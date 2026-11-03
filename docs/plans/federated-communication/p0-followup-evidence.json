@@ -1,0 +1,192 @@
+{
+  "phase": "P0",
+  "status": "PASS",
+  "sourceBranch": "docs/federated-communication",
+  "sourceCommit": "6ede702b7d698a8d86261ecb6a2a5f1efc8e1e87",
+  "implementationBranch": "chore/federated-communication",
+  "implementationCommit": null,
+  "platform": "native Windows 11 / PowerShell / Node 24.13.0",
+  "dsh": "0.2.1-rc.4",
+  "coverage": {
+    "previousPassingUnitCount": 1437,
+    "addedUnitCasesThisRound": 6,
+    "communicationUnitCasesTotal": 12,
+    "fullSuite": {
+      "tests": 1445,
+      "passed": 1443,
+      "skipped": 2,
+      "failed": 0,
+      "exitCode": 0
+    },
+    "originalHostSmoke": {
+      "steps": 52,
+      "status": "PASS",
+      "fixture": "smoke-p0-3",
+      "scope": "original regression steps, not new federation acceptance"
+    },
+    "lint": "PASS; existing warnings only",
+    "buildAndGeneratedChecks": "PASS",
+    "cleanExtractedPackage": "PASS: fresh pack-p0-3 helper import, no test/profile files",
+    "uiRegression": "The existing React interaction case additionally reproduces a late underlying-composer focus steal; no extra unit case count claimed"
+  },
+  "crashCases": [
+    {
+      "point": "before-admission",
+      "status": "PASS",
+      "checkpointFlushed": true,
+      "liveRecovery": {
+        "status": "injection_unknown",
+        "reason": "input_in_flight"
+      },
+      "coldInput": "injection_unknown",
+      "fencedInput": {
+        "status": "not_admitted",
+        "proof": "exclusive_idle_writer"
+      },
+      "modelCalls": 1,
+      "recoveredOutputs": []
+    },
+    {
+      "point": "after-output",
+      "status": "PASS",
+      "checkpointFlushed": true,
+      "liveRecovery": {
+        "status": "injection_unknown",
+        "reason": "input_in_flight"
+      },
+      "coldInput": "admitted",
+      "fencedInput": {
+        "status": "admitted",
+        "sessionId": "session-b2cd232f-d7dd-466d-b7a0-f65d7b08f82c",
+        "seq": 9,
+        "messageId": "b26413a7-53b3-439f-837e-4f06b2381404"
+      },
+      "modelCalls": 1,
+      "recoveredOutputs": [
+        {
+          "sourceKey": "[\"e658564c-5ed1-4d8b-8922-31b352c4b317\",\"session-b2cd232f-d7dd-466d-b7a0-f65d7b08f82c\",16,\"0a2b2019-2a29-45e6-a494-d6e93c7baf38\"]",
+          "messageId": "0a2b2019-2a29-45e6-a494-d6e93c7baf38",
+          "seq": 16,
+          "textSha256": "fa2104824b6c1b9f37220ba6d42cbd63fbc8db5b4a1e3159d237d866cded0843"
+        }
+      ]
+    }
+  ],
+  "humanBoundary": {
+    "status": "PASS",
+    "cases": [
+      {
+        "conversationId": "p0-group",
+        "messageId": "c3fa1f1f831f58fbe34ecbaa5cfa313ce3391d1a78273797bbbc942b62359e64-p0-group",
+        "sourceKey": "[\"e658564c-5ed1-4d8b-8922-31b352c4b317\",\"session-b2cd232f-d7dd-466d-b7a0-f65d7b08f82c\",16,\"0a2b2019-2a29-45e6-a494-d6e93c7baf38\"]",
+        "status": "PASS"
+      },
+      {
+        "conversationId": "p0-dm",
+        "messageId": "c3fa1f1f831f58fbe34ecbaa5cfa313ce3391d1a78273797bbbc942b62359e64-p0-dm",
+        "sourceKey": "[\"e658564c-5ed1-4d8b-8922-31b352c4b317\",\"session-b2cd232f-d7dd-466d-b7a0-f65d7b08f82c\",16,\"0a2b2019-2a29-45e6-a494-d6e93c7baf38\"]",
+        "status": "PASS"
+      }
+    ],
+    "unchangedChiefEvents": 4,
+    "additionalModelCalls": 0,
+    "scope": "real DSH, test-only Human projection; no Hub"
+  },
+  "pendingFollowup": {
+    "runId": "p0-queued-759c42e8-82d0-4ac6-8d80-609e9552a086",
+    "status": "PASS",
+    "recoveredInput": {
+      "status": "queued",
+      "sessionId": "session-1f7bd98c-d571-4e27-b298-c9f55880a3ad",
+      "messageId": "4bc8ecb2-6512-4404-aa74-ba0e2ad8a0c8"
+    },
+    "directRetryBaseline": {
+      "followup": "duplicate_pending_rejected",
+      "steer": "session/steer-unavailable",
+      "agentStatus": "idle",
+      "input": {
+        "status": "queued",
+        "sessionId": "session-1f7bd98c-d571-4e27-b298-c9f55880a3ad",
+        "messageId": "4bc8ecb2-6512-4404-aa74-ba0e2ad8a0c8"
+      }
+    },
+    "notice": {
+      "id": "f49377be-52ca-40bb-9485-01ad2ddb4935",
+      "kind": "ds-bot-communication-recovery",
+      "form": "notice"
+    },
+    "finalInput": {
+      "status": "admitted",
+      "sessionId": "session-1f7bd98c-d571-4e27-b298-c9f55880a3ad",
+      "seq": 27,
+      "messageId": "4bc8ecb2-6512-4404-aa74-ba0e2ad8a0c8"
+    },
+    "sameDshInputId": true,
+    "additionalModelCalls": 1,
+    "recoveredFinals": [
+      {
+        "sourceKey": "[\"b440ba62-d1b3-4118-85f7-46de4fc6eb15\",\"session-1f7bd98c-d571-4e27-b298-c9f55880a3ad\",29,\"4d260ea1-f690-4f9b-92aa-1e5e5dca47bc\"]",
+        "messageId": "4d260ea1-f690-4f9b-92aa-1e5e5dca47bc",
+        "seq": 29,
+        "textSha256": "f720ef4ed4b30e7017b3cd6396829c5ee4ed37090ffa21c05f26d48fdcc4a22e"
+      }
+    ],
+    "secondRestart": {
+      "input": {
+        "status": "admitted",
+        "sessionId": "session-1f7bd98c-d571-4e27-b298-c9f55880a3ad",
+        "seq": 27,
+        "messageId": "4bc8ecb2-6512-4404-aa74-ba0e2ad8a0c8"
+      },
+      "resumed": false
+    },
+    "retryAddsCalls": false,
+    "reason": "A truthful host-restart notice with its own producer source is admitted through public steer beside the original pending input. The original DSH input ID is consumed once; retries and another restart do not add calls. No input is removed or resubmitted, and no DSH patch/private method is used."
+  },
+  "browser": {
+    "status": "PASS",
+    "browser": "Chrome extension / native Windows",
+    "localTarget": "http://127.0.0.1:3101",
+    "realAccountOrModelKeyRequired": false,
+    "cases": [
+      "existing startup authentication verified",
+      "public shell.overlay plus standard React portal navigation",
+      "conversation draft isolation and input focus",
+      "one Enter send per Human group/DM projection",
+      "refresh restores pane, selection and history without resend",
+      "late underlying composer focus is contained",
+      "empty Enter does not send underlying Chief draft",
+      "Back to Chief preserves original unsent draft",
+      "existing browser authentication survives A host restart"
+    ],
+    "runId": "p0-ui-7926a570-d527-4437-aac2-609dd75207f1",
+    "chiefEventsBefore": 5,
+    "chiefEventsAfter": 5,
+    "additionalModelCalls": 0,
+    "groupHumanMessagesAdded": 1,
+    "dmHumanMessagesAdded": 1,
+    "originalChiefDraftPreserved": true,
+    "implementation": "Public shell.overlay + standard ReactDOM portal; no DSH CSS/private state mutation",
+    "historicalPanelOpen": "queued dispatch did not authenticate; user opened Chrome normally and the authenticated tab was claimed"
+  },
+  "newerOfficialApiReview": {
+    "packageVersion": "0.2.1-rc.5",
+    "installed": false,
+    "runtimeTested": false,
+    "finding": "Correction: public send exists in BOTH rc.4 and rc.5 and appends before wake. The tested host lifecycle notice path needs no upgrade."
+  },
+  "dependentPhases": {
+    "P1": "PASS: see p1-transport-evidence.json",
+    "P2": "NEXT",
+    "P3": "NOT_STARTED",
+    "P4": "NOT_STARTED"
+  },
+  "cleanup": {
+    "processes": "A/B stopped after P0 acceptance; smoke-p0-3 previously stopped",
+    "dataRetained": true,
+    "browser": "User-owned Chrome tab retained; no other user tabs changed"
+  },
+  "unauthorizedActions": "No push, publish, DSH patch, private wake, fake Human wake, input remove/reinsert, new auth provider, firewall change, real credential search or real remote Bot connection",
+  "scope": "P0 capability gate only; not complete federation feature acceptance",
+  "dualHostRerun": "PASS: fresh verify initial plus real A/B stop/restart and verify recovery after UI fix"
+}

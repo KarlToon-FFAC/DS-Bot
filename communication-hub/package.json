@@ -1,0 +1,14 @@
+{
+  "name": "ds-bot-communication-hub",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Authenticated durable message transport for independent DS-Bot instances",
+  "engines": { "node": ">=24.0.0" },
+  "scripts": {
+    "start": "node src/cli.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": { "ws": "8.22.1" },
+  "files": ["src/", "README.md", "config.example.json"]
+}

@@ -1,0 +1,110 @@
+{
+  "phase": "P3",
+  "status": "PASS_LOCAL",
+  "implementation": [
+    "Default-off production Communication sidebar entry and public shell.overlay portal",
+    "Per-Human contacts, canonical DM/group navigation, explicit invitations and structured participant picker",
+    "Local/remote Human/Bot authors, authorized same-conversation references, bounded history pages, unread and receipt phases",
+    "Per-conversation drafts, persistent same-ID browser retry intents, focus boundary and refresh restoration",
+    "Distinct local close/restore, leave and manager-only end-group operations",
+    "English/Chinese copy, theme colors, keyboard send and explicit unsupported attachments"
+  ],
+  "productionGroupIntegration": {
+    "command": "node dev/communication/group-demo.mjs --hold",
+    "status": "PASS",
+    "casesPassed": 5,
+    "rawEvidence": ".dsh-test-tools/p3-group.json",
+    "covered": [
+      "Four independent A/J/B/K participants and explicit per-owner invitation acceptance",
+      "Exact structured K mention invokes only K; ordinary Bot reply invokes no other Bot",
+      "Versioned admin routing; Human mention never falls back to a Chief",
+      "Ambiguous same-name and unauthorized management rejected; same-conversation reply metadata preserved",
+      "Canonical event agreement inside both Human participants' authorized join boundaries"
+    ]
+  },
+  "realChromeBrowser": {
+    "authentication": "Both isolated pages authenticated through documented normal DSH startup browser opening; no account, user password, API key or persistent pairing credential needed",
+    "verified": [
+      "Both pages open the same shared conversation with A/J/B/K local/remote identity labels",
+      "Structured Human picker and actual Enter send from A arrive once at B",
+      "Separate group and Human DM drafts survive rapid switching",
+      "Actual Human DM send arrives once in its own canonical conversation",
+      "Group/DM Human sends preserve model call counts at A=37 and B=39",
+      "Refresh restores selected conversation and does not resend messages",
+      "Original private Chief draft remains unsent and communication owns input focus",
+      "Screenshots visually checked; Markdown text color, composer height and latest-message scrolling corrected",
+      "Actual create/invite/accept; Bot-only membership does not expose Human history",
+      "Human removal and rejoin with local Bot cache: old history and old reference body remain inaccessible",
+      "Reply opens exact parent; unauthorized reference becomes Earlier message unavailable",
+      "Local close/restore retains same conversation; explicit Human leave and manager end work",
+      "Removing default reply Bot atomically changes both pages to mentionsOnly",
+      "55 API-seeded messages: actual browser latest 50 and earlier-page navigation",
+      "Long Markdown DOM contains all 4000 Chinese/emoji tokens and final sentinel",
+      "Real loopback Hub offline: browser shows queued, reconnect returns same send once and separate receipts",
+      "Actual same-name picker selects remote K; Return stays within communication composer"
+    ],
+    "notVerified": [],
+    "screenshots": "Captured and inspected in the task tool output; no exported image artifact is claimed",
+    "responsive": {
+      "method": "Same-origin iframe loading real production page; test-only public overlay fixture",
+      "widths": [
+        508,
+        700,
+        1024
+      ],
+      "height": 760,
+      "scrollWidthEqualsViewport": true,
+      "min508": {
+        "mainWidth": 332,
+        "textareaWidth": 314
+      },
+      "nativeOsWindowResize": "NOT_RUN; documented viewport override did not change actual DOM size"
+    }
+  },
+  "browserControlBlock": {
+    "action": "cua.getApp({windowId:723336}) to select the task's native Chrome window for an actual width check",
+    "target": "Chief — DeepSeek Harness - Google Chrome; the two loopback test pages",
+    "result": "STOPPED_BY_TOOL_GUARD; native window action did not execute; no further Computer Use actions attempted",
+    "reason": "Computer Use could not determine the current browser URL on Windows with enough confidence to enforce policy and stopped the turn's Computer Use",
+    "precedingViewportAttempt": "Documented Chrome viewport.set returned but DOM remained 1366x543, so 508px was not counted as tested. viewport.reset was called before the guard stop.",
+    "accountLoginRequired": false,
+    "approvalCardPending": false,
+    "autoReviewDenial": false,
+    "resolution": "Continued via supported Chrome DOM control; no native window guard bypass. No account login required."
+  },
+  "independentVerification": {
+    "fullPluginSuite": {
+      "tests": 1455,
+      "passed": 1453,
+      "skipped": 2,
+      "failed": 0
+    },
+    "communicationSpecificPluginTests": 22,
+    "hubTests": 21,
+    "hostSmoke": {
+      "fixture": "smoke-p4",
+      "steps": 52,
+      "status": "PASS",
+      "stopped": true
+    },
+    "lint": "PASS; existing warnings only",
+    "generatedClient": "Built from source; consistency checked by the passing full suite",
+    "newCases": [
+      "Late history response cannot replace the newly selected conversation",
+      "Uncertain HTTP response retries the identical persisted message intent",
+      "Provider call-ID reuse remains separated by durable assistant event identity",
+      "Group ending atomically revokes unfinished deliveries/invitations and preserves already admitted work",
+      "Human read before delayed inbox arrival produces correct separate receipts and unread count",
+      "Bounded local AI inbox withholds storage acknowledgement under pressure and drains existing work"
+    ],
+    "cleanHubPackage": "PASS: dependency install, startup, health and shutdown",
+    "cleanPluginPackage": "PASS: actual tarball installed in a fresh consumer with pinned complete DSH 0.2.1-rc.4; plugin, production adapter and SDK import without checkout links or test resolver. A minimal peer-only consumer was insufficient for DSH's peer-service graph; no project dependencies were upgraded."
+  },
+  "remaining": {
+    "P3": "Local target browser matrix complete",
+    "P4": "See p4-acceptance.json",
+    "wssRuntime": "NOT_RUN",
+    "differentIp": "NOT_RUN",
+    "realModels": "NOT_RUN"
+  }
+}

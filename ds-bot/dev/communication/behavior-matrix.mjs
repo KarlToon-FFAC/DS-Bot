@@ -1,0 +1,121 @@
+import assert from 'node:assert/strict'
+import { randomUUID } from 'node:crypto'
+import { readFileSync,writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { LocalTopology,until } from './local-topology.mjs'
+import { modelCalls } from './bench-client.mjs'
+
+const topology=new LocalTopology(),nonce=randomUUID(),evidence={status:'RUNNING',model:'local deterministic Mock',cases:[]}
+const record=(id,detail={})=>{evidence.cases.push({id,status:'PASS',...detail});console.log(`PASS ${id}`);writeFileSync(join(topology.root,'p4-behavior.json'),JSON.stringify(evidence,null,2))}
+const logs=peer=>readFileSync(join(peer.home,'mock.jsonl'),'utf8').split('\n').filter(Boolean).map(JSON.parse)
+const nativeSend=(peer,text)=>peer.client.request('/api/bot',{endpoint:'send',payload:{sessionId:peer.botId,text}})
+const botMessages=async text=>(await topology.hub('stats')).messages.filter(item=>JSON.parse(item.body).content.text===text)
+try{
+  await topology.initialize();const [a,b]=topology.peers
+  const [ab,reverse]=await Promise.all([topology.operation(a,'dm',{otherPrincipalId:b.human}),topology.operation(b,'dm',{otherPrincipalId:a.human})])
+  assert.equal(ab.conversationId,reverse.conversationId)
+  const humanA=await topology.send(a,ab.conversationId,`A to B ${nonce}`),humanB=await topology.send(b,ab.conversationId,`B to A ${nonce}`)
+  await until(()=>topology.hasText(a,ab.conversationId,humanB.text),'B to A');await until(()=>topology.hasText(b,ab.conversationId,humanA.text),'A to B')
+  record('DM-01-05-09',{conversationId:ab.conversationId,bidirectional:true,canonicalConcurrentOpen:true})
+  const ak=(await topology.operation(a,'dm',{otherPrincipalId:b.bot})).conversationId
+  const bj=(await topology.operation(b,'dm',{otherPrincipalId:a.bot})).conversationId
+  await Promise.all([topology.send(a,ak,`COMM-ECHO A-K-${nonce}`),topology.send(b,bj,`COMM-ECHO B-J-${nonce}`)])
+  await until(()=>topology.hasText(a,ak,`Communication reply A-K-${nonce}`),'A to K final')
+  await until(()=>topology.hasText(b,bj,`Communication reply B-J-${nonce}`),'B to J final')
+  record('DM-02-05',{conversationIds:[ak,bj],bidirectional:true})
+  await nativeSend(a,`COMM-SEND ${b.human} J-B-${nonce}`)
+  await nativeSend(b,`COMM-SEND ${a.human} K-A-${nonce}`)
+  await until(async()=> (await botMessages(`COMM-ECHO J-B-${nonce}`)).length===1&&(await botMessages(`COMM-ECHO K-A-${nonce}`)).length===1,'Bot to Human both directions')
+  const [jbMsg]=await botMessages(`COMM-ECHO J-B-${nonce}`),[kaMsg]=await botMessages(`COMM-ECHO K-A-${nonce}`)
+  assert.equal(jbMsg.author_id,a.bot);assert.equal(kaMsg.author_id,b.bot)
+  await until(()=>topology.hasText(b,jbMsg.conversation_id,`COMM-ECHO J-B-${nonce}`),'Human B notification view')
+  await until(()=>topology.hasText(a,kaMsg.conversation_id,`COMM-ECHO K-A-${nonce}`),'Human A notification view')
+  record('DM-03-05',{conversationIds:[jbMsg.conversation_id,kaMsg.conversation_id],actualExecutingBotAuthors:true})
+  await nativeSend(a,`COMM-SEND ${b.bot} J-K-${nonce}`)
+  await until(async()=> (await botMessages(`Communication reply J-K-${nonce}`)).length===1,'J to K reply')
+  await nativeSend(b,`COMM-SEND ${a.bot} K-J-${nonce}`)
+  await until(async()=> (await botMessages(`Communication reply K-J-${nonce}`)).length===1,'K to J reply')
+  const [jk]=await botMessages(`COMM-ECHO J-K-${nonce}`),[kj]=await botMessages(`COMM-ECHO K-J-${nonce}`)
+  assert.equal(jk.conversation_id,kj.conversation_id)
+  assert.equal((await botMessages(`Communication reply J-K-${nonce}`))[0].conversation_id,jk.conversation_id)
+  record('DM-04-05',{conversationId:jk.conversation_id,bidirectional:true})
+  await assert.rejects(a.api({endpoint:'send',conversationId:ab.conversationId,text:'forged',messageId:randomUUID(),clientCreatedAt:new Date().toISOString(),senderId:b.bot}),/AUTHOR_MISMATCH/)
+  record('DM-08',{forgedSenderRejected:true})
+  const privateCanary=`A-K-private-${nonce}`
+  await topology.bench(b,'stop');await topology.startPeer(b,{MOCK_WATCH:privateCanary})
+  const bk=(await topology.operation(b,'dm',{otherPrincipalId:b.bot})).conversationId
+  await Promise.all([topology.send(a,ak,`COMM-ECHO ${privateCanary}`),topology.send(b,bk,`COMM-ECHO B-K-isolated-${nonce}`),nativeSend(a,`COMM-SEND ${b.bot} J-K-isolated-${nonce}`)])
+  await until(()=>topology.hasText(a,ak,`Communication reply ${privateCanary}`),'private canary positive control')
+  await until(()=>topology.hasText(b,bk,`Communication reply B-K-isolated-${nonce}`),'B-K isolated reply')
+  await until(async()=> (await botMessages(`Communication reply J-K-isolated-${nonce}`)).length===1,'J-K isolated reply')
+  const db=topology.db(b)
+  try{
+    const bindings=db.prepare('SELECT conversation_id,sessions FROM bindings WHERE principal_id=?').all(b.bot)
+    const privateSessions=new Set(bindings.filter(item=>item.conversation_id===ak).flatMap(item=>JSON.parse(item.sessions)))
+    const otherSessions=new Set(bindings.filter(item=>[bk,jk.conversation_id].includes(item.conversation_id)).flatMap(item=>JSON.parse(item.sessions)))
+    assert.ok(logs(b).some(call=>privateSessions.has(call.session)&&call.watchHit))
+    assert.ok(logs(b).filter(call=>otherSessions.has(call.session)).every(call=>!call.watchHit))
+  }finally{db.close()}
+  record('DM-06',{conversationIds:[ak,bk,jk.conversation_id],privateCanaryPositive:true,otherConversationLeaks:0})
+  const group=await topology.group(`Behavior ${nonce.slice(0,8)}`,[a.bot,b.human,b.bot])
+  await nativeSend(a,`COMM-POST ${group} ${b.bot} COMM-ECHO J-at-K-${nonce}`)
+  await until(()=>topology.hasText(a,group,`Communication reply J-at-K-${nonce}`),'Bot J exact K mention')
+  await nativeSend(b,`COMM-POST ${group} ${a.bot} COMM-ECHO K-at-J-${nonce}`)
+  await until(()=>topology.hasText(b,group,`Communication reply K-at-J-${nonce}`),'Bot K exact J mention')
+  for(const [peer,name] of [[a,'J'],[b,'K']])await nativeSend(peer,`COMM-POST ${group} - ordinary-${name}-${nonce}`)
+  await until(()=>topology.hasText(a,group,`ordinary-J-${nonce}`),'J ordinary group text')
+  await until(()=>topology.hasText(b,group,`ordinary-K-${nonce}`),'K ordinary group text')
+  const stats=await topology.hub('stats')
+  for(const message of stats.messages.filter(item=>item.conversation_id===group&&JSON.parse(item.body).content.text.startsWith('ordinary-')))
+    assert.equal(stats.deliveries.filter(item=>item.message_id===message.id&&item.ai).length,0)
+  record('GR-01-02-03-05-06',{conversationId:group,sameNameBots:true,actualBotToBotMentionsBothWays:true,plainBotBroadcasts:0})
+  await b.client.api({operation:'production-hold',point:'before-admission',conversationId:group})
+  const groupInput=await topology.send(a,group,`COMM-ECHO held-group-${nonce}`,[b.bot])
+  await until(async()=> (await b.client.api({operation:'production-state',conversationId:group})).sessions.some(session=>session.checkpoint?.point==='before-admission'),'group K held')
+  const simultaneous=await topology.send(a,ak,`COMM-ECHO private-during-group-${nonce}`)
+  await until(()=>topology.hasText(a,ak,`Communication reply private-during-group-${nonce}`),'DM proceeds while group held')
+  const released=await b.client.api({operation:'production-release',conversationId:group});assert.ok(released.released)
+  await until(()=>topology.hasText(a,group,`Communication reply held-group-${nonce}`),'original group resumes')
+  const groupState=await b.client.api({operation:'production-state',conversationId:group})
+  assert.ok(!groupState.sessions.flatMap(session=>session.events).some(event=>event.type==='user/message'&&event.data.source?.messageId===simultaneous.messageId))
+  record('DM-07',{conversationIds:[group,ak],groupMessageId:groupInput.messageId,dmMessageId:simultaneous.messageId})
+  const secret=`revoked-before-admission-${nonce}`,revokedGroup=await topology.group(`Revocation ${nonce.slice(0,8)}`,[b.human,b.bot])
+  await b.client.api({operation:'production-hold',point:'before-injection',conversationId:revokedGroup})
+  const old=await topology.send(a,revokedGroup,`COMM-ECHO ${secret}`,[b.bot])
+  await until(async()=> (await b.client.api({operation:'production-state',conversationId:revokedGroup})).checkpoints.some(item=>item.point==='before-injection'),'stored but not injected')
+  const beforeRevoke=modelCalls(b.name)
+  await topology.operation(a,'remove',{conversationId:revokedGroup,targetPrincipalId:b.bot})
+  await topology.bench(b,'stop');await topology.startPeer(b,{MOCK_WATCH:secret})
+  await until(async()=> (await b.api({endpoint:'state'})).connected,'revocation reconciled')
+  assert.equal(modelCalls(b.name),beforeRevoke)
+  const oldState=await b.client.api({operation:'production-state',conversationId:revokedGroup})
+  assert.ok(oldState.inbox.filter(item=>item.ai).every(item=>item.revoked&&item.ai_state==='revoked'))
+  assert.equal(oldState.sessions.length,0)
+  await until(async()=> (await a.api({endpoint:'state'})).outbox.find(item=>item.id===old.messageId)?.deliveries.some(item=>item.recipientPrincipalId===b.bot&&item.rejectionReason==='permission_revoked'),'sender terminal revocation reason')
+  const invitation=await topology.operation(a,'invite',{conversationId:revokedGroup,inviteePrincipalId:b.bot})
+  await topology.operation(b,'accept',{inviteId:invitation.inviteId,recipientPrincipalId:b.bot})
+  const fresh=await topology.send(a,revokedGroup,`COMM-ECHO rejoined-${nonce}`,[b.bot],{replyToMessageId:old.messageId})
+  await until(()=>topology.hasText(a,revokedGroup,`Communication reply rejoined-${nonce}`),'new epoch reply')
+  const reopened=topology.db(b)
+  try{
+    const member=reopened.prepare('SELECT epoch,join_seq FROM memberships WHERE conversation_id=? AND principal_id=?').get(revokedGroup,b.bot)
+    assert.ok(!reopened.prepare("SELECT 1 FROM events WHERE conversation_id=? AND principal_id=? AND epoch=? AND json_extract(body,'$.message.messageId')=?").get(revokedGroup,b.bot,member.epoch,old.messageId))
+    assert.ok(reopened.prepare("SELECT 1 FROM events WHERE conversation_id=? AND principal_id=? AND json_extract(body,'$.message.messageId')=?").get(revokedGroup,b.human,old.messageId))
+    const sessions=new Set(reopened.prepare('SELECT sessions FROM bindings WHERE conversation_id=? AND epoch=?').all(revokedGroup,member.epoch).flatMap(row=>JSON.parse(row.sessions)))
+    assert.ok(logs(b).filter(call=>sessions.has(call.session)).every(call=>!call.watchHit))
+    record('AC-02-03-04',{conversationId:revokedGroup,oldMessageId:old.messageId,newMessageId:fresh.messageId,newJoinSeq:member.join_seq,oldInputConsumed:false,sharedHumanCacheLeak:false})
+  }finally{reopened.close()}
+  const foreignReply=await topology.send(a,group,`forbidden reference ${nonce}`,[],{replyToMessageId:simultaneous.messageId})
+  await until(async()=> (await a.api({endpoint:'state'})).outbox.find(item=>item.id===foreignReply.messageId)?.error==='INVALID_REPLY_TARGET','cross-conversation reply refused')
+  await assert.rejects(b.api({endpoint:'reference',conversationId:ak,messageId:simultaneous.messageId}),/NOT_A_MEMBER/)
+  record('GR-08',{crossConversationReplyRejected:true,unrelatedHumanCannotReadPrivateReference:true})
+  let long=`Begin 😀 中文\n${'汉'.repeat(21780)}\nEnd ${nonce}`
+  assert.ok(Buffer.byteLength(long)>65000&&Buffer.byteLength(long)<65536)
+  const longMessage=await topology.send(a,ab.conversationId,long)
+  await until(()=>topology.hasText(b,ab.conversationId,long),'whole UTF-8 message')
+  for(const extra of [{attachments:[{name:'not-sent.png',data:'synthetic'}]},{files:[{name:'not-sent.txt'}]}])await assert.rejects(topology.send(a,ab.conversationId,'unsupported',[],extra),/UNSUPPORTED_CONTENT/)
+  await assert.rejects(topology.send(a,ab.conversationId,'😀'.repeat(16385)),/PAYLOAD_TOO_LARGE/)
+  record('CT-01',{messageId:longMessage.messageId,utf8Bytes:Buffer.byteLength(long),completeTextPreserved:true,attachmentsRejected:true,oversizeRejected:true})
+  evidence.status='PASS'
+}catch(error){evidence.status='FAIL';evidence.error=error.stack;console.error(error.stack);process.exitCode=1}
+finally{await topology.close();writeFileSync(join(topology.root,'p4-behavior.json'),JSON.stringify(evidence,null,2))}

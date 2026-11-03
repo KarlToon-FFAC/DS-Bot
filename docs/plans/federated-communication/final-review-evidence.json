@@ -1,0 +1,671 @@
+{
+  "status": "PASS_LOCAL_MOCK",
+  "timestamp": "2026-11-03T10:23:19.668Z",
+  "root": "D:\\git\\DS-Bot-federated",
+  "branch": "chore/federated-communication",
+  "baseline": "6ede702b7d698a8d86261ecb6a2a5f1efc8e1e87",
+  "requestedBaseline": "6ede702b7d698a8d86261ecb6a2a5f1efc8e1e87",
+  "origin": "https://github.com/KarlToon-FFAC/DS-Bot.git",
+  "versions": {
+    "node": "v24.13.0",
+    "plugin": "0.2.6",
+    "dsh": "0.2.1-rc.4",
+    "hub": "0.1.0"
+  },
+  "unit": {
+    "tests": 1469,
+    "pass": 1467,
+    "fail": 0,
+    "skipped": 2
+  },
+  "newCommunicationUnitCases": 35,
+  "finalSecurityUnitCases": 8,
+  "hub": {
+    "tests": 31,
+    "pass": 31,
+    "fail": 0,
+    "skipped": 0
+  },
+  "originalSmokeSteps": 52,
+  "matrices": {
+    "recovery": {
+      "status": "PASS",
+      "platform": "native Windows",
+      "model": "local deterministic Mock",
+      "cases": [
+        {
+          "id": "before-receive",
+          "status": "PASS",
+          "conversationId": "b8fc9e98-3a2b-4cc3-bc8f-5c8c8397b965",
+          "messageId": "385042d0-7aef-4519-8a7b-e99fe03c31fa",
+          "deliveryId": "5eb76116-4e21-40c3-bacb-ac49ac8d8108",
+          "logicalInputs": 1,
+          "finalMessages": 1,
+          "modelCalls": 1,
+          "exportedMessageId": "ba82d196-d977-4569-b80f-d85a3392efb6"
+        },
+        {
+          "id": "after-receive",
+          "status": "PASS",
+          "conversationId": "2da2334c-502a-4011-a17a-65e40a1d4c8e",
+          "messageId": "97a69d39-8ccb-432a-a911-837f55d5938b",
+          "deliveryId": "a9100d88-5b58-43f6-ac03-885e143c5f53",
+          "logicalInputs": 1,
+          "finalMessages": 1,
+          "modelCalls": 1,
+          "exportedMessageId": "93da4e81-2141-4031-af18-b7220225dfb3"
+        },
+        {
+          "id": "before-injection",
+          "status": "PASS",
+          "conversationId": "f7ccdbfd-e4bf-4ff9-abd3-be2c58f8c327",
+          "messageId": "8232f7b8-88a1-4974-8fb4-20a31880d174",
+          "deliveryId": "72ec9e0f-fe03-41f8-9319-a89cb9351487",
+          "logicalInputs": 1,
+          "finalMessages": 1,
+          "modelCalls": 1,
+          "exportedMessageId": "61f58a19-9673-4a39-a1eb-2541c111d8a5"
+        },
+        {
+          "id": "before-admission",
+          "status": "PASS",
+          "conversationId": "ef6a9c21-87e1-4695-a9dc-cb06afd7abc3",
+          "messageId": "9e242f38-14fa-43f2-a4d9-24cf38b09e17",
+          "deliveryId": "1b6e9c39-4ae3-4347-8156-520af004d0a7",
+          "logicalInputs": 1,
+          "finalMessages": 1,
+          "modelCalls": 1,
+          "exportedMessageId": "2b48fccd-6324-4809-b4b3-66085e034080"
+        },
+        {
+          "id": "after-injection",
+          "status": "PASS",
+          "conversationId": "8a3788f2-a079-4d3c-9ecf-9bc2bc2dc35c",
+          "messageId": "5ceeb1d0-2455-47d9-972c-3abadfedae4a",
+          "deliveryId": "9a72e455-770d-40e9-a738-d587a5c264c2",
+          "logicalInputs": 1,
+          "finalMessages": 1,
+          "modelCalls": 2,
+          "exportedMessageId": "f8e8d569-a1e7-49d2-821d-f70db4421641"
+        },
+        {
+          "id": "before-export",
+          "status": "PASS",
+          "conversationId": "d9941394-db10-49e7-b492-e73e913eae16",
+          "messageId": "eebd5807-30ec-4995-96d2-c81d4a7f8018",
+          "deliveryId": "120934e4-5526-4269-94b8-2233d89a88e0",
+          "logicalInputs": 1,
+          "finalMessages": 1,
+          "modelCalls": 1,
+          "exportedMessageId": "07a57ae5-32be-4154-8994-d60ee199193a"
+        },
+        {
+          "id": "after-export",
+          "status": "PASS",
+          "conversationId": "38cf0e65-8796-434a-9916-4f5634e6852c",
+          "messageId": "be6158f6-9166-4d51-9daf-7225daa29427",
+          "deliveryId": "8d4ce26b-af98-4159-8d27-18003dbbb300",
+          "logicalInputs": 1,
+          "finalMessages": 1,
+          "modelCalls": 1,
+          "exportedMessageId": "8a8f3c08-2165-405c-b639-ace4f04096e0"
+        }
+      ]
+    },
+    "network": {
+      "status": "PASS",
+      "model": "local deterministic Mock",
+      "network": "loopback WS; independent persistent Hub process",
+      "cases": [
+        {
+          "id": "before-commit-crash",
+          "status": "PASS",
+          "messageId": "b29f9cbc-e942-4168-96c1-839e8cb68a2d",
+          "conversationId": "162dd254-0a42-44b3-9568-f6976c201c84",
+          "canonicalMessages": 1,
+          "conversationSeq": 2
+        },
+        {
+          "id": "after-commit-crash",
+          "status": "PASS",
+          "messageId": "2ec71f3d-c81d-4433-9197-86a9d924afd0",
+          "conversationId": "162dd254-0a42-44b3-9568-f6976c201c84",
+          "canonicalMessages": 1,
+          "conversationSeq": 3
+        },
+        {
+          "id": "ACK-loss-on-open-socket",
+          "status": "PASS",
+          "messageId": "51606a13-f029-4b56-a926-a61320f21434",
+          "conversationSeq": 4
+        },
+        {
+          "id": "offline-sender-host-restart",
+          "status": "PASS",
+          "messageId": "51e389c5-9061-484c-88a7-a63fb60b3753",
+          "payloadHashPreserved": true
+        },
+        {
+          "id": "triple-plus-delayed-retransmit",
+          "status": "PASS",
+          "messageId": "65be46e6-475e-42f1-99b0-43cd002ac134",
+          "canonicalMessages": 1,
+          "recipientDeliveries": 1
+        },
+        {
+          "id": "repeated-reconnect",
+          "status": "PASS",
+          "reconnects": 3,
+          "newModelCalls": 0,
+          "duplicateMessages": 0
+        },
+        {
+          "id": "reordered-permanent-gap-then-incremental-repair",
+          "status": "PASS",
+          "conversationId": "c71a5462-d261-4689-a082-9fcfb5bd2f2b",
+          "messageIds": [
+            "bae528cc-343b-43c5-85e2-c03c41dfa905",
+            "dda397d1-94aa-4ead-a19a-dc5271b5c9f0"
+          ],
+          "modelCallsWhileGap": 0,
+          "modelCallsAfterRepair": 2
+        },
+        {
+          "id": "A-B-Hub-backlog-restarts",
+          "status": "PASS",
+          "conversationId": "162dd254-0a42-44b3-9568-f6976c201c84",
+          "messageIds": [
+            "b411a9d9-51fb-4959-882b-372a735ccfed",
+            "8f1572bc-7c62-479e-b95a-a1aa2a889f65"
+          ],
+          "canonicalDmPreserved": true
+        }
+      ]
+    },
+    "behavior": {
+      "status": "PASS",
+      "model": "local deterministic Mock",
+      "cases": [
+        {
+          "id": "DM-01-05-09",
+          "status": "PASS",
+          "conversationId": "4b9ed698-58e1-4485-bf1e-bd0a65886a58",
+          "bidirectional": true,
+          "canonicalConcurrentOpen": true
+        },
+        {
+          "id": "DM-02-05",
+          "status": "PASS",
+          "conversationIds": [
+            "7cb19083-7799-4b96-9146-6a7f276ea5ff",
+            "ec690bc2-2012-4dd3-9340-4fad4fd78be6"
+          ],
+          "bidirectional": true
+        },
+        {
+          "id": "DM-03-05",
+          "status": "PASS",
+          "conversationIds": [
+            "ec690bc2-2012-4dd3-9340-4fad4fd78be6",
+            "7cb19083-7799-4b96-9146-6a7f276ea5ff"
+          ],
+          "actualExecutingBotAuthors": true
+        },
+        {
+          "id": "DM-04-05",
+          "status": "PASS",
+          "conversationId": "1247a6a3-d548-409a-8487-36d21720601a",
+          "bidirectional": true
+        },
+        {
+          "id": "DM-08",
+          "status": "PASS",
+          "forgedSenderRejected": true
+        },
+        {
+          "id": "DM-06",
+          "status": "PASS",
+          "conversationIds": [
+            "7cb19083-7799-4b96-9146-6a7f276ea5ff",
+            "7d824539-b688-43ba-b749-8b318c4d619d",
+            "1247a6a3-d548-409a-8487-36d21720601a"
+          ],
+          "privateCanaryPositive": true,
+          "otherConversationLeaks": 0
+        },
+        {
+          "id": "GR-01-02-03-05-06",
+          "status": "PASS",
+          "conversationId": "b18dc763-4a22-4540-a9b7-d77fe8aff727",
+          "sameNameBots": true,
+          "actualBotToBotMentionsBothWays": true,
+          "plainBotBroadcasts": 0
+        },
+        {
+          "id": "DM-07",
+          "status": "PASS",
+          "conversationIds": [
+            "b18dc763-4a22-4540-a9b7-d77fe8aff727",
+            "7cb19083-7799-4b96-9146-6a7f276ea5ff"
+          ],
+          "groupMessageId": "34cc6c14-ae96-44d5-ba8c-1ab79a71bcd3",
+          "dmMessageId": "2ade4daf-eba3-4412-8a8d-05198b2358da"
+        },
+        {
+          "id": "AC-02-03-04",
+          "status": "PASS",
+          "conversationId": "a7ed5f8b-e4c7-4e97-8055-96befbcae76c",
+          "oldMessageId": "3af35f4b-ca7e-4847-ba9e-52a22d4c4db9",
+          "newMessageId": "bf385410-d363-4e93-8040-e98d1c9d5e90",
+          "newJoinSeq": 8,
+          "oldInputConsumed": false,
+          "sharedHumanCacheLeak": false
+        },
+        {
+          "id": "GR-08",
+          "status": "PASS",
+          "crossConversationReplyRejected": true,
+          "unrelatedHumanCannotReadPrivateReference": true
+        },
+        {
+          "id": "CT-01",
+          "status": "PASS",
+          "messageId": "8e9a298e-1078-4ddb-bef4-9041509205e5",
+          "utf8Bytes": 65399,
+          "completeTextPreserved": true,
+          "attachmentsRejected": true,
+          "oversizeRejected": true
+        }
+      ]
+    },
+    "atomic": {
+      "status": "PASS",
+      "level": "independent native process, real production CommunicationQueue and SQLite WAL",
+      "cases": [
+        {
+          "point": "before-commit",
+          "status": "PASS",
+          "messageId": "message-51ac80ac-3009-4bba-bb3e-359ebaf0b63a",
+          "atomicTuple": [
+            1,
+            1,
+            1
+          ],
+          "newMessageGeneratedAfterReplay": true
+        },
+        {
+          "point": "after-commit",
+          "status": "PASS",
+          "messageId": "message-ffe82b6b-9708-4a49-841d-c07bd21ace01",
+          "atomicTuple": [
+            1,
+            1,
+            1
+          ],
+          "newMessageGeneratedAfterReplay": false
+        }
+      ]
+    }
+  },
+  "governance": {
+    "status": "PASS",
+    "model": "local deterministic Mock",
+    "network": "loopback WS",
+    "cases": [
+      {
+        "id": "default-readOnly-passive",
+        "status": "PASS",
+        "conversationId": "804cce1d-11e8-479b-bf7d-cddb73b1d025",
+        "humanMode": "readOnly"
+      },
+      {
+        "id": "real-passive-final-and-private-tool-boundary",
+        "status": "PASS",
+        "messageId": "af5bef81-0871-416a-928e-2492d7825f60",
+        "replyMessageId": "929e5ea8-a046-448c-a231-c2059d6b7e59",
+        "responseToDeliveryId": "22186a08-feb4-469e-a791-c80e35b467a7",
+        "privateCanaryLeaked": false,
+        "canaryLocations": [
+          "local Bot project",
+          "isolated DSH_HOME/AGENTS.md",
+          "communication workspace ancestor AGENTS.md"
+        ]
+      },
+      {
+        "id": "real-remote-read-of-other-DM-rejected",
+        "status": "PASS",
+        "conversationId": "804cce1d-11e8-479b-bf7d-cddb73b1d025",
+        "privateConversationId": "7313b252-8590-40e6-b238-32dbeaea4dcf",
+        "privateBodyLeaked": false
+      },
+      {
+        "id": "real-Bot-tool-passive-denied-active-allowed",
+        "status": "PASS"
+      },
+      {
+        "id": "real-concurrent-policy-and-admin-readOnly",
+        "status": "PASS"
+      },
+      {
+        "id": "queued-publish-rechecked-after-downgrade",
+        "status": "PASS",
+        "messageId": "32b84779-94a0-4c68-a864-3466b487a172"
+      },
+      {
+        "id": "rejected-Bot-final-visible-with-stable-audit-id",
+        "status": "PASS",
+        "inputMessageId": "27043a1f-28a0-464b-9829-3dbc097e6235",
+        "replyMessageId": "273f1a3a-8e02-4dc3-86a2-4e750412177c"
+      },
+      {
+        "id": "real-owner-transfer-no-old-owner-authority",
+        "status": "PASS"
+      },
+      {
+        "id": "unsourced-local-input-never-reaches-model-or-borrows-grant",
+        "status": "PASS",
+        "conversationId": "b7dbafbb-d86a-4365-a6fb-a634d5c51b86",
+        "additionalModelCalls": 0
+      }
+    ],
+    "ui": {
+      "conversationId": "b7dbafbb-d86a-4365-a6fb-a634d5c51b86",
+      "title": "Governance UI 9b3d2dff",
+      "a": "http://127.0.0.1:3107/",
+      "b": "http://127.0.0.1:3108/"
+    }
+  },
+  "browser": {
+    "status": "PASS",
+    "engine": "actual Chrome extension controlled production pages",
+    "urls": [
+      "http://127.0.0.1:3107/",
+      "http://127.0.0.1:3108/"
+    ],
+    "profileRun": "review7",
+    "viewportMethod": "direct supported Chrome viewport capability; reset after test",
+    "viewports": [
+      {
+        "width": 508,
+        "height": 760,
+        "documentWidth": 508,
+        "frameWidth": 508,
+        "mainWidth": 332,
+        "mainScrollWidth": 332
+      },
+      {
+        "width": 700,
+        "height": 760,
+        "documentWidth": 700,
+        "frameWidth": 700,
+        "mainWidth": 524,
+        "mainScrollWidth": 524
+      },
+      {
+        "width": 1024,
+        "height": 760,
+        "documentWidth": 1024,
+        "frameWidth": 1024,
+        "mainWidth": 760,
+        "mainScrollWidth": 760
+      }
+    ],
+    "checks": [
+      "stable rejected Bot final alert",
+      "transferred owner can manage role/speech/transfer/end",
+      "last owner cannot leave",
+      "owner role alone does not grant speech",
+      "save own speak through production UI enables composer",
+      "restore readOnly disables composer",
+      "former owner admin has no transfer/end controls"
+    ],
+    "screenshots": "captured and visually inspected in task tool history; no standalone image or trace artifacts exported",
+    "cleanup": "two new owned test tabs closed; original user page preserved"
+  },
+  "packaging": {
+    "status": "PASS",
+    "timestamp": "2026-11-03T10:21:53.850Z",
+    "registry": "https://registry.npmjs.org",
+    "install": "offline cached official packages; fresh consumers",
+    "modelCalls": 0,
+    "hubLocalStartup": true,
+    "results": [
+      {
+        "name": "ds-bot",
+        "files": 87,
+        "tarball": "ds-bot-0.2.6.tgz",
+        "sha256": "77bbfff611e6746787ddd51fa9fb056577d0c474aa61454e9acc10bc401b4e4e",
+        "allInstalledFilesMatchSource": true,
+        "hashes": {
+          "LICENSE": "1eb85fc97224598dad1852b5d6483bbcf0aa8608790dcc657a5a2a761ae9c8c6",
+          "README.md": "ce604a9a5ed8f04373ef524f3d7293742f56c404a69d1f1b63a7207ab502aa2f",
+          "client.js": "ab50aafec609915ba9ccfffccf0d6da5505c89b5ab12a41e2de00f2fbc128e2f",
+          "cordis.patch.yml": "ecc9d3c0639c3786817ef3c59789ebc3d78d73c4194d0fc7144e11311b1db678",
+          "index.js": "bab60ef49111f0fbee14fb489634cf976b08c2c341e0143b1923b0a219573f5c",
+          "office.js": "9a8a97c0ea189d9c742fc6e7e93cb7a3cb117ec885aad9c5896232a10d3b4dea",
+          "package.json": "51da86674f9f65f1846cb687cfadae8f3fdbfbdf47b6074b381f31bb19253425",
+          "src/host/agents.js": "b75d336a78c9a473f67bf4efcd441f722e3b0cec053ebadecd127d3752fc156f",
+          "src/host/approvals.js": "4ec86f80436afddee7d7434fc8761dee85c0b02efc96fd8e5b7e95fb384eeb8f",
+          "src/host/avatar-library.js": "8613951c84be55788948804da55f6290a31662d940c397d3aba43b8649ff1919",
+          "src/host/avatar.js": "83aa45a1672e33939b3bc3aa26e289abe29d336142dd293caac41b5e42cee38a",
+          "src/host/browser-plugins.js": "cd0fab2330b5166d4b1d4768540292e483e1f5b159a2d3c7cd1d2b61f188af5f",
+          "src/host/browser.js": "7a1db818f91283486eabe20e3240631b3e4ba0b8d135769dc3754646f63e818e",
+          "src/host/browser/gate.js": "c45b261d803ed3fa599c951bdff2ba40994e0e99d9ebaf019a545e9da83d25db",
+          "src/host/browser/loop.js": "f6e1ab6d2e939915bac160831c87048a2dcd6c114ac90c854d7685b25c582c32",
+          "src/host/browser/mount.js": "91e1aee67a6e3fc0210ed22b9a502de520f7b859671c1795eddc9855c5da877b",
+          "src/host/browser/refs.js": "65e947297b0e4ad386c34294a6ae7e598e8715c18e622cbf39109ff3a28192c1",
+          "src/host/browser/script.js": "3b5afa1658ca618df421408636fb1078a3bc1d1011d9d8f6fb2bd3b7e100d19c",
+          "src/host/browser/session-model.js": "f6bd1fd9c35db1a3bd958fc8ae6424133719f9e9fbfb7df4223c8748b9b8f171",
+          "src/host/browser/session.js": "31824421ac714fc134ab52b45ba8283f71d34b4bc2e81f3605f56c725e27a8da",
+          "src/host/browser/task.js": "11226bdc0a33f1f44843e6106624b7bfad6ec556f65b68b5b258f14d09bc799a",
+          "src/host/btw.js": "f8205eca8fffe68c3e5ec23175c72d7889cfbb389f54a959529e8af9e91e3339",
+          "src/host/capabilities.js": "33681d752218d5ec5082e2cc6e9969c88503e7e9ea5effad43f04e271fc46b28",
+          "src/host/channel.js": "963ddfe421ed95bb8145d46fea37b5347b20fc7d490e08d4e1de1dc8c8ce65c4",
+          "src/host/chat-index.js": "179bd5ab618b71312143ad9702f16510d294c066adc52b84bc0429471f8974d0",
+          "src/host/communication.js": "0e28446dbbc768ffc04d9c133de7f9e7a459ed2b3b6b6f3d41129d551516aec0",
+          "src/host/connectors.js": "3935c63e14115dec2e12dbe2665ac46ca0bca4548e329cce95133c0d60d187f2",
+          "src/host/constants.js": "22e33c38d908c7171704a96520659704f811d286cc7c55328da3dfd12f13d468",
+          "src/host/delivery.js": "847002995bbad933410718798e3bd86b9e4e6810669a2dbac2651e10b916d708",
+          "src/host/diagnostics.js": "56c5fa6716e4d195524ba1a824fbabfd93d2e4bc2ec6d9c1ba2478a1ecf07467",
+          "src/host/dsh-update.js": "3da9de35448ad5c0b05164ccd8ac6e805f109dd283a1b66bb733e21ab3d4d1cd",
+          "src/host/federation/prompt.js": "06074bcf2a26bdeb454abf8985269606410c4101938523bfaa98474c8e8234b0",
+          "src/host/federation/queue-store.js": "52e15a2a3f6ec936ab154bbc42edb9a5b412d08497e0b4087ebc0ba285438295",
+          "src/host/federation/runtime.js": "7831c9023af57266d6b9ed0a0b2adb59f9dc71b9f73fde443fec47d0cd9442be",
+          "src/host/federation/session-journal.js": "7e37d5451cfe6acff13c549218634b03046fafe4109e3741858a0cf2c2ccc63c",
+          "src/host/federation/session-scope.js": "ad7a725ce7c5a4051a06fa63a33bb2cd8752492e6276171674fd3147f853b053",
+          "src/host/federation/tool-scope.js": "1a12ea8949dd9dffc6416f4b5be55702acc9250fdef60d9ea89a69661cfc317c",
+          "src/host/federation/transport.js": "31b86ff753baab2b6c8b2904e38d8ed5175c40017b2a4206df4f4936af741aac",
+          "src/host/feed.js": "b7950ed356ad788d9ccc1444e2586c97a7e0d05172f4436c1a1d697c74a1721f",
+          "src/host/files.js": "9aa6b2f3985c3267e90f0b99dc8d9d2dcf4d8f194a5537c4689f6dfb5ecbbba1",
+          "src/host/folders.js": "c8562db9f83ca10c3320580a28fbafc61fea881508550dbdca7bbef63eed6f15",
+          "src/host/groups.js": "4053e0649a0ec467256904267a355521e5a6d31a06f9a084dd97b24970878153",
+          "src/host/handoffs.js": "15960a0f42ee110ee527faeefe47d51d962579b68132884ab6a2d5f8bdcc30d9",
+          "src/host/home-lock.js": "2cdd3007ee1b7a8436a460982834f7c7fe9ab6df56be1ddc02012d8641baa098",
+          "src/host/images.js": "a86512bd93971e28c224a2813c67dcb032956383b0a8d170c420277fe7a74f5b",
+          "src/host/learning.js": "e84f8af3494134021c11de55cea941db01560cd1c4ae1e6e6138e3bb49efc851",
+          "src/host/links.js": "1c93b66ac74f1b35cd7b0c1845361d8b2dc55a538da831b8b8216824aa0a5af8",
+          "src/host/memory-pending.js": "9fcd351a7a3b453e3c442ede8f2d8d586f53b9a76f8caaca69287731ad267e6f",
+          "src/host/memory.js": "840a9699b196d3c80f2eb03b470e77dab0eb73ab8769f171f2a381dd77c86345",
+          "src/host/models.js": "cc4092cb1ed24d0c595ae53b4eb87b5a0e9413c2cee71a1c8053cdf0d40d13a3",
+          "src/host/office-skills.js": "56d77d263c937172cc024201025466c2de5b1fbd5b9156555d4cafd068ebc411",
+          "src/host/parts.js": "4fdedde889bee328e046b1615aa31b355beab1fd239bd6994089f29ddedf8d7d",
+          "src/host/permissions.js": "b95903ba029ce95d881a56fce9ddffb083e66fae3dd1c2f51a03badca864fbd0",
+          "src/host/privacy.js": "370b5adf762714a8b794f2079a8bbfd8f9c63811bf599ecadad80a63a9f12c5a",
+          "src/host/prompt.js": "112b24bc8f9f54caef909d431e4b43fa599ae2c3bef7e3c2534d8fb1cc0647db",
+          "src/host/providers.js": "98a45fa42ba7cb15ae9063c26435dd9be677cdf8b1bc1249ce086531bfa39282",
+          "src/host/requests.js": "1b7a2ddfaaff3d4492167566d826dfcd35e4a7cbcc4c7ad99777d496b90da09d",
+          "src/host/resume.js": "a06e130d60292eb6ccf72157750af81736bb84cb9bbb850a66535f6cc02aa3ea",
+          "src/host/roster.js": "f06985d8b63ebad82c631c76b488e91861513b94cd9492c09591ae67236922eb",
+          "src/host/schedules.js": "503f04d1c3524c326018dce3be7055d33beb179b2a03f068d255f1e165a76c30",
+          "src/host/secrets.js": "fbf79f1e4907f726c056a916bcec51656ebffa713f7bc126c9e7ee90515c7c3c",
+          "src/host/side.js": "09178ea42cb6da4ac151dbbff298b5e7cd556f585b6d2905a84009808e151634",
+          "src/host/steer.js": "b09959a6a8a6bd0350b7902ac4fceac6b73be562b1924fc8b8f3c33642aeb462",
+          "src/host/steward.js": "af22df51a59a625b5b449f7e960362a22cb0e5940ffb249ab88753dd7d4bbe2a",
+          "src/host/store.js": "aae02595f97b2337e485f16a84091c9d91d40f6dbdc211350fe3fe0cddf52b19",
+          "src/host/text.js": "375b6944d2f28efdc4a4892fdfe9f91347a4af49ee840c0cad1c5d636d7421c6",
+          "src/host/thinking.js": "7d7f7d3f341a777f9b1627c3b9f59ab7dbe8345151f6495c4b3c1caed2ba38ee",
+          "src/host/time-context.js": "1290e4afdbacb01c4eb0ddfb7c6556f04c43cec3e1596a7d4904af4bc261c57e",
+          "src/host/tools.js": "1b8338340ca28f70c516678eb4395fb7508c5b0d77ed88886db75ed7470d7997",
+          "src/host/turns.js": "6ec4b57107eed07ee73feba43fb863e7e12e489a2ff4dc742c6c6e22fb9c0081",
+          "src/host/update.js": "145004d8f7997d12de519b4c6462caa80e6c8346730edc6bd2ed783003e6e83e",
+          "src/host/usage.js": "3d4ff2168d7dfb726c2d5454f36eef58dec1c768b79c2c0c17f4192a34b2bbd7",
+          "src/office/check.js": "e5f12d37e2691cc5adec6517eff02b68904690d530aeaf505ed2bf46ab192ac9",
+          "src/office/cli.js": "5e1de2c8f6f25df4da6decd3d5a76007ceb7988544a525528b550a35605433c6",
+          "src/office/docx.js": "a19aef11fbc26dc61ae9686c03c81110f736bc437f916f95d3d11aa7615827be",
+          "src/office/package.js": "7798e2f29e27734cb089e454e91cd39cbc13011a97dbce03c00d0bdaaa454629",
+          "src/office/png.js": "5c6fe29d5ee9fd5bf0323cab51d679ca5c027902f17e945db9cea31286bdda8f",
+          "src/office/pptx.js": "d54bab1da38fc6448d1e5b024c76b4928ab182c2f79b29988488affdc4a0ebeb",
+          "src/office/skills/office-tools/SKILL.md": "285600e8e53cac3e287bb1bede219170a7a90e285ddd0fabc8e736de1774720c",
+          "src/office/skills/office/SKILL.md": "215e0a57d054927a3a86574f03f251dfc5374d57c5e8093f7f7ab6cd19b5013a",
+          "src/office/xlsx.js": "91036db0e53257555bcf42e6740cd6dcc0c5715e10e3815926a99344f5b9764e",
+          "src/office/xml.js": "ec94f3f6743a6a2ea0e88145f3567e351d24df57be44f6ae9f29971087e37bfc",
+          "src/office/zip.js": "441e4641fc17462e1641272669e5ef5465234a2d89f1a7ab98f9597ca0e45bd0",
+          "src/shared/communication-mentions.js": "d15a10955b644277886c8dd74c66a032328f2d8fe3c4eb642f6554fe76f2d882",
+          "src/shared/group-replies.js": "89e49479d2edf6a0e5c3199cb7ac1893309d01cc2e12d653e6e81692234e4e42",
+          "src/shared/mentions.js": "f7cbf34e3c184e350edcf5bdbb3a3cbd2894cc8bbbc925ba5f8afc365dce64e9",
+          "web-search.js": "c47a67e66c3fa5e1b739f2389f56c6a3bc8d39148e4897160800f8c11250740e"
+        }
+      },
+      {
+        "name": "hub",
+        "files": 7,
+        "tarball": "ds-bot-communication-hub-0.1.0.tgz",
+        "sha256": "dc9d846ba017fd23f22f725885717c67d9ee6dbcdff47f39f5d1cb9c2c5146b1",
+        "allInstalledFilesMatchSource": true,
+        "hashes": {
+          "README.md": "4ae8d9c13cea3653f41d1241d21ecd056c64b834aa47bf0123c19e8038ba6bb7",
+          "config.example.json": "d2bcfb7695ddee9ec011550306f369a9b4b21cf23133bbdbd0b05de689ff2b21",
+          "package.json": "5ba8a7071123ff5dea8ad3a9b96a63690af0edc42cad21424de03c33c490e549",
+          "src/cli.js": "97b8ed871808efca7cd544da357232f74744ad2660b3072dc1e196455aaedf54",
+          "src/protocol.js": "18558b2e1cd8ddf0bf2479a3985841d3703bf503f98c5b22d6504a3bfc5b9d45",
+          "src/server.js": "5009e709101ac24672e1785202b3167b826a35f6dc2fce0f71620adc1add9a4c",
+          "src/store.js": "0554a3f06eca906ac19110718d55d540cbc9dcfb630093f417f9112427c7dee3"
+        }
+      }
+    ]
+  },
+  "cleanup": {
+    "timestamp": "2026-11-03T10:21:58.3441646Z",
+    "recorded": 106,
+    "running": [],
+    "listeners": [],
+    "profilesRetained": true,
+    "status": "PASS"
+  },
+  "verification": {
+    "buildFresh": true,
+    "lint": "PASS with existing repository warnings",
+    "gitDiffCheck": true,
+    "upstreamDshSource": "unchanged",
+    "independentReview": "Hub and adapter follow-up confirmed reported fixes closed; read-only agents ran no tests"
+  },
+  "uncommittedChanges": [
+    "M .github/workflows/test.yml",
+    " M docs/plans/federated-communication/development-environment.md",
+    " M docs/plans/federated-communication/implementation-plan.md",
+    " M docs/plans/federated-communication/protocol.md",
+    " M ds-bot/client.js",
+    " M ds-bot/dev/harness/package.json",
+    " M ds-bot/dev/mock-llm.mjs",
+    " M ds-bot/index.js",
+    " M ds-bot/src/client/i18n.js",
+    " M ds-bot/src/client/index.js",
+    " M ds-bot/src/client/sidebar.js",
+    " M ds-bot/src/host/channel.js",
+    " M ds-bot/src/host/prompt.js",
+    " M ds-bot/src/host/tools.js",
+    " M ds-bot/src/shared/mentions.js",
+    " M ds-bot/test/privacy.test.js",
+    " M ds-bot/test/prompt.test.js",
+    " M ds-bot/test/work-dir.test.js",
+    "?? communication-hub/README.md",
+    "?? communication-hub/config.example.json",
+    "?? communication-hub/package-lock.json",
+    "?? communication-hub/package.json",
+    "?? communication-hub/src/cli.js",
+    "?? communication-hub/src/protocol.js",
+    "?? communication-hub/src/server.js",
+    "?? communication-hub/src/store.js",
+    "?? communication-hub/test/fixtures/hub-child.mjs",
+    "?? communication-hub/test/fixtures/scoped-store.mjs",
+    "?? communication-hub/test/governance.test.js",
+    "?? communication-hub/test/network.test.js",
+    "?? communication-hub/test/security.test.js",
+    "?? communication-hub/test/store.test.js",
+    "?? docs/plans/federated-communication/final-review-evidence.json",
+    "?? docs/plans/federated-communication/final-security-review.md",
+    "?? docs/plans/federated-communication/group-governance-evidence.json",
+    "?? docs/plans/federated-communication/group-governance.md",
+    "?? docs/plans/federated-communication/local-progress.md",
+    "?? docs/plans/federated-communication/p0-api-evidence.json",
+    "?? docs/plans/federated-communication/p0-followup-evidence.json",
+    "?? docs/plans/federated-communication/p0-login-review.md",
+    "?? docs/plans/federated-communication/p0-recovery-gap.md",
+    "?? docs/plans/federated-communication/p1-transport-evidence.json",
+    "?? docs/plans/federated-communication/p2-adapter-evidence.json",
+    "?? docs/plans/federated-communication/p3-ui-evidence.json",
+    "?? docs/plans/federated-communication/p4-acceptance.json",
+    "?? docs/plans/federated-communication/p4-acceptance.md",
+    "?? docs/plans/federated-communication/production-adapter.md",
+    "?? docs/plans/federated-communication/real-model-test-plan.md",
+    "?? ds-bot/dev/communication/README.md",
+    "?? ds-bot/dev/communication/adapter.mjs",
+    "?? ds-bot/dev/communication/atomic-fixture.mjs",
+    "?? ds-bot/dev/communication/atomic-matrix.mjs",
+    "?? ds-bot/dev/communication/behavior-matrix.mjs",
+    "?? ds-bot/dev/communication/bench-client.mjs",
+    "?? ds-bot/dev/communication/bench.ps1",
+    "?? ds-bot/dev/communication/build-probe.mjs",
+    "?? ds-bot/dev/communication/faults.mjs",
+    "?? ds-bot/dev/communication/governance.mjs",
+    "?? ds-bot/dev/communication/group-demo.mjs",
+    "?? ds-bot/dev/communication/host.mjs",
+    "?? ds-bot/dev/communication/hub-fixture.mjs",
+    "?? ds-bot/dev/communication/human.mjs",
+    "?? ds-bot/dev/communication/local-topology.mjs",
+    "?? ds-bot/dev/communication/network-matrix.mjs",
+    "?? ds-bot/dev/communication/probe-plugin/client-source.js",
+    "?? ds-bot/dev/communication/probe-plugin/client.js",
+    "?? ds-bot/dev/communication/probe-plugin/cordis.patch.yml",
+    "?? ds-bot/dev/communication/probe-plugin/index.js",
+    "?? ds-bot/dev/communication/probe-plugin/package.json",
+    "?? ds-bot/dev/communication/queued-recovery.mjs",
+    "?? ds-bot/dev/communication/recovery-matrix.mjs",
+    "?? ds-bot/dev/communication/ui-seed.mjs",
+    "?? ds-bot/dev/communication/verify.mjs",
+    "?? ds-bot/src/client/communication-model.js",
+    "?? ds-bot/src/client/communication.js",
+    "?? ds-bot/src/host/communication.js",
+    "?? ds-bot/src/host/federation/prompt.js",
+    "?? ds-bot/src/host/federation/queue-store.js",
+    "?? ds-bot/src/host/federation/runtime.js",
+    "?? ds-bot/src/host/federation/session-journal.js",
+    "?? ds-bot/src/host/federation/session-scope.js",
+    "?? ds-bot/src/host/federation/tool-scope.js",
+    "?? ds-bot/src/host/federation/transport.js",
+    "?? ds-bot/src/shared/communication-mentions.js",
+    "?? ds-bot/test/communication-journal.test.js",
+    "?? ds-bot/test/communication-mentions.test.js",
+    "?? ds-bot/test/communication-policy.test.js",
+    "?? ds-bot/test/communication-queue.test.js",
+    "?? ds-bot/test/communication-security.test.js",
+    "?? ds-bot/test/communication-ui.test.js",
+    "?? ds-bot/test/communication-view.test.js"
+  ],
+  "pushed": false,
+  "realModel": {
+    "status": "NOT_RUN",
+    "processApiKeyReferencePresent": false,
+    "userCredentialStoresInspected": false,
+    "permissionNeeded": "existing test credential source + official Flash synthetic test up to 8 requests and US$0.10 total",
+    "plan": "real-model-test-plan.md"
+  },
+  "limitations": [
+    "same-machine processes and loopback WS only",
+    "different IP/WSS/NAT/other OS not runtime-validated",
+    "real-model semantics not validated",
+    "unfinished legacy standard-preset work quarantined for operator review",
+    "arbitrary trusted in-process plugin compositions require separate audit",
+    "offline screenshot/trace artifacts unavailable"
+  ]
+}

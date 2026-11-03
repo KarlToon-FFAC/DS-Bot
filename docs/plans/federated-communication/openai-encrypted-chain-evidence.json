@@ -1,0 +1,532 @@
+{
+  "status": "PASS_ENCRYPTED_REUSE_AND_REAL_DSH_HUB",
+  "timestamp": "2026-11-03T12:21:03.201Z",
+  "branch": "chore/federated-communication",
+  "head": "6ede702b7d698a8d86261ecb6a2a5f1efc8e1e87",
+  "requestedBaseline": "6ede702b7d698a8d86261ecb6a2a5f1efc8e1e87",
+  "versions": {
+    "node": "v24.13.0",
+    "plugin": "0.2.6",
+    "dsh": "0.2.1-rc.4",
+    "hub": "0.1.0"
+  },
+  "storage": {
+    "status": "CONFIGURED_AND_VERIFIED",
+    "mechanism": "Windows DPAPI CurrentUser",
+    "target": "%LOCALAPPDATA%\\DS-Bot\\credentials\\openai-official.dpapi",
+    "configured": true,
+    "decryptable": true,
+    "owner": "<current Windows user>",
+    "protectedAcl": true,
+    "aclEntries": 1,
+    "retainedForAuthorizedReuse": true,
+    "plaintextExported": false,
+    "repositoryOrEnvironmentFile": false,
+    "oldTemporaryKeyPromoted": false,
+    "firstFailure": {
+      "keyFileExisted": false,
+      "directoryEntries": 0,
+      "directoryAclProtected": false,
+      "reproducedCause": "GUI-launched Windows PowerShell could not find Security cmdlets with inherited module path",
+      "repair": "explicit native Security module import and approved ACL setup on exact empty owned directory",
+      "ownerReenteredNewKey": true,
+      "proof": "same native launch synthetic in-place roundtrip passed, then configured/DPAPI verify and successful real requests"
+    },
+    "risk": "same Windows user or administrator can access/decrypt; this is encrypted at rest, not same-user Agent isolation"
+  },
+  "real": {
+    "status": "PASS_REAL_DSH_HUB",
+    "mode": "real",
+    "model": "gpt-6-luna",
+    "network": "same Windows computer; two real DSH hosts and real durable Hub",
+    "stage": "cleanup",
+    "requests": 6,
+    "generations": 3,
+    "usage": [
+      {
+        "inputTokens": 1887,
+        "outputTokens": 7
+      },
+      {
+        "inputTokens": 1961,
+        "outputTokens": 7
+      },
+      {
+        "inputTokens": 2618,
+        "outputTokens": 8
+      }
+    ],
+    "cases": [
+      {
+        "id": "real-dm-full-chain",
+        "status": "PASS",
+        "conversationId": "048fb0d1-4338-42c4-878f-15b104963151",
+        "inputMessageId": "c193482c-bf24-44e6-9431-d6833621899f",
+        "exportedMessageId": "4f81afcf-9edb-4565-ba8f-08f1ee6a9d3e"
+      },
+      {
+        "id": "read-only-server-denial-without-model",
+        "status": "PASS"
+      },
+      {
+        "id": "real-passive-group-full-chain",
+        "status": "PASS",
+        "conversationId": "d84f23d3-d35d-4a3b-86bf-6d3fb2e26d19",
+        "inputMessageId": "5fa85e04-274e-4a22-b3ca-c6e565dfd5ec",
+        "replyMessageId": "6a9f8a9d-c128-42ac-bf5f-beee15a25091"
+      },
+      {
+        "id": "real-injection-privacy-boundary",
+        "status": "PASS",
+        "privateCanarySentToGroupModel": false,
+        "originalInputCount": 1
+      },
+      {
+        "id": "real-final-crash-export-recovery",
+        "status": "PASS",
+        "inputMessageId": "853a1c39-b261-4d87-b21b-0601e0739032",
+        "replyMessageId": "2fddafc4-bee5-41f5-8299-5305c1505e94",
+        "additionalRequests": 0
+      },
+      {
+        "id": "repeated-recovery-no-regeneration",
+        "status": "PASS",
+        "additionalRequests": 0
+      },
+      {
+        "id": "original-private-Chief-not-woken",
+        "status": "PASS",
+        "additionalEvents": 0
+      }
+    ],
+    "payloadChecks": [
+      {
+        "phase": 0,
+        "canaryPresent": true,
+        "credentialPresent": false
+      },
+      {
+        "phase": 0,
+        "canaryPresent": true,
+        "credentialPresent": false
+      },
+      {
+        "phase": 1,
+        "canaryPresent": false,
+        "credentialPresent": false
+      },
+      {
+        "phase": 1,
+        "canaryPresent": false,
+        "credentialPresent": false
+      },
+      {
+        "phase": 2,
+        "canaryPresent": false,
+        "credentialPresent": false
+      },
+      {
+        "phase": 2,
+        "canaryPresent": false,
+        "credentialPresent": false
+      }
+    ],
+    "credentialSavedByTest": false,
+    "realCredentialInChildEnvironment": false,
+    "cleanup": true,
+    "differentMachine": false,
+    "runId": "63447c55",
+    "profiles": [
+      "openai-63447c55-a",
+      "openai-63447c55-b"
+    ],
+    "providerDiagnostics": {
+      "available": true,
+      "route": {
+        "id": "comm-openai-pilot",
+        "name": "comm-openai-pilot",
+        "models": [
+          {
+            "ref": "comm-openai-pilot/gpt-6-luna",
+            "name": "gpt-6-luna"
+          }
+        ],
+        "key": {
+          "configured": true,
+          "writable": true
+        },
+        "removable": false,
+        "custom": true
+      },
+      "visibleProviderIds": [
+        "deepseek-official",
+        "comm-openai-pilot"
+      ],
+      "addableCount": 41
+    },
+    "attempts": [
+      {
+        "phase": 0,
+        "toolNames": [
+          "end_communication_group",
+          "invite_communication_member",
+          "leave_communication_group",
+          "list_communication_conversations",
+          "list_contacts",
+          "read_communication_history",
+          "remove_communication_member",
+          "send_contact_message",
+          "set_communication_member_policy",
+          "set_communication_receiving_rule",
+          "transfer_communication_ownership"
+        ],
+        "toolFields": [
+          "type",
+          "name",
+          "description",
+          "parameters"
+        ],
+        "choiceType": null
+      },
+      {
+        "phase": 1,
+        "toolNames": [
+          "end_communication_group",
+          "invite_communication_member",
+          "leave_communication_group",
+          "list_communication_conversations",
+          "list_contacts",
+          "read_communication_history",
+          "remove_communication_member",
+          "send_contact_message",
+          "set_communication_member_policy",
+          "set_communication_receiving_rule",
+          "transfer_communication_ownership"
+        ],
+        "toolFields": [
+          "type",
+          "name",
+          "description",
+          "parameters"
+        ],
+        "choiceType": null
+      },
+      {
+        "phase": 2,
+        "toolNames": [
+          "end_communication_group",
+          "invite_communication_member",
+          "leave_communication_group",
+          "list_communication_conversations",
+          "list_contacts",
+          "read_communication_history",
+          "remove_communication_member",
+          "send_contact_message",
+          "set_communication_member_policy",
+          "set_communication_receiving_rule",
+          "transfer_communication_ownership"
+        ],
+        "toolFields": [
+          "type",
+          "name",
+          "description",
+          "parameters"
+        ],
+        "choiceType": null
+      }
+    ],
+    "reservedRequests": 6,
+    "reservedMicroUsd": 10536,
+    "modeledGenerationCostUsdUpperBound": 0.0016275
+  },
+  "reservations": [
+    {
+      "kind": "generation",
+      "state": "headers",
+      "count": 3
+    },
+    {
+      "kind": "input-count",
+      "state": "headers",
+      "count": 3
+    }
+  ],
+  "finalMock": {
+    "directory": "openai-dsh-mock-ZaPNNC",
+    "status": "PASS_MOCK_DSH_HUB",
+    "requests": 6,
+    "cases": [
+      {
+        "id": "real-dm-full-chain",
+        "status": "PASS",
+        "conversationId": "a7998f40-8cfb-479d-a43d-9831bb0d03d5",
+        "inputMessageId": "423e3e58-6620-42ac-9d94-cdd5ae395ed7",
+        "exportedMessageId": "1d1fe7dd-9e9a-4f63-8083-ba152b920a9c"
+      },
+      {
+        "id": "read-only-server-denial-without-model",
+        "status": "PASS"
+      },
+      {
+        "id": "real-passive-group-full-chain",
+        "status": "PASS",
+        "conversationId": "b9713627-3e5f-4795-8c70-e43e56c5a632",
+        "inputMessageId": "6e415fbf-8759-47f9-9e1f-8abb4e9dfe14",
+        "replyMessageId": "996df1a2-78ed-403b-8d2d-6a2be1d1ea93"
+      },
+      {
+        "id": "real-injection-privacy-boundary",
+        "status": "PASS",
+        "privateCanarySentToGroupModel": false,
+        "originalInputCount": 1
+      },
+      {
+        "id": "real-final-crash-export-recovery",
+        "status": "PASS",
+        "inputMessageId": "3d093888-fe09-43eb-83c5-dc8478ddf2af",
+        "replyMessageId": "2808ca14-916c-4df8-a695-0ea8306dbc74",
+        "additionalRequests": 0
+      },
+      {
+        "id": "repeated-recovery-no-regeneration",
+        "status": "PASS",
+        "additionalRequests": 0
+      },
+      {
+        "id": "original-private-Chief-not-woken",
+        "status": "PASS",
+        "additionalEvents": 0
+      }
+    ],
+    "cleanup": true,
+    "mock": {
+      "requests": 6,
+      "allAuthorized": true,
+      "keyInPayload": false
+    }
+  },
+  "officialRequests": {
+    "thisAuthorizedFullChain": 6,
+    "earlierSeparateTemporaryKeyProbe": 7,
+    "cumulative": 13,
+    "perRunMaximum": 8,
+    "oldLedgersReset": false
+  },
+  "usage": {
+    "inputTokens": 6466,
+    "outputTokens": 22,
+    "modeledGenerationCostUsdUpperBound": 0.0016275,
+    "invoiceVerified": false,
+    "excludes": "counting/metadata fees not explicitly established, taxes and unrelated account activity"
+  },
+  "validation": {
+    "full": {
+      "tests": 1491,
+      "pass": 1489,
+      "fail": 0,
+      "skipped": 2,
+      "cancelled": 0
+    },
+    "newOpenAICasesSince1469Snapshot": 22,
+    "nativeVaultCases": 2,
+    "guardAndVaultFocusedCases": 15,
+    "ownedSupervisorLossCase": 1,
+    "lint": "PASS with existing warnings",
+    "bundleFresh": true,
+    "gitDiffCheck": true,
+    "productionFileHashesUnchanged": 94,
+    "credentialShapedLiteralScan": {
+      "scannedRepositoryChanges": 114,
+      "found": false
+    },
+    "coverageVersion": "real model acceptance preceded only final owned-supervisor cleanup hardening; final hardening covered by unit and complete Mock, no additional real request"
+  },
+  "cleanup": {
+    "timestamp": "2026-11-03T12:17:18.7260449Z",
+    "vaultConfigured": true,
+    "vaultDecryptable": true,
+    "vaultOwner": "<current Windows user>",
+    "vaultAclProtected": true,
+    "vaultAclEntries": 1,
+    "entryWindowRemaining": false,
+    "owned": [
+      {
+        "profile": "openai-63447c55-a",
+        "kind": "mock",
+        "id": 51868,
+        "running": false
+      },
+      {
+        "profile": "openai-63447c55-a",
+        "kind": "web",
+        "id": 53120,
+        "running": false
+      },
+      {
+        "profile": "openai-63447c55-b",
+        "kind": "mock",
+        "id": 37128,
+        "running": false
+      },
+      {
+        "profile": "openai-63447c55-b",
+        "kind": "web",
+        "id": 26164,
+        "running": false
+      }
+    ],
+    "listeners": 0,
+    "credentialRetained": true,
+    "plaintextExported": false
+  },
+  "uncommittedChanges": [
+    "M .github/workflows/test.yml",
+    " M docs/plans/federated-communication/development-environment.md",
+    " M docs/plans/federated-communication/implementation-plan.md",
+    " M docs/plans/federated-communication/protocol.md",
+    " M ds-bot/client.js",
+    " M ds-bot/dev/harness/package.json",
+    " M ds-bot/dev/mock-llm.mjs",
+    " M ds-bot/index.js",
+    " M ds-bot/src/client/i18n.js",
+    " M ds-bot/src/client/index.js",
+    " M ds-bot/src/client/sidebar.js",
+    " M ds-bot/src/host/channel.js",
+    " M ds-bot/src/host/prompt.js",
+    " M ds-bot/src/host/tools.js",
+    " M ds-bot/src/shared/mentions.js",
+    " M ds-bot/test/privacy.test.js",
+    " M ds-bot/test/prompt.test.js",
+    " M ds-bot/test/work-dir.test.js",
+    "?? communication-hub/README.md",
+    "?? communication-hub/config.example.json",
+    "?? communication-hub/package-lock.json",
+    "?? communication-hub/package.json",
+    "?? communication-hub/src/cli.js",
+    "?? communication-hub/src/protocol.js",
+    "?? communication-hub/src/server.js",
+    "?? communication-hub/src/store.js",
+    "?? communication-hub/test/fixtures/hub-child.mjs",
+    "?? communication-hub/test/fixtures/scoped-store.mjs",
+    "?? communication-hub/test/governance.test.js",
+    "?? communication-hub/test/network.test.js",
+    "?? communication-hub/test/security.test.js",
+    "?? communication-hub/test/store.test.js",
+    "?? docs/plans/federated-communication/final-review-evidence.json",
+    "?? docs/plans/federated-communication/final-security-review.md",
+    "?? docs/plans/federated-communication/group-governance-evidence.json",
+    "?? docs/plans/federated-communication/group-governance.md",
+    "?? docs/plans/federated-communication/local-progress.md",
+    "?? docs/plans/federated-communication/openai-credential-storage-proposal.md",
+    "?? docs/plans/federated-communication/openai-encrypted-chain-evidence.json",
+    "?? docs/plans/federated-communication/openai-encrypted-reuse.md",
+    "?? docs/plans/federated-communication/openai-model-preparation.md",
+    "?? docs/plans/federated-communication/openai-preparation-evidence.json",
+    "?? docs/plans/federated-communication/openai-private-input-evidence.json",
+    "?? docs/plans/federated-communication/openai-private-input.md",
+    "?? docs/plans/federated-communication/openai-real-pilot-evidence.json",
+    "?? docs/plans/federated-communication/openai-real-pilot.md",
+    "?? docs/plans/federated-communication/p0-api-evidence.json",
+    "?? docs/plans/federated-communication/p0-followup-evidence.json",
+    "?? docs/plans/federated-communication/p0-login-review.md",
+    "?? docs/plans/federated-communication/p0-recovery-gap.md",
+    "?? docs/plans/federated-communication/p1-transport-evidence.json",
+    "?? docs/plans/federated-communication/p2-adapter-evidence.json",
+    "?? docs/plans/federated-communication/p3-ui-evidence.json",
+    "?? docs/plans/federated-communication/p4-acceptance.json",
+    "?? docs/plans/federated-communication/p4-acceptance.md",
+    "?? docs/plans/federated-communication/production-adapter.md",
+    "?? docs/plans/federated-communication/real-model-test-plan.md",
+    "?? ds-bot/dev/communication/README.md",
+    "?? ds-bot/dev/communication/adapter.mjs",
+    "?? ds-bot/dev/communication/atomic-fixture.mjs",
+    "?? ds-bot/dev/communication/atomic-matrix.mjs",
+    "?? ds-bot/dev/communication/behavior-matrix.mjs",
+    "?? ds-bot/dev/communication/bench-client.mjs",
+    "?? ds-bot/dev/communication/bench.ps1",
+    "?? ds-bot/dev/communication/build-probe.mjs",
+    "?? ds-bot/dev/communication/faults.mjs",
+    "?? ds-bot/dev/communication/governance.mjs",
+    "?? ds-bot/dev/communication/group-demo.mjs",
+    "?? ds-bot/dev/communication/host.mjs",
+    "?? ds-bot/dev/communication/hub-fixture.mjs",
+    "?? ds-bot/dev/communication/human.mjs",
+    "?? ds-bot/dev/communication/local-topology.mjs",
+    "?? ds-bot/dev/communication/network-matrix.mjs",
+    "?? ds-bot/dev/communication/openai-budget.mjs",
+    "?? ds-bot/dev/communication/openai-dsh-pilot.mjs",
+    "?? ds-bot/dev/communication/openai-private-input.mjs",
+    "?? ds-bot/dev/communication/openai-private-input.ps1",
+    "?? ds-bot/dev/communication/openai-real-pilot.mjs",
+    "?? ds-bot/dev/communication/openai-test.config.example.json",
+    "?? ds-bot/dev/communication/openai-vault-lib.ps1",
+    "?? ds-bot/dev/communication/openai-vault.ps1",
+    "?? ds-bot/dev/communication/openai-wire-check.mjs",
+    "?? ds-bot/dev/communication/owned-parent.mjs",
+    "?? ds-bot/dev/communication/probe-plugin/client-source.js",
+    "?? ds-bot/dev/communication/probe-plugin/client.js",
+    "?? ds-bot/dev/communication/probe-plugin/cordis.patch.yml",
+    "?? ds-bot/dev/communication/probe-plugin/index.js",
+    "?? ds-bot/dev/communication/probe-plugin/package.json",
+    "?? ds-bot/dev/communication/queued-recovery.mjs",
+    "?? ds-bot/dev/communication/recovery-matrix.mjs",
+    "?? ds-bot/dev/communication/ui-seed.mjs",
+    "?? ds-bot/dev/communication/verify.mjs",
+    "?? ds-bot/src/client/communication-model.js",
+    "?? ds-bot/src/client/communication.js",
+    "?? ds-bot/src/host/communication.js",
+    "?? ds-bot/src/host/federation/prompt.js",
+    "?? ds-bot/src/host/federation/queue-store.js",
+    "?? ds-bot/src/host/federation/runtime.js",
+    "?? ds-bot/src/host/federation/session-journal.js",
+    "?? ds-bot/src/host/federation/session-scope.js",
+    "?? ds-bot/src/host/federation/tool-scope.js",
+    "?? ds-bot/src/host/federation/transport.js",
+    "?? ds-bot/src/shared/communication-mentions.js",
+    "?? ds-bot/test/communication-journal.test.js",
+    "?? ds-bot/test/communication-mentions.test.js",
+    "?? ds-bot/test/communication-policy.test.js",
+    "?? ds-bot/test/communication-queue.test.js",
+    "?? ds-bot/test/communication-security.test.js",
+    "?? ds-bot/test/communication-ui.test.js",
+    "?? ds-bot/test/communication-view.test.js",
+    "?? ds-bot/test/openai-budget.test.js",
+    "?? ds-bot/test/openai-owned-parent.test.js",
+    "?? ds-bot/test/openai-private-input.test.js",
+    "?? ds-bot/test/openai-real-pilot.test.js",
+    "?? ds-bot/test/openai-vault.test.js"
+  ],
+  "sourceHashes": {
+    "ds-bot/dev/communication/openai-vault-lib.ps1": "c40df5517322f0c0daf9bbed3ea5998687dd6899dd4b3c4dcb6805e1baad0b5f",
+    "ds-bot/dev/communication/openai-vault.ps1": "d6dff7a6ef46abf86f85f0a2dbf34adf8b44f9f814505fbdd298d42ad98f19c3",
+    "ds-bot/dev/communication/openai-dsh-pilot.mjs": "3bd705b728e6bd376b683fa57c5a0b89059ccd66da08a34759f2a7d952637d57",
+    "ds-bot/dev/communication/openai-budget.mjs": "be24d4bc96a5c415894f9d608ffcf2014e81b0eccc473d1987f6355fcb81dc6b",
+    "ds-bot/dev/communication/owned-parent.mjs": "f08599f0240dc917fec37e605459d7b770903589ceee84c467148f4d30fe58b6",
+    "ds-bot/dev/communication/host.mjs": "88bb1a93544e46ffdb4a9bbe10a292d0ca397323488a7cd9db8645799801574d",
+    "ds-bot/dev/communication/bench.ps1": "c72a2c7770927551fabb38f93247c91e5a71ea80cb54a7ce44cd131b6c0d4fe2",
+    "ds-bot/dev/communication/hub-fixture.mjs": "2726c474abd02a03d79b978bdcafaebf588f41c64d0c8b0ff5c1ca16c5721705",
+    "ds-bot/dev/communication/probe-plugin/index.js": "6f0ae490bf1779334b2fbd0db5a014c10c0cabddb7ed6942c60893519e29e36b",
+    "ds-bot/dev/mock-llm.mjs": "c77e4c809a910a3c28e0aab64b78b9c659af4687da01279a3004d9baf0b1523d",
+    "ds-bot/test/openai-budget.test.js": "483606c51b79e0fe67eecdebc2159d4edbe5bad616bde4f96ad8731eb4e19ee3",
+    "ds-bot/test/openai-vault.test.js": "83451b7c345fc1c4177276b6bf17f8caf2e40252ce356056844567e15a475598",
+    "ds-bot/test/openai-owned-parent.test.js": "4ef6986d5641baa06aa488cea3f2e6ad0e38f2da465dab3f3370fdab7d6bad86",
+    "ds-bot/dev/communication/README.md": "e5272e9cc1d33c0b6e69f29cf917089080b42d0d7c0a2307af96c0f3f1ffafb1",
+    "docs/plans/federated-communication/openai-encrypted-reuse.md": "a8142043f4632135b729491f737d181781b6337475c23f4fb4aa6d94256084e7",
+    "docs/plans/federated-communication/local-progress.md": "689befeb74e4f42de865ef978ddc312f440069403575515d0421fabc40046315"
+  },
+  "limitations": [
+    "same computer only; different-machine and WSS/NAT unrun",
+    "real API-driven management tool scenarios not exercised",
+    "persistent reuse currently integrated into the isolated test launcher, personal app DSH settings unchanged",
+    "provider final invoice is not a local guarantee"
+  ],
+  "userActionNeededNow": false,
+  "pushed": false,
+  "virtualInputTouched": false,
+  "upstreamDshPatched": false,
+  "publication": {
+    "privacyMetadataRedacted": true,
+    "sourceHashesDescribeOriginalLocalSnapshots": true,
+    "pathPlaceholders": "CurrentUser / LOCALAPPDATA; raw local test artifacts remain untracked"
+  }
+}

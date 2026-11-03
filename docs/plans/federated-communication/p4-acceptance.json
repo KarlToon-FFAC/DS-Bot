@@ -1,0 +1,313 @@
+{
+  "phase": "P4",
+  "status": "PASS_LOCAL",
+  "platform": "native Windows 11",
+  "versions": {
+    "node": "24.13.0",
+    "dsh": "0.2.1-rc.4",
+    "plugin": "0.2.6",
+    "hub": "0.1.0"
+  },
+  "network": "loopback WS only",
+  "implementationCommit": null,
+  "suites": {
+    "recovery": {
+      "status": "PASS",
+      "platform": "native Windows",
+      "model": "local deterministic Mock",
+      "cases": [
+        {
+          "id": "before-receive",
+          "status": "PASS",
+          "conversationId": "c0f96d8e-4670-4ba6-afba-4e0f7ca68be0",
+          "messageId": "9eac998e-a035-4da8-ab47-e5ea24151eef",
+          "deliveryId": "0e2fcaa0-a64d-4bb0-b74f-651c51d19d82",
+          "logicalInputs": 1,
+          "finalMessages": 1,
+          "modelCalls": 1,
+          "exportedMessageId": "e52fa11d-f291-4383-b54b-84e549888d57"
+        },
+        {
+          "id": "after-receive",
+          "status": "PASS",
+          "conversationId": "d6d71c13-4487-46b9-8b6d-0cbc42358dce",
+          "messageId": "8486181c-30b2-487b-9cc3-d95d2059a86d",
+          "deliveryId": "0b3be604-2659-4749-84bf-5ec4a9bfd3bd",
+          "logicalInputs": 1,
+          "finalMessages": 1,
+          "modelCalls": 1,
+          "exportedMessageId": "cb189497-e7d4-498b-9692-6461c1748a10"
+        },
+        {
+          "id": "before-injection",
+          "status": "PASS",
+          "conversationId": "650f82f4-135d-4375-86bf-3675ae1c4f10",
+          "messageId": "33042e19-3193-4bd3-a1f0-851491030274",
+          "deliveryId": "c1701ed9-8889-45f8-b89c-c4c7480412b3",
+          "logicalInputs": 1,
+          "finalMessages": 1,
+          "modelCalls": 1,
+          "exportedMessageId": "3071dcac-1ef0-41cc-a706-461e10484571"
+        },
+        {
+          "id": "before-admission",
+          "status": "PASS",
+          "conversationId": "98429546-51b4-4281-b920-8540e10a4112",
+          "messageId": "05a1937a-e9fe-4645-af2a-ce91c6f5ce8e",
+          "deliveryId": "df9ca079-837e-4dc9-a7a0-f1d7e223f085",
+          "logicalInputs": 1,
+          "finalMessages": 1,
+          "modelCalls": 1,
+          "exportedMessageId": "73e830f6-12a0-4f8f-81a0-b2ad7d8736ab"
+        },
+        {
+          "id": "after-injection",
+          "status": "PASS",
+          "conversationId": "6818f0dd-825b-47d9-b6f4-75f72a969fb8",
+          "messageId": "8c947cfc-8a98-41b5-b6ad-9e64801dc4ef",
+          "deliveryId": "3803e9ca-e534-4551-bedb-dee4c52cae85",
+          "logicalInputs": 1,
+          "finalMessages": 1,
+          "modelCalls": 2,
+          "exportedMessageId": "e4615f87-be3d-4fea-9d4f-0b23659bdce9"
+        },
+        {
+          "id": "before-export",
+          "status": "PASS",
+          "conversationId": "4277c431-2e6c-459c-a429-a9dacb7c4d4d",
+          "messageId": "bb60cb6d-a92f-47c6-90ac-c861f7167d01",
+          "deliveryId": "e9dc0c77-84d7-4613-b751-bc33a1045620",
+          "logicalInputs": 1,
+          "finalMessages": 1,
+          "modelCalls": 1,
+          "exportedMessageId": "f138e276-31d4-4551-85c1-d823feb5249d"
+        },
+        {
+          "id": "after-export",
+          "status": "PASS",
+          "conversationId": "e01ff92d-d3fa-45d2-8eff-7dd9aaeb0864",
+          "messageId": "76cd484d-4922-4a93-932e-f8e56ad49b02",
+          "deliveryId": "4c7be5d0-a4eb-4c08-9fad-70d669f8f342",
+          "logicalInputs": 1,
+          "finalMessages": 1,
+          "modelCalls": 1,
+          "exportedMessageId": "2df778b1-42fb-4c02-83ab-d732f0b8de71"
+        }
+      ]
+    },
+    "network": {
+      "status": "PASS",
+      "model": "local deterministic Mock",
+      "network": "loopback WS; independent persistent Hub process",
+      "cases": [
+        {
+          "id": "before-commit-crash",
+          "status": "PASS",
+          "messageId": "750b2fd3-63c0-450e-85e5-afaa7752c482",
+          "conversationId": "52e91f00-deb2-415e-800b-0a7104fafe1e",
+          "canonicalMessages": 1,
+          "conversationSeq": 2
+        },
+        {
+          "id": "after-commit-crash",
+          "status": "PASS",
+          "messageId": "c3bffaee-79e7-4f87-8b65-69981874df8b",
+          "conversationId": "52e91f00-deb2-415e-800b-0a7104fafe1e",
+          "canonicalMessages": 1,
+          "conversationSeq": 3
+        },
+        {
+          "id": "ACK-loss-on-open-socket",
+          "status": "PASS",
+          "messageId": "9ecae5f2-2160-47d0-9977-a88b88e2f36c",
+          "conversationSeq": 4
+        },
+        {
+          "id": "offline-sender-host-restart",
+          "status": "PASS",
+          "messageId": "5feed003-9d70-48a8-91f3-eeb0e267a15f",
+          "payloadHashPreserved": true
+        },
+        {
+          "id": "triple-plus-delayed-retransmit",
+          "status": "PASS",
+          "messageId": "0d33067f-6ef7-497d-b6e2-ef6303eea07a",
+          "canonicalMessages": 1,
+          "recipientDeliveries": 1
+        },
+        {
+          "id": "repeated-reconnect",
+          "status": "PASS",
+          "reconnects": 3,
+          "newModelCalls": 0,
+          "duplicateMessages": 0
+        },
+        {
+          "id": "reordered-permanent-gap-then-incremental-repair",
+          "status": "PASS",
+          "conversationId": "e82f1acf-29d6-4987-aa2f-ae74ebadd1a7",
+          "messageIds": [
+            "0c03bdac-780b-4e19-8fe9-93e28985e892",
+            "191ae53d-9239-49bd-b9d2-0e8cbb50d707"
+          ],
+          "modelCallsWhileGap": 0,
+          "modelCallsAfterRepair": 2
+        },
+        {
+          "id": "A-B-Hub-backlog-restarts",
+          "status": "PASS",
+          "conversationId": "52e91f00-deb2-415e-800b-0a7104fafe1e",
+          "messageIds": [
+            "cb557dff-0d52-4064-b253-b1f8ad222853",
+            "f0b2b8f8-0df1-4beb-8e59-84f89355db5a"
+          ],
+          "canonicalDmPreserved": true
+        }
+      ]
+    },
+    "behavior": {
+      "status": "PASS",
+      "model": "local deterministic Mock",
+      "cases": [
+        {
+          "id": "DM-01-05-09",
+          "status": "PASS",
+          "conversationId": "f623564a-68cc-4f21-8bdb-1552e499fa0e",
+          "bidirectional": true,
+          "canonicalConcurrentOpen": true
+        },
+        {
+          "id": "DM-02-05",
+          "status": "PASS",
+          "conversationIds": [
+            "b326b222-d282-4a8e-8f0d-ef7b47249dd0",
+            "2f79b2cc-0ae7-4bbb-8425-31f7142367df"
+          ],
+          "bidirectional": true
+        },
+        {
+          "id": "DM-03-05",
+          "status": "PASS",
+          "conversationIds": [
+            "2f79b2cc-0ae7-4bbb-8425-31f7142367df",
+            "b326b222-d282-4a8e-8f0d-ef7b47249dd0"
+          ],
+          "actualExecutingBotAuthors": true
+        },
+        {
+          "id": "DM-04-05",
+          "status": "PASS",
+          "conversationId": "edae600c-53ef-4590-a385-82e88c71f914",
+          "bidirectional": true
+        },
+        {
+          "id": "DM-08",
+          "status": "PASS",
+          "forgedSenderRejected": true
+        },
+        {
+          "id": "DM-06",
+          "status": "PASS",
+          "conversationIds": [
+            "b326b222-d282-4a8e-8f0d-ef7b47249dd0",
+            "56594eae-d6fa-4ce9-a502-d266669d7914",
+            "edae600c-53ef-4590-a385-82e88c71f914"
+          ],
+          "privateCanaryPositive": true,
+          "otherConversationLeaks": 0
+        },
+        {
+          "id": "GR-01-02-03-05-06",
+          "status": "PASS",
+          "conversationId": "93ba5e26-4ce2-4c4b-932d-694d91be2569",
+          "sameNameBots": true,
+          "actualBotToBotMentionsBothWays": true,
+          "plainBotBroadcasts": 0
+        },
+        {
+          "id": "DM-07",
+          "status": "PASS",
+          "conversationIds": [
+            "93ba5e26-4ce2-4c4b-932d-694d91be2569",
+            "b326b222-d282-4a8e-8f0d-ef7b47249dd0"
+          ],
+          "groupMessageId": "68f1edaf-ac13-4ea8-9d62-3207679dd0cb",
+          "dmMessageId": "19b5ac58-e302-4662-a9da-1d9dc36c11a1"
+        },
+        {
+          "id": "AC-02-03-04",
+          "status": "PASS",
+          "conversationId": "c0c5e19f-4239-4e54-b81d-be12d21ede6f",
+          "oldMessageId": "7115ae66-45fd-4419-8e6e-c1d9d7a41474",
+          "newMessageId": "a84c9e5c-70f3-4f42-bd97-9bf6ccae2d2e",
+          "newJoinSeq": 6,
+          "oldInputConsumed": false,
+          "sharedHumanCacheLeak": false
+        },
+        {
+          "id": "GR-08",
+          "status": "PASS",
+          "crossConversationReplyRejected": true,
+          "unrelatedHumanCannotReadPrivateReference": true
+        },
+        {
+          "id": "CT-01",
+          "status": "PASS",
+          "messageId": "1d39e2bb-1838-4c87-ad43-7aadbb219fb9",
+          "utf8Bytes": 65399,
+          "completeTextPreserved": true,
+          "attachmentsRejected": true,
+          "oversizeRejected": true
+        }
+      ]
+    },
+    "atomic": {
+      "status": "PASS",
+      "level": "independent native process, real production CommunicationQueue and SQLite WAL",
+      "cases": [
+        {
+          "point": "before-commit",
+          "status": "PASS",
+          "messageId": "message-dd2059ef-ac27-47f9-aab6-bf4c6fb33d89",
+          "atomicTuple": [
+            1,
+            1,
+            1
+          ],
+          "newMessageGeneratedAfterReplay": true
+        },
+        {
+          "point": "after-commit",
+          "status": "PASS",
+          "messageId": "message-beac9577-691b-4416-9c84-4df96a7a4c35",
+          "atomicTuple": [
+            1,
+            1,
+            1
+          ],
+          "newMessageGeneratedAfterReplay": false
+        }
+      ]
+    }
+  },
+  "regression": {
+    "plugin": {
+      "tests": 1455,
+      "passed": 1453,
+      "skipped": 2,
+      "failed": 0
+    },
+    "communicationSpecific": 22,
+    "hub": 21,
+    "smokeSteps": 52,
+    "lint": "PASS",
+    "buildCheck": "PASS"
+  },
+  "packages": "Actual tarballs installed in clean directories; plugin + production runtime + SQLite imported with complete pinned DSH; Hub dependency install/start/health/stop passed",
+  "limits": [
+    "Mock only; not real model semantic robustness",
+    "Different IP, WSS, NAT and public deployment NOT_RUN",
+    "Native OS window resize NOT_RUN; responsive production iframe viewports tested",
+    "No commits or pushes; snapshot is local working tree"
+  ]
+}

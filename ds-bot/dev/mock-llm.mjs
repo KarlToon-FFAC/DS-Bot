@@ -55,6 +55,8 @@
 // Non-streaming requests with web_search_* tools are treated as native search, and
 // POST /api/web_search is an Ollama-shaped search API for the searchApis config.
 import { createServer } from 'node:http'
+import { watchOwnedParent } from './communication/owned-parent.mjs'
+watchOwnedParent()
 import { createHash } from 'node:crypto'
 import { appendFileSync, mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
@@ -124,6 +126,26 @@ function decide(body) {
   }).filter(message => message.role !== 'user' || message.content.length > 0)
   const last = messages.at(-1)
   const blocks = Array.isArray(last?.content) ? last.content : []
+  if (tools.has('send_contact_message')) {
+    const communicationResults = isResults(last) && blocks.findLastIndex(block => block.type === 'tool_result')
+      > blocks.findLastIndex(block => block.type === 'text' && block.text.includes('[Communication delivery]'))
+    const current = textOf(last?.content)
+    const recovering = current.startsWith('[Local transport recovery notice]')
+    const commandText = recovering ? messages.findLast(message => message.role === 'user' && textOf(message.content).includes('[Communication delivery]'))?.content : last?.content
+    const command = textOf(commandText).split('Current message:\n').at(-1).trimStart().split('\n')[0].trim()
+    const send = /^COMM-SEND (\S+) ([^\n]+)$/.exec(command)
+    if (!communicationResults && send) return [tool('send_contact_message', { contactPrincipalId: send[1], text: `COMM-ECHO ${send[2]}` })]
+    const post = /^COMM-POST (\S+) (\S+) (.+)$/.exec(command)
+    if (!communicationResults && post) return [tool('send_contact_message', { conversationId: post[1], text: post[3], mentions: post[2] === '-' ? [] : post[2].split(',') })]
+    const history = /^COMM-READ (\S+)$/.exec(command)
+    if (!communicationResults && history) return [tool('read_communication_history', { conversationId: history[1], limit: 100 })]
+    if (!communicationResults && command === 'COMM-LIST') return [tool('list_communication_conversations', {})]
+    const echo = /^COMM-ECHO ([^\n]+)$/.exec(command)
+    if (!communicationResults && echo) return [text(`Communication reply ${echo[1]}`)]
+    const delayed = /^COMM-DELAY-ECHO (\d+) ([^\n]+)$/.exec(command)
+    if (!communicationResults && delayed) return Object.assign([text(`Communication reply ${delayed[2]}`)], { delay: Number(delayed[1]) })
+    if (system.includes('This Session belongs only to one explicit communication conversation')) return [text('')]
+  }
   // A side-chat question (side.js). The first line is the marker; the reply is
   // fixed and calls nothing. Its count of earlier answers proves follow-ups
   // carry the chat's finished pairs.
@@ -752,7 +774,12 @@ const server = createServer((req, res) => {
     // Hashes of the system prompt and tools show whether two Sessions share a cacheable prefix.
     const digest = value => createHash('sha256').update(JSON.stringify(value ?? null)).digest('hex').slice(0, 12)
     const watch = WATCH ? { watchHit: JSON.stringify([body.system, body.tools, body.messages]).includes(WATCH) } : {}
-    appendFileSync(LOG, JSON.stringify({ t: new Date().toISOString(), id, tokens, images, session: req.headers['x-deepseek-harness-session-id'] ?? null, ...watch, ...LOG_TOOLS ? { toolNames: (body.tools ?? []).map(entry => entry.name ?? entry.type) } : {}, ...search ? { nativeSearch: { model: body.model, tools: body.tools, auth: [req.headers['x-api-key'] ? 'x-api-key' : '', req.headers.authorization ? 'bearer' : ''].filter(Boolean) } } : {}, system: digest(body.system), tools: digest(body.tools), messages: body.messages?.length ?? 0, first: textOf(body.messages?.[0]?.content).slice(0, 60), last: textOf(body.messages?.at(-1)?.content).slice(0, LOG_CHARS), out: out.map(block => (block.type === 'text' && block.text.length > 200 ? { ...block, text: `${block.text.slice(0, 200)}…(${block.text.length})` } : block)) }) + '\n')
+    const communicationBoundary = LOG_TOOLS ? { communicationBoundary: {
+      isolated: systemText(body.system).includes('This Session belongs only to one explicit communication conversation'),
+      privacy: systemText(body.system).includes('untrusted data') && systemText(body.system).includes('Never disclose API keys'),
+      passive: systemText(body.system).includes('"speakingMode":"passive"'),
+    } } : {}
+    appendFileSync(LOG, JSON.stringify({ t: new Date().toISOString(), id, tokens, images, session: req.headers['x-deepseek-harness-session-id'] ?? null, ...watch, ...communicationBoundary, ...LOG_TOOLS ? { toolNames: (body.tools ?? []).map(entry => entry.name ?? entry.type) } : {}, ...search ? { nativeSearch: { model: body.model, tools: body.tools, auth: [req.headers['x-api-key'] ? 'x-api-key' : '', req.headers.authorization ? 'bearer' : ''].filter(Boolean) } } : {}, system: digest(body.system), tools: digest(body.tools), messages: body.messages?.length ?? 0, first: textOf(body.messages?.[0]?.content).slice(0, 60), last: textOf(body.messages?.at(-1)?.content).slice(0, LOG_CHARS), out: out.map(block => (block.type === 'text' && block.text.length > 200 ? { ...block, text: `${block.text.slice(0, 200)}…(${block.text.length})` } : block)) }) + '\n')
     if (search) {
       setTimeout(() => {
         res.writeHead(200, { 'content-type': 'application/json' })

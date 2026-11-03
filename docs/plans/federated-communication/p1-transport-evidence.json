@@ -1,0 +1,71 @@
+{
+  "phase": "P1",
+  "status": "PASS",
+  "scope": "Native Windows, local loopback WS, real SQLite and independent owned Hub/client processes; not full federation acceptance",
+  "sourceCommit": "6ede702b7d698a8d86261ecb6a2a5f1efc8e1e87",
+  "implementationBranch": "chore/federated-communication",
+  "implementationCommit": null,
+  "versions": { "node": "24.13.0", "sqlite": "3.50.4", "ws": "8.22.1", "dsh": "0.2.1-rc.4" },
+  "deliverables": [
+    "communication-hub: independent service, initial migration, CLI, config references and health endpoint",
+    "Authenticated version/capability handshake and durable connection fencing",
+    "Published identities, canonical DM get-or-create, groups, invitations, joins, removals and routing",
+    "Atomic canonical event, sequence, recipient delivery and acceptance",
+    "Per-principal membership epochs, history boundaries and cursor acknowledgments",
+    "Durable client outbox/inbox, receipts, gap buffering, retry and automatic reconnect",
+    "Atomic Bot-output source mapping, full outbox and export positions",
+    "Durable trust revocation; an increased owner pairing revision is required to restore trust",
+    "Whole-message bounded frames and explicit payload/capacity failures"
+  ],
+  "newTransportSuite": {
+    "tests": 16,
+    "passed": 16,
+    "failed": 0,
+    "command": "cd communication-hub; npm test",
+    "realProcessCases": [
+      "publish committed, response lost, Hub forcibly killed, same IDs retried after restart",
+      "receiver SQLite committed, stored-receipt response lost, receiver reopened and receipt retried",
+      "automatic reconnect with an offline durable outbox after the same Hub endpoint returns",
+      "actual CLI config references, readiness, health and owned process stop"
+    ],
+    "otherCases": [
+      "concurrent reverse DM opens, same-payload retry, conflicting payload rejection",
+      "transaction rollback before commit preserves sequence and creates no partial delivery",
+      "exact Bot routing, Human notification and ordinary Bot replies without model broadcast",
+      "unaccepted invitations, same-instance per-principal history and rejoin isolation",
+      "UTF-8 limits, unsupported content and cross-conversation reference rejection",
+      "durable out-of-order gaps block projection and AI work until continuity is restored",
+      "unknown AI injection persists without blind replay",
+      "export mapping/outbox/cursor atomicity and stable replay identity",
+      "future schema versions refused without changing existing records",
+      "protocol/capability/auth rejection and old connection permanently fenced",
+      "trust revocation survives restart; old delivery does not return after explicit re-pair",
+      "explicit outbox and service backpressure; complete message pagination"
+    ]
+  },
+  "originalRegression": { "tests": 1445, "passed": 1443, "skipped": 2, "failed": 0, "smoke": { "fixture": "smoke-p1", "steps": 52, "status": "PASS" } },
+  "checks": {
+    "pluginLint": "PASS; existing warnings only",
+    "hubLint": "PASS",
+    "generatedClients": "PASS",
+    "whitespace": "PASS",
+    "cleanHubPackageInstallStartupHealthShutdown": "PASS",
+    "cleanPackedClientModules": "PASS; built-in Node dependencies only; no checkout dependency",
+    "ci": "Hub tests added for Node 24 Windows and Linux; remote CI not executed"
+  },
+  "securityBoundary": {
+    "testCredentials": "Generated in process memory, passed only to owned test children, never stored in config or database",
+    "newPersistentCredentials": false,
+    "installedServicesOrFirewallChanges": false,
+    "realRemoteBotConnections": false,
+    "pushOrPublish": false
+  },
+  "remaining": {
+    "P2": "NEXT: production Human/Bot adapters and DSH bindings",
+    "P3": "NOT_STARTED: production communication UI",
+    "P4": "NOT_STARTED: complete DM/GR/ST/AC/UI acceptance matrix",
+    "WssRuntime": "NOT_RUN; authenticated TLS configuration and non-loopback TLS enforcement implemented",
+    "differentIp": "NOT_RUN",
+    "realModels": "NOT_RUN"
+  }
+}

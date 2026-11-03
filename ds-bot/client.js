@@ -42,6 +42,77 @@ module.exports = __toCommonJS(index_exports);
 // src/client/i18n.js
 var NAMESPACE = "ds-bot";
 var ZH = {
+  // Explicit cross-instance communication.
+  "This browser session needs the instance startup login.": "此浏览器会话需要通过实例启动入口登录。",
+  "Cannot reach this instance": "暂时无法连接此实例",
+  "Open referenced message": "打开引用消息",
+  "Earlier message unavailable": "较早消息不可读",
+  "The referenced message is outside your authorized history.": "引用的消息不在你的授权历史范围内。",
+  "Communication": "通信",
+  "Human": "人",
+  "Local": "本地",
+  "Remote": "远程",
+  "Private message": "私聊",
+  "Back to local chats": "返回本地对话",
+  "Offline · sends stay queued": "离线 · 消息保留在发送队列",
+  "Communication conversations": "通信会话",
+  "Hide closed conversations": "隐藏已关闭的会话",
+  "Show closed conversations": "显示已关闭的会话",
+  "Contacts": "联系人",
+  "Create communication group": "新建通信群",
+  "Create and invite": "创建并邀请",
+  "Invitations": "邀请",
+  "Accept invitation": "接受邀请",
+  "Operation failed": "操作失败",
+  "Operation queued": "操作已排队",
+  "Choose a contact or conversation": "选择联系人或会话",
+  "Close on this device": "仅在本机关闭",
+  "Group members and receiving rules": "群成员与收件规则",
+  "Group manager": "群管理者",
+  "Invite participant": "邀请成员",
+  "Invite": "邀请",
+  "Receiving rule": "收件规则",
+  "Mentions only": "仅点名时回复",
+  "Plain messages go to one Bot": "普通消息由指定 Bot 回复",
+  "Default reply Bot": "默认回复 Bot",
+  "Save receiving rule": "保存收件规则",
+  "Confirm leaving group": "确认退出群",
+  "Leave group": "退出群",
+  "Confirm ending group for everyone": "确认解散所有人的群",
+  "End group for everyone": "解散所有人的群",
+  "Communication messages": "通信消息",
+  "Load earlier messages": "加载更早消息",
+  "Show latest messages": "显示最新消息",
+  "Membership or receiving rule changed": "成员或收件规则已变更",
+  "You · Human": "你 · 人",
+  "Reply to": "回复",
+  "Hub accepted": "通信服务已接受",
+  "Send failed": "发送失败",
+  "Queued on this device": "已在本机排队",
+  "Cancel reply": "取消回复",
+  "Mention participant": "点名成员",
+  "Communication message": "通信消息",
+  "Retry same send": "重试原消息",
+  "Text and Markdown · attachments unavailable": "支持文本与 Markdown · 暂不支持附件",
+  "Bot delivery needs reconciliation": "Bot 收件结果需要核对",
+  "Choose a participant": "选择成员",
+  "Revoked": "已撤销",
+  "Bot admitted": "Bot 已入箱",
+  "Displayed": "已显示",
+  "Destination stored": "目标端已落盘",
+  "Waiting for destination": "等待目标端接收",
+  "Choose the exact participant in the mention picker.": "请在点名选择器中选择确切的成员。",
+  "Choose a current participant to mention.": "请选择当前会话的成员。",
+  "The message exceeds the text limit. Split it into separate messages.": "消息超过文本上限，请分成多条发送。",
+  "Only text and Markdown are supported.": "仅支持文本与 Markdown。",
+  "The send queue is full. Wait for the connection to recover.": "发送队列已满，请等待连接恢复。",
+  "You are no longer a member of this conversation.": "你已不再是此会话的成员。",
+  "Your membership changed. Refresh the conversation.": "成员资格已变更，请刷新会话。",
+  "You do not have permission for this group operation.": "你没有执行此群操作的权限。",
+  "That message is not an authorized reply target in this conversation.": "无法引用此会话中未获授权的消息。",
+  "The conversation is waiting for a connection.": "会话正在等待连接。",
+  "This instance is read-only.": "此实例处于只读状态。",
+  "Communication is unavailable. Retry the same send when the connection returns.": "通信暂不可用，连接恢复后请重试原消息。",
   // Shared
   "Main Bot": "主 Bot",
   Working: "工作中",
@@ -1224,6 +1295,29 @@ var HOST_ZH = {
   "DS Bot is still loading this chat.": "DS Bot 还在加载这个对话。"
 };
 Object.assign(ZH, HOST_ZH);
+Object.assign(ZH, {
+  "Group owner": "群主",
+  "Group admin": "群管理员",
+  "Group member": "群成员",
+  "Group role": "群角色",
+  "Speaking permission": "发言权限",
+  "Read only": "只读",
+  "Can speak": "可发言",
+  "Reply only": "被动回复",
+  "Save member permissions": "保存成员权限",
+  "Transfer ownership to": "移交群主给",
+  "Transfer ownership": "移交群主",
+  "Confirm ownership transfer": "确认移交群主",
+  "Transfer ownership before leaving": "请先移交群主再退出",
+  "Restore retained ownership": "恢复原群主身份",
+  "You have read-only access to this group.": "你在此群中只有只读权限。",
+  "This Bot can only reply to an authorized message.": "此 Bot 只能被动回复已授权的消息。",
+  "Group settings changed. Review the current members and try again.": "群设置已变更，请核对当前成员后重试。",
+  "Transfer ownership before leaving or removing the owner.": "退出或移除群主前，请先移交群主身份。",
+  "Restore your retained ownership first.": "请先恢复原群主身份。",
+  "The owner is unavailable. Ownership stays with that identity.": "群主暂不可用，群主身份仍保留给原身份。",
+  "This legacy group has no retained owner. No automatic takeover is allowed.": "此旧群没有保留的群主身份，不允许自动接管。"
+});
 var fill = (text, params) => params ? text.replace(/\{(\w+)\}/g, (match, name) => name in params ? String(params[name]) : match) : text;
 var service = null;
 var bound = null;
@@ -1477,8 +1571,8 @@ function bodyOf(def, paint, flat = false) {
     return "";
   }
 }
-var eyeMarkup = ([cx, cy, w, h50, tilt]) => `<g transform="translate(${cx} ${cy}) rotate(${tilt})"><rect class="bt-eye" x="${-w / 2}" y="${-h50 / 2}" width="${w}" height="${h50}" rx="${w / 2}"/></g>`;
-var happyEyeMarkup = ([cx, cy, w, h50, tilt]) => `<g transform="translate(${cx} ${cy}) rotate(${tilt})"><path class="bt-eye-happy" opacity="0" d="M${-w * 0.62} ${h50 * 0.14}Q0 ${-h50 * 0.42} ${w * 0.62} ${h50 * 0.14}" fill="none" stroke="#000" stroke-width="${w * 0.5}" stroke-linecap="round"/></g>`;
+var eyeMarkup = ([cx, cy, w, h51, tilt]) => `<g transform="translate(${cx} ${cy}) rotate(${tilt})"><rect class="bt-eye" x="${-w / 2}" y="${-h51 / 2}" width="${w}" height="${h51}" rx="${w / 2}"/></g>`;
+var happyEyeMarkup = ([cx, cy, w, h51, tilt]) => `<g transform="translate(${cx} ${cy}) rotate(${tilt})"><path class="bt-eye-happy" opacity="0" d="M${-w * 0.62} ${h51 * 0.14}Q0 ${-h51 * 0.42} ${w * 0.62} ${h51 * 0.14}" fill="none" stroke="#000" stroke-width="${w * 0.5}" stroke-linecap="round"/></g>`;
 var maskBox = (size) => `maskUnits="userSpaceOnUse" x="${-size}" y="${-size}" width="${size * 3}" height="${size * 3}"`;
 var holes = (def, eyes) => `<rect x="${-def.size}" y="${-def.size}" width="${def.size * 3}" height="${def.size * 3}" fill="#fff"/>${eyes}`;
 var MASK_ID = "%MASK%";
@@ -1932,7 +2026,7 @@ function referenceSpans(text, labels = []) {
   }
   return spans.sort((a, b) => a.start - b.start);
 }
-function mentionSpans(text, bots, { references = [] } = {}) {
+function mentionSpans(text, bots, { references = [], unknown = false } = {}) {
   const value = String(text ?? "");
   const skip = [
     ...[...value.matchAll(LITERAL)].map((match) => ({ start: match.index, end: match.index + match[0].length })),
@@ -1944,7 +2038,13 @@ function mentionSpans(text, bots, { references = [] } = {}) {
     if (at > 0 && ADDRESS_BEFORE.test(value[at - 1]) || overlaps(skip, at, at + 1)) continue;
     const bot = byLength.find((candidate) => fitsAt(value, at + 1, candidate.name));
     const all = bot ? void 0 : ALL_WORDS.find((word) => fitsAt(value, at + 1, word));
-    if (!bot && !all) continue;
+    if (!bot && !all) {
+      if (unknown) {
+        const token = value.slice(at + 1).match(/^[^\s@,.;:!?，。；：！？()[\]{}<>/\\]+/u)?.[0];
+        if (token && !NAME_GOES_ON.test(value.slice(at + 1 + token.length))) spans.push({ start: at, end: at + 1 + token.length, unknown: token });
+      }
+      continue;
+    }
     const end = at + 1 + (bot ? bot.name.length : all.length);
     spans.push(bot ? { start: at, end, bot } : { start: at, end, all: true });
     at = end - 1;
@@ -2225,24 +2325,24 @@ function liveSprings(apply2) {
   const values = /* @__PURE__ */ new Map();
   let frame = 0;
   let last = 0;
-  const read = () => Object.fromEntries([...values].map(([key, value]) => [key, value.x]));
+  const read2 = () => Object.fromEntries([...values].map(([key, value]) => [key, value.x]));
   const step = (now) => {
     const dt = Math.min(0.5, Math.max(1e-3, (now - last) / 1e3));
     last = now;
     const steps = Math.ceil(dt * 240);
-    const h50 = dt / steps;
+    const h51 = dt / steps;
     let moving = false;
     for (const value of values.values()) {
       for (let index = 0; index < steps; index += 1) {
-        value.v += (-value.k * (value.x - value.to) - value.c * value.v) * h50;
-        value.x += value.v * h50;
+        value.v += (-value.k * (value.x - value.to) - value.c * value.v) * h51;
+        value.x += value.v * h51;
       }
       if (Math.abs(value.x - value.to) < 0.05 && Math.abs(value.v) < 1) {
         value.x = value.to;
         value.v = 0;
       } else moving = true;
     }
-    apply2(read());
+    apply2(read2());
     frame = moving ? requestAnimationFrame(step) : 0;
   };
   return {
@@ -2257,7 +2357,7 @@ function liveSprings(apply2) {
       if (jump) {
         cancelAnimationFrame(frame);
         frame = 0;
-        apply2(read());
+        apply2(read2());
         return;
       }
       if (!frame) {
@@ -4567,10 +4667,10 @@ function parse(source) {
     if (!isOp(value)) fail(peek() ? `expected "${value}" at ${peek().at + 1}` : `expected "${value}" at the end`);
     index += 1;
   };
-  const nest = (read) => {
+  const nest = (read2) => {
     depth += 1;
     if (depth > MAX_NESTING) fail(`nested more than ${MAX_NESTING} levels`);
-    const node = read();
+    const node = read2();
     depth -= 1;
     return node;
   };
@@ -6984,7 +7084,7 @@ function SecretCard({ sessionId, bot, request, roster, actions, inline = false }
   };
   const cancel = () => run2(() => actions.secretCancel(request.id));
   const long = value.trim().length >= MIN_VALUE;
-  const save = () => {
+  const save2 = () => {
     if (long && !busy) void run2(() => actions.secretSet({ requestId: request.id, value, scope }));
   };
   const allow = () => {
@@ -7009,7 +7109,7 @@ function SecretCard({ sessionId, bot, request, roster, actions, inline = false }
       (0, import_react14.createElement)("label", { className: "bt-q-field bt-secret-field" }, (0, import_react14.createElement)(MaskedInput, { value, onChange: (next) => {
         hold();
         setValue(next);
-      }, onEnter: save, label: t("Value of {name}", { name: request.name }), autoFocus: replacing })),
+      }, onEnter: save2, label: t("Value of {name}", { name: request.name }), autoFocus: replacing })),
       request.kind === "fill" ? (0, import_react14.createElement)(ScopeSwitch, { value: scope, onChange: (next) => {
         hold();
         setScope(next);
@@ -7033,7 +7133,7 @@ function SecretCard({ sessionId, bot, request, roster, actions, inline = false }
         setReplacing(true);
       } }, t("Replace value")) : null,
       (0, import_react14.createElement)("button", { type: "button", className: "bt-q-btn", disabled: busy, onClick: cancel }, t("Cancel")),
-      filling ? (0, import_react14.createElement)("button", { type: "button", className: "bt-q-submit", disabled: !long || busy, onClick: save }, busy ? t("Saving…") : t("Save")) : (0, import_react14.createElement)("button", { type: "button", className: "bt-q-submit", disabled: busy, onClick: allow }, busy ? t("Allowing…") : t("Allow"))
+      filling ? (0, import_react14.createElement)("button", { type: "button", className: "bt-q-submit", disabled: !long || busy, onClick: save2 }, busy ? t("Saving…") : t("Save")) : (0, import_react14.createElement)("button", { type: "button", className: "bt-q-submit", disabled: busy, onClick: allow }, busy ? t("Allowing…") : t("Allow"))
     )
   );
 }
@@ -7137,7 +7237,7 @@ function ValueEditor({ secret, onSave }) {
   const [value, setValue] = (0, import_react14.useState)("");
   const [replaced, setReplaced] = (0, import_react14.useState)(false);
   const long = value.trim().length >= MIN_VALUE;
-  const save = () => {
+  const save2 = () => {
     if (!long) return;
     void Promise.resolve(onSave(value)).then((ok) => {
       if (ok) {
@@ -7157,8 +7257,8 @@ function ValueEditor({ secret, onSave }) {
     (0, import_react14.createElement)(
       "div",
       { className: "bt-secret-inline" },
-      (0, import_react14.createElement)("label", { className: "bt-q-field bt-secret-field" }, (0, import_react14.createElement)(MaskedInput, { value, onChange: edit, onEnter: save, label: t("New value of {name}", { name: secret.name }) })),
-      (0, import_react14.createElement)("button", { type: "button", className: "bt-soft bt-soft-sm", disabled: !long, onClick: save }, t("Replace"))
+      (0, import_react14.createElement)("label", { className: "bt-q-field bt-secret-field" }, (0, import_react14.createElement)(MaskedInput, { value, onChange: edit, onEnter: save2, label: t("New value of {name}", { name: secret.name }) })),
+      (0, import_react14.createElement)("button", { type: "button", className: "bt-soft bt-soft-sm", disabled: !long, onClick: save2 }, t("Replace"))
     ),
     value !== "" && !long ? (0, import_react14.createElement)("div", { className: "bt-set-hint" }, t("At least {count} characters.", { count: MIN_VALUE })) : replaced ? (0, import_react14.createElement)("div", { className: "bt-set-hint bt-secret-ok", role: "status" }, (0, import_react14.createElement)(CheckIcon), t("Replaced. Bots get the new value from their next command.")) : null
   );
@@ -7212,7 +7312,7 @@ function AddSecret({ actions, run: run2, onDone }) {
   const [purpose, setPurpose] = (0, import_react14.useState)("");
   const [value, setValue] = (0, import_react14.useState)("");
   const ready = /^[A-Za-z][\w-]{0,63}$/.test(name.trim()) && value.trim().length >= MIN_VALUE;
-  const save = () => {
+  const save2 = () => {
     if (!ready) return;
     void run2(actions.secretSet({ name, purpose, value, scope: "all" })).then((ok) => {
       if (ok) {
@@ -7226,13 +7326,13 @@ function AddSecret({ actions, run: run2, onDone }) {
     { className: "bt-set-row bt-set-paste bt-secret-add" },
     (0, import_react14.createElement)("input", { className: "bt-input", "aria-label": t("Key name"), placeholder: t("NAME, e.g. GITHUB_TOKEN"), value: name, spellCheck: false, autoComplete: "off", autoFocus: true, onChange: (event) => setName(event.target.value.toUpperCase()) }),
     (0, import_react14.createElement)("input", { className: "bt-input", "aria-label": t("What it is for"), placeholder: t("What it is for"), value: purpose, autoComplete: "off", onChange: (event) => setPurpose(event.target.value) }),
-    (0, import_react14.createElement)("label", { className: "bt-q-field bt-secret-field" }, (0, import_react14.createElement)(MaskedInput, { value, onChange: setValue, onEnter: save, label: t("Value") })),
+    (0, import_react14.createElement)("label", { className: "bt-q-field bt-secret-field" }, (0, import_react14.createElement)(MaskedInput, { value, onChange: setValue, onEnter: save2, label: t("Value") })),
     (0, import_react14.createElement)(
       "div",
       { className: "bt-secret-row-actions" },
       (0, import_react14.createElement)("span", { className: "bt-set-hint" }, t("New keys are for all Bots; narrow it down afterwards.")),
       (0, import_react14.createElement)("button", { type: "button", className: "bt-soft bt-soft-sm", onClick: onDone }, t("Cancel")),
-      (0, import_react14.createElement)("button", { type: "button", className: "bt-soft bt-soft-sm", disabled: !ready, onClick: save }, t("Save key"))
+      (0, import_react14.createElement)("button", { type: "button", className: "bt-soft bt-soft-sm", disabled: !ready, onClick: save2 }, t("Save key"))
     )
   );
 }
@@ -7487,7 +7587,7 @@ function foldPreview(text, limit = FOLD_AT, markdown = true) {
 var stripLongNote = (text) => text.replace(/^\[A long message: \d+ characters\.[^\]\n]*\]\n/, "");
 function useFold(text, { limit = FOLD_AT, whole, live = false, markdown = true } = {}) {
   const [open, setOpen] = (0, import_react15.useState)(false);
-  const [read, setRead] = (0, import_react15.useState)();
+  const [read2, setRead] = (0, import_react15.useState)();
   const cut = whole !== void 0 && whole.length > text.length;
   const view = (0, import_react15.useMemo)(() => live ? null : foldView(text, cut ? ALWAYS : limit, markdown), [text, live, limit, markdown, cut]);
   if (view === null) return { shown: text, control: null };
@@ -7497,14 +7597,14 @@ function useFold(text, { limit = FOLD_AT, whole, live = false, markdown = true }
   if (!open) {
     const show2 = async () => {
       setOpen(true);
-      if (!cut || read !== void 0 || whole.load === void 0) return;
+      if (!cut || read2 !== void 0 || whole.load === void 0) return;
       setRead("loading");
       setRead(await whole.load() ?? { whole: false });
     };
     return { shown, folded: true, code, codeHead: view.codeHead, control: (0, import_react15.createElement)("span", { className: "bt-fold" }, (0, import_react15.createElement)("button", { type: "button", className: "bt-more", onClick: show2 }, t("Show all · {count} characters", { count }))) };
   }
-  const loaded = typeof read?.text === "string" ? read : void 0;
-  const note = !cut || read === void 0 || read === "loading" || loaded?.whole ? null : loaded !== void 0 && loaded.text.length > text.length ? t("Showing the first {count} characters", { count: loaded.text.length.toLocaleString() }) : t("Only the start of this message is kept here");
+  const loaded = typeof read2?.text === "string" ? read2 : void 0;
+  const note = !cut || read2 === void 0 || read2 === "loading" || loaded?.whole ? null : loaded !== void 0 && loaded.text.length > text.length ? t("Showing the first {count} characters", { count: loaded.text.length.toLocaleString() }) : t("Only the start of this message is kept here");
   return {
     shown: loaded?.text ?? text,
     control: (0, import_react15.createElement)(
@@ -7799,13 +7899,13 @@ function useTurnFacts(sessionId, actions) {
   const [facts, setFacts] = (0, import_react16.useState)(() => actions.turnFacts(sessionId));
   (0, import_react16.useEffect)(() => {
     let live = true;
-    const read = () => {
+    const read2 = () => {
       if (!live) return;
       const next = actions.turnFacts(sessionId);
       setFacts((current) => current.turns === next.turns && current.openTurn === next.openTurn ? current : next);
     };
-    read();
-    const off = actions.watchTurns(sessionId, read);
+    read2();
+    const off = actions.watchTurns(sessionId, read2);
     return () => {
       live = false;
       off();
@@ -9294,7 +9394,7 @@ function installFrameWatch(frame) {
   let raf = 0;
   const watched = /* @__PURE__ */ new Set();
   const observer = typeof ResizeObserver === "function" ? new ResizeObserver(() => schedule()) : null;
-  const read = () => {
+  const read2 = () => {
     const column = document.querySelector('[class*="_sidebarCol"]');
     const animating = column?.closest("[data-animating]") != null;
     const width = animating ? null : sidebarTrackWidth();
@@ -9314,7 +9414,7 @@ function installFrameWatch(frame) {
         }
       }
     }
-    read();
+    read2();
   };
   const schedule = () => {
     if (raf === 0) raf = requestAnimationFrame(() => {
@@ -9915,6 +10015,7 @@ function TeamSidebar(props) {
     "div",
     { className: wideContent ? "bt-side" : "bt-side bt-rail", onKeyDown: typeToSearch },
     top,
+    roster.communicationEnabled ? (0, import_react19.createElement)("button", { type: "button", className: "bt-soft", onClick: actions.openCommunication, "aria-label": t("Communication"), title: t("Communication") }, wideContent ? t("Communication") : "↔") : null,
     wideContent && roster.readOnly ? (0, import_react19.createElement)("div", { className: "bt-hint bt-read-only", role: "status" }, hostText(roster.readOnly)) : null,
     (0, import_react19.createElement)(
       "div",
@@ -11980,7 +12081,7 @@ function ModelKeyCard({ model, actions }) {
   const [error, setError] = (0, import_react25.useState)("");
   const label = t("{provider} API key", { provider: model.providerName ?? model.provider });
   const ready = value.trim() !== "" && !busy;
-  const save = () => {
+  const save2 = () => {
     if (!ready) return;
     setBusy(true);
     setError("");
@@ -11990,13 +12091,13 @@ function ModelKeyCard({ model, actions }) {
     "div",
     { className: "bt-q bt-model-key", role: "group", "aria-label": label },
     (0, import_react25.createElement)("div", { className: "bt-model-key-title" }, (0, import_react25.createElement)(KeyIcon), label),
-    (0, import_react25.createElement)("label", { className: "bt-q-field bt-secret-field" }, (0, import_react25.createElement)(MaskedInput, { value, onChange: setValue, onEnter: save, label, autoFocus: true })),
+    (0, import_react25.createElement)("label", { className: "bt-q-field bt-secret-field" }, (0, import_react25.createElement)(MaskedInput, { value, onChange: setValue, onEnter: save2, label, autoFocus: true })),
     error ? (0, import_react25.createElement)("div", { className: "bt-secret-error", role: "alert" }, error) : null,
     (0, import_react25.createElement)(
       "div",
       { className: "bt-q-foot" },
       actions.openModels ? (0, import_react25.createElement)("button", { type: "button", className: "bt-q-btn bt-model-key-other", onClick: actions.openModels }, t("Another provider")) : null,
-      (0, import_react25.createElement)("button", { type: "button", className: "bt-q-submit", disabled: !ready, onClick: save }, busy ? t("Saving…") : t("Save"))
+      (0, import_react25.createElement)("button", { type: "button", className: "bt-q-submit", disabled: !ready, onClick: save2 }, busy ? t("Saving…") : t("Save"))
     )
   );
 }
@@ -13575,7 +13676,7 @@ function BotSettingsForm({ bot, roster, actions, run: run2 }) {
   const inGroup = (roster.rooms ?? []).some((room2) => room2.members?.includes(bot.id));
   const privateHint = t("Other Bots cannot read its folder, memory or chats, and you approve what it shares with them.");
   const privacyHint = bot.private === true ? privateHint : isMainBot ? t("A Main Bot cannot be private.") : inGroup ? t("Leave its group chats before making it private.") : !bot.workDir ? t("Choose a working folder of its own first.") : privateHint;
-  const save = (patch) => run2(actions.updateBot(bot.id, patch));
+  const save2 = (patch) => run2(actions.updateBot(bot.id, patch));
   const duplicate = () => run2(actions.duplicateBot(bot.id).then((copy2) => actions.openSession(copy2.id)));
   const remove = () => {
     if (confirming) void run2(actions.deleteBot(bot.id));
@@ -13611,8 +13712,8 @@ function BotSettingsForm({ bot, roster, actions, run: run2 }) {
     (0, import_react31.createElement)(
       Card2,
       { title: t("Profile") },
-      (0, import_react31.createElement)(Row, { label: t("Name") }, (0, import_react31.createElement)(InlineText, { label: t("Name"), value: bot.name, placeholder: "Bob", required: true, maxLength: 40, onSave: (name) => save({ name }) })),
-      (0, import_react31.createElement)(Row, { label: t("Label"), hint: t("Optional. Shown under the name.") }, (0, import_react31.createElement)(InlineText, { label: t("Label"), value: bot.role, placeholder: t("Research, admin…"), maxLength: 24, onSave: (role) => save({ role }) }))
+      (0, import_react31.createElement)(Row, { label: t("Name") }, (0, import_react31.createElement)(InlineText, { label: t("Name"), value: bot.name, placeholder: "Bob", required: true, maxLength: 40, onSave: (name) => save2({ name }) })),
+      (0, import_react31.createElement)(Row, { label: t("Label"), hint: t("Optional. Shown under the name.") }, (0, import_react31.createElement)(InlineText, { label: t("Label"), value: bot.role, placeholder: t("Research, admin…"), maxLength: 24, onSave: (role) => save2({ role }) }))
     ),
     (0, import_react31.createElement)(
       Card2,
@@ -13631,7 +13732,7 @@ function BotSettingsForm({ bot, roster, actions, run: run2 }) {
         "div",
         { className: "bt-set-row bt-bs-row" },
         (0, import_react31.createElement)("span", { className: "bt-set-copy" }, (0, import_react31.createElement)("span", { className: "bt-bs-label" }, t("Folder"))),
-        (0, import_react31.createElement)(FolderMenu, { value: bot.workDir, actions, run: run2, onPick: (workDir) => save({ workDir }) })
+        (0, import_react31.createElement)(FolderMenu, { value: bot.workDir, actions, run: run2, onPick: (workDir) => save2({ workDir }) })
       )
     ),
     (0, import_react31.createElement)(
@@ -13642,7 +13743,7 @@ function BotSettingsForm({ bot, roster, actions, run: run2 }) {
         hint: privacyHint,
         on: bot.private === true,
         disabled: bot.private !== true && (isMainBot || inGroup || !bot.workDir),
-        onChange: (value) => save({ private: value })
+        onChange: (value) => save2({ private: value })
       })
     ),
     (0, import_react31.createElement)(
@@ -13651,7 +13752,7 @@ function BotSettingsForm({ bot, roster, actions, run: run2 }) {
       (0, import_react31.createElement)(
         Row,
         { label: t("What this Bot does"), hint: t("Its job on the team. Part of the Bot's system prompt."), stack: true },
-        (0, import_react31.createElement)(InlineText, { label: t("Instructions"), value: bot.instructions, multiline: true, placeholder: t("What this Bot is responsible for…"), onSave: (instructions) => save({ instructions }) })
+        (0, import_react31.createElement)(InlineText, { label: t("Instructions"), value: bot.instructions, multiline: true, placeholder: t("What this Bot is responsible for…"), onSave: (instructions) => save2({ instructions }) })
       )
     ),
     (0, import_react31.createElement)(BotCapabilitiesCard, { bot, roster, actions, run: run2, Card: Card2, SwitchRow }),
@@ -14271,13 +14372,13 @@ var VOICE_LABELS = {
   unsupported: "Voice chat is not available in this browser"
 };
 var CAPTURE_NOTES = { blocked: "Microphone access is blocked", unavailable: "Voice chat is not available in this browser", "too-long": "That was too long to recognize" };
-function watchReply(read, watch, consume) {
+function watchReply(read2, watch, consume) {
   let off = () => {
   };
   let consumed = false;
   const attempt = () => {
     if (consumed) return;
-    const text = read();
+    const text = read2();
     if (text === void 0) return;
     consumed = true;
     off();
@@ -16671,7 +16772,7 @@ function KeyEditor({ provider, apply: apply2, actions }) {
   const [value, setValue] = (0, import_react44.useState)("");
   const [saved, setSaved] = (0, import_react44.useState)(false);
   const ready = value.trim() !== "";
-  const save = () => {
+  const save2 = () => {
     if (!ready) return;
     void apply2(actions.setProviderKey(provider.id, value)).then((ok) => {
       if (ok) {
@@ -16692,8 +16793,8 @@ function KeyEditor({ provider, apply: apply2, actions }) {
     (0, import_react44.createElement)(
       "div",
       { className: "bt-secret-inline" },
-      (0, import_react44.createElement)("label", { className: "bt-q-field bt-secret-field" }, (0, import_react44.createElement)(KeyIcon), (0, import_react44.createElement)(MaskedInput, { value, onChange: edit, onEnter: save, label })),
-      (0, import_react44.createElement)("button", { type: "button", className: "bt-soft bt-soft-sm", disabled: !ready, onClick: save }, t("Save")),
+      (0, import_react44.createElement)("label", { className: "bt-q-field bt-secret-field" }, (0, import_react44.createElement)(KeyIcon), (0, import_react44.createElement)(MaskedInput, { value, onChange: edit, onEnter: save2, label })),
+      (0, import_react44.createElement)("button", { type: "button", className: "bt-soft bt-soft-sm", disabled: !ready, onClick: save2 }, t("Save")),
       provider.key.configured ? (0, import_react44.createElement)("button", { type: "button", className: "bt-soft bt-soft-sm bt-secret-danger", onClick: () => apply2(actions.setProviderKey(provider.id, null)) }, t("Remove key")) : null
     ),
     saved ? (0, import_react44.createElement)("div", { className: "bt-set-hint bt-secret-ok", role: "status" }, (0, import_react44.createElement)(CheckIcon), t("Saved.")) : null
@@ -16879,12 +16980,12 @@ function Choice({ label, value, options, pick: pick2 }) {
     }
   }, t(text))));
 }
-function WidthSlider({ label, value, save }) {
+function WidthSlider({ label, value, save: save2 }) {
   const [width, setWidth] = (0, import_react45.useState)(value);
   const pending = (0, import_react45.useRef)(null);
   const timer = (0, import_react45.useRef)(0);
-  const saveRef = (0, import_react45.useRef)(save);
-  saveRef.current = save;
+  const saveRef = (0, import_react45.useRef)(save2);
+  saveRef.current = save2;
   (0, import_react45.useEffect)(() => {
     if (pending.current === null) setWidth(value);
   }, [value]);
@@ -19377,7 +19478,7 @@ var READ_PAGE_SCRIPT = readPageScript();
 
 // src/client/shared-map.js
 function sharedMap(key, storage = globalThis.localStorage) {
-  const read = (fallback = {}) => {
+  const read2 = (fallback = {}) => {
     if (!storage) return fallback;
     try {
       const value = JSON.parse(storage.getItem(key) ?? "{}");
@@ -19387,7 +19488,7 @@ function sharedMap(key, storage = globalThis.localStorage) {
     }
   };
   const update = (change, fallback = {}) => {
-    const base = read(fallback);
+    const base = read2(fallback);
     const next = change(base);
     if (next === base) return next;
     try {
@@ -19396,7 +19497,7 @@ function sharedMap(key, storage = globalThis.localStorage) {
     }
     return next;
   };
-  return { key, read, update };
+  return { key, read: read2, update };
 }
 function setEntry(map, id, value) {
   if (value === void 0) {
@@ -19596,13 +19697,13 @@ function createBotBrowsers({ bridge, createSource: createSource2, storage = glob
     const botId = owner.get(tabId);
     return { ...state, [tabId]: { ...EMPTY, ...savedTab(botId, tabId), ...state[tabId], ...patch } };
   });
-  const save = (botId, entry) => {
+  const save2 = (botId, entry) => {
     saved = store.update((stored) => setEntry(stored, botId, entry), saved);
   };
   const persist = (botId) => {
     const state = tabs.getSnapshot()[botId];
     const snapshot = pages.getSnapshot();
-    save(botId, state && {
+    save2(botId, state && {
       tabs: state.ids.map((id) => ({ id, url: snapshot[id]?.url ?? "", title: snapshot[id]?.title ?? "" })),
       active: state.active
     });
@@ -19893,7 +19994,7 @@ function createBotBrowsers({ bridge, createSource: createSource2, storage = glob
       const { [botId]: _, ...rest } = snapshot;
       return rest;
     });
-    save(botId, void 0);
+    save2(botId, void 0);
     seen.delete(botId);
     await bridge.forget?.(`bot:${botId}`)?.catch((error) => console.warn("[ds-bot] browser forget", error));
   }
@@ -20544,6 +20645,560 @@ function listedOpener({ list, open, refresh, current }) {
     drop = off;
     refresh?.();
   };
+}
+
+// src/client/communication-model.js
+function contactLabels(contacts, instanceId, t2 = (value) => value) {
+  const basic = (contact) => `${contact.displayName} · ${contact.instanceLabel ?? contact.homeInstanceId} · ${contact.kind === "bot" ? "Bot" : t2("Human")} · ${t2(contact.homeInstanceId === instanceId ? "Local" : "Remote")}`;
+  return new Map(contacts.map((contact) => {
+    const base = basic(contact);
+    return [contact.principalId, contacts.filter((other) => basic(other) === base).length > 1 ? `${base} · ${contact.principalId}` : base];
+  }));
+}
+function deliveryPhase(delivery) {
+  if (delivery.revoked) return "Revoked";
+  if (delivery.aiAccepted) return "Bot admitted";
+  if (delivery.humanRead) return "Read";
+  if (delivery.uiApplied) return "Displayed";
+  if (delivery.targetStored) return "Destination stored";
+  return "Waiting for destination";
+}
+function conversationTitle(member, humanId, labels) {
+  return member.kind === "group" ? member.title : member.info?.members.filter((person) => person.principalId !== humanId).map((person) => labels.get(person.principalId) ?? person.displayName).join(", ") || "Private message";
+}
+
+// src/client/communication.js
+var import_react53 = require("react");
+var import_react_dom10 = require("react-dom");
+var OPEN = "ds-bot:communication:open", SELECTED = "ds-bot:communication:selected";
+var DRAFTS = "ds-bot:communication:drafts", HIDDEN = "ds-bot:communication:hidden", ATTEMPTS = "ds-bot:communication:attempts";
+var read = (key, fallback) => {
+  try {
+    return JSON.parse(sessionStorage.getItem(key)) ?? fallback;
+  } catch {
+    return fallback;
+  }
+};
+var save = (key, value) => {
+  try {
+    sessionStorage.setItem(key, JSON.stringify(value));
+  } catch {
+  }
+};
+async function communicationRequest(body) {
+  const response = await fetch("/api/communication", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(15e3) });
+  if ([401, 403].includes(response.status)) throw Object.assign(new Error("INSTANCE_AUTHENTICATION_REQUIRED"), { code: "INSTANCE_AUTHENTICATION_REQUIRED" });
+  const result = await response.json();
+  if (!result.ok) throw Object.assign(new Error(result.error?.code ?? "COMMUNICATION_UNAVAILABLE"), { code: result.error?.code });
+  return result.value;
+}
+var friendly = (error) => ({
+  INSTANCE_AUTHENTICATION_REQUIRED: "This browser session needs the instance startup login.",
+  AMBIGUOUS_MENTION: "Choose the exact participant in the mention picker.",
+  UNKNOWN_MENTION: "Choose a current participant to mention.",
+  PAYLOAD_TOO_LARGE: "The message exceeds the text limit. Split it into separate messages.",
+  UNSUPPORTED_CONTENT: "Only text and Markdown are supported.",
+  OUTBOX_FULL: "The send queue is full. Wait for the connection to recover.",
+  NOT_A_MEMBER: "You are no longer a member of this conversation.",
+  MEMBERSHIP_REVOKED: "Your membership changed. Refresh the conversation.",
+  FORBIDDEN: "You do not have permission for this group operation.",
+  INVALID_REPLY_TARGET: "That message is not an authorized reply target in this conversation.",
+  REFERENCE_NOT_AVAILABLE: "The referenced message is outside your authorized history.",
+  SPEAKING_FORBIDDEN: "You have read-only access to this group.",
+  PASSIVE_REPLY_REQUIRED: "This Bot can only reply to an authorized message.",
+  PASSIVE_REPLY_ONLY: "This Bot can only reply to an authorized message.",
+  GROUP_VERSION_CONFLICT: "Group settings changed. Review the current members and try again.",
+  OWNER_TRANSFER_REQUIRED: "Transfer ownership before leaving or removing the owner.",
+  OWNER_RECLAIM_REQUIRED: "Restore your retained ownership first.",
+  CONVERSATION_PENDING: "The conversation is waiting for a connection.",
+  COMMUNICATION_READ_ONLY: "This instance is read-only."
+})[error.code] ?? "Communication is unavailable. Retry the same send when the connection returns.";
+function CommunicationSurface({ roster, surface, panel, request = communicationRequest }) {
+  const team = (0, import_react53.useSyncExternalStore)(roster.subscribe, roster.getSnapshot);
+  const mode = (0, import_react53.useSyncExternalStore)(surface.subscribe, surface.getSnapshot);
+  const open = (0, import_react53.useSyncExternalStore)(panel.subscribe, panel.getSnapshot);
+  const [shown, closing] = useLinger(open && mode.mode === "bot" && team.communicationEnabled, 160);
+  const [state, setState] = (0, import_react53.useState)(null), [error, setError] = (0, import_react53.useState)(""), [busy, setBusy] = (0, import_react53.useState)(false);
+  const [pollError, setPollError] = (0, import_react53.useState)("");
+  const [selected, setSelected] = (0, import_react53.useState)(() => read(SELECTED, null));
+  const [drafts, setDrafts] = (0, import_react53.useState)(() => read(DRAFTS, {})), [attempts, setAttempts] = (0, import_react53.useState)(() => read(ATTEMPTS, {}));
+  const [hidden, setHidden] = (0, import_react53.useState)(() => read(HIDDEN, [])), [showHidden, setShowHidden] = (0, import_react53.useState)(false);
+  const [page, setPage] = (0, import_react53.useState)(null), [older, setOlder] = (0, import_react53.useState)(null), [reply, setReply] = (0, import_react53.useState)(null);
+  const [referenced, setReferenced] = (0, import_react53.useState)(null), [unavailableReferences, setUnavailableReferences] = (0, import_react53.useState)([]);
+  const [title, setTitle] = (0, import_react53.useState)(""), [invitees, setInvitees] = (0, import_react53.useState)([]), [invite, setInvite] = (0, import_react53.useState)("");
+  const [routing, setRouting] = (0, import_react53.useState)("mentionsOnly"), [admin, setAdmin] = (0, import_react53.useState)(""), [confirm, setConfirm] = (0, import_react53.useState)("");
+  const [policies, setPolicies] = (0, import_react53.useState)({}), [newOwner, setNewOwner] = (0, import_react53.useState)("");
+  const input = (0, import_react53.useRef)(null), frame = (0, import_react53.useRef)(null), log = (0, import_react53.useRef)(null), autoScroll = (0, import_react53.useRef)(true), pageOrder = (0, import_react53.useRef)(0), operationIds = (0, import_react53.useRef)(/* @__PURE__ */ new Map());
+  const labels = contactLabels(state?.contacts ?? [], state?.instanceId, t);
+  const member = state?.conversations?.find((item) => item.conversationId === selected);
+  const key = `${state?.instanceId}:${selected}`;
+  const draft = drafts[key] ?? { text: "", mentions: [] };
+  const changeDraft = (value) => setDrafts((current) => {
+    const next = { ...current, [key]: { ...draft, ...value } };
+    save(DRAFTS, next);
+    return next;
+  });
+  const close = () => {
+    panel.set(false);
+    save(OPEN, false);
+  };
+  const refresh = async () => {
+    const value = await request({ endpoint: "state" });
+    setState(value);
+    return value;
+  };
+  (0, import_react53.useEffect)(() => {
+    if (!team.communicationEnabled) return void 0;
+    let active = true, timer;
+    const poll = async () => {
+      try {
+        const value = await request({ endpoint: "state" });
+        if (active) {
+          setState(value);
+          setPollError("");
+        }
+      } catch (failure) {
+        if (active) setPollError(friendly(failure));
+      }
+      if (active) timer = setTimeout(() => {
+        void poll();
+      }, 750);
+    };
+    void poll();
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [team.communicationEnabled, request]);
+  (0, import_react53.useEffect)(() => {
+    if (!shown) return void 0;
+    input.current?.focus();
+    const retain = (event) => {
+      if (frame.current && !frame.current.contains(event.target)) input.current?.focus();
+    };
+    const keys = (event) => {
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        close();
+      }
+    };
+    document.addEventListener("focusin", retain, true);
+    document.addEventListener("keydown", keys, true);
+    return () => {
+      document.removeEventListener("focusin", retain, true);
+      document.removeEventListener("keydown", keys, true);
+    };
+  }, [shown]);
+  (0, import_react53.useEffect)(() => {
+    save(SELECTED, selected);
+    setOlder(null);
+    setReply(null);
+    setReferenced(null);
+    setConfirm("");
+    setNewOwner("");
+    setPolicies({});
+    autoScroll.current = true;
+    input.current?.focus();
+  }, [selected]);
+  (0, import_react53.useLayoutEffect)(() => {
+    const target = referenced && [...log.current?.querySelectorAll("article") ?? []].find((node) => node.dataset.messageId === referenced);
+    if (target) target.scrollIntoView?.({ block: "center" });
+    else if (log.current && older === null && autoScroll.current) log.current.scrollTop = log.current.scrollHeight;
+  }, [page, older, referenced, state?.outbox]);
+  (0, import_react53.useEffect)(() => {
+    setRouting(member?.routingMode ?? "mentionsOnly");
+    setAdmin(member?.adminBotPrincipalId ?? "");
+  }, [selected, member?.membershipVersion]);
+  (0, import_react53.useEffect)(() => {
+    if (!shown || !member) {
+      setPage(null);
+      return void 0;
+    }
+    let active = true;
+    const order = ++pageOrder.current;
+    void request({ endpoint: "history", conversationId: selected, limit: 50, ...older === null ? {} : { before: older } }).then((value) => {
+      if (active && pageOrder.current === order) setPage(value);
+    }).catch((failure) => {
+      if (active) {
+        setPage(null);
+        setError(friendly(failure));
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [shown, selected, member?.membershipEpoch, older, older === null ? member?.watermark : null, request]);
+  (0, import_react53.useEffect)(() => {
+    if (!shown || page?.conversationId !== selected || !page.events.length) return void 0;
+    const mark = () => {
+      if (document.visibilityState === "visible" && document.hasFocus()) void request({ endpoint: "read", conversationId: selected, seq: page.events.at(-1).conversationSeq }).catch((failure) => setError(friendly(failure)));
+    };
+    mark();
+    window.addEventListener("focus", mark);
+    document.addEventListener("visibilitychange", mark);
+    return () => {
+      window.removeEventListener("focus", mark);
+      document.removeEventListener("visibilitychange", mark);
+    };
+  }, [shown, selected, page, request]);
+  const operation = async (endpoint, values) => {
+    const current = state?.conversations?.find((item) => item.conversationId === values.conversationId);
+    if (current && !["reclaim", "dm", "create-group", "accept"].includes(endpoint)) values = { membershipEpoch: current.membershipEpoch, expectedVersion: current.membershipVersion, ...values };
+    const operationKey = JSON.stringify([endpoint, values]);
+    if (!operationIds.current.has(operationKey)) operationIds.current.set(operationKey, crypto.randomUUID());
+    const value = await request({ endpoint, ...values, operationId: operationIds.current.get(operationKey) });
+    if (value.status !== "queued") operationIds.current.delete(operationKey);
+    await refresh();
+    return value;
+  };
+  const act = async (work) => {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      await work();
+    } catch (failure) {
+      setError(friendly(failure));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const send = () => act(async () => {
+    if (!member || !draft.text.trim()) return;
+    const intent = attempts[key] ?? {
+      endpoint: "send",
+      conversationId: selected,
+      membershipEpoch: member.membershipEpoch,
+      messageId: crypto.randomUUID(),
+      clientCreatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      text: draft.text,
+      mentions: draft.mentions,
+      replyToMessageId: reply?.messageId ?? null
+    };
+    const next = { ...attempts, [key]: intent };
+    save(ATTEMPTS, next);
+    setAttempts(next);
+    try {
+      await request(intent);
+    } catch (failure) {
+      if (failure.code) {
+        delete next[key];
+        save(ATTEMPTS, next);
+        setAttempts({ ...next });
+      }
+      throw failure;
+    }
+    delete next[key];
+    save(ATTEMPTS, next);
+    setAttempts({ ...next });
+    changeDraft({ text: "", mentions: [] });
+    setReply(null);
+    await refresh();
+    input.current?.focus();
+  });
+  const choose = (id) => {
+    const next = hidden.filter((item) => item !== `${state?.instanceId}:${id}`);
+    save(HIDDEN, next);
+    setHidden(next);
+    setSelected(id);
+    setError("");
+  };
+  const hide = () => {
+    const next = [.../* @__PURE__ */ new Set([...hidden, key])];
+    save(HIDDEN, next);
+    setHidden(next);
+    setSelected(null);
+  };
+  const openReference = (messageId) => act(async () => {
+    try {
+      const event = await request({ endpoint: "reference", conversationId: selected, messageId });
+      setReferenced(messageId);
+      if (!page?.events.some((item) => item.message?.messageId === messageId)) setOlder(event.conversationSeq + 24);
+    } catch (failure) {
+      if (failure.code === "REFERENCE_NOT_AVAILABLE") setUnavailableReferences((current) => [.../* @__PURE__ */ new Set([...current, messageId])]);
+      throw failure;
+    }
+  });
+  const btn = (label, onClick, props = {}) => (0, import_react53.createElement)("button", { type: "button", disabled: busy, onClick, ...props }, props.children ?? t(label));
+  const chooseContact = (label, value, onChange, contacts2) => (0, import_react53.createElement)(
+    "label",
+    { className: "bt-comm-field" },
+    t(label),
+    (0, import_react53.createElement)(
+      "select",
+      { value, onChange: (event) => onChange(event.target.value), "aria-label": t(label) },
+      (0, import_react53.createElement)("option", { value: "" }, t("Choose a participant")),
+      contacts2.map((contact) => (0, import_react53.createElement)("option", { key: contact.principalId, value: contact.principalId }, labels.get(contact.principalId) ?? contact.displayName))
+    )
+  );
+  if (!shown || !team.communicationEnabled) return null;
+  const events = page?.conversationId === selected && page?.membershipEpoch === member?.membershipEpoch ? page.events : [];
+  const visibleIds = new Set(events.map((event) => event.message?.messageId));
+  const ownOutbox = member ? (state?.outbox ?? []).filter((item) => item.type === "message.publish" && item.conversationId === selected) : [];
+  const currentMembers = member?.info?.members ?? [];
+  const isOwner = member?.role === "owner", canManage = ["owner", "admin"].includes(member?.role);
+  const canSpeak = member && (member.kind !== "group" || member.speakingMode === "speak");
+  const contacts = state?.contacts ?? [];
+  const operations = state?.outbox?.filter((item) => item.type !== "message.publish" && item.state !== "accepted") ?? [];
+  return (0, import_react_dom10.createPortal)((0, import_react53.createElement)(
+    "section",
+    { ref: frame, className: "bt-comm-frame", "data-closing": closing, "aria-label": t("Communication") },
+    (0, import_react53.createElement)(
+      "aside",
+      { className: "bt-comm-nav" },
+      (0, import_react53.createElement)("h2", null, t("Communication")),
+      btn("Back to local chats", close),
+      (0, import_react53.createElement)("p", { role: "status" }, t(pollError ? "Cannot reach this instance" : state?.connected ? "Connected" : "Offline · sends stay queued")),
+      state?.error ? (0, import_react53.createElement)("p", { className: "bt-comm-error", role: "alert" }, state.error) : null,
+      (0, import_react53.createElement)("nav", { "aria-label": t("Communication conversations") }, (state?.conversations ?? []).filter((item) => showHidden || !hidden.includes(`${state.instanceId}:${item.conversationId}`)).map((item) => btn(conversationTitle(item, state.humanPrincipalId, labels), () => choose(item.conversationId), {
+        key: item.conversationId,
+        "aria-pressed": item.conversationId === selected,
+        title: item.conversationId,
+        children: `${conversationTitle(item, state.humanPrincipalId, labels)}${item.unread ? ` (${item.unread})` : ""}`
+      }))),
+      btn(showHidden ? "Hide closed conversations" : "Show closed conversations", () => setShowHidden((value) => !value)),
+      (0, import_react53.createElement)("details", null, (0, import_react53.createElement)("summary", null, t("Contacts")), contacts.filter((contact) => contact.principalId !== state?.humanPrincipalId).map((contact) => btn(labels.get(contact.principalId), () => {
+        void act(async () => {
+          const value = await operation("dm", { otherPrincipalId: contact.principalId });
+          if (value.conversationId) choose(value.conversationId);
+        });
+      }, { key: contact.principalId, title: contact.principalId }))),
+      (0, import_react53.createElement)(
+        "details",
+        null,
+        (0, import_react53.createElement)("summary", null, t("Create communication group")),
+        (0, import_react53.createElement)("label", { className: "bt-comm-field" }, t("Group name"), (0, import_react53.createElement)("input", { value: title, onChange: (event) => setTitle(event.target.value), "aria-label": t("Group name") })),
+        contacts.filter((contact) => contact.principalId !== state?.humanPrincipalId).map((contact) => (0, import_react53.createElement)(
+          "label",
+          { key: contact.principalId, className: "bt-comm-check" },
+          (0, import_react53.createElement)("input", { type: "checkbox", checked: invitees.includes(contact.principalId), onChange: (event) => setInvitees((current) => event.target.checked ? [...current, contact.principalId] : current.filter((id) => id !== contact.principalId)) }),
+          labels.get(contact.principalId)
+        )),
+        btn("Create and invite", () => {
+          void act(async () => {
+            const value = await operation("create-group", { title });
+            if (!value.conversationId) return;
+            choose(value.conversationId);
+            for (const inviteePrincipalId of invitees) await operation("invite", { conversationId: value.conversationId, inviteePrincipalId });
+            setTitle("");
+            setInvitees([]);
+          });
+        }, { disabled: busy || !title.trim() })
+      ),
+      state?.invites?.length ? (0, import_react53.createElement)("div", null, (0, import_react53.createElement)("h3", null, t("Invitations")), state.invites.map((invitation) => (0, import_react53.createElement)(
+        "div",
+        { key: invitation.inviteId },
+        (0, import_react53.createElement)("p", null, `${invitation.title} · ${labels.get(invitation.principalId) ?? invitation.principalId}`),
+        btn("Accept invitation", () => {
+          void act(() => operation("accept", { inviteId: invitation.inviteId, recipientPrincipalId: invitation.principalId }));
+        })
+      ))) : null,
+      (state?.recoverableOwnership ?? []).map((item) => (0, import_react53.createElement)(
+        "div",
+        { key: item.conversationId },
+        (0, import_react53.createElement)("p", null, item.title),
+        btn("Restore retained ownership", () => {
+          void act(() => operation("reclaim", { conversationId: item.conversationId, expectedVersion: item.membershipVersion }));
+        })
+      )),
+      operations.map((item) => (0, import_react53.createElement)("p", { key: item.id, role: "status" }, `${t(item.state === "failed" ? "Operation failed" : "Operation queued")} · ${item.error ?? item.type}`))
+    ),
+    (0, import_react53.createElement)(
+      "main",
+      { className: "bt-comm-main" },
+      (0, import_react53.createElement)(
+        "header",
+        null,
+        (0, import_react53.createElement)("h2", null, member ? conversationTitle(member, state.humanPrincipalId, labels) : t("Choose a contact or conversation")),
+        member ? btn("Close on this device", hide) : null
+      ),
+      member?.kind === "group" ? (0, import_react53.createElement)(
+        "details",
+        { className: "bt-comm-members" },
+        (0, import_react53.createElement)("summary", null, t("Group members and receiving rules")),
+        member.ownerPrincipalId && !currentMembers.some((person) => person.principalId === member.ownerPrincipalId) ? (0, import_react53.createElement)("p", { role: "status" }, t("The owner is unavailable. Ownership stays with that identity.")) : null,
+        !member.ownerPrincipalId ? (0, import_react53.createElement)("p", { role: "status" }, t("This legacy group has no retained owner. No automatic takeover is allowed.")) : null,
+        currentMembers.map((person) => {
+          const editable = isOwner || member.role === "admin" && person.role === "member";
+          const policyKey = `${selected}:${member.membershipVersion}:${person.principalId}`;
+          const policy = policies[policyKey] ?? { role: person.role, speakingMode: person.speakingMode };
+          const changePolicy = (values) => setPolicies((current) => ({ ...current, [policyKey]: { ...policy, ...values } }));
+          return (0, import_react53.createElement)(
+            "div",
+            { key: person.principalId, className: "bt-comm-person", "data-principal-id": person.principalId },
+            (0, import_react53.createElement)("span", { title: person.principalId }, labels.get(person.principalId) ?? person.displayName),
+            (0, import_react53.createElement)("span", null, t(person.role === "owner" ? "Group owner" : person.role === "admin" ? "Group admin" : "Group member")),
+            editable ? (0, import_react53.createElement)(
+              import_react53.Fragment,
+              null,
+              isOwner && person.role !== "owner" ? (0, import_react53.createElement)("label", null, t("Group role"), (0, import_react53.createElement)(
+                "select",
+                { value: policy.role, "aria-label": t("Group role"), onChange: (event) => changePolicy({ role: event.target.value }) },
+                (0, import_react53.createElement)("option", { value: "member" }, t("Group member")),
+                (0, import_react53.createElement)("option", { value: "admin" }, t("Group admin"))
+              )) : null,
+              (0, import_react53.createElement)("label", null, t("Speaking permission"), (0, import_react53.createElement)(
+                "select",
+                { value: policy.speakingMode, "aria-label": t("Speaking permission"), onChange: (event) => changePolicy({ speakingMode: event.target.value }) },
+                (person.kind === "human" ? [["readOnly", "Read only"], ["speak", "Can speak"]] : [["passive", "Reply only"], ["active", "Can speak"]]).map(([value, label]) => (0, import_react53.createElement)("option", { key: value, value }, t(label)))
+              )),
+              btn("Save member permissions", () => {
+                void act(() => operation("policy", {
+                  conversationId: selected,
+                  targetPrincipalId: person.principalId,
+                  expectedVersion: member.membershipVersion,
+                  speakingMode: policy.speakingMode,
+                  ...isOwner && person.role !== "owner" ? { role: policy.role } : {}
+                }));
+              })
+            ) : (0, import_react53.createElement)("span", null, t(["readOnly", "passive"].includes(person.speakingMode) ? person.kind === "human" ? "Read only" : "Reply only" : "Can speak")),
+            canManage && person.role !== "owner" && (isOwner || person.role === "member") && person.principalId !== state.humanPrincipalId ? btn("Remove from group", () => {
+              void act(() => operation("remove", { conversationId: selected, targetPrincipalId: person.principalId }));
+            }) : null
+          );
+        }),
+        canManage ? (0, import_react53.createElement)(
+          import_react53.Fragment,
+          null,
+          chooseContact("Invite participant", invite, setInvite, contacts.filter((contact) => !currentMembers.some((person) => person.principalId === contact.principalId))),
+          btn("Invite", () => {
+            void act(() => operation("invite", { conversationId: selected, inviteePrincipalId: invite }));
+          }, { disabled: busy || !invite }),
+          (0, import_react53.createElement)("label", { className: "bt-comm-field" }, t("Receiving rule"), (0, import_react53.createElement)(
+            "select",
+            { value: routing, onChange: (event) => setRouting(event.target.value), "aria-label": t("Receiving rule") },
+            (0, import_react53.createElement)("option", { value: "mentionsOnly" }, t("Mentions only")),
+            (0, import_react53.createElement)("option", { value: "admin" }, t("Plain messages go to one Bot"))
+          )),
+          routing === "admin" ? chooseContact("Default reply Bot", admin, setAdmin, currentMembers.filter((person) => person.kind === "bot")) : null,
+          btn("Save receiving rule", () => {
+            void act(() => operation("routing", { conversationId: selected, mode: routing, adminBotPrincipalId: admin || null }));
+          })
+        ) : (0, import_react53.createElement)("p", null, t(member.routingMode === "admin" ? "Plain messages go to one Bot" : "Mentions only")),
+        isOwner ? (0, import_react53.createElement)(
+          import_react53.Fragment,
+          null,
+          chooseContact("Transfer ownership to", newOwner, (value) => {
+            setNewOwner(value);
+            setConfirm("");
+          }, currentMembers.filter((person) => person.principalId !== state.humanPrincipalId)),
+          btn(confirm === "transfer" ? "Confirm ownership transfer" : "Transfer ownership", () => {
+            if (confirm !== "transfer") setConfirm("transfer");
+            else void act(() => operation("transfer", { conversationId: selected, targetPrincipalId: newOwner, expectedVersion: member.membershipVersion }));
+          }, { disabled: busy || !newOwner })
+        ) : null,
+        btn(confirm === "leave" ? "Confirm leaving group" : "Leave group", () => {
+          if (confirm !== "leave") setConfirm("leave");
+          else void act(() => operation("remove", { conversationId: selected }));
+        }, { disabled: busy || isOwner, title: isOwner ? t("Transfer ownership before leaving") : void 0 }),
+        isOwner ? btn(confirm === "dissolve" ? "Confirm ending group for everyone" : "End group for everyone", () => {
+          if (confirm !== "dissolve") setConfirm("dissolve");
+          else void act(() => operation("dissolve", { conversationId: selected }));
+        }, { className: "bt-comm-danger" }) : null
+      ) : null,
+      (0, import_react53.createElement)(
+        "div",
+        { ref: log, className: "bt-comm-log", role: "log", "aria-label": t("Communication messages"), onScroll: (event) => {
+          const element = event.currentTarget;
+          autoScroll.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80;
+        } },
+        member && events.length && events[0].conversationSeq > member.joinSeq ? btn("Load earlier messages", () => setOlder(events[0].conversationSeq - 1)) : null,
+        older !== null ? btn("Show latest messages", () => setOlder(null)) : null,
+        events.map((event) => event.type !== "message" ? (0, import_react53.createElement)("p", { key: event.eventId, className: "bt-comm-event" }, t("Membership or receiving rule changed")) : (0, import_react53.createElement)(
+          "article",
+          { key: event.message.messageId, "data-message-id": event.message.messageId, "data-self": event.message.author.principalId === state.humanPrincipalId, "data-referenced": event.message.messageId === referenced },
+          (0, import_react53.createElement)("strong", { title: event.message.author.principalId }, event.message.author.principalId === state.humanPrincipalId ? t("You · Human") : labels.get(event.message.author.principalId) ?? event.message.author.principalId),
+          event.message.replyToMessageId ? (0, import_react53.createElement)("div", { className: "bt-comm-reference" }, btn(
+            unavailableReferences.includes(event.message.replyToMessageId) ? "Earlier message unavailable" : "Open referenced message",
+            () => {
+              void openReference(event.message.replyToMessageId);
+            },
+            { disabled: busy || unavailableReferences.includes(event.message.replyToMessageId), title: event.message.replyToMessageId }
+          )) : null,
+          (0, import_react53.createElement)("div", { className: "bt-comm-body" }, (0, import_react53.createElement)(import_dsh_client_ui_primitives.MarkdownText, { text: event.message.content.text, labels: mdLabels2(), variant: "compact" })),
+          event.message.mentions.length ? (0, import_react53.createElement)("p", { className: "bt-comm-reference" }, event.message.mentions.map((mention) => `@${labels.get(mention.principalId) ?? mention.principalId}`).join(" · ")) : null,
+          (0, import_react53.createElement)("div", { className: "bt-comm-message-actions" }, (0, import_react53.createElement)("time", null, new Date(event.serverAcceptedAt).toLocaleString()), btn("Reply", () => {
+            setReply(event.message);
+            input.current?.focus();
+          })),
+          ownOutbox.find((item) => item.id === event.message.messageId)?.deliveries.filter((delivery) => delivery.recipientPrincipalId !== state.humanPrincipalId).map((delivery) => (0, import_react53.createElement)("p", { key: delivery.deliveryId, className: "bt-comm-reference" }, `${labels.get(delivery.recipientPrincipalId) ?? delivery.recipientPrincipalId} · ${t(deliveryPhase(delivery))}`))
+        )),
+        ownOutbox.filter((item) => !visibleIds.has(item.id) && (item.state !== "accepted" || older === null && item.result?.conversationSeq > (page?.watermark ?? 0))).map((item) => (0, import_react53.createElement)(
+          "article",
+          { key: item.id, "data-message-id": item.id, "data-self": true },
+          (0, import_react53.createElement)("strong", null, t("You · Human")),
+          (0, import_react53.createElement)("p", { className: "bt-comm-pending-text" }, item.text),
+          (0, import_react53.createElement)("p", { role: "status" }, t(item.state === "accepted" ? "Hub accepted" : item.state === "failed" ? "Send failed" : "Queued on this device"), item.error ? ` · ${item.error}` : "")
+        ))
+      ),
+      member ? (0, import_react53.createElement)(
+        "footer",
+        null,
+        reply ? (0, import_react53.createElement)("div", { className: "bt-comm-reference" }, `${t("Reply to")} ${reply.content.text.slice(0, 120)}`, btn("Cancel reply", () => setReply(null))) : null,
+        (0, import_react53.createElement)("div", { className: "bt-comm-mentions" }, (draft.mentions ?? []).map((id) => btn(`@${labels.get(id) ?? id} ×`, () => changeDraft({ mentions: draft.mentions.filter((item) => item !== id) }), { key: id }))),
+        (0, import_react53.createElement)("details", null, (0, import_react53.createElement)("summary", null, t("Mention participant")), chooseContact("Mention participant", "", (id) => {
+          if (id) changeDraft({ mentions: [.../* @__PURE__ */ new Set([...draft.mentions ?? [], id])] });
+        }, currentMembers)),
+        (0, import_react53.createElement)("label", { className: "bt-comm-field" }, t("Communication message"), (0, import_react53.createElement)("textarea", {
+          ref: input,
+          value: draft.text,
+          rows: 3,
+          disabled: !canSpeak || Boolean(attempts[key]),
+          onChange: (event) => changeDraft({ text: event.target.value }),
+          onKeyDown: (event) => {
+            event.stopPropagation();
+            if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+              event.preventDefault();
+              void send();
+            }
+          },
+          onPaste: (event) => {
+            if (event.clipboardData?.files.length) {
+              event.preventDefault();
+              setError("Only text and Markdown are supported.");
+            }
+          },
+          onDrop: (event) => {
+            event.preventDefault();
+            setError("Only text and Markdown are supported.");
+          },
+          "aria-label": t("Communication message")
+        })),
+        btn(attempts[key] ? "Retry same send" : "Send message", () => {
+          void send();
+        }, { disabled: busy || !canSpeak || !draft.text.trim() }),
+        !canSpeak ? (0, import_react53.createElement)("p", { role: "status" }, t("You have read-only access to this group.")) : null,
+        (0, import_react53.createElement)("span", { className: "bt-comm-reference" }, t("Text and Markdown · attachments unavailable"))
+      ) : null,
+      error ? (0, import_react53.createElement)("p", { className: "bt-comm-error", role: "alert" }, t(error)) : null,
+      pollError ? (0, import_react53.createElement)("p", { className: "bt-comm-error", role: "alert" }, t(pollError)) : null,
+      state?.errors?.filter((item) => item.conversationId === selected).map((item) => (0, import_react53.createElement)("p", { key: item.bindingId, className: "bt-comm-error", role: "alert" }, `${t("Bot delivery needs reconciliation")} · ${item.code}`)),
+      state?.exportFailures?.filter((item) => item.conversationId === selected).map((item) => (0, import_react53.createElement)("p", { key: item.messageId, className: "bt-comm-error", role: "alert" }, `${t("Send failed")} · Bot ${item.messageId}: ${item.code}`))
+    )
+  ), document.body);
+}
+var CSS2 = `.bt-comm-frame{position:fixed;inset:0;z-index:60;display:grid;grid-template-columns:264px minmax(0,1fr);background:var(--bt-main);color:var(--bt-ink);font:13px/18px var(--bt-font);pointer-events:auto;opacity:1;transition:opacity .16s ease}.bt-comm-frame[data-closing=true]{opacity:0;pointer-events:none}.bt-comm-frame *{box-sizing:border-box}.bt-comm-frame h2{font-size:15px;line-height:20px;margin:0}.bt-comm-frame h3{font-size:13px;margin:8px 0}.bt-comm-frame p{margin:6px 0;overflow-wrap:anywhere}.bt-comm-frame button{min-height:32px;border:1px solid var(--bt-line);border-radius:8px;background:var(--bt-card);color:var(--bt-ink);padding:6px 10px;font:inherit;text-align:left;cursor:pointer;transition:background .12s}.bt-comm-frame button:hover{background:var(--bt-hover)}.bt-comm-frame button[aria-pressed=true]{background:var(--bt-active)}.bt-comm-frame button:disabled{opacity:.35;cursor:default}.bt-comm-frame :is(button,input,textarea,select,summary):focus-visible{outline:2px solid var(--bt-accent);outline-offset:2px}.bt-comm-frame :is(input:not([type=checkbox]),textarea,select){width:100%;border:1px solid var(--bt-line);border-radius:8px;padding:8px;background:var(--bt-card);color:var(--bt-ink);font:13px/18px var(--bt-font)}.bt-comm-frame textarea{resize:vertical;min-height:80px;max-height:220px;font-size:14px;line-height:22px}.bt-comm-nav{background:var(--bt-sidebar);border-right:1px solid var(--bt-line);padding:16px;overflow:auto;display:flex;flex-direction:column;gap:12px}.bt-comm-nav nav,.bt-comm-nav details{display:flex;flex-direction:column;gap:4px}.bt-comm-nav nav button,.bt-comm-nav details>button{width:100%;overflow-wrap:anywhere;margin:2px 0}.bt-comm-frame summary{cursor:pointer;min-height:28px;padding:4px 0}.bt-comm-main{min-width:0;min-height:0;display:flex;flex-direction:column;padding:16px;gap:12px}.bt-comm-main header{display:flex;align-items:center;justify-content:space-between;gap:12px}.bt-comm-log{flex:1;min-height:80px;overflow:auto;overscroll-behavior:contain;padding:8px}.bt-comm-log article{max-width:min(992px,90%);padding:8px 12px;border-radius:18px;background:var(--bt-bubble);margin:8px 0;overflow-wrap:anywhere;font-size:14px;line-height:24px}.bt-comm-log article[data-self=true]{margin-left:auto;background:var(--bt-user);color:var(--bt-user-ink)}.bt-comm-log strong{font-size:12px;line-height:16px;font-weight:500}.bt-comm-message-actions{display:flex;gap:12px;align-items:center;font-size:11px;line-height:16px}.bt-comm-reference,.bt-comm-event{font-size:12px;line-height:16px;color:var(--bt-ink-2)}.bt-comm-message-actions button{min-height:28px}.bt-comm-field{display:flex;flex-direction:column;gap:6px;margin:8px 0;font-size:12px;line-height:16px}.bt-comm-check{display:flex;gap:8px;align-items:center;margin:8px 0}.bt-comm-check input{width:16px;height:16px}.bt-comm-mentions{display:flex;gap:4px;flex-wrap:wrap}.bt-comm-pending-text{white-space:pre-wrap}.bt-comm-members{max-height:30vh;overflow:auto;border:1px solid var(--bt-line);border-radius:12px;padding:8px 12px}.bt-comm-members>div{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:4px 0}.bt-comm-frame .bt-comm-danger,.bt-comm-error{color:var(--bt-danger)}.bt-comm-main footer{border-top:1px solid var(--bt-line);padding-top:8px}.bt-comm-main footer>button{background:var(--bt-accent);color:var(--bt-accent-ink)}.bt-comm-main footer>.bt-comm-reference{margin-left:12px}.bt-comm-main footer .bt-comm-field:has(select){max-width:420px}@media(max-width:700px){.bt-comm-frame{grid-template-columns:176px minmax(0,1fr)}.bt-comm-nav,.bt-comm-main{padding:8px}.bt-comm-log{padding:0}.bt-comm-log article{max-width:100%}.bt-comm-main header{align-items:flex-start;flex-direction:column}}@media(prefers-reduced-motion:reduce){.bt-comm-frame{transition:none}}`;
+function installCommunication(ctx, { roster, surface }) {
+  const panel = createSource(read(OPEN, false));
+  ctx.effect(() => {
+    const style = document.createElement("style");
+    style.textContent = CSS2 + `
+.bt-comm-body>div{color:inherit!important;font-size:inherit!important;line-height:inherit!important}
+.bt-comm-log article[data-self=true] .bt-comm-reference{color:inherit;opacity:.75}
+.bt-comm-log article[data-referenced=true]{outline:2px solid var(--bt-accent);outline-offset:2px}
+.bt-comm-members>.bt-comm-person{flex-wrap:wrap;justify-content:flex-start}.bt-comm-person>span:first-child{flex:1 1 200px}.bt-comm-person label{display:flex;flex-direction:column;gap:4px;min-width:120px;max-width:100%;flex:1 1 140px}.bt-comm-person button{flex:0 1 auto}
+`;
+    document.head.append(style);
+    return () => style.remove();
+  }, "ds-bot: communication styles");
+  ctx.slots.inject("shell.overlay", () => ctx.slots.register(
+    { name: "shell.overlay", id: "bot-communication", order: 52 },
+    () => (0, import_react53.createElement)(CommunicationSurface, { roster, surface, panel })
+  ));
+  return { open: () => {
+    save(OPEN, true);
+    panel.set(true);
+  } };
 }
 
 // src/client/index.js
@@ -21200,6 +21855,8 @@ function apply(ctx) {
   const browserPages = browsers?.pages ?? createSource({});
   const browserTabs = browsers?.tabs ?? createSource({});
   const browserHolds = browsers?.holds ?? createSource({});
+  const communication = installCommunication(ctx, { roster, surface });
+  actions.openCommunication = communication.open;
   const face = () => ({ actions, hooks: { roster, ui: ui2, activity, work, memoryNews, registry, turnClock, live, cards, heldCards, browserPages, browserTabs, browserHolds, surface, update, frame, sidebarPref } });
   ctx.effect(() => noticeApprovals({
     work,

@@ -1,5 +1,7 @@
 # 跨实例通信：开发环境与本地验证
 
+> 当前本机 P0–P4 及追加权限/提示需求已通过，完整命令见 [Windows runbook](../../../ds-bot/dev/communication/README.md)，证据见 [P4 验收](p4-acceptance.md) 与 [追加需求记录](group-governance-evidence.json)。历史准备快照不代表当前状态；不同 IP、WSS、真实模型仍未测。
+
 ## 1. 目标与范围
 
 在一台机器上启动两个相互独立的 DSH 实例，模拟两个人各自使用本地 Bot，通过通信服务进行群聊和私聊。
@@ -30,7 +32,7 @@
 | DSH B | `127.0.0.1:3102` | 人 B 与本地 Bot |
 | Mock A | `127.0.0.1:8801` | A 的脚本模型 |
 | Mock B | `127.0.0.1:8802` | B 的脚本模型 |
-| 通信服务 | 建议 `127.0.0.1:3190` | 待实现的共享通信服务 |
+| 通信服务 | `127.0.0.1:3190` | 已实现 `communication-hub`；P1 本地运输验证通过，DSH 适配在 P2 接入 |
 | A 数据 | `D:\dsh-communication-test\a\data` | 独立 `DSH_HOME` |
 | B 数据 | `D:\dsh-communication-test\b\data` | 独立 `DSH_HOME` |
 | A 工作目录 | `D:\dsh-communication-test\a\workspace` | A 的测试文件 |
@@ -191,7 +193,14 @@ bench 将数据保存在 DS-Bot checkout 下的 `.dsh-test-peer-a/` 和 `.dsh-te
 
 ## 10. 待开发的通信服务与启动脚本
 
-以下内容是实施要求，当前仓库不存在相应联邦服务及命令，不能照此宣称已经启动成功。
+已开始实施的原生 Windows P0 API 探针和双实例启动/停止命令见
+[`ds-bot/dev/communication/README.md`](../../../ds-bot/dev/communication/README.md)。
+该脚本使用固定版测试 harness 与公开 profile boot，不需要全局安装 pnpm。
+测试数据实际放在 checkout 内 `.dsh-test-communication-a/`、`.dsh-test-communication-b/`，
+不是本文第 2 节的示例目录。测试结论及尚未完成的项目见
+[本地实施记录](local-progress.md)。
+
+以下通信服务、持久队列和完整联邦验收仍是实施要求；P0 探针不能代替这些功能。
 
 - 新增独立通信服务，开发默认端口建议为 `3190`，数据存放在专用测试目录。
 - A、B 分别主动连接该服务；只开放联邦协议，不通过中转服务暴露 DSH 全部管理接口。
@@ -272,4 +281,4 @@ dev/bench.sh peer-b 3102 8802 stop
 - [DSH Node engines](https://github.com/deepseek-ai/deepseek-harness/blob/504a01a9578abc2c6f1fb896b1dc322c9fe24f66/package.json)。
 - [DSH Connection](https://github.com/deepseek-ai/deepseek-harness/blob/504a01a9578abc2c6f1fb896b1dc322c9fe24f66/packages/client/connection/README.md)：启动 token、按 hostname/port 绑定的 Cookie 与认证。
 
-本文是环境准备与实施说明，不表示已经在用户 Windows 机器上安装依赖、启动实例或通过联邦通信验收。
+原方案的准备命令不等同于验收。当前本地实施已完成 P0/P1/P2，并有真实双实例 Mock 证据；P3 已实现且部分浏览器检查通过，剩余门禁见 `p3-ui-evidence.json`。完整进度和命令见 `local-progress.md` 与 `ds-bot/dev/communication/README.md`；不同 IP、WSS 运行和真实模型仍未验收。

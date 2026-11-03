@@ -51,7 +51,7 @@ export function referenceSpans(text, labels = []) {
 
 // Every "@Name" and "@all" outside code, links and references, in order. Longest names
 // match first, so "@新 Bot 2" is never "@新 Bot"; a name may hold spaces.
-export function mentionSpans(text, bots, { references = [] } = {}) {
+export function mentionSpans(text, bots, { references = [], unknown = false } = {}) {
   const value = String(text ?? '')
   const skip = [
     ...[...value.matchAll(LITERAL)].map(match => ({ start: match.index, end: match.index + match[0].length })),
@@ -63,7 +63,13 @@ export function mentionSpans(text, bots, { references = [] } = {}) {
     if ((at > 0 && ADDRESS_BEFORE.test(value[at - 1])) || overlaps(skip, at, at + 1)) continue
     const bot = byLength.find(candidate => fitsAt(value, at + 1, candidate.name))
     const all = bot ? undefined : ALL_WORDS.find(word => fitsAt(value, at + 1, word))
-    if (!bot && !all) continue
+    if (!bot && !all) {
+      if (unknown) {
+        const token = value.slice(at + 1).match(/^[^\s@,.;:!?，。；：！？()[\]{}<>/\\]+/u)?.[0]
+        if (token && !NAME_GOES_ON.test(value.slice(at + 1 + token.length))) spans.push({ start: at, end: at + 1 + token.length, unknown: token })
+      }
+      continue
+    }
     const end = at + 1 + (bot ? bot.name.length : all.length)
     spans.push(bot ? { start: at, end, bot } : { start: at, end, all: true })
     at = end - 1

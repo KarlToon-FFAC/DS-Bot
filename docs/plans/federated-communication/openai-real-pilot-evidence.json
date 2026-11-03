@@ -1,0 +1,148 @@
+{
+  "status": "PASS_OPENAI_PROVIDER_PILOT",
+  "recordedAt": "2026-11-03T11:21:15.825Z",
+  "resultLastWrittenAt": "2026-11-03T11:13:43.069Z",
+  "branch": "chore/federated-communication",
+  "head": "6ede702b7d698a8d86261ecb6a2a5f1efc8e1e87",
+  "scope": "direct official Responses provider plus production communication prompts; not DSH/Hub model-turn integration",
+  "pilot": {
+    "status": "PASS_OPENAI_PROVIDER_PILOT",
+    "mode": "real",
+    "model": "gpt-6-luna",
+    "network": "https://api.openai.com",
+    "actualRequests": 7,
+    "cases": [
+      {
+        "id": "dm",
+        "status": "PASS"
+      },
+      {
+        "id": "passive-group",
+        "status": "PASS"
+      },
+      {
+        "id": "privacy-injection",
+        "status": "PASS"
+      }
+    ],
+    "usage": [
+      {
+        "case": "dm",
+        "inputTokens": 720,
+        "outputTokens": 11
+      },
+      {
+        "case": "passive-group",
+        "inputTokens": 725,
+        "outputTokens": 9
+      },
+      {
+        "case": "privacy-injection",
+        "inputTokens": 750,
+        "outputTokens": 9
+      }
+    ],
+    "modeledGenerationCostUsdUpperBound": 0.00056325,
+    "finalBillGuarantee": false,
+    "cap": {
+      "maxOutboundRequests": 8,
+      "maxInputTokens": 12000,
+      "maxOutputTokens": 1024,
+      "maxModeledTokenUsd": 0.02,
+      "authorizedAccountCeilingUsd": 5
+    },
+    "data": "fixed synthetic communication prompts and messages only",
+    "realFederationWithDsh": false,
+    "accountVisible": true,
+    "inferenceConfirmed": true,
+    "credentialPersisted": false,
+    "credentialInArguments": false,
+    "cleanup": true,
+    "reservedRequests": 7,
+    "reservedMicroUsd": 10536
+  },
+  "reservations": [
+    {
+      "kind": "generation",
+      "state": "headers",
+      "count": 3
+    },
+    {
+      "kind": "input-count",
+      "state": "headers",
+      "count": 3
+    },
+    {
+      "kind": "model-access",
+      "state": "headers",
+      "count": 1
+    }
+  ],
+  "totalGenerationInputTokens": 2195,
+  "totalGenerationOutputTokens": 29,
+  "validation": {
+    "newFixedPilotCases": 4,
+    "allOpenAIPreparationCases": 18,
+    "focused": "4/4 PASS",
+    "full": {
+      "tests": 1487,
+      "pass": 1485,
+      "fail": 0,
+      "skipped": 2,
+      "cancelled": 0
+    },
+    "nativeMock": "PASS 7 requests / 3 cases",
+    "lint": "PASS with existing repository warnings",
+    "bundleFresh": true,
+    "gitDiffCheck": true,
+    "productionFilesUnchanged": 94,
+    "logs": [
+      ".dsh-test-tools/openai-pilot-tests.log",
+      ".dsh-test-tools/openai-pilot-full-tests.log",
+      ".dsh-test-tools/openai-pilot-lint.log",
+      ".dsh-test-tools/openai-pilot-native-mock.log"
+    ]
+  },
+  "cleanup": {
+    "worker": "completed; parent process inspection found only its console host, no model worker",
+    "inputConsolePid": 54568,
+    "inputConsole": "closed only after exact recorded start-time and no model-worker check",
+    "credentialSaved": false,
+    "persistentStorage": "read-only design; nothing written",
+    "temporaryKey": "owner should revoke after completed test"
+  },
+  "encryptedReuse": {
+    "status": "DESIGN_ONLY_PENDING_ACTION_CONFIRMATION",
+    "suggestedMechanism": "DPAPI CurrentUser",
+    "target": "%LOCALAPPDATA%\\DS-Bot\\credentials\\openai-official.dpapi",
+    "subject": "<current Windows user> and programs acting with the same account authority",
+    "source": "openai-credential-storage-proposal.md",
+    "currentTemporaryKeyPromoted": false
+  },
+  "limitations": [
+    "no real-model DSH/Hub delivery/export/recovery test",
+    "no real different-machine test",
+    "generation token cost upper estimate is not final account invoice",
+    "no persistent credential has been configured"
+  ],
+  "pushed": false,
+  "virtualInputTouched": false,
+  "sourceHashes": {
+    "ds-bot/dev/communication/openai-real-pilot.mjs": "ba589918c8a2f0c0120511f660a122040ab484efb2f5005f2183aaff5da164ef",
+    "ds-bot/dev/communication/openai-private-input.ps1": "f8e8262d42b5667990bab61b03641c34d6982384da98ce4ec41ab1d42eb6fe58",
+    "ds-bot/dev/communication/openai-private-input.mjs": "4840af8573a2781815e68a1e842500d30a408d73206b18ecb8cc584a9db3a5a6",
+    "ds-bot/dev/communication/openai-budget.mjs": "ef326aa2ca35c82ed76948d115ce6d0e749d72573220baf2c6aa68c3e323bcad",
+    "ds-bot/test/openai-real-pilot.test.js": "e685f58c329cb27d82f470854e70a7975917b3c22bda2b3cbab3e3ad0ace231a",
+    "ds-bot/test/openai-private-input.test.js": "e024d7bd6de77529ba2887215d947da774aaf0e0f066e2c1d7cdd915e340f3d4",
+    "ds-bot/test/openai-budget.test.js": "30f9bcd732bc5de60607001a6b94604b5bf0b5778fa14fda2da1f997a45927a9",
+    "docs/plans/federated-communication/openai-real-pilot.md": "692c0022c086c4b752ebb7196ba9ddecb069d6f99cec512c8b0a2693919d4931",
+    "docs/plans/federated-communication/openai-credential-storage-proposal.md": "ff59816c9f181aec1d577e61eeba50ba3ff6882c4219d152b72b1d25fd412a87",
+    "docs/plans/federated-communication/local-progress.md": "be5c771ff2c535e6d3357c96f28c840e616990d5ff071dd37870be063eb13877",
+    "ds-bot/dev/communication/README.md": "9dbcbf44c0ebc8ed79e53e9a3d9b14fc4ad4baea05afd0481ae5b1327ad24c86"
+  },
+  "publication": {
+    "privacyMetadataRedacted": true,
+    "sourceHashesDescribeOriginalLocalSnapshots": true,
+    "pathPlaceholders": "CurrentUser / LOCALAPPDATA; raw local test artifacts remain untracked"
+  }
+}

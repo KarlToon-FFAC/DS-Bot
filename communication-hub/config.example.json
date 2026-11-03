@@ -1,0 +1,10 @@
+{
+  "host": "127.0.0.1",
+  "port": 3190,
+  "databasePath": "../.dsh-test-hub/hub.sqlite",
+  "peers": [
+    { "instanceId": "instance-a", "instanceLabel": "Instance A", "pairingRevision": 1, "credentialEnv": "DSBOT_HUB_A_CREDENTIAL" },
+    { "instanceId": "instance-b", "instanceLabel": "Instance B", "pairingRevision": 1, "credentialEnv": "DSBOT_HUB_B_CREDENTIAL" }
+  ],
+  "limits": { "maxTextBytes": 65536, "maxEnvelopeBytes": 131072, "maxMembers": 64, "maxPendingDeliveries": 10000 }
+}

@@ -355,3 +355,37 @@ Hub 在实际发出投递时再次检查当前资格，不能只依赖最初创�
 - [DSH 让步记录：公开插件接口的限制](https://github.com/KarlToon-FFAC/DS-Bot/blob/5c514ad70d5f3fd1c3b72b2e76e530bef50989d7/docs/plans/2026-10-13-dsh-concessions.md)。
 - [贡献约束：使用 DSH 公开接口，不补丁修改上游](https://github.com/KarlToon-FFAC/DS-Bot/blob/5c514ad70d5f3fd1c3b72b2e76e530bef50989d7/AGENTS.md)。
 
+# 群治理增补（2026-11-03）
+
+本段记录 P0–P4 检查点后的用户追加需求，详细语义见 [群治理设计](group-governance.md)。
+握手新增必需能力 `group-policy`；旧客户端返回 `UNSUPPORTED_CAPABILITY`，不做隐式全权降级。
+
+- Membership 增加 `role: owner|admin|member`、按类型限定的 `speakingMode`、
+  `ownerPrincipalId`、`dissolved`，保留 `membershipVersion` 与旧 manager 投影。
+- Human 模式为 `readOnly|speak`，Bot 为 `passive|active`。新接受成员采用限制模式；
+  创建者可发言。v1 Hub 迁移保留旧发言能力与稳定 ID，数据库版本升至 2。
+- `group.policy`：`principalId, operationId, conversationId, targetPrincipalId,
+  expectedVersion, role?, speakingMode?`。仅 owner 任免 admin；admin 只能改普通成员发言模式。
+- `group.transfer`：同上但无 role/mode；原子转移至活跃成员，旧 owner 变为 admin。
+- `group.reclaim`：`principalId, operationId, conversationId, expectedVersion`，只允许重新配对后的
+  原 owner 恢复新 epoch；不能接管他人身份或复活已解散群。
+- `message.publish` 可附 `responseToDeliveryId`。被动 Bot 必须携带此字段，且其
+  `replyToMessageId` 必须等于相应真实 AI delivery 的原消息。Hub 校验作者、会话、epoch、
+  stored 与 revoked，事务性保存唯一回复资格消耗；重复同 messageId 返回原 ACK。
+  被动回复中的提及保留显示，但不会触发其他 Bot 的 AI delivery。
+- 明确错误包括 `SPEAKING_FORBIDDEN`、`PASSIVE_REPLY_REQUIRED`、`INVALID_RESPONSE_GRANT`、
+  `RESPONSE_ALREADY_SENT`、`GROUP_VERSION_CONFLICT`、`OWNER_TRANSFER_REQUIRED`。
+  以上授权错误属于终态；离线 outbox 到达 Hub 时按最新权限检查。
+
+通信 Session 的读/列会话/发送/群操作另由宿主限制在其绑定 conversation，不因同一 Bot 身份
+而开放其他 DM/群。该执行边界独立于提示词和 UI。原本地群、DM 协议和 DSH 沙盒权限不因此扩权。
+
+
+
+## Final review wire requirements
+
+The required membership-epoch capability fences old clients. Every newly committed message and group mutation carries its actor membershipEpoch; retry never acquires a newer rejoin epoch. Byte-identical already committed retries return the original result without new effects. An uncommitted legacy intent lacking scope fails explicitly and remains auditable.
+
+A completed Bot final is tied to exact canonical AI delivery provenance from its own Session turn. Operational cwd context is not an activation grant. New communication Sessions use the verified persona-only public Preset; unfinished legacy standard-preset work is quarantined for operator review.
+
+Publish budgets include complete sync/delivery response containers, the echoed request ID and future sync watermark width. Whole-event pagination counts separators only between elements. Permanently rejected automatic finals retain their stable outbox identity and are visible only in an authorized Human conversation.

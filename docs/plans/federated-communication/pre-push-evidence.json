@@ -1,0 +1,90 @@
+{
+  "timestamp": "2026-11-03T12:55:43.287Z",
+  "status": "PASS_PRE_PUSH_LOCAL",
+  "branch": "chore/federated-communication",
+  "baseline": "6ede702b7d698a8d86261ecb6a2a5f1efc8e1e87",
+  "versions": {
+    "node": "v24.13.0",
+    "plugin": "0.2.6",
+    "dsh": "0.2.1-rc.4",
+    "hub": "0.1.0"
+  },
+  "unit": {
+    "tests": 1491,
+    "pass": 1489,
+    "fail": 0,
+    "originalSkipped": 2
+  },
+  "hub": {
+    "tests": 32,
+    "pass": 32,
+    "fail": 0,
+    "skipped": 0,
+    "productionWss": true
+  },
+  "checks": {
+    "lint": true,
+    "generatedClientFresh": true,
+    "gitDiffCheck": true,
+    "upstreamDshSourceClean": true,
+    "startPs1ParseAndSingleExecutableSelection": true
+  },
+  "publicationScan": {
+    "tree": "exported Git index",
+    "filesBeforeThisEvidence": 677,
+    "mustFix": 0,
+    "acceptedInformational": 628,
+    "groups": [
+      "not-public-path-in-code",
+      "legacy-name-in-migration",
+      "vendor-name",
+      "other-email",
+      "public-ip"
+    ],
+    "privacyMetadataRedacted": true,
+    "noCredentialOrDataFilesStaged": true
+  },
+  "packaging": {
+    "previousCleanConsumerVerified": true,
+    "currentComparison": [
+      {
+        "kind": "plugin",
+        "files": 87,
+        "unchangedInstalledRuntime": true,
+        "documentationChanges": []
+      },
+      {
+        "kind": "hub",
+        "files": 7,
+        "unchangedInstalledRuntime": true,
+        "documentationChanges": [
+          "README.md"
+        ]
+      }
+    ]
+  },
+  "realModel": {
+    "status": "PASS_REAL_DSH_HUB",
+    "model": "gpt-6-luna",
+    "requests": 6,
+    "generations": 3,
+    "checks": 7,
+    "differentMachine": false,
+    "modeledGenerationCostUsdUpperBound": 0.0016275,
+    "noAdditionalPaidCallsForPrePush": true
+  },
+  "localArtifactHashes": {
+    "pluginLog": "3e9da643c211e674a838ed5216de745925ab08d94f1523cfaa2d6ef3736ae044",
+    "hubLog": "f729a3a1d6b164d1e721ae5dd1c962576829b4a08922e5b74fe2d578148fc3d8",
+    "realChainResult": "26ef84f19a3675ce75dddc51d76ff5057169b605f990e741698d4aa45c75bd8a",
+    "sanitizedScanResult": "572045c5c88e7dc30ae5dbd32791a63bec00215b7ae4eb40cbd7a993f0bac1ed"
+  },
+  "limits": [
+    "Different physical computers/IPs NOT_RUN",
+    "Production network and certificates owner-provided",
+    "Packaged Electron trial NOT_RUN",
+    "No final billing invoice guarantee",
+    "Vault retained outside Git; normal desktop provider configuration is separate"
+  ],
+  "guide": "two-machine-trial.md"
+}

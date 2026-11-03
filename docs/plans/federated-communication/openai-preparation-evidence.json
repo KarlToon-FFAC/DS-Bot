@@ -1,0 +1,112 @@
+{
+  "status": "PASS_PREPARATION_MOCK_ONLY",
+  "timestamp": "2026-11-03T10:53:48.413Z",
+  "branch": "chore/federated-communication",
+  "head": "6ede702b7d698a8d86261ecb6a2a5f1efc8e1e87",
+  "model": "gpt-6-luna",
+  "api": "openai-responses",
+  "officialOrigin": "https://api.openai.com",
+  "discovery": {
+    "documentationVerifiedAt": "2026-11-03",
+    "accountVisibility": "UNVERIFIED",
+    "inferencePermission": "UNVERIFIED",
+    "sdkVersion": "7.19.0",
+    "piVersion": "1.5.0",
+    "sdkStaticChatModelContains56Luna": true,
+    "sdkStaticChatModelContains6Luna": false,
+    "piGeneratedCatalogLunaMentions": 0,
+    "sources": [
+      "https://developers.openai.com/api/docs/models/gpt-6-luna",
+      "https://developers.openai.com/api/docs/pricing",
+      "https://developers.openai.com/api/docs/guides/token-counting"
+    ]
+  },
+  "pricesUsdPerMillion": {
+    "standardInput": 0.1,
+    "cachedInput": 0.01,
+    "cacheWrite30m": 0.125,
+    "cacheWrite12h": 0.25,
+    "output": 0.5
+  },
+  "budget": {
+    "maxRequests": 8,
+    "maxInputTokens": 12000,
+    "maxOutputTokens": 1024,
+    "maxTotalInputTokens": 96000,
+    "maxTotalOutputTokens": 8192,
+    "maxCostMicroUsd": 0,
+    "execute": false,
+    "maximumGenerations": 4,
+    "maximumAfterMetadata": 3,
+    "reservedMicroUsdPerGeneration": 3512,
+    "maximumModelTokenUsd": 0.014048,
+    "countsAllOutboundSlots": true,
+    "ledger": "SQLite transactional reservations retained across restart and unknown outcomes",
+    "allBillGuarantee": false,
+    "spendAuthorization": "PENDING",
+    "tokenCountAndMetadataPricing": "not explicitly established by consulted docs"
+  },
+  "validation": {
+    "focused": {
+      "tests": 12,
+      "pass": 12,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0
+    },
+    "full": {
+      "tests": 1481,
+      "pass": 1479,
+      "fail": 0,
+      "skipped": 2,
+      "cancelled": 0
+    },
+    "wire": {
+      "status": "PASS_LOOPBACK_MOCK",
+      "officialApiRequests": 0,
+      "generations": 1,
+      "outboundSlotsReserved": 2,
+      "model": "gpt-6-luna",
+      "api": "openai-responses",
+      "inputCount": 12,
+      "maxOutputTokens": 1024,
+      "reasoningEffort": "none",
+      "stream": "stop",
+      "realCredentialRead": false
+    },
+    "lint": "PASS with existing repository warnings",
+    "generatedBundleFresh": true,
+    "gitDiffCheck": true,
+    "productionFilesUnchanged": 94,
+    "productionBaseline": "final-review-evidence.json packaging hashes",
+    "logs": [
+      ".dsh-test-tools/openai-budget-tests.log",
+      ".dsh-test-tools/openai-full-tests.log",
+      ".dsh-test-tools/openai-budget-lint.log",
+      ".dsh-test-tools/openai-wire.json"
+    ]
+  },
+  "security": {
+    "realApiRequests": 0,
+    "realCredentialRead": false,
+    "persistedCredentials": false,
+    "modelFallback": false,
+    "userDshDataInspected": false,
+    "virtualInputTouched": false,
+    "persistentServiceOrFirewallChange": false,
+    "mockListeners": "owned ephemeral listeners closed in finally; runner exited successfully",
+    "realLaunchEnabled": false,
+    "pending": "specific spending approval, private one-process key injection, isolated launch wiring, account access verification"
+  },
+  "sourceHashes": {
+    "ds-bot/dev/communication/openai-budget.mjs": "ef326aa2ca35c82ed76948d115ce6d0e749d72573220baf2c6aa68c3e323bcad",
+    "ds-bot/dev/communication/openai-test.config.example.json": "94f7061112238925a5f3c1a6230f2cd4df99d9bc8565e0d8493b0ef05a8815aa",
+    "ds-bot/dev/communication/openai-wire-check.mjs": "a7c6cc4d1a1c0a248b564784c86b5923efffc01d9788c48efe9dd5f2b1b1ccdb",
+    "ds-bot/test/openai-budget.test.js": "30f9bcd732bc5de60607001a6b94604b5bf0b5778fa14fda2da1f997a45927a9",
+    "ds-bot/dev/communication/README.md": "3183058fa8b62c44951a1777062290a644db66b272f9907a0ed8e7bba98ef8af",
+    "docs/plans/federated-communication/openai-model-preparation.md": "346c1863c2ec5a9a81d8e5852286715688c81110535ccbaddbd9fc61307e5ed0",
+    "docs/plans/federated-communication/real-model-test-plan.md": "97fd8f5a01f77f50b72a23d80fb49af4640d5f5be3a89aaf004b5181dc2dbe21",
+    "docs/plans/federated-communication/local-progress.md": "498618d9eaced7907c8210f7277c29630bc5295d24a00b9306b173269e5305fa"
+  },
+  "pushed": false
+}
