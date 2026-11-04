@@ -89,3 +89,22 @@ Release procedure: commit the reviewed index, non-force push only to
 and compare it to local HEAD. The delivery report records that result. No main/docs
 rewrite is authorized. No additional functional acceptance remains pending here;
 physical network/certificate deployment and real-model validation remain separate.
+
+## CI dependency-isolation correction
+
+The first published follow-up (`ae4e4b8`) failed its four plugin CI matrix jobs:
+the new fairness test imported the sibling Hub server, but plugin jobs correctly
+install only plugin and DSH harness dependencies. Node resolves the server's `ws`
+dependency relative to the Hub package, not the importing plugin's installation.
+An existing developer Hub installation masked that error. All four job logs show
+this same single module-load failure; independent Hub jobs passed.
+
+The three pure queue/transport cases remain in the plugin suite. The two real Hub
+socket lifecycle cases now live in `communication-hub/test/transport-fairness.test.js`,
+where the existing Hub CI jobs install the server's locked dependency. Their
+assertions and coverage are unchanged; no test is skipped and no resolution hook
+or production dependency path is altered. A fresh exported tree with no Hub
+`node_modules` reproduces the old server import error and passes all three pure
+plugin cases. A second fresh tree installs only the Hub lockfile and passes all
+80 Hub tests, including both moved cases. The release report records clean full
+plugin verification and the follow-up CI status separately.
