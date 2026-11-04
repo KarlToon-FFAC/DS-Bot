@@ -19,16 +19,64 @@ npm.cmd test
 npm.cmd start -- ./config.example.json
 ```
 
-`npm test` needs no real account or key. It generates credentials in memory for
-the test process and its explicitly owned children; none are written to config
-files or databases. It includes independent Hub/client databases, a forcibly
-terminated Hub, lost publish/receipt responses and automatic reconnect.
+`npm test` needs no real account or key. Legacy shared secrets and signing private
+keys stay in the test process; isolated databases contain public-key authorization,
+consent state and password verifiers. No production credentials are used. It
+includes independent Hub/client databases, a forcibly terminated Hub, lost
+publish/receipt responses and automatic reconnect.
 
 The CLI reports its actual listening port. `GET /health` returns only readiness
 and protocol version. Ctrl+C invokes normal shutdown; a forced Windows process
 termination is a crash-recovery test, not proof of graceful shutdown. Embedded
 callers use `await startHub(options)` and `await hub.close()`. No service is
 installed. Database paths resolve relative to the config file.
+
+## Hub page, device requests and user codes
+
+Enable `management.enabled` and supply an administrator password of at least
+16 characters through `management.adminPasswordEnv`, using your existing local
+secret mechanism. Do not put its value in config or command arguments. The Hub
+prints its `/admin/` address. There is no default password, and management is off
+unless explicitly configured. `peers` may be empty when management is enabled.
+
+For real devices, configure a reachable `management.url`, for example
+`wss://hub.example.test:3190/communication`, with the matching trusted TLS
+certificate and existing network routing. `management.origin` can specify the
+same-origin HTTPS admin address. The Hub code contains that full address and a
+stable Hub ID: it is a locator, not a secret, discovery service or NAT traversal.
+Loopback plaintext is for local isolated tests only. This service does not install
+certificates, open firewall rules or create a persistent system service.
+
+In DS Bot choose Remote communication → Add a device, paste the code, verify the
+displayed address/Hub ID and explicitly request admission. The Hub administrator
+checks the applicant and key fingerprint before approving it on the Hub page.
+The device proves possession of its private signing key; approval does not send
+a shared secret back. The private key stays in that device's DSH credential
+provider. Its default provider is an OS-account-protected plaintext file, so do
+not mistake it for encryption or isolation from same-user processes. Configuration
+contains a credential reference, not the key. Existing configured pairings cannot
+be silently replaced with another Hub.
+
+After approval, explicitly select local Bots to publish. Each instance's Human
+receives a unique user code. Use Manage contacts to request the other user's code;
+both Humans must explicitly confirm their own shared Bot scope (default none).
+Codes identify users but never authenticate them or grant administrator rights.
+Unknown/unavailable code requests have indistinguishable acknowledgments. Pending
+requests expire, and rate limits and single-use signed challenges prevent abuse.
+
+Revoking a contact blocks DMs and new invitations, fences old queued DM intents
+and preserves historical data. Existing shared groups keep their separate
+permissions. Revoking an instance stops its authentication; explicit repair accepts
+only its original key and increases its revision, without restoring old group
+memberships. Reconnecting or sharing a public code cannot undo revocation.
+
+The local Human CLI `dsbot-remote` covers these device, contact, profile and
+publication operations; run `help` for exact JSON schemas. Administrative CLI:
+`node communication-hub/src/admin-cli.mjs --help` from the repository root.
+Supply `DSBOT_HUB_ADMIN_PASSWORD` privately for state/decide/revoke/repair commands.
+These administrative operations do not belong to a Bot or group owner.
+See [management design](../docs/plans/federated-communication/management-design.md)
+and the [final acceptance matrix](../docs/plans/federated-communication/follow-up-matrix.md).
 
 ## Pairing and transport
 

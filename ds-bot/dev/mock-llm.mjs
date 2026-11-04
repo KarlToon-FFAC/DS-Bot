@@ -142,6 +142,8 @@ function decide(body) {
       if (!communicationResults && collaborationAll) return [text(`COMM-COLLAB DONE ${collaborationAll[1]} @all`)]
       const collaborationDone = /^COMM-COLLAB DONE (\S+)(?:\s+@\S+)*$/.exec(command)
       if (!communicationResults && collaborationDone) return [text(`Collaboration done ${collaborationDone[1]}`)]
+      const collaborationReply = /^COMM-COLLAB REPLY (\S+) (\S+) (\S+)$/.exec(command)
+      if (!communicationResults && collaborationReply) return [tool('send_contact_message', { conversationId: collaborationReply[1], replyToMessageId: collaborationReply[2], text: `COMM-ECHO ${collaborationReply[3]}`, mentions: [] })]
       const collaborationBurst = /^COMM-COLLAB BURST (\S+) (\S+) (\d+) (\S+)$/.exec(command)
       if (!communicationResults && collaborationBurst) {
         const count = Number(collaborationBurst[3])

@@ -5,7 +5,9 @@ import { t } from './i18n.js'
 import { MarkdownText } from './dsh-primitives.js'
 import { mdLabels } from './btw.js'
 import { useLinger } from './motion.js'
-import { contactLabels, conversationTitle, deliveryPhase, contactsByAddress, principalAvatar, mentionQuery, mentionChoices, insertMention, retainedMentions, collaborationStops } from './communication-model.js'
+import { contactLabels, conversationTitle, deliveryPhase, contactsByAddress, mentionQuery, mentionChoices, insertMention, retainedMentions, collaborationStops, groupSettingsValues, groupSettingsChanges, referenceExcerpt } from './communication-model.js'
+import { AddDevice, ContactManager } from './communication-onboarding.js'
+import { CommunicationAvatar, HumanProfile, syncAvatarDirectory } from './communication-profile.js'
 import { communicationCSS } from './communication-styles.js'
 
 const OPEN = 'ds-bot:communication:open', SELECTED = 'ds-bot:communication:selected'
@@ -72,6 +74,103 @@ function PairingGuide({ connectionLabel }) {
     h('p', null, t('If disconnected, check the exact instanceId, matching privately supplied credential, trusted certificate and hostname, and Hub restart. Readiness alone does not prove pairing. Revoked devices need the Hub owner to increase pairingRevision before re-pairing.')))
 }
 
+function ReferenceQuote({ conversationId, membershipEpoch, messageId, request, labels, onJump }) {
+  const [source, setSource] = useState(null), [unavailable, setUnavailable] = useState(false)
+  useEffect(() => {
+    let active = true
+    setSource(null); setUnavailable(false)
+    void request({ endpoint: 'reference', conversationId, messageId }).then(event => {
+      if (active && event?.message?.messageId === messageId) setSource(event.message)
+      else if (active) setUnavailable(true)
+    }).catch(() => { if (active) setUnavailable(true) })
+    return () => { active = false }
+  }, [conversationId, membershipEpoch, messageId, request])
+  return h('button', { type: 'button', className: 'bt-comm-quote', 'data-reference-id': messageId, disabled: !source || unavailable,
+    'aria-label': t('Jump to source message'), onClick: () => { void onJump(messageId) } },
+    source ? h(Fragment, null, h('span', { className: 'bt-comm-quote-author' }, labels.get(source.author.principalId) ?? source.author.displayName ?? t('Participant')),
+      h('span', { className: 'bt-comm-quote-text' }, referenceExcerpt(source.content.text))) : t(unavailable ? 'Earlier message unavailable' : 'Loading reference…'))
+}
+
+function GroupSettings({ member, contacts, operation, pendingSettings, operationPending, act, busy, humanId, btn, personLabel, chooseContact }) {
+  const [open, setOpen] = useState(false), [base, setBase] = useState(null), [draft, setDraft] = useState(null)
+  const [saving, setSaving] = useState(false), [failure, setFailure] = useState(''), [pending, setPending] = useState(null)
+  const [invite, setInvite] = useState(''), [newOwner, setNewOwner] = useState(''), [confirm, setConfirm] = useState('')
+  const generation = useRef(0), revision = useRef(0), summary = useRef(null)
+  useEffect(() => () => { generation.current += 1 }, [])
+  useEffect(() => { if (pending && !pendingSettings(member.conversationId)) setPending(null) }, [operationPending, member.membershipVersion])
+  const isOwner = member.role === 'owner', canManage = ['owner', 'admin'].includes(member.role)
+  const members = member.info?.members ?? []
+  const close = () => { generation.current += 1; setOpen(false); setBase(null); setDraft(null); setFailure(''); setSaving(false); setPending(null); summary.current?.focus() }
+  const begin = () => {
+    generation.current += 1; revision.current = 0
+    const values = groupSettingsValues(member)
+    setBase({ values, expectedVersion: member.membershipVersion, membershipEpoch: member.membershipEpoch })
+    setDraft(values); setFailure(''); setPending(pendingSettings(member.conversationId)); setSaving(false); setOpen(true)
+  }
+  const edit = values => { revision.current += 1; setDraft(current => ({ ...current, ...values })) }
+  const changes = base && draft ? groupSettingsChanges(base.values, draft) : {}
+  const dirty = Object.keys(changes).length > 0
+  const saveSettings = async () => {
+    if (saving || !base || !draft || !dirty && !pending) return
+    const token = generation.current, editedAt = revision.current
+    const intent = pending ?? { conversationId: member.conversationId, membershipEpoch: base.membershipEpoch, expectedVersion: base.expectedVersion, ...changes }
+    setSaving(true); setFailure('')
+    try {
+      const result = await operation('save-settings', intent)
+      if (token !== generation.current) return
+      if (result.status === 'queued') { setPending(intent); return }
+      const canonical = result.refreshedState?.conversations?.find(item => item.conversationId === member.conversationId && item.membershipVersion === result.membershipVersion)
+      const savedValues = canonical ? groupSettingsValues(canonical) : {
+        ...base.values, ...(intent.title === undefined ? {} : { title: intent.title }), ...(intent.routing ? { routing: intent.routing } : {}),
+        policies: { ...base.values.policies, ...Object.fromEntries((intent.policies ?? []).map(policy => [policy.targetPrincipalId, { ...base.values.policies[policy.targetPrincipalId], ...policy }])) },
+      }
+      setBase({ values: savedValues, expectedVersion: result.membershipVersion, membershipEpoch: intent.membershipEpoch })
+      if (revision.current === editedAt && (!pending || editedAt === 0)) setDraft(savedValues)
+      setPending(null)
+    } catch (error) {
+      if (token === generation.current) { setFailure(friendly(error)); setPending(error.code ? null : intent) }
+    } finally { if (token === generation.current) setSaving(false) }
+  }
+  const values = draft ?? groupSettingsValues(member)
+  const roleLabel = role => role === 'owner' ? 'Group owner' : role === 'admin' ? 'Group admin' : 'Group member'
+  return h('details', { className: 'bt-comm-members', open },
+    h('summary', { ref: summary, onClick: event => { event.preventDefault(); if (open) close(); else begin() } }, t('Group members and receiving rules')),
+    open ? h(Fragment, null,
+      h('div', { className: 'bt-comm-settings-actions' }, canManage ? h('button', { type: 'button', onClick: () => { void saveSettings() }, disabled: saving || !dirty && !pending, 'data-dirty': dirty, 'aria-label': t('Save group settings') }, t('Save')) : null,
+        h('button', { type: 'button', onClick: close, 'aria-label': t('Close member settings') }, t('Close member settings'))),
+      failure ? h('p', { className: 'bt-comm-error', role: 'alert' }, t(failure)) : null,
+      pending ? h('p', { role: 'status' }, t('An operation is not confirmed. Check status, then retry the same action.')) : null,
+      base && member.membershipVersion > base.expectedVersion ? h('p', { role: 'status' }, t('Group settings changed elsewhere. Your edits are retained. Close and reopen to review the current settings.')) : null,
+      h('p', { className: 'bt-comm-reference' }, t('Roles control group management. Speaking permissions control who can send.')),
+      member.ownerPrincipalId && !members.some(person => person.principalId === member.ownerPrincipalId) ? h('p', { role: 'status' }, t('The owner is unavailable. Ownership stays with that identity.')) : null,
+      !member.ownerPrincipalId ? h('p', { role: 'status' }, t('This legacy group has no retained owner. No automatic takeover is allowed.')) : null,
+      canManage ? h('label', { className: 'bt-comm-field' }, t('Group name'), h('input', { value: values.title, onChange: event => edit({ title: event.target.value }), 'aria-label': t('Group name') })) : null,
+      members.map(person => {
+        const editable = isOwner || member.role === 'admin' && person.role === 'member'
+        const policy = values.policies[person.principalId] ?? { role: person.role, speakingMode: person.speakingMode }
+        const changePolicy = change => edit({ policies: { ...values.policies, [person.principalId]: { ...policy, ...change } } })
+        return h('div', { key: person.principalId, className: 'bt-comm-person', 'data-principal-id': person.principalId },
+          h('span', { title: person.principalId }, personLabel(person)), h('span', { className: 'bt-comm-role' }, t(roleLabel(person.role))),
+          editable ? h(Fragment, null,
+            isOwner && person.role !== 'owner' ? h('label', null, t('Group role'), h('select', { value: policy.role, 'aria-label': t('Group role'), onChange: event => changePolicy({ role: event.target.value }) }, h('option', { value: 'member' }, t('Group member')), h('option', { value: 'admin' }, t('Group admin')))) : null,
+            h('label', null, t('Speaking permission'), h('select', { value: policy.speakingMode, 'aria-label': t('Speaking permission'), onChange: event => changePolicy({ speakingMode: event.target.value }) },
+              (person.kind === 'human' ? [['readOnly', 'Read only'], ['speak', 'Can speak']] : [['passive', 'Reply only'], ['active', 'Can speak']]).map(([value, label]) => h('option', { key: value, value }, t(label)))))) : h('span', null, t(['readOnly', 'passive'].includes(person.speakingMode) ? person.kind === 'human' ? 'Read only' : 'Reply only' : 'Can speak')),
+          canManage && person.role !== 'owner' && (isOwner || person.role === 'member') && person.principalId !== humanId ? btn('Remove from group', () => { void act(() => operation('remove', { conversationId: member.conversationId, targetPrincipalId: person.principalId })) }) : null)
+      }),
+      h('p', { className: 'bt-comm-reference' }, t('Both Bot modes may @mention current group Bots in an authorized final reply. Reply-only Bots cannot initiate messages or send proactively with tools. Active Bots may also initiate with tools. Bot delegation chains stop at the server’s finite limit.')),
+      canManage ? h(Fragment, null,
+        chooseContact('Invite participant', invite, setInvite, contacts.filter(contact => !members.some(person => person.principalId === contact.principalId))),
+        btn('Invite', () => { void act(() => operation('invite', { conversationId: member.conversationId, inviteePrincipalId: invite })) }, { disabled: busy || !invite }),
+        h('label', { className: 'bt-comm-field' }, t('Receiving rule'), h('select', { value: values.routing.mode, onChange: event => edit({ routing: { mode: event.target.value, adminBotPrincipalId: event.target.value === 'admin' ? values.routing.adminBotPrincipalId : null } }), 'aria-label': t('Receiving rule') },
+          h('option', { value: 'mentionsOnly' }, t('Mentions only')), h('option', { value: 'admin' }, t('Plain messages go to one Bot')))),
+        values.routing.mode === 'admin' ? chooseContact('Default reply Bot', values.routing.adminBotPrincipalId ?? '', id => edit({ routing: { mode: 'admin', adminBotPrincipalId: id } }), members.filter(person => person.kind === 'bot')) : null) : h('p', null, t(member.routingMode === 'admin' ? 'Plain messages go to one Bot' : 'Mentions only')),
+      isOwner ? h(Fragment, null,
+        chooseContact('Transfer ownership to', newOwner, value => { setNewOwner(value); setConfirm('') }, members.filter(person => person.principalId !== humanId)),
+        btn(confirm === 'transfer' ? 'Confirm ownership transfer' : 'Transfer ownership', () => { if (confirm !== 'transfer') setConfirm('transfer'); else void act(() => operation('transfer', { conversationId: member.conversationId, targetPrincipalId: newOwner, expectedVersion: member.membershipVersion })) }, { disabled: busy || !newOwner })) : null,
+      btn(confirm === 'leave' ? 'Confirm leaving group' : 'Leave group', () => { if (confirm !== 'leave') setConfirm('leave'); else void act(() => operation('remove', { conversationId: member.conversationId })) }, { disabled: busy || isOwner, title: isOwner ? t('Transfer ownership before leaving') : undefined }),
+      isOwner ? btn(confirm === 'dissolve' ? 'Confirm ending group for everyone' : 'End group for everyone', () => { if (confirm !== 'dissolve') setConfirm('dissolve'); else void act(() => operation('dissolve', { conversationId: member.conversationId })) }, { className: 'bt-comm-danger' }) : null) : null)
+}
+
 export function CommunicationSurface({ roster, surface, panel, request = communicationRequest }) {
   const team = useSyncExternalStore(roster.subscribe, roster.getSnapshot)
   const mode = useSyncExternalStore(surface.subscribe, surface.getSnapshot)
@@ -84,11 +183,9 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
   const [drafts, setDrafts] = useState(() => read(DRAFTS, {})), [attempts, setAttempts] = useState(() => read(ATTEMPTS, {}))
   const [hidden, setHidden] = useState(() => read(HIDDEN, [])), [showHidden, setShowHidden] = useState(false)
   const [page, setPage] = useState(null), [older, setOlder] = useState(null), [reply, setReply] = useState(null)
-  const [referenced, setReferenced] = useState(null), [unavailableReferences, setUnavailableReferences] = useState([])
-  const [title, setTitle] = useState(''), [invitees, setInvitees] = useState([]), [invite, setInvite] = useState('')
-  const [routing, setRouting] = useState('mentionsOnly'), [admin, setAdmin] = useState(''), [confirm, setConfirm] = useState('')
-  const [policies, setPolicies] = useState({}), [newOwner, setNewOwner] = useState('')
-  const [humanName, setHumanName] = useState(''), [groupName, setGroupName] = useState('')
+  const [referenced, setReferenced] = useState(null), [jumpRevision, setJumpRevision] = useState(0)
+  const pendingJump = useRef(null), referenceOrder = useRef(0), contextKey = useRef('')
+  const [title, setTitle] = useState(''), [invitees, setInvitees] = useState([])
   const [completion, setCompletion] = useState(null), [completionIndex, setCompletionIndex] = useState(0), [composing, setComposing] = useState(false)
   const chooser = useRef(null), chooserTrigger = useRef(null)
   const [browse, setBrowse] = useState(false), [activePanel, setActivePanel] = useState('')
@@ -96,10 +193,12 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
   const labels = contactLabels(state?.contacts ?? [], state?.instanceId, t)
   const member = state?.conversations?.find(item => item.conversationId === selected)
   const key = `${state?.instanceId}:${selected}`
+  contextKey.current = `${key}:${member?.membershipEpoch}`
   const draft = drafts[key] ?? { text: '', mentions: [] }
   const changeDraft = value => setDrafts(current => { const next = { ...current, [key]: { ...draft, ...value } }; save(DRAFTS, next); return next })
   const close = () => { panel.set(false); save(OPEN, false) }
   const refresh = async () => { const value = await request({ endpoint: 'state' }); setState(value); setPollError(''); return value }
+  useEffect(() => { syncAvatarDirectory(state?.contacts ?? []) }, [state?.contacts])
   useEffect(() => {
     if (!team.communicationEnabled) { setState(null); setPollError(''); return undefined }
     let active = true, timer
@@ -125,7 +224,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
         if (completion) { setCompletion(null); return }
         if (activePanel) { setActivePanel(''); chooserTrigger.current?.focus(); return }
         const members = frame.current?.querySelector('.bt-comm-members[open]')
-        if (members) { members.open = false; focusDefault() } else close()
+        if (members) { members.querySelector('summary')?.click(); focusDefault() } else close()
       }
       if (event.key === 'Tab') {
         const targets = controls(), first = targets[0], last = targets.at(-1)
@@ -142,13 +241,21 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
     if (!shown || !activePanel) return
     chooser.current?.querySelector(activePanel === 'group' ? 'input' : 'button')?.focus()
   }, [shown, activePanel])
-  useEffect(() => { save(SELECTED, selected); setOlder(null); setReply(null); setReferenced(null); setConfirm(''); setNewOwner(''); setPolicies({}); setCompletion(null); autoScroll.current = true; input.current?.focus() }, [selected])
+  useEffect(() => { save(SELECTED, selected); setOlder(null); setReply(null); setReferenced(null); pendingJump.current = null; referenceOrder.current += 1; setCompletion(null); autoScroll.current = true; input.current?.focus() }, [selected])
+  useEffect(() => {
+    if (!shown) return undefined
+    const clear = () => { pendingJump.current = null; referenceOrder.current += 1; setReferenced(null) }
+    document.addEventListener('pointerdown', clear, true)
+    return () => document.removeEventListener('pointerdown', clear, true)
+  }, [shown])
   useLayoutEffect(() => {
-    const target = referenced && [...(log.current?.querySelectorAll('article') ?? [])].find(node => node.dataset.messageId === referenced)
-    if (target) target.scrollIntoView?.({ block: 'center' })
-    else if (log.current && older === null && autoScroll.current) log.current.scrollTop = log.current.scrollHeight
-  }, [page, older, referenced, state?.outbox])
-  useEffect(() => { setRouting(member?.routingMode ?? 'mentionsOnly'); setAdmin(member?.adminBotPrincipalId ?? ''); setGroupName(member?.title ?? '') }, [selected, member?.membershipVersion])
+    const jump = pendingJump.current
+    const target = jump && [...(log.current?.querySelectorAll('article') ?? [])].find(node => node.dataset.messageId === jump.messageId)
+    if (target && jump.context === contextKey.current) {
+      pendingJump.current = null; autoScroll.current = false
+      target.scrollIntoView?.({ block: 'center' })
+    } else if (!jump && log.current && older === null && autoScroll.current) log.current.scrollTop = log.current.scrollHeight
+  }, [page, older, referenced, jumpRevision, state?.outbox])
   useEffect(() => {
     if (!shown || !member) { setPage(null); return undefined }
     let active = true
@@ -180,8 +287,9 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
       throw failure
     }
     if (value.status !== 'queued') { operationIds.current.delete(operationKey); persist() }
-    await refresh()
-    return value
+    let refreshedState
+    try { refreshedState = await refresh() } catch (failure) { setPollError(friendly(failure)) }
+    return { ...value, refreshedState }
   }
   const act = async work => {
     if (busy) return
@@ -204,16 +312,19 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
     save(HIDDEN, next); setHidden(next); setSelected(id); setBrowse(false); setError('')
   }
   const hide = () => { const next = [...new Set([...hidden, key])]; save(HIDDEN, next); setHidden(next); setSelected(null) }
-  const openReference = messageId => act(async () => {
+  const openReference = async messageId => {
+    const context = contextKey.current, order = ++referenceOrder.current
     try {
       const event = await request({ endpoint: 'reference', conversationId: selected, messageId })
-      setReferenced(messageId)
+      if (context !== contextKey.current || order !== referenceOrder.current) return
+      autoScroll.current = false
+      pendingJump.current = { messageId, context }
+      setReferenced(messageId); setJumpRevision(value => value + 1)
       if (!page?.events.some(item => item.message?.messageId === messageId)) setOlder(event.conversationSeq + 24)
-    } catch (failure) {
-      if (failure.code === 'REFERENCE_NOT_AVAILABLE') setUnavailableReferences(current => [...new Set([...current, messageId])])
-      throw failure
+    } catch {
+      if (context === contextKey.current && order === referenceOrder.current) setError('Earlier message unavailable')
     }
-  })
+  }
   const btn = (label, onClick, props = {}) => h('button', { type: 'button', disabled: busy, onClick, ...props }, props.children ?? t(label))
   const chooseContact = (label, value, onChange, people) => h('details', { className: 'bt-comm-participant-picker' },
     h('summary', null, t(label), value ? ': ' : '', value ? personLabel(people.find(person => person.principalId === value) ?? { principalId: value }) : ''),
@@ -223,7 +334,6 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
   const visibleIds = new Set(events.map(event => event.message?.messageId))
   const ownOutbox = member ? (state?.outbox ?? []).filter(item => item.type === 'message.publish' && item.conversationId === selected) : []
   const currentMembers = member?.info?.members ?? []
-  const isOwner = member?.role === 'owner', canManage = ['owner','admin'].includes(member?.role)
   const canSpeak = member && (member.kind !== 'group' || member.speakingMode === 'speak')
   const contacts = state?.contacts ?? []
   const operations = state?.outbox?.filter(item => item.type !== 'message.publish' && item.state !== 'accepted') ?? []
@@ -231,14 +341,21 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
   const remoteCount = contacts.filter(contact => contact.homeInstanceId !== state?.instanceId).length
   const showPanel = name => { chooserTrigger.current = document.activeElement; setActivePanel(name) }
   const connectionBlocked = state?.error && !['CONNECTION_LOST','REQUEST_TIMEOUT','STORAGE_UNAVAILABLE','BACKPRESSURE','HISTORY_GAP'].includes(state.error)
-  const connectionLabel = !team.communicationEnabled ? 'Not configured' : pollError ? 'Cannot reach this instance' : !state ? 'Connecting…' : state.connected ? 'Connected to Hub' : connectionBlocked ? 'Connection needs attention' : 'Reconnecting to Hub'
+  const connectionLabel = !team.communicationEnabled ? 'Not configured' : pollError ? 'Offline' : !state ? 'Connecting…' : state.connected ? 'Connected to Hub' : connectionBlocked ? 'Offline' : 'Reconnecting to Hub'
   const roleLabel = role => role === 'owner' ? 'Group owner' : role === 'admin' ? 'Group admin' : 'Group member'
   const speechLabel = person => person.speakingMode === 'readOnly' ? 'Read only' : person.speakingMode === 'passive' ? 'Reply only' : 'Can speak'
   const avatar = (id, name) => {
-    const value = principalAvatar(id, name ?? labels.get(id) ?? id)
-    return h('span', { className: 'bt-comm-avatar', 'data-avatar': value.variant, 'data-avatar-id': id, 'aria-hidden': true, 'data-initials': value.initials })
+    const contact = contacts.find(person => person.principalId === id)
+    return h(CommunicationAvatar, { person: contact ?? { principalId: id, displayName: name ?? id, kind: id?.startsWith('bot:') ? 'bot' : id?.startsWith('human:') ? 'human' : 'group' }, request, allowed: Boolean(contact) })
   }
-  const personLabel = person => h('span', { className: 'bt-comm-person-label' }, avatar(person.principalId, person.displayName), labels.get(person.principalId) ?? person.displayName ?? person.principalId)
+  const identityIcons = person => {
+    const kind = person.kind ?? (person.principalId?.startsWith('bot:') ? 'bot' : 'human')
+    const instanceId = person.homeInstanceId ?? person.principalId?.split(':')[1]
+    return h(Fragment, null,
+      h('span', { className: 'bt-comm-kind-icon', 'aria-label': t(kind === 'bot' ? 'Bot' : 'Human'), title: t(kind === 'bot' ? 'Bot' : 'Human'), 'data-symbol': kind === 'bot' ? '◇' : '○' }),
+      instanceId && instanceId !== state?.instanceId ? h('span', { className: 'bt-comm-kind-icon', 'aria-label': t('Remote'), title: t('Remote'), 'data-symbol': '↗' }) : null)
+  }
+  const personLabel = person => h('span', { className: 'bt-comm-person-label', title: `${person.displayName ?? ''} · ${person.instanceLabel ?? person.homeInstanceId ?? ''} · ${person.principalId}` }, avatar(person.principalId, person.displayName), labels.get(person.principalId) ?? person.displayName ?? person.principalId, identityIcons(person))
   const groupedContacts = render => contactsByAddress(contacts.filter(person => person.principalId !== state?.humanPrincipalId)).map(group => h('section', { key: group.address, className: 'bt-comm-address' },
     h('h3', null, t(group.address)), group.instances.map(instance => h('section', { key: instance.instanceId ?? 'unknown' }, h('p', { className: 'bt-comm-reference', title: instance.instanceId }, instance.label, ' · ', instance.instanceId), instance.contacts.map(render)))))
   const suggestions = completion ? mentionChoices(currentMembers, completion.query, t('All Bots')) : []
@@ -257,15 +374,14 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
         h('p', { className: 'bt-comm-connection-label', role: 'status', 'data-connected': Boolean(state?.connected && !pollError) }, h('span', { className: 'bt-comm-dot', 'aria-hidden': true }), t(connectionLabel)),
         state ? h('p', { className: 'bt-comm-reference' }, `${state.instanceId} · ${t('Remote contacts')}: ${remoteCount}`) : null,
         team.communicationEnabled && !state?.connected && !connectionBlocked ? h('p', { className: 'bt-comm-reference' }, t('Queued messages send automatically when the connection returns.')) : null,
-        state?.error ? h('p', { className: 'bt-comm-error', role: 'alert' }, t(friendly({ code: state.error }))) : null,
         team.communicationEnabled ? btn('Refresh status', () => { void act(refresh) }) : null,
         state ? h('details', { className: 'bt-comm-identity' }, h('summary', null, t('Human profile and connection')),
           h('p', null, t('This device')), h('code', null, state.instanceId),
           h('p', null, t('Your identity')), personLabel(contacts.find(person => person.principalId === state.humanPrincipalId) ?? { principalId: state.humanPrincipalId, displayName: 'Human' }), h('code', null, state.humanPrincipalId),
-          h('label', { className: 'bt-comm-field' }, t('Human name'), h('input', { value: humanName, onChange: event => setHumanName(event.target.value), 'aria-label': t('Human name') })),
-          btn('Save Human name', () => { void act(async () => { await operation('rename-human', { displayName: humanName }); setHumanName('') }) }, { disabled: busy || !humanName.trim() }),
-          state.error ? h(Fragment, null, h('p', null, t('Error code')), h('code', null, state.error)) : null) : null),
+          btn('Edit Human profile', () => showPanel('profile')),
+          null) : null),
       btn('Add a device', () => showPanel('pairing')),
+      btn('Manage contacts', () => showPanel('manage-contacts'), { disabled: !team.communicationEnabled }),
       h('div', { className: 'bt-comm-start-actions' },
         btn('New message', () => showPanel('contacts'), { disabled: busy || !team.communicationEnabled }),
         btn('New group', () => showPanel('group'), { className: 'bt-comm-primary', disabled: busy || !team.communicationEnabled })),
@@ -281,13 +397,11 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
         btn('Accept invitation', () => { void act(() => operation('accept', { inviteId: invitation.inviteId, recipientPrincipalId: invitation.principalId })) })))) : null,
       (state?.recoverableOwnership ?? []).map(item => h('div', { key: item.conversationId }, h('p', null, item.title),
         btn('Restore retained ownership', () => { void act(() => operation('reclaim', { conversationId: item.conversationId, expectedVersion: item.membershipVersion })) }))),
-      operationPending ? h('p', { role: 'status', className: 'bt-comm-reference' }, t('An operation is not confirmed. Check status, then retry the same action.')) : null,
-      operations.map(item => h('p', { key: item.id, role: 'status', className: item.state === 'failed' ? 'bt-comm-error' : 'bt-comm-reference' },
-        t(item.state === 'failed' ? 'Operation failed' : 'Operation queued'), ' · ', item.error ? t(friendly({ code: item.error })) : t('Waiting for the Hub')))),
+      null),
     activePanel ? h('div', { className: 'bt-comm-modal-backdrop', onMouseDown: event => { if (event.target === event.currentTarget) { setActivePanel(''); chooserTrigger.current?.focus() } } },
-      h('section', { ref: chooser, className: 'bt-comm-modal', role: 'dialog', 'aria-modal': true, 'aria-label': t(activePanel === 'pairing' ? 'Pairing guide' : activePanel === 'group' ? 'New group' : 'New message') },
-        h('h2', null, t(activePanel === 'pairing' ? 'Pairing guide' : activePanel === 'group' ? 'New group' : 'New message')),
-        activePanel === 'pairing' ? h(PairingGuide, { connectionLabel }) : h(Fragment, null,
+      h('section', { ref: chooser, className: 'bt-comm-modal', role: 'dialog', 'aria-modal': true, 'aria-label': t(activePanel === 'manage-contacts' ? 'Manage contacts' : activePanel === 'profile' ? 'Human profile' : activePanel === 'pairing' ? 'Pairing guide' : activePanel === 'group' ? 'New group' : 'New message') },
+        h('h2', null, t(activePanel === 'manage-contacts' ? 'Manage contacts' : activePanel === 'profile' ? 'Human profile' : activePanel === 'pairing' ? 'Pairing guide' : activePanel === 'group' ? 'New group' : 'New message')),
+        activePanel === 'manage-contacts' ? h(ContactManager, { request, operation, contacts, hubUrl: state?.hubUrl }) : activePanel === 'profile' ? h(HumanProfile, { human: contacts.find(person => person.principalId === state?.humanPrincipalId) ?? { principalId: state?.humanPrincipalId ?? 'human:local', displayName: 'Human', kind: 'human' }, request, operation }) : activePanel === 'pairing' ? h(AddDevice, { request, displayName: contacts.find(person => person.principalId === state?.humanPrincipalId)?.displayName ?? 'Human', manualGuide: h(PairingGuide, { connectionLabel }) }) : h(Fragment, null,
         activePanel === 'group' ? h('label', { className: 'bt-comm-field' }, t('Group name'), h('input', { value: title, onChange: event => setTitle(event.target.value), 'aria-label': t('Group name') })) : null,
         groupedContacts(contact => activePanel === 'group' ? h('label', { key: contact.principalId, className: 'bt-comm-check' },
           h('input', { type: 'checkbox', checked: invitees.includes(contact.principalId), onChange: event => setInvitees(current => event.target.checked ? [...current, contact.principalId] : current.filter(id => id !== contact.principalId)) }), personLabel(contact)) :
@@ -315,58 +429,23 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
         team.communicationEnabled ? h('div', { className: 'bt-comm-start-actions' }, btn('New message', () => showPanel('contacts')), btn('New group', () => showPanel('group'), { className: 'bt-comm-primary' })) : null,
         btn('Add a device', () => showPanel('pairing')),
         h('p', { className: 'bt-comm-reference' }, t('Local chats stay separate from communication conversations.'))) : null,
-      member?.kind === 'group' ? h('details', { className: 'bt-comm-members' }, h('summary', null, t('Group members and receiving rules')),
-        btn('Close member settings', event => { const details = event.currentTarget.closest('details'); details.open = false; details.querySelector('summary')?.focus() }, { className: 'bt-comm-members-close' }),
-        h('p', { className: 'bt-comm-reference' }, t('Roles control group management. Speaking permissions control who can send.')),
-        member.ownerPrincipalId && !currentMembers.some(person => person.principalId === member.ownerPrincipalId) ? h('p', { role: 'status' }, t('The owner is unavailable. Ownership stays with that identity.')) : null,
-        !member.ownerPrincipalId ? h('p', { role: 'status' }, t('This legacy group has no retained owner. No automatic takeover is allowed.')) : null,
-        currentMembers.map(person => {
-          const editable = isOwner || member.role === 'admin' && person.role === 'member'
-          const policyKey = `${selected}:${member.membershipVersion}:${person.principalId}`
-          const policy = policies[policyKey] ?? { role: person.role, speakingMode: person.speakingMode }
-          const changePolicy = values => setPolicies(current => ({ ...current, [policyKey]: { ...policy, ...values } }))
-          return h('div', { key: person.principalId, className: 'bt-comm-person', 'data-principal-id': person.principalId },
-            h('span', { title: person.principalId }, personLabel(person)),
-            h('span', { className: 'bt-comm-role' }, t(roleLabel(person.role))),
-            editable ? h(Fragment, null,
-              isOwner && person.role !== 'owner' ? h('label', null, t('Group role'), h('select', { value: policy.role, 'aria-label': t('Group role'), onChange: event => changePolicy({ role: event.target.value }) },
-                h('option', { value: 'member' }, t('Group member')), h('option', { value: 'admin' }, t('Group admin')))) : null,
-              h('label', null, t('Speaking permission'), h('select', { value: policy.speakingMode, 'aria-label': t('Speaking permission'), onChange: event => changePolicy({ speakingMode: event.target.value }) },
-                (person.kind === 'human' ? [['readOnly','Read only'],['speak','Can speak']] : [['passive','Reply only'],['active','Can speak']]).map(([value,label]) => h('option', { key: value, value }, t(label))))),
-              btn('Save member permissions', () => { void act(() => operation('policy', { conversationId: selected, targetPrincipalId: person.principalId, expectedVersion: member.membershipVersion,
-                speakingMode: policy.speakingMode, ...(isOwner && person.role !== 'owner' ? { role: policy.role } : {}) })) })) : h('span', null, t(['readOnly','passive'].includes(person.speakingMode) ? person.kind === 'human' ? 'Read only' : 'Reply only' : 'Can speak')),
-            canManage && person.role !== 'owner' && (isOwner || person.role === 'member') && person.principalId !== state.humanPrincipalId ? btn('Remove from group', () => { void act(() => operation('remove', { conversationId: selected, targetPrincipalId: person.principalId })) }) : null)
-        }),
-        h('p', { className: 'bt-comm-reference' }, t('Both Bot modes may @mention current group Bots in an authorized final reply. Reply-only Bots cannot initiate messages or send proactively with tools. Active Bots may also initiate with tools. Bot delegation chains stop at the server’s finite limit.')),
-        canManage ? h(Fragment, null,
-          h('label', { className: 'bt-comm-field' }, t('Group name'), h('input', { value: groupName, onChange: event => setGroupName(event.target.value), 'aria-label': t('Group name') })),
-          btn('Save group name', () => { void act(() => operation('configure-group', { conversationId: selected, title: groupName })) }, { disabled: busy || !groupName.trim() || groupName === member.title }),
-          chooseContact('Invite participant', invite, setInvite, contacts.filter(contact => !currentMembers.some(person => person.principalId === contact.principalId))),
-          btn('Invite', () => { void act(() => operation('invite', { conversationId: selected, inviteePrincipalId: invite })) }, { disabled: busy || !invite }),
-          h('label', { className: 'bt-comm-field' }, t('Receiving rule'), h('select', { value: routing, onChange: event => setRouting(event.target.value), 'aria-label': t('Receiving rule') },
-            h('option', { value: 'mentionsOnly' }, t('Mentions only')), h('option', { value: 'admin' }, t('Plain messages go to one Bot')))),
-          routing === 'admin' ? chooseContact('Default reply Bot', admin, setAdmin, currentMembers.filter(person => person.kind === 'bot')) : null,
-          btn('Save receiving rule', () => { void act(() => operation('routing', { conversationId: selected, mode: routing, adminBotPrincipalId: admin || null })) })) : h('p', null, t(member.routingMode === 'admin' ? 'Plain messages go to one Bot' : 'Mentions only')),
-        isOwner ? h(Fragment, null,
-          chooseContact('Transfer ownership to', newOwner, value => { setNewOwner(value); setConfirm('') }, currentMembers.filter(person => person.principalId !== state.humanPrincipalId)),
-          btn(confirm === 'transfer' ? 'Confirm ownership transfer' : 'Transfer ownership', () => { if (confirm !== 'transfer') setConfirm('transfer'); else void act(() => operation('transfer', { conversationId: selected, targetPrincipalId: newOwner, expectedVersion: member.membershipVersion })) }, { disabled: busy || !newOwner })) : null,
-        btn(confirm === 'leave' ? 'Confirm leaving group' : 'Leave group', () => { if (confirm !== 'leave') setConfirm('leave'); else void act(() => operation('remove', { conversationId: selected })) }, { disabled: busy || isOwner, title: isOwner ? t('Transfer ownership before leaving') : undefined }),
-        isOwner ? btn(confirm === 'dissolve' ? 'Confirm ending group for everyone' : 'End group for everyone', () => { if (confirm !== 'dissolve') setConfirm('dissolve'); else void act(() => operation('dissolve', { conversationId: selected })) }, { className: 'bt-comm-danger' }) : null) : null,
+      member?.kind === 'group' ? h(GroupSettings, { key: `${selected}:${member.membershipEpoch}`, member, contacts, labels, operation, operationPending, act, busy, humanId: state.humanPrincipalId, btn, personLabel, chooseContact,
+        pendingSettings: id => [...operationIds.current.keys()].map(item => JSON.parse(item)).find(([instanceId, endpoint, values]) => instanceId === state.instanceId && endpoint === 'save-settings' && values.conversationId === id)?.[2] ?? null }) : null,
       h('div', { ref: log, className: 'bt-comm-log', role: 'log', 'aria-label': t('Communication messages'), onScroll: event => {
-        const element = event.currentTarget; autoScroll.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80
+        const element = event.currentTarget; autoScroll.current = !referenced && !pendingJump.current && element.scrollHeight - element.scrollTop - element.clientHeight < 80
       } },
         member && events.length > 0 && events[0].conversationSeq > member.joinSeq ? btn('Load earlier messages', () => setOlder(events[0].conversationSeq - 1)) : null,
         older !== null ? btn('Show latest messages', () => setOlder(null)) : null,
         events.filter(event => event.type === 'message').map(event => h('article', { key: event.message.messageId, 'data-message-id': event.message.messageId, 'data-self': event.message.author.principalId === state.humanPrincipalId, 'data-referenced': event.message.messageId === referenced },
-          avatar(event.message.author.principalId, contacts.find(person => person.principalId === event.message.author.principalId)?.displayName ?? event.message.author.displayName), h('strong', { title: event.message.author.principalId }, event.message.author.principalId === state.humanPrincipalId ? t('You · Human') : labels.get(event.message.author.principalId) ?? event.message.author.principalId),
-          event.message.replyToMessageId ? h('div', { className: 'bt-comm-reference' }, btn(unavailableReferences.includes(event.message.replyToMessageId) ? 'Earlier message unavailable' : 'Open referenced message',
-            () => { void openReference(event.message.replyToMessageId) }, { disabled: busy || unavailableReferences.includes(event.message.replyToMessageId), title: event.message.replyToMessageId })) : null,
+          avatar(event.message.author.principalId, contacts.find(person => person.principalId === event.message.author.principalId)?.displayName ?? event.message.author.displayName), h('strong', { title: event.message.author.principalId }, labels.get(event.message.author.principalId) ?? event.message.author.displayName ?? (event.message.author.principalId === state.humanPrincipalId ? t('You') : event.message.author.principalId), identityIcons(contacts.find(person => person.principalId === event.message.author.principalId) ?? event.message.author)),
+          event.message.replyToMessageId ? h(ReferenceQuote, { key: `${selected}:${member.membershipEpoch}:${event.message.replyToMessageId}`, conversationId: selected,
+            membershipEpoch: member.membershipEpoch, messageId: event.message.replyToMessageId, request, labels, onJump: openReference }) : null,
           h('div', { className: 'bt-comm-body' }, h(MarkdownText, { text: event.message.content.text, labels: mdLabels(), variant: 'compact' })),
           event.message.mentions.length ? h('p', { className: 'bt-comm-reference' }, event.message.mentions.map(mention => `@${labels.get(mention.principalId) ?? mention.principalId}`).join(' · ')) : null,
           h('div', { className: 'bt-comm-message-actions' }, h('time', null, new Date(event.serverAcceptedAt).toLocaleString()), btn('Reply', () => { setReply(event.message); input.current?.focus() })),
           ownOutbox.find(item => item.id === event.message.messageId)?.deliveries.filter(delivery => delivery.recipientPrincipalId !== state.humanPrincipalId).map(delivery => h('p', { key: delivery.deliveryId, className: 'bt-comm-reference' }, `${labels.get(delivery.recipientPrincipalId) ?? delivery.recipientPrincipalId} · ${t(deliveryPhase(delivery))}`)))),
         ownOutbox.filter(item => item.state !== 'failed' && !visibleIds.has(item.id) && (item.state !== 'accepted' || older === null && item.result?.conversationSeq > (page?.watermark ?? 0))).map(item => h('article', { key: item.id, 'data-message-id': item.id, 'data-self': true, 'data-failed': item.state === 'failed' },
-          avatar(state.humanPrincipalId, contacts.find(person => person.principalId === state.humanPrincipalId)?.displayName), h('strong', null, t('You · Human')), h('p', { className: 'bt-comm-pending-text' }, item.text), h('p', { role: 'status' }, t(item.state === 'accepted' ? 'Hub accepted' : item.state === 'failed' ? 'Send failed' : 'Queued on this device'), item.error ? ` · ${t(friendly({ code: item.error }))}` : '')))),
+          avatar(state.humanPrincipalId, contacts.find(person => person.principalId === state.humanPrincipalId)?.displayName), h('strong', { title: state.humanPrincipalId }, contacts.find(person => person.principalId === state.humanPrincipalId)?.displayName ?? t('You'), identityIcons({ principalId: state.humanPrincipalId, kind: 'human', homeInstanceId: state.instanceId })), h('p', { className: 'bt-comm-pending-text' }, item.text), h('p', { role: 'status' }, t(item.state === 'accepted' ? 'Hub accepted' : item.state === 'failed' ? 'Send failed' : 'Queued on this device'), item.error ? ` · ${t(friendly({ code: item.error }))}` : '')))),
       member ? h('footer', null,
         pendingCount ? h('p', { className: 'bt-comm-reference', role: 'status' }, `${pendingCount} · ${t('Queued messages send automatically when the connection returns.')}`) : null,
         attempts[key] ? h('p', { className: 'bt-comm-error', role: 'alert' }, t('Send not confirmed. Retry the same message to avoid sending it twice.')) : null,
@@ -398,14 +477,16 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
         h('details', { className: 'bt-comm-status-help' }, h('summary', null, t('About message status')),
           h('p', null, t('Stored means the destination saved the message. Read means a Human opened it. Bot admitted means processing was accepted, not that a reply is complete.')),
           h('p', null, t('Text and Markdown · attachments unavailable')))) : null,
-      h('section', { className: 'bt-comm-feedback', 'aria-label': t('Activity and send status') },
+      (collaborationStops(events, ownOutbox).length || operations.length || operationPending || ownOutbox.some(item => item.state === 'failed')) ? h('section', { className: 'bt-comm-feedback', 'aria-label': t('Activity and send status') },
         collaborationStops(events, ownOutbox).map(item => h('p', { key: `causal:${item.messageId}`, role: 'status', className: 'bt-comm-reference', 'data-causal-stop': item.messageId, title: item.messageId },
           t('Bot collaboration stopped at the safety limit. Send a new Human message to continue.'))),
-        events.filter(event => event.type !== 'message').map(event => h('p', { key: event.eventId, className: 'bt-comm-event' }, t('Membership or receiving rule changed'))),
+        operationPending ? h('p', { role: 'status', className: 'bt-comm-reference' }, t('An operation is not confirmed. Check status, then retry the same action.')) : null,
+        operations.map(item => h('p', { key: item.id, role: 'status', className: item.state === 'failed' ? 'bt-comm-error' : 'bt-comm-reference' }, t(item.state === 'failed' ? 'Operation failed' : 'Operation queued'), ' · ', item.error ? t(friendly({ code: item.error })) : t('Waiting for the Hub'))),
         ownOutbox.filter(item => item.state === 'failed').map(item => h('div', { key: item.id, className: 'bt-comm-error' },
           h('p', { role: 'status' }, t('Send failed'), ' · ', item.error ? t(friendly({ code: item.error })) : '', ' · ', item.text),
-          btn('Copy to draft', () => { changeDraft({ text: item.text, mentions: [], manualMentions: [] }); input.current?.focus() }, { disabled: busy || Boolean(draft.text) || Boolean(attempts[key]) })))),
+          btn('Copy to draft', () => { changeDraft({ text: item.text, mentions: [], manualMentions: [] }); input.current?.focus() }, { disabled: busy || Boolean(draft.text) || Boolean(attempts[key]) })))) : null,
       error ? h('p', { className: 'bt-comm-error', role: 'alert' }, t(error)) : null,
+      state?.error ? h('p', { className: 'bt-comm-error', role: 'alert' }, t(friendly({ code: state.error }))) : null,
       pollError ? h('p', { className: 'bt-comm-error', role: 'alert' }, t(pollError)) : null,
       state?.errors?.filter(item => item.conversationId === selected).map(item => h('p', { key: item.bindingId, className: 'bt-comm-error', role: 'alert' }, `${t('Bot delivery needs reconciliation')} · ${item.code}`)),
       state?.exportFailures?.filter(item => item.conversationId === selected).map(item => h('p', { key: item.messageId, className: 'bt-comm-error', role: 'alert' }, `${t('Send failed')} · Bot ${item.messageId}: ${item.code}`)))), document.body)

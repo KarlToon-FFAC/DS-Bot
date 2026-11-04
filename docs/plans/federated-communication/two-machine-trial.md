@@ -10,6 +10,36 @@ of pairing, authorization or model completion.
 
 ## Prepare the two clients
 
+### Recommended: Hub-managed enrollment
+
+For a new pairing, use the Hub management page rather than editing credentials
+into either client. Enable `management.enabled` on the Hub, provide its private
+administrator password through `management.adminPasswordEnv`, and configure a
+reachable trusted `wss://.../communication` address in `management.url`. The Hub
+prints its `/admin/` address. The Hub code includes its actual address and stable
+ID; it does not discover machines, open ports or traverse NAT.
+
+On each client choose **Remote communication → Add a device**, paste the Hub code,
+review its address and ID, then explicitly request access. The Hub administrator
+checks the applicant and key fingerprint before approving. Use **Check approval**
+on the client to apply the supported configuration-editor update and reload.
+Existing settings are preserved; a configured client cannot silently switch Hubs.
+The signing key stays in the client's credential provider. Its default provider
+uses an OS-account-protected plaintext file, not encryption; same-user programs
+may read it. No private key belongs in a Hub code or chat.
+
+Use **Manage contacts** to select local Bots to publish and exchange Human user
+codes. A request alone grants no contact access: both Humans explicitly confirm
+their own shared Bot scope, defaulting to none. Then open a DM or invite approved
+contacts to a group. Every participant can inspect group members; only authorized
+roles can save changes. Revoking contact consent stops DMs and new invitations;
+an existing shared group retains its separate permissions.
+
+See the [Hub run instructions](../../../communication-hub/README.md) and
+[management design](management-design.md) for approval, revocation, repair, CLI
+and credential boundaries. Upgrade the Hub before clients. The manual static-peer
+procedure below remains a compatibility path for an existing installation.
+
 Use Node 24 or newer and Git. On **each** computer, clone the branch into a new
 directory, without copying the other computer's profile or credentials:
 
@@ -49,8 +79,9 @@ the whole state file into a chat or another profile. Merge this into the existin
 Computer B uses `trial-b`, its own local Bot ID and display name. Choose stable,
 distinct instance IDs before first enabling communication. Do not delete or copy
 `communication.sqlite` to repair pairing. Bot publication is explicit: an
-unpublished local Bot will not run communication turns; an older directory entry
-may remain until the Hub peer is revoked. Peer revocation, rather than removing a
+unpublished local Bot will not run new communication turns and publication sync
+removes it from contact discovery and future AI recipients. Historical group
+identity remains visible as unpublished. Peer revocation, rather than removing a
 local configuration entry, is the authoritative way to revoke a whole machine.
 
 Supply `DSBOT_COMMUNICATION_CREDENTIAL` privately to the launching process,

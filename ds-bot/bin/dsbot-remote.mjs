@@ -22,7 +22,25 @@ const schemas = {
   reclaim: { conversationId: text, expectedVersion: integer, operationId: text },
   dissolve: { conversationId: text, operationId: text },
   'configure-group': { conversationId: text, title: text, expectedVersion: integer, membershipEpoch: text, operationId: text },
+  'save-settings': { conversationId: text, expectedVersion: integer, membershipEpoch: text, operationId: text, title: text,
+    routing: { fields: { mode: ['admin', 'mentionsOnly'], adminBotPrincipalId: text }, required: ['mode'] },
+    policies: { items: { fields: { targetPrincipalId: text, role: ['member', 'admin'], speakingMode: ['readOnly', 'speak', 'passive', 'active'] },
+      required: ['targetPrincipalId'], someRequired: ['role', 'speakingMode'] } } },
   'rename-human': { displayName: text },
+  'profile-human': { displayName: text, avatar: { nullable: true, fields: { image: 'avatarImage' }, required: ['image'] }, operationId: text },
+  avatar: { principalId: text, revision: 'sha256' },
+  'decode-hub-code': { hubCode: text },
+  'join-hub': { hubCode: text, displayName: text, confirmedHubId: text, confirmedUrl: text },
+  'onboarding-storage': { hubId: text },
+  'hub-join-status': { hubId: text }, 'cancel-hub-join': { hubId: text },
+  'user-code': {}, 'rotate-user-code': { operationId: text },
+  'request-contact': { userCode: text, localBotIds: 'strings', operationId: text },
+  'contact-requests': {}, 'contact-relations': {},
+  'accept-contact': { requestId: text, expectedVersion: integer, localBotIds: 'strings', operationId: text },
+  'reject-contact': { requestId: text, expectedVersion: integer, localBotIds: 'strings', operationId: text },
+  'cancel-contact': { requestId: text, expectedVersion: integer, localBotIds: 'strings', operationId: text },
+  'revoke-contact': { otherHumanPrincipalId: text, expectedVersion: integer, operationId: text },
+  'available-bots': {}, 'publish-bots': { localBotIds: 'strings' },
 }
 const required = {
   members: ['conversationId'], history: ['conversationId'], reference: ['conversationId', 'messageId'], read: ['conversationId', 'seq'],
@@ -30,17 +48,57 @@ const required = {
   accept: ['inviteId'], remove: ['conversationId'], leave: ['conversationId'], routing: ['conversationId', 'mode'],
   policy: ['conversationId', 'targetPrincipalId', 'expectedVersion'], transfer: ['conversationId', 'targetPrincipalId', 'expectedVersion'],
   reclaim: ['conversationId', 'expectedVersion'], dissolve: ['conversationId'], 'configure-group': ['conversationId', 'title', 'expectedVersion'], 'rename-human': ['displayName'],
+  'save-settings': ['conversationId', 'expectedVersion'],
+  avatar: ['principalId', 'revision'],
+  'decode-hub-code': ['hubCode'], 'join-hub': ['hubCode', 'displayName', 'confirmedHubId', 'confirmedUrl'],
+  'hub-join-status': ['hubId'], 'cancel-hub-join': ['hubId'], 'request-contact': ['userCode', 'localBotIds'],
+  'accept-contact': ['requestId', 'expectedVersion'], 'reject-contact': ['requestId', 'expectedVersion'],
+  'cancel-contact': ['requestId', 'expectedVersion'], 'revoke-contact': ['otherHumanPrincipalId', 'expectedVersion'],
+  'publish-bots': ['localBotIds'],
 }
 const projections = new Set(['contacts', 'conversations', 'invites', 'outbox'])
 const fail = (code, exitCode = 2, request) => { throw Object.assign(new Error(code), { code, exitCode, request }) }
 const object = value => value && typeof value === 'object' && !Array.isArray(value)
+const validValue = (type, value) => {
+  if (Array.isArray(type)) return type.includes(value)
+  if (type && typeof type === 'object') {
+    if (type.nullable && value === null) return true
+    if (type.items) return Array.isArray(value) && value.every(item => validValue(type.items, item))
+    return object(value) && Object.entries(value).every(([key, item]) => Object.hasOwn(type.fields, key) && validValue(type.fields[key], item))
+      && (type.required ?? []).every(key => value[key] !== undefined)
+      && (!type.someRequired || type.someRequired.some(key => value[key] !== undefined))
+  }
+  if (type === integer) return Number.isSafeInteger(value) && value >= 0
+  if (type === 'strings') return Array.isArray(value) && value.every(item => typeof item === 'string' && item.length > 0)
+  if (type === 'sha256') return typeof value === 'string' && /^[a-f0-9]{64}$/.test(value)
+  if (type === 'avatarImage') {
+    if (typeof value !== 'string' || value.length > 160000) return false
+    const match = /^data:image\/(png|jpeg|webp|gif);base64,([A-Za-z0-9+/]+={0,2})$/.exec(value)
+    if (!match || match[2].length % 4 !== 0) return false
+    const bytes = Buffer.from(match[2], 'base64')
+    if (bytes.toString('base64') !== match[2]) return false
+    return match[1] === 'png' ? bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+      : match[1] === 'jpeg' ? bytes.length >= 3 && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255
+      : match[1] === 'gif' ? /^GIF8[79]a$/.test(bytes.subarray(0, 6).toString('ascii'))
+      : bytes.length >= 12 && bytes.subarray(0, 4).toString('ascii') === 'RIFF' && bytes.subarray(8, 12).toString('ascii') === 'WEBP'
+  }
+  return typeof value === type && (type !== text || value.trim().length > 0)
+}
 
 export const pairingGuide = {
   title: 'Add a machine to Remote communication',
   mode: 'Instructions and non-secret templates only. No network request, credential generation or configuration change.',
   requirements: ['Node 24 or newer; same compatible DS Bot version on Hub and clients',
     'An existing Hub reachable by the clients with a trusted WSS certificate matching its hostname',
-    'Hub owner authorization to add a distinct stable instanceId; no self-service pairing API exists'],
+    'Hub owner authorization; use the code-join flow below when supported, or the static peer templates as a manual fallback'],
+  codeJoin: [
+    'Hub owner: configure trusted HTTPS/WSS and use the Human-only Hub admin portal to obtain a Hub code and approve device enrollment.',
+    'New machine: decode-hub-code {hubCode} through your authenticated local API. Review the decoded Hub ID and URL with the user before join-hub {hubCode,displayName,confirmedHubId,confirmedUrl}. Never infer an address or approve a different Hub.',
+    'Read hub-join-status {hubId} and onboarding-storage {hubId}. The local Host SDK persists pending credentials and enrollment; the CLI never reads keys or credential records. After an uncertain join, reconcile this state before an explicit retry. Use cancel-hub-join {hubId} to cancel.',
+    'After approval and connection, use available-bots and publish-bots {localBotIds:[]} to choose publication explicitly. Honor reloadRequired and recheck connected state.',
+    'Exchange user-code privately, then request-contact {userCode,localBotIds:[]}. The other Human explicitly accepts with their own localBotIds scope; each side defaults to no Bots. Generic acknowledgments never prove the code or target exists.',
+    'Inspect contact-requests/contact-relations and exact contacts; confirm both Humans and only the Bots explicitly shared by each side. Group membership and speaking grants remain separate.',
+  ],
   steps: [
     'Hub owner: privately provision a distinct high-entropy pairing secret of at least 32 characters for the new instance. This is not a model API key or DSH login cookie.',
     'Hub owner: preserve all existing peers; add the peer template to the explicit Hub JSON peers list, inject its credential into the named environment variable, then restart the Hub with that same complete configuration. Removing an existing peer revokes it.',
@@ -71,13 +129,20 @@ export function prepare(operation, input = {}) {
   const schema = schemas[operation]
   for (const [key, value] of Object.entries(input)) {
     const type = schema[key]
-    const valid = Array.isArray(type) ? type.includes(value) : type === integer ? Number.isSafeInteger(value) && value >= 0
-      : type === 'strings' ? Array.isArray(value) && value.every(item => typeof item === 'string' && item.length > 0)
-        : typeof value === type && (type !== text || value.trim().length > 0)
-    if (!Object.hasOwn(schema, key) || !valid) fail('INVALID_FIELD_' + key.replace(/[^A-Za-z0-9_]/g, '').slice(0, 40))
+    if (!Object.hasOwn(schema, key) || !validValue(type, value)) fail('INVALID_FIELD_' + key.replace(/[^A-Za-z0-9_]/g, '').slice(0, 40))
   }
   if ((required[operation] ?? []).some(key => input[key] === undefined)) fail('MISSING_REQUIRED_FIELD')
   if (operation === 'policy' && input.role === undefined && input.speakingMode === undefined) fail('POLICY_CHANGE_REQUIRED')
+  if (operation === 'profile-human' && input.displayName === undefined && input.avatar === undefined) fail('PROFILE_CHANGE_REQUIRED')
+  if (operation === 'profile-human' && input.displayName?.trim().length > 256) fail('INVALID_FIELD_displayName')
+  if (operation === 'join-hub' && input.displayName.length > 100) fail('INVALID_FIELD_displayName')
+  if (input.localBotIds && (input.localBotIds.length > 100 || new Set(input.localBotIds).size !== input.localBotIds.length)) fail('INVALID_FIELD_localBotIds')
+  if (operation === 'request-contact' && input.userCode.length > 4096) fail('INVALID_FIELD_userCode')
+  if (operation === 'save-settings') {
+    if (input.title === undefined && input.routing === undefined && !input.policies?.length) fail('SETTINGS_CHANGE_REQUIRED')
+    const targets = input.policies?.map(item => item.targetPrincipalId) ?? []
+    if (new Set(targets).size !== targets.length) fail('DUPLICATE_POLICY_TARGET')
+  }
   if (operation === 'history' && input.limit !== undefined && (input.limit < 1 || input.limit > 200)) fail('INVALID_HISTORY_LIMIT')
   if (operation === 'send' && input.clientCreatedAt !== undefined && !Number.isFinite(Date.parse(input.clientCreatedAt))) fail('INVALID_TIMESTAMP')
   const request = { ...input, endpoint: projections.has(operation) ? 'state' : operation === 'leave' ? 'remove' : operation }
@@ -96,6 +161,12 @@ export const help = operation => JSON.stringify({
   operations: operation && schemas[operation] ? { [operation]: { fields: schemas[operation], required: required[operation] ?? [] } }
     : Object.fromEntries(Object.entries(schemas).map(([name, fields]) => [name, { fields, required: required[name] ?? [] }])),
   retry: 'dsbot-remote retry < original-request.json; use the request object from the previous result/error unchanged. No automatic retries.',
+  settings: 'save-settings atomically validates/applies title, routing and member policies against one expectedVersion and increments the group version once. No partial save; retry the complete original request with its original operationId.',
+  profile: 'profile-human changes only the authenticated Human. avatar:null resets to a name-derived avatar; avatar:{image:dataURL} uses a consenting custom PNG/JPEG/WebP/GIF image, max 160000 characters. No URLs or file paths. Preserve the complete original operationId/request for an uncertain retry. Profile requests and avatar reads contain image data: keep them private to the intended audience.',
+  enrollment: 'decode-hub-code uses the authenticated local API. Review its Hub ID/URL with the user, then supply both exact confirmation fields to join-hub. Host SDK owns durable keys and pending state; reconcile hub-join-status/onboarding-storage before explicitly retrying uncertain enrollment. Never read credential records or send the local session cookie to the Hub.',
+  contacts: 'request-contact/accept-contact share only the explicit localBotIds selected by each Human; [] shares no Bots. Generic acknowledgments do not prove code/target existence. Review current request/relation expectedVersion before decisions/revocation; preserve generated operationId for retry.',
+  publication: 'available-bots lists eligible local IDs; publish-bots replaces the explicit publication list (use [] for none). Honor reloadRequired and inspect state after reload. Publication alone is not contact consent or group permission.',
+  reply: 'send.replyToMessageId can address the referenced current member Bot without @ when there are no explicit Bot mentions. Explicit Bot mentions take precedence; membership, speaking permissions, reply grants and causal budgets still apply.',
   setup: 'dsbot-remote setup-guide (alias pairing-guide): unauthenticated offline pairing steps and non-secret configuration templates',
   skill: fileURLToPath(new URL('../skills/dsbot-remote/SKILL.md', import.meta.url)),
   exitCodes: { 0: 'success/accepted (inspect queued delivery status)', 2: 'usage/input', 3: 'configuration/authentication', 4: 'API rejection', 5: 'uncertain outcome; preserve request ID' },

@@ -75,6 +75,11 @@ $overlay = @'
       - { id: deepseek-v4-pro, contextWindow: 100000, maxTokens: 8000 }
 '@
 $overlay = $overlay.Replace('    checkRatio: 0.45', ('    checkRatio: 0.45' + [Environment]::NewLine + $communication))
+if ($env:DSBOT_COMMUNICATION_ONBOARDING_FIXTURE -eq '1') {
+    if ($communication) { throw 'The fresh onboarding fixture cannot use legacy communication configuration.' }
+    # The public Config Editor must own this entry in the ordinary profile.
+    $overlay = $overlay -replace '(?m)^- id: bot\r?\n  config:\r?\n    checkRatio: 0\.45\r?\n', ''
+}
 if ($env:DSBOT_OPENAI_GUARD_URL) {
     $guardUri = [Uri]$env:DSBOT_OPENAI_GUARD_URL
     if ($guardUri.Scheme -ne 'http' -or $guardUri.Host -ne '127.0.0.1' -or $guardUri.AbsolutePath -ne '/v1' -or $guardUri.Query -or $guardUri.Fragment -or $guardUri.UserInfo -or $env:DSBOT_OPENAI_LOCAL.Length -lt 32) { throw 'Invalid isolated OpenAI guard.' }
@@ -104,7 +109,7 @@ if ($env:DSBOT_OPENAI_GUARD_URL) {
     $overlay += [Environment]::NewLine + $openaiOverlay.Replace('GUARD_URL', $guardUri.AbsoluteUri.TrimEnd('/'))
 }
 [IO.File]::WriteAllText((Join-Path $data 'bench.patch.yml'), $overlay, [Text.UTF8Encoding]::new($false))
-$variables = @('DSH_HOME','MOCK_PORT','MOCK_LOG','MOCK_DELAY_MS','DEEPSEEK_BASE_URL','DEEPSEEK_API_KEY','DSH_TELEMETRY_DISABLED','DSBOT_COMMUNICATION_PROBE','DSBOT_WEB_PORT','NO_PROXY')
+$variables = @('DSH_HOME','MOCK_PORT','MOCK_LOG','MOCK_DELAY_MS','DEEPSEEK_BASE_URL','DEEPSEEK_API_KEY','DSH_TELEMETRY_DISABLED','DSBOT_COMMUNICATION_PROBE','DSBOT_COMMUNICATION_TEST_LOOPBACK','DSBOT_WEB_PORT','NO_PROXY')
 $saved = @{}
 foreach ($key in $variables) { $saved[$key] = [Environment]::GetEnvironmentVariable($key, 'Process') }
 $started = @()
@@ -124,6 +129,7 @@ try {
     $env:DEEPSEEK_API_KEY = 'mock-key'
     $env:DSH_TELEMETRY_DISABLED = '1'
     $env:DSBOT_COMMUNICATION_PROBE = '1'
+    $env:DSBOT_COMMUNICATION_TEST_LOOPBACK = '1'
     $env:DSBOT_WEB_PORT = "$WebPort"
     $env:NO_PROXY = 'localhost,127.0.0.1,::1'
     $communicationKey = $env:DSBOT_COMMUNICATION_CREDENTIAL

@@ -8,7 +8,7 @@ import { OpenAIBudget, OpenAITestGate, officialOpenAISender, startOpenAITestGuar
 
 const request = extra => ({ model: 'gpt-6-luna', input: 'Synthetic test only', ...extra })
 test('the new scoped remote tools remain explicitly allowlisted while arbitrary tools stay blocked',()=>{
-  for(const name of ['read_communication_members','read_communication_reference','configure_communication_group']){
+  for(const name of ['read_communication_members','read_communication_reference','configure_communication_group','save_communication_group_settings']){
     assert.doesNotThrow(()=>prepareOpenAIRequest(request({tools:[{type:'function',name,parameters:{type:'object',properties:{}}}]}),budgetPolicy()))
   }
   assert.throws(()=>prepareOpenAIRequest(request({tools:[{type:'function',name:'read_private_files',parameters:{}}]}),budgetPolicy()),{code:'TOOL_NOT_ALLOWED'})

@@ -12,7 +12,7 @@ const { JSDOM } = harness('jsdom'), React = harness('react'), { act } = React
 const { outputFiles } = await build({ entryPoints: [fileURLToPath(new URL('../src/client/communication.js', import.meta.url))],
   bundle: true, platform: 'browser', format: 'cjs', external: ['react', 'react-dom', '@deepseek-ai/dsh-client-ui-primitives'], write: false })
 
-async function pane({ enabled = true, snapshot, history = [], handle = async () => ({}) }, check) {
+async function pane({ enabled = true, snapshot, history = [], getState, handle = async () => ({}) }, check) {
   const dom = new JSDOM('<!doctype html><body><textarea id="native">private draft</textarea><div id="root"></div></body>', { url: 'http://127.0.0.1:3138/', pretendToBeVisual: true })
   const saved = Object.fromEntries(['window', 'document', 'navigator', 'HTMLElement', 'IS_REACT_ACT_ENVIRONMENT'].map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]))
   for (const [key, value] of Object.entries({ window: dom.window, document: dom.window.document, navigator: dom.window.navigator, HTMLElement: dom.window.HTMLElement, IS_REACT_ACT_ENVIRONMENT: true })) Object.defineProperty(globalThis, key, { configurable: true, value })
@@ -26,8 +26,8 @@ async function pane({ enabled = true, snapshot, history = [], handle = async () 
   const panel = createSource(true), roster = createSource({ communicationEnabled: enabled }), surface = createSource({ mode: 'bot' }), calls = []
   const request = async body => {
     calls.push(body)
-    if (body.endpoint === 'state') return snapshot
-    if (body.endpoint === 'history') return { conversationId: body.conversationId, membershipEpoch: 'epoch', events: history }
+    if (body.endpoint === 'state') return getState ? getState() : { ...snapshot, conversations: snapshot.conversations?.map(item => ({ ...item })) }
+    if (body.endpoint === 'history') { const value = typeof history === 'function' ? await history(body) : history; return Array.isArray(value) ? { conversationId: body.conversationId, membershipEpoch: 'epoch', events: value } : value }
     if (body.endpoint === 'read') return {}
     return handle(body)
   }
@@ -37,9 +37,9 @@ async function pane({ enabled = true, snapshot, history = [], handle = async () 
   const click = async label => { assert.ok(button(label), `button: ${label}`); await act(async () => button(label).click()) }
   const edit = async (node, value) => {
     await act(async () => {
-      const type = node.tagName === 'TEXTAREA' ? dom.window.HTMLTextAreaElement : dom.window.HTMLInputElement
+      const type = node.tagName === 'SELECT' ? dom.window.HTMLSelectElement : node.tagName === 'TEXTAREA' ? dom.window.HTMLTextAreaElement : dom.window.HTMLInputElement
       Object.getOwnPropertyDescriptor(type.prototype, 'value').set.call(node, value)
-      node.dispatchEvent(new dom.window.Event('input', { bubbles: true }))
+      node.dispatchEvent(new dom.window.Event(node.tagName === 'SELECT' ? 'change' : 'input', { bubbles: true }))
     })
   }
   try {
@@ -92,7 +92,7 @@ test('partial invitations preserve the created group and never create another gr
     assert.equal(new Set(invitations.map(item => item.inviteePrincipalId)).size, 2)
     assert.equal(doc.querySelector('.bt-comm-main h2').textContent, 'Shared group')
     assert.equal(doc.querySelector('.bt-comm-modal'), null)
-    assert.equal(doc.querySelector('input[aria-label="Group name"]').value, 'Shared group')
+    assert.equal(doc.querySelector('input[aria-label="Group name"]'), null)
     assert.match(doc.querySelector('.bt-comm-main').textContent, /Group created\. Some invitations were not sent/)
     assert.match(doc.querySelector('.bt-comm-heading').textContent, /Group owner.*Can speak/)
     assert.equal(doc.querySelector('.bt-comm-frame').dataset.browse, 'false')
@@ -104,9 +104,10 @@ test('connection recovery refreshes status without resending failures and naviga
   snapshot.outbox = [{ type: 'message.publish', id: 'failed', conversationId: 'group', state: 'failed', text: 'Original denied message', error: 'SPEAKING_FORBIDDEN' }]
   await pane({ snapshot }, async ({ doc, dom, panel, click, edit, calls }) => {
     await click('Shared group')
-    assert.match(doc.querySelector('.bt-comm-connection').textContent, /Connection needs attention/)
+    assert.match(doc.querySelector('.bt-comm-connection').textContent, /Offline/)
     assert.doesNotMatch(doc.querySelector('.bt-comm-connection').textContent, /Reconnecting to Hub/)
-    assert.match(doc.querySelector('.bt-comm-connection').textContent, /Ask the Hub owner to check its pairing/)
+    assert.doesNotMatch(doc.querySelector('aside').textContent, /Ask the Hub owner to check its pairing|Operation failed|Error code/)
+    assert.match(doc.querySelector('.bt-comm-main').textContent, /Ask the Hub owner to check its pairing/)
     assert.equal(doc.querySelector('article[data-failed=true]'), null)
     assert.match(doc.querySelector('.bt-comm-feedback').textContent, /read-only access/)
     await edit(doc.querySelector('textarea[aria-label="Communication message"]'), 'Preserved draft')
@@ -184,12 +185,15 @@ test('Human and group rename send authenticated versioned requests and failed se
   snapshot.outbox = [{ type: 'message.publish', id: 'failed', conversationId: 'group', state: 'failed', text: 'Denied original', error: 'FORBIDDEN' }]
   await pane({ snapshot }, async ({ doc, calls, click, edit, button }) => {
     await click('Shared group')
+    await click('Edit Human profile')
     await edit(doc.querySelector('input[aria-label="Human name"]'), 'Renamed Human')
-    await click('Save Human name')
-    assert.equal(calls.find(call => call.endpoint === 'rename-human').displayName, 'Renamed Human')
+    await click('Save profile')
+    assert.equal(calls.find(call => call.endpoint === 'profile-human').displayName, 'Renamed Human')
+    await click('Cancel')
+    await act(async () => doc.querySelector('.bt-comm-members summary').click())
     await edit(doc.querySelector('input[aria-label="Group name"]'), 'Renamed group')
-    await click('Save group name')
-    const configure = calls.find(call => call.endpoint === 'configure-group')
+    await click('Save')
+    const configure = calls.find(call => call.endpoint === 'save-settings')
     assert.equal(configure.title, 'Renamed group')
     assert.equal(configure.conversationId, 'group')
     assert.equal(configure.membershipEpoch, 'epoch')
@@ -207,8 +211,7 @@ test('Human and group rename send authenticated versioned requests and failed se
 
 test('pairing guide is available before and after configuration and never performs API mutations', async () => {
   for (const enabled of [false, true]) {
-    await pane({ enabled, snapshot: state(), handle: async () => { throw new Error('Guide must not call an action') } }, async ({ doc, dom, calls, click, panel }) => {
-      const before = calls.length
+    await pane({ enabled, snapshot: state(), handle: async body => { assert.equal(body.endpoint, 'onboarding-storage'); return { storage: { defaultProvider: 'owner-acl-plaintext', encryptedByDefault: false, agentIsolation: false }, enrollments: [] } } }, async ({ doc, dom, calls, click, panel }) => {
       await click('Add a device')
       const guide = doc.querySelector('.bt-comm-modal[aria-label="Pairing guide"]')
       assert.ok(guide)
@@ -224,12 +227,13 @@ test('pairing guide is available before and after configuration and never perfor
       assert.equal(peer.credentialEnv, 'DSBOT_HUB_NEW_DEVICE_CREDENTIAL')
       assert.equal(Object.hasOwn(peer, 'credential'), false)
       assert.match(guide.querySelector('pre[aria-label="Device configuration example"]').textContent, /url: wss:\/\/hub.example.test:3190\/communication/)
-      assert.equal(guide.querySelectorAll('input,textarea').length, 0)
-      assert.equal(calls.length, before)
+      assert.ok(guide.querySelector('[aria-label="Hub code"]'))
+      assert.equal(guide.querySelector('.bt-comm-manual-guide').open, false)
+      assert.equal(calls.filter(call => !['state', 'onboarding-storage'].includes(call.endpoint)).length, 0)
       await act(async () => doc.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })))
       assert.equal(doc.querySelector('.bt-comm-modal'), null)
       assert.equal(panel.getSnapshot(), true)
-      assert.equal(calls.length, before)
+      assert.equal(calls.filter(call => !['state', 'onboarding-storage'].includes(call.endpoint)).length, 0)
     })
   }
 })
@@ -289,7 +293,7 @@ test('an uncertain group creation reuses its persisted operation ID after a full
     let persisted = JSON.parse(dom.window.sessionStorage.getItem('ds-bot:communication:operation-ids'))
     assert.equal(persisted.length, 1)
     assert.equal(persisted[0][1], attempts[0].operationId)
-    assert.match(doc.querySelector('aside').textContent, /operation is not confirmed/)
+    assert.match(doc.querySelector('.bt-comm-feedback').textContent, /operation is not confirmed/)
     await remount()
     await click('New group')
     await edit(doc.querySelector('.bt-comm-modal input'), 'One group')
@@ -313,6 +317,7 @@ test('member permissions explain authorized delegation for both Bot modes withou
   await pane({ snapshot }, async ({ doc, click, calls }) => {
     await click('Shared group')
     const drawer = doc.querySelector('.bt-comm-members')
+    await act(async () => drawer.querySelector('summary').click())
     assert.match(drawer.textContent, /Both Bot modes may @mention current group Bots in an authorized final reply/)
     assert.match(drawer.textContent, /Reply-only Bots cannot initiate messages or send proactively with tools/)
     assert.match(drawer.textContent, /Active Bots may also initiate with tools/)
@@ -345,4 +350,202 @@ test('causal-limit stops render once outside chat from canonical history or an a
       assert.equal(message.content.text, 'Original final reply remains visible')
     })
   }
+})
+
+
+test('one dirty Save atomically submits the drawer draft and closing discards unsaved edits', async () => {
+  const snapshot = state()
+  const bot = { principalId: 'bot:a:one', displayName: 'One', kind: 'bot', role: 'member', speakingMode: 'passive' }
+  snapshot.contacts = [bot]
+  snapshot.conversations = [{ ...membership, info: { members: [...membership.info.members, bot] } }]
+  await pane({ snapshot, handle: async body => {
+    assert.equal(body.endpoint, 'save-settings')
+    const current = snapshot.conversations[0]
+    snapshot.conversations = [{ ...current, title: body.title, routingMode: body.routing.mode, adminBotPrincipalId: body.routing.adminBotPrincipalId, membershipVersion: 2, info: { members: current.info.members.map(person => person.principalId === bot.principalId ? { ...person, ...body.policies[0] } : person) } }]
+    return { updated: true, conversationId: 'group', membershipVersion: 2 }
+  } }, async ({ doc, click, edit, calls, button }) => {
+    await click('Shared group')
+    await act(async () => doc.querySelector('.bt-comm-members summary').click())
+    const save = () => doc.querySelector('[aria-label="Save group settings"]')
+    assert.equal(save().disabled, true)
+    assert.equal([...doc.querySelectorAll('.bt-comm-members button')].filter(node => node.textContent.startsWith('Save')).length, 1)
+    await edit(doc.querySelector('input[aria-label="Group name"]'), 'Atomic title')
+    await edit(doc.querySelector('[data-principal-id="bot:a:one"] select[aria-label="Speaking permission"]'), 'active')
+    await edit(doc.querySelector('select[aria-label="Receiving rule"]'), 'admin')
+    const reply = [...doc.querySelectorAll('.bt-comm-participant-picker')].find(node => node.querySelector('summary').textContent.startsWith('Default reply Bot'))
+    await act(async () => reply.querySelector('summary').click())
+    await act(async () => reply.querySelector('button').click())
+    assert.equal(save().dataset.dirty, 'true')
+    assert.equal(calls.some(call => ['policy', 'routing', 'configure-group'].includes(call.endpoint)), false)
+    await click('Save')
+    const sent = calls.find(call => call.endpoint === 'save-settings')
+    assert.equal(sent.title, 'Atomic title')
+    assert.equal(sent.expectedVersion, 1)
+    assert.equal(sent.membershipEpoch, 'epoch')
+    assert.equal(sent.routing.adminBotPrincipalId, bot.principalId)
+    assert.equal(sent.policies[0].speakingMode, 'active')
+    assert.equal(save().disabled, true)
+    await edit(doc.querySelector('input[aria-label="Group name"]'), 'Discard me')
+    await click('Close member settings')
+    await act(async () => doc.querySelector('.bt-comm-members summary').click())
+    assert.equal(doc.querySelector('input[aria-label="Group name"]').value, 'Atomic title')
+    assert.equal(button('Save').disabled, true)
+  })
+})
+
+test('concurrent polling and a stale save retain edits until the drawer is closed and reopened', async () => {
+  const snapshot = state(); snapshot.conversations = [{ ...membership }]
+  await pane({ snapshot, handle: async body => { assert.equal(body.expectedVersion, 1); throw Object.assign(new Error('stale'), { code: 'GROUP_VERSION_CONFLICT' }) } }, async ({ doc, click, edit }) => {
+    await click('Shared group')
+    await act(async () => doc.querySelector('.bt-comm-members summary').click())
+    await edit(doc.querySelector('input[aria-label="Group name"]'), 'Local draft')
+    snapshot.conversations = [{ ...membership, title: 'Elsewhere', membershipVersion: 2 }]
+    await click('Refresh status')
+    assert.equal(doc.querySelector('input[aria-label="Group name"]').value, 'Local draft')
+    await click('Save')
+    assert.equal(doc.querySelector('input[aria-label="Group name"]').value, 'Local draft')
+    assert.match(doc.querySelector('.bt-comm-members [role=alert]').textContent, /Group settings changed/)
+    assert.equal(doc.querySelector('[aria-label="Save group settings"]').dataset.dirty, 'true')
+    await click('Close member settings')
+    await act(async () => doc.querySelector('.bt-comm-members summary').click())
+    assert.equal(doc.querySelector('input[aria-label="Group name"]').value, 'Elsewhere')
+  })
+})
+
+test('an uncertain settings save preserves newer edits and retries the same payload and ID before sending new edits', async () => {
+  const snapshot = state(); snapshot.conversations = [{ ...membership }]
+  const attempts = []; let rejectFirst
+  await pane({ snapshot, handle: async body => {
+    attempts.push(body)
+    if (attempts.length === 1) return new Promise((_resolve, reject) => { rejectFirst = reject })
+    snapshot.conversations = [{ ...snapshot.conversations[0], title: body.title, membershipVersion: attempts.length }]
+    return { updated: true, membershipVersion: attempts.length, conversationId: 'group' }
+  } }, async ({ doc, click, edit }) => {
+    await click('Shared group')
+    await act(async () => doc.querySelector('.bt-comm-members summary').click())
+    await edit(doc.querySelector('input[aria-label="Group name"]'), 'First submitted')
+    await click('Save')
+    await edit(doc.querySelector('input[aria-label="Group name"]'), 'Newer local edit')
+    await act(async () => rejectFirst(new TypeError('response lost')))
+    await click('Save')
+    assert.equal(attempts[0].operationId, attempts[1].operationId)
+    assert.equal(attempts[1].title, 'First submitted')
+    assert.equal(doc.querySelector('input[aria-label="Group name"]').value, 'Newer local edit')
+    assert.equal(doc.querySelector('[aria-label="Save group settings"]').dataset.dirty, 'true')
+    await click('Save')
+    assert.equal(attempts[2].title, 'Newer local edit')
+    assert.equal(attempts[2].expectedVersion, 2)
+    assert.equal(doc.querySelector('[aria-label="Save group settings"]').disabled, true)
+  })
+})
+
+test('late settings responses cannot overwrite another group or a reopened drawer', async () => {
+  const snapshot = state(); snapshot.conversations = [{ ...membership }, { ...membership, conversationId: 'other', title: 'Other group' }]
+  let release
+  await pane({ snapshot, handle: async body => new Promise(resolve => { release = () => { snapshot.conversations[0] = { ...membership, title: body.title, membershipVersion: 2 }; resolve({ updated: true, conversationId: 'group', membershipVersion: 2 }) } }) }, async ({ doc, click, edit }) => {
+    await click('Shared group')
+    await act(async () => doc.querySelector('.bt-comm-members summary').click())
+    await edit(doc.querySelector('input[aria-label="Group name"]'), 'Submitted')
+    await click('Save')
+    await click('Close member settings')
+    await act(async () => doc.querySelector('.bt-comm-members summary').click())
+    await edit(doc.querySelector('input[aria-label="Group name"]'), 'Reopened edit')
+    await act(async () => release())
+    assert.equal(doc.querySelector('input[aria-label="Group name"]').value, 'Reopened edit')
+    await click('Other group')
+    await act(async () => doc.querySelector('.bt-comm-members summary').click())
+    await edit(doc.querySelector('input[aria-label="Group name"]'), 'Other local edit')
+    await click('Refresh status')
+    assert.equal(doc.querySelector('input[aria-label="Group name"]').value, 'Other local edit')
+  })
+})
+
+test('all group members can inspect current member information while non-managers have no edit controls', async () => {
+  const snapshot = state(); snapshot.conversations = [{ ...membership, role: 'member', speakingMode: 'readOnly' }]
+  await pane({ snapshot }, async ({ doc, click, calls }) => {
+    await click('Shared group')
+    await act(async () => doc.querySelector('.bt-comm-members summary').click())
+    const drawer = doc.querySelector('.bt-comm-members')
+    assert.match(drawer.textContent, /Owner/)
+    assert.equal(drawer.querySelector('select,input'), null)
+    assert.equal(drawer.querySelector('[aria-label="Save group settings"]'), null)
+    assert.equal(calls.some(call => call.endpoint === 'save-settings'), false)
+  })
+})
+
+test('routine membership changes produce no notice or empty feedback box', async () => {
+  const snapshot = state(); snapshot.conversations = [membership]
+  await pane({ snapshot, history: [{ type: 'membership.policy', eventId: 'policy', conversationSeq: 2 }] }, async ({ doc, click }) => {
+    await click('Shared group')
+    assert.doesNotMatch(doc.querySelector('.bt-comm-frame').textContent, /Membership or receiving rule changed/)
+    assert.equal(doc.querySelector('.bt-comm-event'), null)
+    assert.equal(doc.querySelector('.bt-comm-feedback'), null)
+  })
+})
+
+
+test('reference previews use authorized short Unicode text and jump once without scroll locking or focus theft', async () => {
+  const snapshot = state(); snapshot.conversations = [{ ...membership, watermark: 2 }]
+  const source = { type: 'message', eventId: 'source-event', conversationSeq: 1, serverAcceptedAt: '2026-11-04T00:00:00Z', message: { messageId: 'source', author: { principalId: 'human:b:source', displayName: 'Source author' }, content: { text: '😀'.repeat(180) }, mentions: [] } }
+  const reply = { ...source, eventId: 'reply-event', conversationSeq: 2, message: { messageId: 'reply', author: { principalId: 'human:a:owner' }, content: { text: 'A reply' }, mentions: [], replyToMessageId: 'source' } }
+  await pane({ snapshot, history: [source, reply], handle: async body => { assert.equal(body.endpoint, 'reference'); assert.equal(body.conversationId, 'group'); return source } }, async ({ doc, dom, click }) => {
+    let jumps = 0
+    dom.window.HTMLElement.prototype.scrollIntoView = function () { if (this.dataset.messageId === 'source') jumps += 1 }
+    await click('Shared group')
+    const quote = doc.querySelector('.bt-comm-quote')
+    assert.equal(quote.getAttribute('aria-label'), 'Jump to source message')
+    assert.equal(quote.querySelector('.bt-comm-quote-author').textContent, 'Source author')
+    const excerpt = quote.querySelector('.bt-comm-quote-text').textContent
+    assert.equal([...excerpt].length, 160)
+    assert.ok(excerpt.endsWith('…'))
+    await act(async () => { quote.focus(); quote.click() })
+    assert.equal(jumps, 1)
+    assert.equal(doc.activeElement, quote)
+    assert.equal(doc.querySelector('[data-message-id="source"]').dataset.referenced, 'true')
+    const log = doc.querySelector('.bt-comm-log')
+    Object.defineProperties(log, { scrollHeight: { configurable: true, value: 1000 }, clientHeight: { configurable: true, value: 200 } })
+    log.scrollTop = 123
+    await act(async () => log.dispatchEvent(new dom.window.Event('scroll', { bubbles: true })))
+    snapshot.conversations[0] = { ...snapshot.conversations[0], watermark: 3 }
+    await click('Refresh status')
+    assert.equal(jumps, 1)
+    assert.equal(log.scrollTop, 123)
+    await act(async () => doc.body.dispatchEvent(new dom.window.Event('pointerdown', { bubbles: true })))
+    assert.equal(doc.querySelector('[data-message-id="source"]').dataset.referenced, 'false')
+    assert.equal(doc.activeElement, quote)
+    assert.equal(log.scrollTop, 123)
+    await act(async () => quote.click())
+    assert.equal(jumps, 2)
+  })
+})
+
+test('unavailable reference previews show only a generic message and never render an API error payload', async () => {
+  const snapshot = state(); snapshot.conversations = [membership]
+  const reply = { type: 'message', eventId: 'reply', conversationSeq: 2, serverAcceptedAt: '2026-11-04T00:00:00Z', message: { messageId: 'reply', author: { principalId: 'human:a:owner' }, content: { text: 'Public reply' }, mentions: [], replyToMessageId: 'private-source' } }
+  await pane({ snapshot, history: [reply], handle: async () => { throw Object.assign(new Error('private source contents must never leak'), { code: 'REFERENCE_NOT_AVAILABLE' }) } }, async ({ doc, click }) => {
+    await click('Shared group')
+    assert.equal(doc.querySelector('.bt-comm-quote').textContent, 'Earlier message unavailable')
+    assert.equal(doc.querySelector('.bt-comm-quote').disabled, true)
+    assert.doesNotMatch(doc.querySelector('.bt-comm-frame').textContent, /private source contents/)
+  })
+})
+
+test('an acknowledged settings save stays confirmed when the follow-up status read fails', async () => {
+  const snapshot = state(); snapshot.conversations = [membership]
+  let unavailable = false; const versions = []
+  await pane({ snapshot, getState: () => { if (unavailable) throw new TypeError('status unavailable'); return { ...snapshot } }, handle: async body => {
+    versions.push(body.expectedVersion); unavailable = true
+    return { updated: true, conversationId: 'group', membershipVersion: body.expectedVersion + 1 }
+  } }, async ({ doc, click, edit }) => {
+    await click('Shared group')
+    await act(async () => doc.querySelector('.bt-comm-members summary').click())
+    await edit(doc.querySelector('input[aria-label="Group name"]'), 'Committed')
+    await click('Save')
+    assert.equal(doc.querySelector('[aria-label="Save group settings"]').disabled, true)
+    assert.equal(doc.querySelector('.bt-comm-members [role=alert]'), null)
+    await edit(doc.querySelector('input[aria-label="Group name"]'), 'Next committed')
+    await click('Save')
+    assert.deepEqual(versions, [1, 2])
+    assert.equal(doc.querySelector('[aria-label="Save group settings"]').disabled, true)
+  })
 })

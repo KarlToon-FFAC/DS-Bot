@@ -3,6 +3,8 @@ import { createServer as createHttpsServer } from 'node:https'
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { WebSocketServer } from 'ws'
 import { HubStore } from './store.js'
+import { HubManagement } from './management-store.js'
+import { createManagementHttp } from './management-http.js'
 import { CommunicationError, PROTOCOL, identifier, requireThat } from './protocol.js'
 
 const loopback = host => ['127.0.0.1','::1'].includes(host)
@@ -10,12 +12,14 @@ const digest = value => createHash('sha256').update(value).digest()
 const routes = {
   'principal.register':'register', 'contacts.list':'contacts', 'dm.open':'createDm', 'group.create':'createGroup',
   'group.invite':'invite', 'group.accept':'accept', 'group.remove':'remove', 'group.routing':'routing', 'group.dissolve':'dissolve',
-  'group.policy':'policy', 'group.transfer':'transfer', 'group.reclaim':'reclaim', 'principal.rename':'renameHuman', 'group.configure':'configureGroup',
+  'group.policy':'policy', 'group.transfer':'transfer', 'group.reclaim':'reclaim', 'principal.rename':'renameHuman', 'group.configure':'configureGroup', 'group.settings':'settings',
   'message.publish':'publish', 'memberships.list':'memberships', 'conversation.sync':'sync', 'conversation.authorize':'authorize', 'conversation.members':'members',
   'conversation.ack':'acknowledgeCursor', 'deliveries.pull':'pending', 'delivery.receipt':'receipt', 'message.status':'deliveryStatus',
+  'principal.avatar.begin':'avatarBegin', 'principal.avatar.chunk':'avatarChunk', 'principal.avatar.read':'avatarRead', 'principal.profile':'profile',
+  'principal.publication':'syncPublication',
 }
 
-export async function startHub({ databasePath, peers, host='127.0.0.1', port=3190, tls, limits, beforeCommit, beforeRequest, beforeResponse }={}) {
+export async function startHub({ databasePath, peers, host='127.0.0.1', port=3190, tls, limits, management:managementOptions, beforeCommit, beforeRequest, beforeResponse }={}) {
   requireThat(loopback(host)||tls?.key&&tls?.cert,'TLS_REQUIRED','Non-loopback listeners require TLS')
   requireThat(Number.isInteger(port)&&port>=0&&port<=65535,'INVALID_CONFIG')
   const allowed=new Map()
@@ -24,17 +28,26 @@ export async function startHub({ databasePath, peers, host='127.0.0.1', port=319
     requireThat(!peer.instanceId.includes(':')&&!allowed.has(peer.instanceId)&&typeof peer.credential==='string'&&peer.credential.length>=32,'INVALID_CONFIG')
     allowed.set(peer.instanceId,{credentialHash:digest(peer.credential),label:peer.instanceLabel??peer.instanceId,pairingRevision:peer.pairingRevision??1})
   }
-  requireThat(allowed.size>0,'INVALID_CONFIG','Configure at least one explicitly paired instance')
   const store=new HubStore(databasePath,{limits,beforeCommit})
+  const management=new HubManagement(store,{url:managementOptions?.url??managementOptions?.publicUrl})
+  store.directoryFilter=(auth,rows,principalId)=>management.filterDirectory(auth,rows,principalId)
+  store.contactPolicy=(auth,actorId,targetId)=>management.assertContact(auth,actorId,targetId)
+  store.dmPolicy=id=>management.assertDm(id)
   try{
+    requireThat(allowed.size>0||managementOptions?.enabled===true||store.db.prepare('SELECT 1 FROM hub_enrolled_peers LIMIT 1').get(),'INVALID_CONFIG','Configure paired instances or explicitly enable Hub management')
     for(const [id,peer] of allowed)store.configurePeer(id,peer.label,peer.pairingRevision)
-    for(const instance of store.db.prepare('SELECT id FROM instances WHERE trusted=1').all())if(!allowed.has(instance.id))store.revokeInstance(instance.id)
+    for(const instance of store.db.prepare('SELECT id FROM instances WHERE trusted=1').all())if(!allowed.has(instance.id)&&!management.peer(instance.id))store.revokeInstance(instance.id)
+    if(managementOptions?.enabled)requireThat(typeof managementOptions.password==='string'||store.db.prepare("SELECT 1 FROM hub_management WHERE key='adminVerifier'").get(),'INVALID_CONFIG','Configure a private administrator password before enabling management')
   }catch(error){store.close();throw error}
-  const server=(tls?createHttpsServer: createHttpServer)(...(tls?[{key:tls.key,cert:tls.cert,minVersion:'TLSv1.2'}]:[]),(_req,res)=>{
+  let managementHttp
+  const server=(tls?createHttpsServer: createHttpServer)(...(tls?[{key:tls.key,cert:tls.cert,minVersion:'TLSv1.2'}]:[]),async(_req,res)=>{
+    try{
+    if(await managementHttp?.handle(_req,res))return
     if(_req.method==='GET'&&_req.url==='/health'){
       res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'})
       res.end(JSON.stringify({ok:true,protocol:PROTOCOL}))
     }else{res.writeHead(404);res.end()}
+    }catch{if(!res.headersSent)res.writeHead(500,{'cache-control':'no-store'});res.end()}
   })
   const sockets=new WebSocketServer({server,path:'/communication',maxPayload:store.limits.maxEnvelopeBytes,perMessageDeflate:false})
   const connections=new Set()
@@ -45,7 +58,7 @@ export async function startHub({ databasePath, peers, host='127.0.0.1', port=319
     let auth=null
     const deadline=setTimeout(()=>socket.close(1008,'Authentication required'),5000)
     deadline.unref()
-    socket.on('close',()=>{clearTimeout(deadline);connections.delete(socket);identities.delete(socket)})
+    socket.on('close',()=>{clearTimeout(deadline);connections.delete(socket);identities.delete(socket);management.forget(socket)})
     socket.on('error',()=>{})
     socket.on('message',(data,isBinary)=>{
       let id=null
@@ -59,22 +72,44 @@ export async function startHub({ databasePath, peers, host='127.0.0.1', port=319
         requireThat(frame.payload&&typeof frame.payload==='object'&&!Array.isArray(frame.payload),'INVALID_REQUEST')
         let value
         if(!auth){
+          if(frame.type==='enrollment.challenge'){
+            requireThat(frame.payload.purpose!=='join'||managementHttp?.enabled,'MANAGEMENT_DISABLED')
+            value=management.challenge(socket,frame.payload,request.socket.remoteAddress??'unknown')
+          }else if(frame.type==='enrollment.prove'){
+            const proof=management.prove(socket,frame.payload)
+            if(proof.instanceId&&proof.label!==undefined){
+              value=store.connect(proof.instanceId,proof.label,frame.payload.capabilities)
+              auth={instanceId:value.instanceId,epoch:value.epoch}
+            }else value=proof
+          }else{
           requireThat(frame.type==='hello','UNAUTHENTICATED')
           const peer=allowed.get(frame.payload?.instanceId)
-          requireThat(peer&&typeof frame.payload.credential==='string'&&timingSafeEqual(peer.credentialHash,digest(frame.payload.credential)),'UNAUTHENTICATED')
+          requireThat(peer&&!management.peer(frame.payload.instanceId)&&typeof frame.payload.credential==='string'&&timingSafeEqual(peer.credentialHash,digest(frame.payload.credential)),'UNAUTHENTICATED')
           value=store.connect(frame.payload.instanceId,peer.label,frame.payload.capabilities)
           auth={instanceId:value.instanceId,epoch:value.epoch}
+          }
+          if(auth){
           store.observeAddress(auth,(request.socket.remoteAddress??'unknown').replace(/^::ffff:/,''))
           identities.set(socket,auth.instanceId)
           clearTimeout(deadline)
+          }
         }else{
-          requireThat(allowed.has(auth.instanceId),'UNAUTHENTICATED')
+          requireThat(allowed.has(auth.instanceId)||management.peer(auth.instanceId),'UNAUTHENTICATED')
+          store.check(auth)
+          const contactRoutes={'contact.code':'code','contact.code.rotate':'rotateCode','contact.request':'requestContact','contact.requests':'contactRequests','contact.relations':'relations',
+            'contact.accept':'accept','contact.reject':'reject','contact.cancel':'cancel','contact.revoke':'revokeContact'}
+          const contact=contactRoutes[frame.type]
+          if(contact){
+            value=['accept','reject','cancel'].includes(contact)?management.respondContact(auth,frame.payload,contact):management[contact](auth,frame.payload)
+          }else{
           const method=Object.hasOwn(routes,frame.type)?routes[frame.type]:null
           requireThat(method,'UNKNOWN_OPERATION')
           beforeRequest?.({type:frame.type,payload:frame.payload})
           value=store[method](auth,frame.payload)
+          }
         }
         if(beforeResponse?.({type:frame.type,value,socket})===false)return
+        if(auth&&(frame.type==='hello'||frame.type==='enrollment.prove'))value={...value,hubId:management.hubId}
         requireThat(socket.bufferedAmount<store.limits.maxEnvelopeBytes*4,'BACKPRESSURE')
         const response=JSON.stringify({id,ok:true,value})
         requireThat(Buffer.byteLength(response)<=store.limits.maxEnvelopeBytes,'PAYLOAD_TOO_LARGE')
@@ -90,7 +125,16 @@ export async function startHub({ databasePath, peers, host='127.0.0.1', port=319
     await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(port,host,resolve)})
   }catch(error){sockets.close();store.close();throw error}
   const address=server.address()
-  return {store,host,port:address.port,url:`${tls?'wss':'ws'}://${host.includes(':')?`[${host}]`:host}:${address.port}/communication`,
-    revoke(instanceId){allowed.delete(instanceId);const value=store.revokeInstance(instanceId);for(const [socket,id] of identities)if(id===instanceId)socket.close(1008,'Trust revoked');return value},
-    async close(){for(const socket of connections)socket.terminate();await new Promise(resolve=>sockets.close(resolve));await new Promise(resolve=>server.close(resolve));store.close()}}
+  const url=`${tls?'wss':'ws'}://${host.includes(':')?`[${host}]`:host}:${address.port}/communication`
+  const revoke=instanceId=>{allowed.delete(instanceId);const value=store.revokeInstance(instanceId);for(const [socket,id] of identities)if(id===instanceId)socket.close(1008,'Trust revoked');return value}
+  if(managementOptions?.enabled){
+    try{
+      management.url??=url
+      const origin=managementOptions.origin??new URL(management.url.replace(/^ws/,'http')).origin
+      managementHttp=createManagementHttp(management,{password:managementOptions.password,origin,onRevoke:revoke})
+    }catch(error){for(const socket of connections)socket.terminate();await new Promise(resolve=>sockets.close(resolve));await new Promise(resolve=>server.close(resolve));store.close();throw error}
+  }
+  return {store,management,host,port:address.port,url,managementUrl:managementHttp?.enabled?`${managementOptions.origin??new URL(management.url.replace(/^ws/,'http')).origin}/admin/`:null,
+    revoke,
+    async close(){managementHttp?.close();for(const socket of connections)socket.terminate();await new Promise(resolve=>sockets.close(resolve));await new Promise(resolve=>server.close(resolve));store.close()}}
 }

@@ -7,6 +7,7 @@ import { CommunicationTransport, communicationUrl } from './transport.js'
 import { completedOutputs, inspectBinding, interruptedInputs, reconcileInput, recoverBinding, resumePendingInput, resumeInterruptedInput, SOURCE_KIND } from './session-journal.js'
 import { communicationMentions } from '../../shared/communication-mentions.js'
 import { mentionSpans } from '../../shared/mentions.js'
+import { syncBotAvatars } from './avatars.js'
 import { splitRef } from '../text.js'
 import { communicationPrompt } from './prompt.js'
 import { OUTSIDE_CONVERSATION_TOOLS } from './tool-scope.js'
@@ -29,7 +30,8 @@ export class CommunicationRuntime {
     this.ctx = rt.ctx
     this.settings = settings
     this.queue = new CommunicationQueue(settings.dataPath ?? join(rt.home, 'communication.sqlite'), { instanceId: settings.instanceId, maxPending: settings.maxPending ?? 1000 })
-    this.human = this.queue.localPrincipal('human', 'local-user', settings.humanDisplayName ?? 'You')
+    try { this.human = this.queue.localPrincipal('human', 'local-user', settings.humanDisplayName ?? 'You', settings.credentialKey ? 'local-user' : undefined) }
+    catch (error) { this.queue.close(); throw error }
     this.bots = new Map()
     for (const id of settings.publishedBotIds ?? []) {
       const bot = rt.botOf(id)
@@ -56,27 +58,38 @@ export class CommunicationRuntime {
         conversationId: delivery.conversationId, messageId: delivery.messageId, deliveryId: delivery.deliveryId }),
       afterReceive: delivery => this.ctx.parallel('ds-bot/communication-checkpoint', { point: 'after-receive',
         conversationId: delivery.conversationId, messageId: delivery.messageId, deliveryId: delivery.deliveryId }),
-      onConnect: async () => {
+      onConnect: async welcome => {
         await this.registerLocalIdentities()
+        if (welcome?.capabilities?.includes('principal-publication')) await this.transport.request('principal.publication', { principalIds: [...this.bots.values()].map(bot => bot.principalId) })
         this.lastConnectedAt = new Date().toISOString()
         this.lastError = null
       },
       onChange: async () => {
         this.everReconciled = true
         this.contacts = await this.transport.request('contacts.list')
+        for (const principal of this.bots.values()) {
+          const name = this.rt.botOf(principal.localRef)?.name
+          if (!name || name === principal.displayName) continue
+          const updated = await this.transport.request('principal.register', { localId: principal.localId, kind: 'bot', displayName: name })
+          principal.displayName = updated.displayName
+          this.contacts = this.contacts.map(contact => contact.principalId === principal.principalId ? { ...contact, ...updated } : contact)
+        }
+        try { await syncBotAvatars(this); this.avatarError = null }
+        catch (error) { this.avatarError = error.code ?? 'AVATAR_SYNC_FAILED' }
         const authorized = new Set(this.queue.memberships().map(member => member.conversationId))
         for (const id of this.conversations.keys()) if (!authorized.has(id)) this.conversations.delete(id)
         for (const member of this.queue.memberships()) {
-          if (this.conversations.get(member.conversationId)?.membershipVersion === member.membershipVersion) continue
+          if (this.conversations.get(member.conversationId)?.membershipVersion === member.membershipVersion
+            && Date.now() - (this.profileRefreshedAt?.get(member.conversationId) ?? 0) < 5000) continue
           try {
             await this.refreshConversation(member.conversationId)
-          } catch (error) { if (!['NOT_A_MEMBER', 'MEMBERSHIP_REVOKED'].includes(error.code)) throw error }
+          } catch (error) { if (!['NOT_A_MEMBER', 'MEMBERSHIP_REVOKED','CONTACT_REQUIRED'].includes(error.code)) throw error }
         }
         // Directory renames do not change group membership versions.
         const directory = new Map(this.contacts.map(contact => [contact.principalId, contact]))
         for (const [id, info] of this.conversations) this.conversations.set(id, { ...info, members: info.members.map(member => {
           const contact = directory.get(member.principalId)
-          return contact ? { ...member, displayName: contact.displayName, instanceLabel: contact.instanceLabel } : member
+          return contact ? { ...member, displayName: contact.displayName, instanceLabel: contact.instanceLabel, avatar: contact.avatar } : member
         }) })
         const sent = this.queue.outboxFor(this.human.principalId).filter(item => item.type === 'message.publish' && item.state === 'accepted')
         for (let i = 0; i < Math.min(5, sent.length); i += 1) {
@@ -249,13 +262,17 @@ export class CommunicationRuntime {
     const info = await this.transport.request('conversation.members', { conversationId, principalId: member.principalId, membershipEpoch: member.membershipEpoch })
     const current = this.queue.memberships().find(item => item.conversationId === conversationId && item.principalId === member.principalId && item.membershipEpoch === member.membershipEpoch)
     if (!current) return
-    if ((this.conversations.get(conversationId)?.membershipVersion ?? 0) <= info.membershipVersion) this.conversations.set(conversationId, info)
+    if ((this.conversations.get(conversationId)?.membershipVersion ?? 0) <= info.membershipVersion) {
+      this.conversations.set(conversationId, info)
+      this.profileRefreshedAt ??= new Map()
+      this.profileRefreshedAt.set(conversationId, Date.now())
+    }
   }
   message(principalId, conversationId, { text, mentions = [], replyToMessageId = null, responseToDeliveryId, causationDeliveryId, membershipEpoch, messageId = randomUUID(), clientCreatedAt = new Date().toISOString(), attachments, files } = {}) {
     if (attachments || files) fail('UNSUPPORTED_CONTENT')
     if (typeof text !== 'string') fail('INVALID_REQUEST')
     const info = this.conversations?.get(conversationId), members = info?.members
-    const contacts = members ? this.contacts.filter(contact => members.some(member => member.principalId === contact.principalId)) : this.contacts
+    const contacts = members ? members.map(member => ({ ...this.contacts.find(contact => contact.principalId === member.principalId), ...member })) : this.contacts
     // Without a current participant snapshot, an @all expansion cannot be scoped safely.
     const all = mentionSpans(text.replace(/^[\t ]*>[^\n]*/gm, line => ' '.repeat(line.length)), []).some(span => span.all)
     if (all && (!members || info.membershipVersion !== this.member(principalId, conversationId, membershipEpoch).membershipVersion)) fail('AUTHORIZATION_PENDING')
@@ -332,7 +349,8 @@ export class CommunicationRuntime {
   snapshot() {
     const memberships = this.everReconciled ? this.queue.memberships().filter(member => member.principalId === this.human.principalId) : []
     return { enabled: true, connected: this.transport.connected, reconciled: this.everReconciled, instanceId: this.queue.instanceId, humanPrincipalId: this.human.principalId,
-      lastConnectedAt: this.lastConnectedAt ?? null, error: this.lastError ?? null, contacts: this.contacts,
+      hubUrl: this.settings.url, hubId: this.settings.hubId ?? this.transport.welcome?.hubId ?? null,
+      lastConnectedAt: this.lastConnectedAt ?? null, error: this.lastError ?? null, avatarError: this.avatarError ?? null, contacts: this.contacts,
       limits: this.queue.limits,
       localBots: [...this.bots.values()].map(bot => ({ principalId: bot.principalId, displayName: this.rt.botOf(bot.localRef)?.name ?? bot.displayName })),
       conversations: memberships.map(member => ({ ...member, info: this.conversations.get(member.conversationId) ?? null,
@@ -397,6 +415,7 @@ export class CommunicationRuntime {
     const format = event => {
       if (event.type !== 'message') return JSON.stringify({ type: event.type, conversationSeq: event.conversationSeq })
       const person = this.contacts.find(contact => contact.principalId === event.message.author.principalId)
+        ?? this.conversations?.get(delivery.conversationId)?.members.find(member => member.principalId === event.message.author.principalId)
       return JSON.stringify({ messageId: event.message.messageId, author: event.message.author,
         displayName: person?.displayName ?? event.message.author.principalId, instanceLabel: person?.instanceLabel,
         content: event.message.content, mentions: event.message.mentions, replyToMessageId: event.message.replyToMessageId,

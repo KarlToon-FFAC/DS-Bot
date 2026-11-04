@@ -71,11 +71,16 @@ test('reconciliation loads Bot-only participants without exposing that conversat
 test('new member, reference and group configuration tools remain in the existing public tool collection and conversation scope', () => {
   const rt = { config: { communication: { enabled: true } }, teamTools: [], ctx: { effect: () => {} } }
   install(rt)
-  for (const name of ['read_communication_members', 'read_communication_reference', 'configure_communication_group']) {
+  for (const name of ['read_communication_members', 'read_communication_reference', 'configure_communication_group', 'save_communication_group_settings']) {
     assert.ok(rt.teamTools.some(tool => tool.name === name))
     assertConversationToolScope({ conversationId: 'current' }, name, { conversationId: 'current' })
     assert.throws(() => assertConversationToolScope({ conversationId: 'current' }, name, { conversationId: 'private' }), { code: 'CONVERSATION_SCOPE_MISMATCH' })
   }
+  const settings = rt.teamTools.find(tool => tool.name === 'save_communication_group_settings').parameters
+  assert.deepEqual(settings.properties.routing.required, ['mode'])
+  assert.equal(settings.properties.routing.additionalProperties, false)
+  assert.deepEqual(settings.properties.policies.items.required, ['targetPrincipalId'])
+  assert.equal(settings.properties.policies.items.additionalProperties, false)
 })
 
 test('queued group configuration survives restart and replays its original operation, identity, epoch and version', async () => {

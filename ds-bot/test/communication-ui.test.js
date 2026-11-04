@@ -17,7 +17,7 @@ test('communication labels disambiguate same-name origins and never equate stora
   ]
   const labels = contactLabels(contacts, 'a')
   assert.equal(new Set(labels.values()).size, 3)
-  assert.match(labels.get('bot:b:j'), /Remote/)
+  assert.match(labels.get('bot:b:j'), /Chief/)
   assert.equal(deliveryPhase({ targetStored: 1 }), 'Destination stored')
   assert.equal(deliveryPhase({ targetStored: 1, uiApplied: 1 }), 'Displayed')
   assert.equal(deliveryPhase({ humanRead: 1 }), 'Read')
@@ -63,7 +63,7 @@ test('production pane ignores a late history response and retries an uncertain H
     await act(async () => [...dom.window.document.querySelectorAll('nav button')].find(button => button.textContent === 'two').click())
     await act(async () => releaseFirst(history('one')))
     assert.equal(dom.window.document.querySelector('.bt-comm-main h2').textContent, 'two')
-    assert.equal(dom.window.document.querySelectorAll('.bt-comm-feedback .bt-comm-event').length, 1)
+    assert.equal(dom.window.document.querySelectorAll('.bt-comm-feedback .bt-comm-event').length, 0)
     await act(async () => {
       Object.getOwnPropertyDescriptor(dom.window.HTMLTextAreaElement.prototype, 'value').set.call(field(), 'same original intent')
       field().dispatchEvent(new dom.window.Event('input', { bubbles: true }))

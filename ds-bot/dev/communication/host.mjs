@@ -1,7 +1,7 @@
 // Same documented profile boot entry point used by app/src/host.mjs.
 import { createRequire } from 'node:module'
-import { mkdirSync, symlinkSync, existsSync } from 'node:fs'
-import { resolve, join } from 'node:path'
+import { mkdirSync, symlinkSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { resolve, join, basename } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { watchOwnedParent } from './owned-parent.mjs'
 watchOwnedParent()
@@ -16,6 +16,16 @@ if (!root || !process.env.DSBOT_COMMUNICATION_PROBE) throw new Error('Use the is
 const dir = join(root, 'profiles', 'communication-test')
 const bundles = ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', 'ds-bot', 'ds-bot-communication-probe']
 initProfile(dir, bundles)
+if (process.env.DSBOT_COMMUNICATION_ONBOARDING_FIXTURE === '1') {
+  if (!/^\.dsh-test-hub-onboard-[a-f0-9]{8}(?:-[a-z0-9-]+)?-[ab]$/.test(basename(root))) throw new Error('Use a fresh owned onboarding profile')
+  const marker = join(root, '.onboarding-normal-profile'), patch = join(dir, 'cordis.patch.yml')
+  if (!existsSync(marker)) {
+    const initial = existsSync(patch) ? readFileSync(patch, 'utf8').split(/\r?\n/).filter(line => !line.trim().startsWith('#')).join('\n').trim() : ''
+    if (existsSync(join(root, 'bot/communication.sqlite')) || initial && initial !== '[]') throw new Error('Onboarding fixture refuses to replace an existing profile configuration')
+    writeFileSync(patch, '- id: bot\n  config:\n    checkRatio: 0.45\n')
+    writeFileSync(marker, 'Fresh onboarding profile initialized once.\n')
+  }
+}
 const modules = join(dir, 'node_modules')
 mkdirSync(modules, { recursive: true })
 for (const [name, source] of [['ds-bot', plugin], ['ds-bot-communication-probe', join(plugin, 'dev/communication/probe-plugin')]]) {

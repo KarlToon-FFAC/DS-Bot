@@ -1,10 +1,16 @@
 import { mentionSpans } from '../shared/mentions.js'
 
-export function contactLabels(contacts, instanceId, t = value => value) {
-  const basic = contact => `${contact.displayName} · ${contact.instanceLabel ?? contact.homeInstanceId} · ${contact.kind === 'bot' ? 'Bot' : t('Human')} · ${t(contact.homeInstanceId === instanceId ? 'Local' : 'Remote')}`
+export function contactLabels(contacts) {
+  const name = contact => contact.displayName ?? contact.principalId
+  const origin = contact => contact.instanceLabel ?? contact.homeInstanceId ?? contact.principalId
   return new Map(contacts.map(contact => {
-    const base = basic(contact)
-    return [contact.principalId, contacts.filter(other => basic(other) === base).length > 1 ? `${base} · ${contact.principalId}` : base]
+    const sameName = contacts.filter(other => name(other) === name(contact))
+    let label = name(contact)
+    if (sameName.length > 1) {
+      label += ' · ' + origin(contact)
+      if (sameName.filter(other => origin(other) === origin(contact)).length > 1) label += ' · ' + contact.principalId.slice(-8)
+    }
+    return [contact.principalId, label]
   }))
 }
 
@@ -89,4 +95,32 @@ export function collaborationStops(events, outbox) {
     if (item.state === 'accepted' && item.result?.dispatchSuppressed === 'CAUSAL_LIMIT' && !stopped.has(item.id)) stopped.set(item.id, item.result.causality)
   }
   return [...stopped].map(([messageId, causality]) => ({ messageId, causality }))
+}
+
+
+export function groupSettingsValues(member) {
+  return { title: member.title ?? '', routing: { mode: member.routingMode ?? 'mentionsOnly', adminBotPrincipalId: member.adminBotPrincipalId ?? null },
+    policies: Object.fromEntries((member.info?.members ?? []).map(person => [person.principalId, { role: person.role, speakingMode: person.speakingMode }])) }
+}
+
+export function groupSettingsChanges(base, draft) {
+  const changes = {}
+  if (draft.title !== base.title) changes.title = draft.title
+  if (JSON.stringify(draft.routing) !== JSON.stringify(base.routing)) changes.routing = draft.routing
+  const policies = []
+  for (const [targetPrincipalId, policy] of Object.entries(draft.policies)) {
+    const before = base.policies[targetPrincipalId]
+    if (!before) continue
+    const change = { targetPrincipalId }
+    if (policy.role !== before.role) change.role = policy.role
+    if (policy.speakingMode !== before.speakingMode) change.speakingMode = policy.speakingMode
+    if (Object.keys(change).length > 1) policies.push(change)
+  }
+  if (policies.length) changes.policies = policies
+  return changes
+}
+
+export function referenceExcerpt(text, limit = 160) {
+  const chars = [...String(text ?? '').replace(/\s+/g, ' ').trim()]
+  return chars.length > limit ? chars.slice(0, limit - 1).join('') + '…' : chars.join('')
 }

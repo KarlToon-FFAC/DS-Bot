@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { randomUUID } from 'node:crypto'
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
+import { MAX_AVATAR_LENGTH, AVATAR_CHUNK_LENGTH, avatarRevision, validAvatarRevision, normalizeAvatar, validateAvatarImage } from './avatars.js'
 import { CAPABILITIES, HUB_CAPABILITIES, DEFAULT_LIMITS, PROTOCOL, CommunicationError, hash, identifier, normalizeMessage, requireThat, responseBytes } from './protocol.js'
 
 export class HubStore {
@@ -29,6 +30,10 @@ export class HubStore {
       CREATE TABLE IF NOT EXISTS cursors (conversation_id TEXT NOT NULL, principal_id TEXT NOT NULL, membership_epoch TEXT NOT NULL, seq INTEGER NOT NULL, PRIMARY KEY(conversation_id,principal_id,membership_epoch));
       CREATE TABLE IF NOT EXISTS instance_addresses (instance_id TEXT PRIMARY KEY REFERENCES instances(id), address TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS principal_preferences (principal_id TEXT PRIMARY KEY REFERENCES principals(id), display_name TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS principal_profiles (principal_id TEXT PRIMARY KEY REFERENCES principals(id), default_name TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS principal_publication (principal_id TEXT PRIMARY KEY REFERENCES principals(id), published INTEGER NOT NULL CHECK(published IN (0,1)));
+      CREATE TABLE IF NOT EXISTS principal_avatar (principal_id TEXT PRIMARY KEY REFERENCES principals(id), descriptor TEXT NOT NULL, image_revision TEXT, image TEXT);
+      CREATE TABLE IF NOT EXISTS avatar_uploads (principal_id TEXT PRIMARY KEY REFERENCES principals(id), upload_id TEXT NOT NULL, revision TEXT NOT NULL, total_length INTEGER NOT NULL, data TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS causal_roots (id TEXT PRIMARY KEY, conversation_id TEXT NOT NULL REFERENCES conversations(id), ai_deliveries INTEGER NOT NULL DEFAULT 0);
       CREATE TABLE IF NOT EXISTS message_causality (message_id TEXT PRIMARY KEY REFERENCES messages(id), root_id TEXT NOT NULL REFERENCES causal_roots(id), parent_id TEXT, depth INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS causal_schema (version INTEGER PRIMARY KEY);
@@ -106,7 +111,7 @@ export class HubStore {
     requireThat(row && row.instance_id === auth.instanceId, 'AUTHOR_MISMATCH')
     return { principalId: row.id, homeInstanceId: row.instance_id, kind: row.kind }
   }
-  register(auth, { localId, kind, displayName }) {
+  register(auth, { localId, kind, displayName, avatar }) {
     this.check(auth); identifier(localId)
     requireThat(!localId.includes(':')&&localId.length<=100, 'INVALID_REQUEST')
     requireThat(['human','bot'].includes(kind) && typeof displayName === 'string' && displayName.trim() && displayName.length <= 256, 'INVALID_REQUEST')
@@ -115,15 +120,49 @@ export class HubStore {
       // Legacy Humans retain their identities, history and authority; only new identities are limited.
       const existing=this.db.prepare('SELECT 1 FROM principals WHERE id=?').get(principalId)
       requireThat(existing || kind !== 'human' || !this.db.prepare("SELECT 1 FROM principals WHERE instance_id=? AND kind='human'").get(auth.instanceId),'HUMAN_ALREADY_REGISTERED')
+      const defaultName=displayName
       displayName=this.db.prepare('SELECT display_name FROM principal_preferences WHERE principal_id=?').get(principalId)?.display_name??displayName
       requireThat(existing||this.db.prepare('SELECT count(*) count FROM principals').get().count<this.limits.maxPrincipals,'DIRECTORY_FULL')
       this.db.prepare('INSERT INTO principals VALUES (?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name').run(principalId,auth.instanceId,kind,localId,displayName)
-      return { principalId, homeInstanceId: auth.instanceId, kind, displayName }
+      if(kind==='bot')this.db.prepare('INSERT INTO principal_publication VALUES (?,1) ON CONFLICT(principal_id) DO UPDATE SET published=1').run(principalId)
+      this.db.prepare('INSERT INTO principal_profiles VALUES (?,?) ON CONFLICT(principal_id) DO UPDATE SET default_name=excluded.default_name').run(principalId,defaultName)
+      if(avatar!==undefined){
+        requireThat(kind==='bot','INVALID_AVATAR')
+        this.applyAvatar(principalId,avatar)
+      }
+      return { principalId, homeInstanceId: auth.instanceId, kind, displayName, avatar:this.avatarOf(principalId) }
     })
   }
-  contacts(auth) {
+  contacts(auth,input={}) {
     this.check(auth)
-    return this.db.prepare('SELECT p.id principalId,p.instance_id homeInstanceId,p.kind,coalesce(n.display_name,p.name) displayName,i.label instanceLabel,a.address ipAddress FROM principals p JOIN instances i ON i.id=p.instance_id LEFT JOIN instance_addresses a ON a.instance_id=i.id LEFT JOIN principal_preferences n ON n.principal_id=p.id WHERE i.trusted=1 ORDER BY p.id').all()
+    if(input.principalId!==undefined)this.principal(auth,input.principalId)
+    const rows=this.db.prepare("SELECT p.id principalId,p.instance_id homeInstanceId,p.kind,coalesce(n.display_name,p.name) displayName,i.label instanceLabel,a.address ipAddress FROM principals p JOIN instances i ON i.id=p.instance_id LEFT JOIN instance_addresses a ON a.instance_id=i.id LEFT JOIN principal_preferences n ON n.principal_id=p.id LEFT JOIN principal_publication pub ON pub.principal_id=p.id WHERE i.trusted=1 AND (p.kind<>'bot' OR coalesce(pub.published,1)=1) ORDER BY p.id").all().map(person=>({...person,avatar:this.avatarOf(person.principalId)}))
+    return this.directoryFilter?this.directoryFilter(auth,rows,input.principalId):rows
+  }
+  isPublished(principalId) {
+    const row=this.db.prepare('SELECT p.kind,coalesce(pub.published,1) published FROM principals p LEFT JOIN principal_publication pub ON pub.principal_id=p.id WHERE p.id=?').get(principalId)
+    return Boolean(row&&(row.kind!=='bot'||row.published===1))
+  }
+  syncPublication(auth,input) {
+    this.check(auth)
+    requireThat(input&&Object.keys(input).every(key=>key==='principalIds')&&Array.isArray(input.principalIds)&&input.principalIds.length<=this.limits.maxPrincipals,'INVALID_REQUEST')
+    const ids=[...new Set(input.principalIds.map(id=>identifier(id)))].sort()
+    return this.transaction(()=>{
+      for(const id of ids)requireThat(this.principal(auth,id).kind==='bot','INVALID_REQUEST')
+      const selected=new Set(ids)
+      for(const row of this.db.prepare("SELECT id FROM principals WHERE instance_id=? AND kind='bot'").all(auth.instanceId)){
+        const published=selected.has(row.id)?1:0
+        this.db.prepare('INSERT INTO principal_publication VALUES (?,?) ON CONFLICT(principal_id) DO UPDATE SET published=excluded.published').run(row.id,published)
+        if(!published){
+          this.db.prepare('UPDATE deliveries SET revoked=1 WHERE recipient_id=? AND ai=1 AND ai_accepted=0').run(row.id)
+          for(const group of this.db.prepare("SELECT id FROM conversations WHERE admin_bot=? AND kind='group' AND closed=0").all(row.id)){
+            this.db.prepare("UPDATE conversations SET admin_bot=NULL,routing_mode='mentionsOnly',version=version+1 WHERE id=?").run(group.id)
+            this.event(group.id,'routing.changed',{mode:'mentionsOnly',adminBotPrincipalId:null,reason:'principalUnpublished'})
+          }
+        }
+      }
+      return {principalIds:ids}
+    })
   }
   observeAddress(auth,address) {
     this.check(auth)
@@ -137,6 +176,100 @@ export class HubStore {
       this.db.prepare('UPDATE principals SET name=? WHERE id=?').run(input.displayName.trim(),principal.principalId)
       return {principalId:principal.principalId,displayName:input.displayName.trim()}
     })
+  }
+  avatarOf(principalId) {
+    const row=this.db.prepare('SELECT descriptor FROM principal_avatar WHERE principal_id=?').get(principalId)
+    return row ? JSON.parse(row.descriptor) : {seed:principalId,imageRevision:null}
+  }
+  avatarBegin(auth,input) {
+    identifier(input.principalId);this.principal(auth,input.principalId);identifier(input.uploadId)
+    requireThat(validAvatarRevision(input.imageRevision)&&Number.isSafeInteger(input.totalLength)&&input.totalLength>0&&input.totalLength<=MAX_AVATAR_LENGTH,'INVALID_AVATAR_UPLOAD')
+    return this.transaction(()=>{
+      const committed=this.db.prepare('SELECT image_revision,image FROM principal_avatar WHERE principal_id=?').get(input.principalId)
+      if(committed?.image_revision===input.imageRevision&&committed.image){
+        requireThat(committed.image.length===input.totalLength,'AVATAR_UPLOAD_CONFLICT')
+        return {uploadId:input.uploadId,nextOffset:input.totalLength,complete:true}
+      }
+      const old=this.db.prepare('SELECT * FROM avatar_uploads WHERE principal_id=?').get(input.principalId)
+      if(old?.upload_id===input.uploadId){
+        requireThat(old.revision===input.imageRevision&&old.total_length===input.totalLength,'AVATAR_UPLOAD_CONFLICT')
+        return {uploadId:input.uploadId,nextOffset:old.data.length,complete:old.data.length===old.total_length}
+      }
+      this.db.prepare('INSERT INTO avatar_uploads VALUES (?,?,?,?,?) ON CONFLICT(principal_id) DO UPDATE SET upload_id=excluded.upload_id,revision=excluded.revision,total_length=excluded.total_length,data=excluded.data').run(input.principalId,input.uploadId,input.imageRevision,input.totalLength,'')
+      return {uploadId:input.uploadId,nextOffset:0,complete:false}
+    })
+  }
+  avatarChunk(auth,input) {
+    identifier(input.principalId);this.principal(auth,input.principalId);identifier(input.uploadId)
+    requireThat(Number.isSafeInteger(input.offset)&&input.offset>=0&&typeof input.data==='string'&&input.data.length>0&&input.data.length<=AVATAR_CHUNK_LENGTH&&/^[\x20-\x7e]+$/.test(input.data),'INVALID_AVATAR_CHUNK')
+    return this.transaction(()=>{
+      const upload=this.db.prepare('SELECT * FROM avatar_uploads WHERE principal_id=?').get(input.principalId)
+      requireThat(upload?.upload_id===input.uploadId,'AVATAR_UPLOAD_MISMATCH')
+      requireThat(input.offset+input.data.length<=upload.total_length,'INVALID_AVATAR_CHUNK')
+      if(input.offset<upload.data.length)requireThat(upload.data.slice(input.offset,input.offset+input.data.length)===input.data,'AVATAR_UPLOAD_CONFLICT')
+      else{
+        requireThat(input.offset===upload.data.length,'AVATAR_UPLOAD_OFFSET')
+        this.db.prepare('UPDATE avatar_uploads SET data=data||? WHERE principal_id=?').run(input.data,input.principalId)
+      }
+      const nextOffset=input.offset<upload.data.length?upload.data.length:upload.data.length+input.data.length
+      return {uploadId:input.uploadId,nextOffset,complete:nextOffset===upload.total_length}
+    })
+  }
+  applyAvatar(principalId,input,uploadId) {
+    const avatar=normalizeAvatar(input,this.avatarOf(principalId),principalId)
+    const current=this.db.prepare('SELECT image_revision,image FROM principal_avatar WHERE principal_id=?').get(principalId)
+    let image=null
+    if(avatar.imageRevision!==null){
+      if(current?.image_revision===avatar.imageRevision&&current.image)image=current.image
+      else{
+        const upload=this.db.prepare('SELECT * FROM avatar_uploads WHERE principal_id=?').get(principalId)
+        requireThat(typeof uploadId==='string'&&upload?.upload_id===uploadId&&upload.revision===avatar.imageRevision,'AVATAR_UPLOAD_REQUIRED')
+        requireThat(upload.data.length===upload.total_length,'AVATAR_UPLOAD_INCOMPLETE')
+        requireThat(avatarRevision(upload.data)===avatar.imageRevision,'AVATAR_REVISION_MISMATCH')
+        validateAvatarImage(upload.data);image=upload.data
+      }
+    }
+    this.db.prepare('INSERT INTO principal_avatar VALUES (?,?,?,?) ON CONFLICT(principal_id) DO UPDATE SET descriptor=excluded.descriptor,image_revision=excluded.image_revision,image=excluded.image').run(principalId,JSON.stringify(avatar),avatar.imageRevision,image)
+    if(uploadId!==undefined||input===null||Object.hasOwn(input,'imageRevision'))this.db.prepare('DELETE FROM avatar_uploads WHERE principal_id=?').run(principalId)
+    return avatar
+  }
+  profile(auth,input) {
+    return this.operation(auth,input.operationId,input,()=>{
+      identifier(input.principalId)
+      const principal=this.principal(auth,input.principalId)
+      requireThat(Object.keys(input).every(key=>['principalId','operationId','displayName','avatar','uploadId'].includes(key))&&(input.displayName!==undefined||input.avatar!==undefined),'INVALID_REQUEST')
+      if(input.displayName!==undefined){
+        requireThat(principal.kind==='human'&&(input.displayName===null||typeof input.displayName==='string'&&input.displayName.trim()&&input.displayName.length<=256),'INVALID_REQUEST')
+        let name
+        if(input.displayName===null){
+          name=this.db.prepare('SELECT default_name FROM principal_profiles WHERE principal_id=?').get(input.principalId)?.default_name
+          requireThat(name,'PROFILE_DEFAULT_UNAVAILABLE')
+          this.db.prepare('DELETE FROM principal_preferences WHERE principal_id=?').run(input.principalId)
+        }else{
+          name=input.displayName.trim()
+          this.db.prepare('INSERT INTO principal_preferences VALUES (?,?) ON CONFLICT(principal_id) DO UPDATE SET display_name=excluded.display_name').run(input.principalId,name)
+        }
+        this.db.prepare('UPDATE principals SET name=? WHERE id=?').run(name,input.principalId)
+      }
+      const avatar=input.avatar===undefined?this.avatarOf(input.principalId):this.applyAvatar(input.principalId,input.avatar,input.uploadId)
+      return {principalId:input.principalId,displayName:this.db.prepare('SELECT name FROM principals WHERE id=?').get(input.principalId).name,avatar}
+    })
+  }
+  avatarRead(auth,input) {
+    this.check(auth);identifier(input.principalId)
+    const target=this.db.prepare('SELECT p.instance_id FROM principals p JOIN instances i ON i.id=p.instance_id WHERE p.id=? AND i.trusted=1').get(input.principalId)
+    requireThat(target,'UNKNOWN_PRINCIPAL')
+    const shared=this.db.prepare("SELECT 1 FROM memberships them JOIN conversations c ON c.id=them.conversation_id JOIN memberships us ON us.conversation_id=c.id JOIN principals p ON p.id=us.principal_id WHERE them.principal_id=? AND them.active=1 AND us.active=1 AND c.kind='group' AND c.closed=0 AND p.instance_id=? LIMIT 1").get(input.principalId,auth.instanceId)
+    const visible=this.canReadPrincipalAvatar ? this.canReadPrincipalAvatar(auth,input.principalId) : this.contacts(auth).some(person=>person.principalId===input.principalId)
+    requireThat(target.instance_id===auth.instanceId||shared||visible===true,'FORBIDDEN')
+    requireThat(validAvatarRevision(input.imageRevision),'INVALID_AVATAR_REVISION')
+    const offset=input.offset??0,limit=input.limit??AVATAR_CHUNK_LENGTH
+    requireThat(Number.isSafeInteger(offset)&&offset>=0&&Number.isSafeInteger(limit)&&limit>0&&limit<=AVATAR_CHUNK_LENGTH,'INVALID_AVATAR_CHUNK')
+    const row=this.db.prepare('SELECT image_revision,image FROM principal_avatar WHERE principal_id=?').get(input.principalId)
+    requireThat(row?.image&&row.image_revision===input.imageRevision,'AVATAR_REVISION_MISMATCH')
+    requireThat(offset<=row.image.length,'INVALID_AVATAR_CHUNK')
+    const data=row.image.slice(offset,offset+limit),nextOffset=offset+data.length
+    return {principalId:input.principalId,imageRevision:input.imageRevision,offset,data,totalLength:row.image.length,nextOffset,done:nextOffset===row.image.length}
   }
   member(auth, conversationId, principalId, epoch) {
     this.principal(auth, principalId)
@@ -181,6 +314,8 @@ export class HubStore {
     identifier(input.otherPrincipalId)
     requireThat(author.principalId !== input.otherPrincipalId && this.db.prepare('SELECT p.id FROM principals p JOIN instances i ON i.id=p.instance_id WHERE p.id=? AND i.trusted=1').get(input.otherPrincipalId), 'INVALID_REQUEST')
     return this.operation(auth,input.operationId,input,() => {
+      requireThat(this.isPublished(author.principalId)&&this.isPublished(input.otherPrincipalId),'BOT_NOT_PUBLISHED')
+      this.contactPolicy?.(auth,author.principalId,input.otherPrincipalId)
       const members = [author.principalId,input.otherPrincipalId].sort(), key = JSON.stringify(members)
       const old = this.db.prepare('SELECT id FROM conversations WHERE dm_key=?').get(key)
       if (old) {
@@ -217,6 +352,8 @@ export class HubStore {
       requireThat(['owner','admin'].includes(this.actorMembership(auth,input).role),'FORBIDDEN')
       requireThat(this.db.prepare('SELECT kind FROM conversations WHERE id=?').get(input.conversationId).kind==='group','INVALID_REQUEST')
       requireThat(this.db.prepare('SELECT p.id FROM principals p JOIN instances i ON i.id=p.instance_id WHERE p.id=? AND i.trusted=1').get(input.inviteePrincipalId),'UNKNOWN_PRINCIPAL')
+      requireThat(this.isPublished(input.inviteePrincipalId),'BOT_NOT_PUBLISHED')
+      this.contactPolicy?.(auth,input.principalId,input.inviteePrincipalId)
       const old=this.db.prepare('SELECT id FROM invites WHERE conversation_id=? AND principal_id=? AND active=1').get(input.conversationId,input.inviteePrincipalId)
       if(old)return {inviteId:old.id}
       const instance=this.db.prepare('SELECT instance_id FROM principals WHERE id=?').get(input.inviteePrincipalId).instance_id
@@ -279,7 +416,7 @@ export class HubStore {
       requireThat(this.db.prepare('SELECT kind FROM conversations WHERE id=?').get(input.conversationId).kind==='group','INVALID_REQUEST')
       if(input.mode==='admin'){
         const bot=this.db.prepare('SELECT p.kind FROM memberships m JOIN principals p ON p.id=m.principal_id WHERE m.conversation_id=? AND m.principal_id=? AND m.active=1').get(input.conversationId,input.adminBotPrincipalId)
-        requireThat(bot?.kind==='bot','INVALID_ADMIN')
+        requireThat(bot?.kind==='bot'&&this.isPublished(input.adminBotPrincipalId),'INVALID_ADMIN')
       }
       this.db.prepare('UPDATE conversations SET version=version+1,routing_mode=?,admin_bot=? WHERE id=?').run(input.mode,input.mode==='admin'?input.adminBotPrincipalId:null,input.conversationId)
       this.event(input.conversationId,'routing.changed',{mode:input.mode,adminBotPrincipalId:input.mode==='admin'?input.adminBotPrincipalId:null})
@@ -306,19 +443,60 @@ export class HubStore {
   policy(auth,input) {
     return this.operation(auth,input.operationId,input,()=>{
       const {caller}=this.groupActor(auth,input)
-      const target=this.db.prepare('SELECT m.*,p.kind FROM memberships m JOIN principals p ON p.id=m.principal_id WHERE m.conversation_id=? AND m.principal_id=? AND m.active=1').get(input.conversationId,input.targetPrincipalId)
-      requireThat(target,'NOT_A_MEMBER')
-      requireThat(caller.role==='owner'||caller.role==='admin'&&target.role==='member'&&input.role===undefined,'FORBIDDEN')
-      const role=input.role??target.role,mode=input.speakingMode??target.speaking_mode
-      requireThat(target.role!=='owner'||role==='owner','OWNER_TRANSFER_REQUIRED')
-      requireThat(role===target.role||['member','admin'].includes(role),'INVALID_ROLE')
-      requireThat(target.role==='owner'||role!=='owner','OWNER_TRANSFER_REQUIRED')
-      requireThat((target.kind==='human'?['readOnly','speak']:['passive','active']).includes(mode),'INVALID_SPEAKING_MODE')
+      const {target,role,mode}=this.memberPolicy(caller,input)
       this.db.prepare('UPDATE memberships SET role=?,manager=?,speaking_mode=? WHERE conversation_id=? AND principal_id=?').run(role,Number(role!=='member'),mode,input.conversationId,input.targetPrincipalId)
       this.db.prepare('UPDATE conversations SET version=version+1 WHERE id=?').run(input.conversationId)
       if(role==='member'&&target.role==='admin')this.db.prepare('UPDATE invites SET active=0 WHERE conversation_id=? AND inviter_id=?').run(input.conversationId,input.targetPrincipalId)
       this.event(input.conversationId,'membership.policy',{principalId:input.targetPrincipalId,role,speakingMode:mode})
       return {updated:true,membershipVersion:input.expectedVersion+1}
+    })
+  }
+  memberPolicy(caller,input) {
+    const target=this.db.prepare('SELECT m.*,p.kind FROM memberships m JOIN principals p ON p.id=m.principal_id WHERE m.conversation_id=? AND m.principal_id=? AND m.active=1').get(input.conversationId,input.targetPrincipalId)
+    requireThat(target,'NOT_A_MEMBER')
+    requireThat(caller.role==='owner'||caller.role==='admin'&&target.role==='member'&&input.role===undefined,'FORBIDDEN')
+    const role=input.role??target.role,mode=input.speakingMode??target.speaking_mode
+    requireThat(target.role!=='owner'||role==='owner','OWNER_TRANSFER_REQUIRED')
+    requireThat(role===target.role||['member','admin'].includes(role),'INVALID_ROLE')
+    requireThat(target.role==='owner'||role!=='owner','OWNER_TRANSFER_REQUIRED')
+    requireThat((target.kind==='human'?['readOnly','speak']:['passive','active']).includes(mode),'INVALID_SPEAKING_MODE')
+    return {target,role,mode}
+  }
+  settings(auth,input) {
+    return this.operation(auth,input.operationId,input,()=>{
+      const {caller,group}=this.groupActor(auth,input)
+      requireThat(['owner','admin'].includes(caller.role),'FORBIDDEN')
+      requireThat(Object.keys(input).every(key=>['conversationId','principalId','membershipEpoch','expectedVersion','operationId','title','routing','policies'].includes(key)),'INVALID_REQUEST')
+      if(input.title!==undefined)requireThat(typeof input.title==='string'&&input.title.trim()&&input.title.length<=256,'INVALID_REQUEST')
+      const routing=input.routing
+      if(routing!==undefined){
+        requireThat(routing&&typeof routing==='object'&&!Array.isArray(routing)&&Object.keys(routing).every(key=>['mode','adminBotPrincipalId'].includes(key))&&['admin','mentionsOnly'].includes(routing.mode),'INVALID_REQUEST')
+        requireThat(routing.adminBotPrincipalId===undefined||routing.adminBotPrincipalId===null||typeof routing.adminBotPrincipalId==='string','INVALID_REQUEST')
+        if(routing.mode==='admin')requireThat(typeof routing.adminBotPrincipalId==='string'&&this.db.prepare("SELECT 1 FROM memberships m JOIN principals p ON p.id=m.principal_id WHERE m.conversation_id=? AND m.principal_id=? AND m.active=1 AND p.kind='bot'").get(input.conversationId,routing.adminBotPrincipalId)&&this.isPublished(routing.adminBotPrincipalId),'INVALID_ADMIN')
+      }
+      requireThat(input.policies===undefined||Array.isArray(input.policies)&&input.policies.length<=this.limits.maxMembers,'INVALID_REQUEST')
+      const policies=[],seen=new Set()
+      for(const policy of input.policies??[]){
+        requireThat(policy&&typeof policy==='object'&&!Array.isArray(policy)&&Object.keys(policy).every(key=>['targetPrincipalId','role','speakingMode'].includes(key))
+          &&(policy.role!==undefined||policy.speakingMode!==undefined),'INVALID_REQUEST')
+        identifier(policy.targetPrincipalId)
+        requireThat(!seen.has(policy.targetPrincipalId),'INVALID_REQUEST');seen.add(policy.targetPrincipalId)
+        requireThat(policy.role===undefined||['member','admin'].includes(policy.role),'INVALID_ROLE')
+        requireThat(policy.speakingMode===undefined||typeof policy.speakingMode==='string','INVALID_SPEAKING_MODE')
+        policies.push(this.memberPolicy(caller,{...policy,conversationId:input.conversationId}))
+      }
+      requireThat(input.title!==undefined||routing!==undefined||policies.length>0,'INVALID_REQUEST')
+      this.db.prepare('UPDATE conversations SET title=?,routing_mode=?,admin_bot=?,version=version+1 WHERE id=?').run(input.title?.trim()??group.title,routing?.mode??group.routing_mode,
+        routing ? routing.mode==='admin'?routing.adminBotPrincipalId:null : group.admin_bot,input.conversationId)
+      const changed=[]
+      for(const {target,role,mode} of policies){
+        this.db.prepare('UPDATE memberships SET role=?,manager=?,speaking_mode=? WHERE conversation_id=? AND principal_id=?').run(role,Number(role!=='member'),mode,input.conversationId,target.principal_id)
+        if(role==='member'&&target.role==='admin')this.db.prepare('UPDATE invites SET active=0 WHERE conversation_id=? AND inviter_id=?').run(input.conversationId,target.principal_id)
+        changed.push({principalId:target.principal_id,role,speakingMode:mode})
+      }
+      this.event(input.conversationId,'group.settings.changed',{membershipVersion:group.version+1,...(input.title!==undefined?{title:input.title.trim()}:{}),
+        ...(routing?{routing:{mode:routing.mode,adminBotPrincipalId:routing.mode==='admin'?routing.adminBotPrincipalId:null}}:{}),...(policies.length?{policies:changed}:{})})
+      return {conversationId:input.conversationId,updated:true,membershipVersion:group.version+1}
     })
   }
   transfer(auth,input) {
@@ -381,10 +559,13 @@ export class HubStore {
     return this.transaction(()=>{
       const digest=hash(message), old=this.db.prepare('SELECT * FROM messages WHERE id=?').get(message.messageId)
       if(old){ requireThat(old.hash===digest&&old.author_id===author.principalId,'MESSAGE_ID_CONFLICT'); return this.accepted(old) }
+      requireThat(this.isPublished(author.principalId),'BOT_NOT_PUBLISHED')
+      this.dmPolicy?.(message.conversationId)
       requireThat(typeof message.membershipEpoch==='string','MEMBERSHIP_EPOCH_REQUIRED')
       const sender=this.member(auth,message.conversationId,author.principalId,message.membershipEpoch)
       requireThat(!this.db.prepare('SELECT 1 FROM events WHERE id=?').get(message.messageId),'MESSAGE_ID_CONFLICT')
       const conversation=this.db.prepare('SELECT * FROM conversations WHERE id=?').get(message.conversationId)
+      if(conversation.kind==='dm')requireThat(!this.db.prepare("SELECT 1 FROM memberships m JOIN principals p ON p.id=m.principal_id JOIN principal_publication pub ON pub.principal_id=p.id WHERE m.conversation_id=? AND m.active=1 AND p.kind='bot' AND pub.published=0").get(message.conversationId),'BOT_NOT_PUBLISHED')
       if(conversation.kind==='group'){
         requireThat(['owner','admin','member'].includes(sender.role),'FORBIDDEN')
         requireThat(author.kind==='human'?sender.speaking_mode==='speak':['passive','active'].includes(sender.speaking_mode),'SPEAKING_FORBIDDEN')
@@ -400,11 +581,17 @@ export class HubStore {
         if(message.responseToDeliveryId)requireThat(!this.db.prepare('SELECT 1 FROM responses WHERE delivery_id=?').get(delivery.id),'RESPONSE_ALREADY_SENT')
         cause=delivery
       }
-      const members=this.db.prepare('SELECT m.*,p.kind FROM memberships m JOIN principals p ON p.id=m.principal_id WHERE conversation_id=? AND active=1').all(message.conversationId)
+      const members=this.db.prepare('SELECT m.*,p.kind,coalesce(pub.published,1) published FROM memberships m JOIN principals p ON p.id=m.principal_id LEFT JOIN principal_publication pub ON pub.principal_id=p.id WHERE conversation_id=? AND active=1').all(message.conversationId)
       for(const mention of message.mentions) requireThat(members.some(member=>member.principal_id===mention.principalId),'UNKNOWN_MENTION')
+      let replyBot
       if(message.replyToMessageId){
-        const parent=this.db.prepare('SELECT conversation_id,seq FROM messages WHERE id=?').get(message.replyToMessageId)
+        const parent=this.db.prepare('SELECT m.conversation_id,m.seq,m.author_id,p.kind FROM messages m JOIN principals p ON p.id=m.author_id WHERE m.id=?').get(message.replyToMessageId)
         requireThat(parent?.conversation_id===message.conversationId&&parent.seq>=sender.join_seq,'INVALID_REPLY_TARGET')
+        if(conversation.kind==='group'&&parent.kind==='bot'){
+          const target=members.find(member=>member.principal_id===parent.author_id)
+          requireThat(target&&parent.seq>=target.join_seq,'INVALID_REPLY_TARGET')
+          if(!message.responseToDeliveryId)replyBot=target.principal_id
+        }
       }
       let rootId, parentMessageId=null, depth=0
       if(author.kind==='human')rootId=`message:${message.messageId}`
@@ -425,11 +612,12 @@ export class HubStore {
       requireThat(pending+members.length<=this.limits.maxPendingDeliveries,'STORAGE_UNAVAILABLE','Pending delivery capacity reached')
       const acceptedAt=new Date().toISOString()
       const event={message,serverAcceptedAt:acceptedAt,payloadHash:digest,causality,conversationId:message.conversationId,conversationSeq:conversation.seq+1,eventId:message.messageId,type:'message'}
+      const explicitBots=message.mentions.filter(mention=>members.some(member=>member.kind==='bot'&&member.principal_id===mention.principalId))
       const deliveries=members.map(member=>{
         const mentioned=message.mentions.some(mention=>mention.principalId===member.principal_id)
         const mayReceiveAi=conversation.kind==='dm'||['passive','active'].includes(member.speaking_mode)
-        const ai=member.kind==='bot'&&member.principal_id!==author.principalId&&mayReceiveAi&&(conversation.kind==='dm'?true:
-          mentioned||(!message.mentions.length&&author.kind==='human'&&conversation.routing_mode==='admin'&&conversation.admin_bot===member.principal_id))
+        const ai=member.kind==='bot'&&member.published===1&&member.principal_id!==author.principalId&&mayReceiveAi&&(conversation.kind==='dm'?true:
+          mentioned||(!explicitBots.length&&replyBot===member.principal_id)||(!replyBot&&!message.mentions.length&&author.kind==='human'&&conversation.routing_mode==='admin'&&conversation.admin_bot===member.principal_id))
         return {deliveryId:randomUUID(),messageId:message.messageId,conversationId:message.conversationId,recipientPrincipalId:member.principal_id,membershipEpoch:member.epoch,routingVersion:conversation.version,notify:member.kind==='human'&&member.principal_id!==author.principalId,ai:Boolean(ai),event}
       })
       const aiCount=deliveries.filter(delivery=>delivery.ai).length
@@ -481,12 +669,14 @@ export class HubStore {
   }
   authorize(auth,input) {
     const member=this.member(auth,input.conversationId,input.principalId,input.membershipEpoch)
+    this.dmPolicy?.(input.conversationId)
     return {conversationId:member.conversation_id,principalId:member.principal_id,membershipEpoch:member.epoch,joinSeq:member.join_seq,role:member.role,speakingMode:member.speaking_mode}
   }
   members(auth,input) {
     this.member(auth,input.conversationId,input.principalId,input.membershipEpoch)
+    this.dmPolicy?.(input.conversationId)
     const conversation=this.db.prepare('SELECT title,kind,version,routing_mode,admin_bot,owner_id FROM conversations WHERE id=?').get(input.conversationId)
-    const members=this.db.prepare('SELECT p.id principalId,p.kind,p.name displayName,p.instance_id homeInstanceId,i.label instanceLabel,m.manager,m.role,m.speaking_mode speakingMode FROM memberships m JOIN principals p ON p.id=m.principal_id JOIN instances i ON i.id=p.instance_id WHERE m.conversation_id=? AND m.active=1 ORDER BY p.id').all(input.conversationId)
+    const members=this.db.prepare('SELECT p.id principalId,p.kind,p.name displayName,p.instance_id homeInstanceId,i.label instanceLabel,m.manager,m.role,m.speaking_mode speakingMode FROM memberships m JOIN principals p ON p.id=m.principal_id JOIN instances i ON i.id=p.instance_id WHERE m.conversation_id=? AND m.active=1 ORDER BY p.id').all(input.conversationId).map(person=>({...person,published:this.isPublished(person.principalId),avatar:this.avatarOf(person.principalId)}))
     return {conversationId:input.conversationId,title:conversation.title,kind:conversation.kind,membershipVersion:conversation.version,routingMode:conversation.routing_mode,adminBotPrincipalId:conversation.admin_bot,ownerPrincipalId:conversation.owner_id,members}
   }
   acknowledgeCursor(auth,input) {
@@ -503,6 +693,7 @@ export class HubStore {
     const deliveries=[]
     let bytes=responseBytes(deliveries)
     for(const row of this.db.prepare(`SELECT d.*,m.conversation_id,m.seq,e.body FROM deliveries d JOIN principals p ON p.id=d.recipient_id JOIN messages m ON m.id=d.message_id JOIN events e ON e.id=d.message_id JOIN memberships member ON member.conversation_id=m.conversation_id AND member.principal_id=d.recipient_id WHERE p.instance_id=? AND d.stored=0 AND d.revoked=0 AND member.active=1 AND member.epoch=d.membership_epoch ORDER BY m.conversation_id,m.seq LIMIT 500`).iterate(auth.instanceId)){
+        try{this.dmPolicy?.(row.conversation_id)}catch(error){if(error.code==='CONTACT_REQUIRED')continue;throw error}
       const delivery={deliveryId:row.id,messageId:row.message_id,conversationId:row.conversation_id,recipientPrincipalId:row.recipient_id,membershipEpoch:row.membership_epoch,routingVersion:row.routing_version,notify:Boolean(row.notify),ai:Boolean(row.ai),event:JSON.parse(row.body)}
       const size=Buffer.byteLength(JSON.stringify(delivery))+(deliveries.length?1:0)
       if(bytes+size>this.limits.maxEnvelopeBytes){requireThat(deliveries.length>0,'PAYLOAD_TOO_LARGE');break}
@@ -523,6 +714,7 @@ export class HubStore {
       requireThat(column,'INVALID_REQUEST')
       requireThat(input.status!=='humanRead'||row.kind==='human','INVALID_RECEIPT')
       requireThat(input.status!=='aiAccepted'||row.ai===1,'INVALID_RECEIPT')
+      if(input.status==='aiAccepted')this.dmPolicy?.(row.conversation_id)
       requireThat(input.status==='targetStored'||row.stored===1,'RECEIPT_OUT_OF_ORDER')
       this.db.prepare(`UPDATE deliveries SET ${column}=1 WHERE id=?`).run(row.id)
       return {deliveryId:row.id,status:input.status}

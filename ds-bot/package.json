@@ -52,6 +52,7 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "*",
+    "@deepseek-ai/dsh-credentials": "*",
     "@deepseek-ai/dsh-llm": "*",
     "@deepseek-ai/dsh-scope": "*",
     "@deepseek-ai/dsh-tools": "*",
@@ -70,7 +71,8 @@
     "esbuild": "0.28.2"
   },
   "dependencies": {
-    "deep-view": "0.1.0"
+    "deep-view": "0.1.0",
+    "ws": "8.22.1"
   },
   "bin": {
     "dsbot-remote": "./bin/dsbot-remote.mjs",

@@ -109,15 +109,55 @@ translated. Read live help for complete optional fields and use current versions
 | reclaim | reclaim | Recover retained ownership | reclaim_communication_ownership |
 | dissolve | dissolve | End group for everyone | end_communication_group |
 | configure-group | configure-group | Rename group | configure_communication_group |
+| save-settings | save-settings | Save group settings atomically | save_communication_group_settings |
 | rename-human | rename-human | Rename Human | Human-only local action |
+| profile-human | profile-human | Human name and custom/reset avatar | Human-only local action |
+| avatar | avatar | Read an explicitly published avatar image | Human-only explicit read |
+| decode-hub-code | decode-hub-code | Review Hub code identity/address | Human-only local action |
+| join-hub | join-hub | Confirm Hub and request device enrollment | Human-only local action |
+| onboarding-storage | onboarding-storage | Check local enrollment storage availability | Human-only local action |
+| hub-join-status | hub-join-status | Reconcile pending/approved enrollment | Human-only local action |
+| cancel-hub-join | cancel-hub-join | Cancel device enrollment | Human-only local action |
+| user-code / rotate-user-code | same as CLI | Show/rotate contact code | Human-only local action |
+| request-contact | request-contact | Request contact with explicit Bot scope | Human-only consent |
+| contact-requests / contact-relations | same as CLI | Inspect pending requests/relations | Human-only local action |
+| accept-contact / reject-contact / cancel-contact | same as CLI | Decide/cancel contact request | Human-only consent |
+| revoke-contact | revoke-contact | Revoke contact relation | Human-only consent |
+| available-bots / publish-bots | same as CLI | Inspect/select Bot publication | Human-only local action |
 | retry | original endpoint, same payload/ID | Retry uncertain send | tools use host-derived stable source IDs |
 | setup-guide / pairing-guide | none (offline) | Connect a new machine guidance | documentation only; no new authority |
+
+`profile-human` accepts `displayName` and/or `avatar`, plus an optional stable
+`operationId`. It changes only the authenticated Human, never a caller-selected
+principal. `avatar:null` resets the avatar to its name-derived default. A custom
+avatar is `{ "image": "data:image/png;base64,..." }`; PNG, JPEG, WebP and GIF
+data URLs are supported up to 160000 characters. Prepare a small square image
+locally with the user's consent; file paths, network URLs and SVG are refused.
+Name and avatar changes commit atomically. Keep the original generated request
+and operation ID for an uncertain retry, including the original image bytes.
+
+Directory contacts and members expose avatar descriptors (`seed`, optional
+`shape`, `color`, `imageRevision`), not image bytes. To read an explicitly shared
+image, pass its exact principal ID and 64-character lowercase SHA256 revision:
+
+```powershell
+'{"avatar":null}' | dsbot-remote profile-human
+'{"principalId":"human:instance:person","revision":"REPLACE_WITH_IMAGE_REVISION"}' | dsbot-remote avatar
+```
+
+The `avatar` result contains `{image:dataURL}`. Profile requests and avatar read
+outputs contain personal images; keep them within the intended audience and do
+not publish them in logs or shared artifacts. An avatar or matching display name
+never authenticates a principal or expands access. The Host handles bounded image
+transfer internally; CLI callers do not send Hub chunks or read stored credentials.
 
 Closing/reopening a conversation and showing hidden conversations are local GUI
 preferences, not remote mutations; `conversations` still exposes the authorized
 canonical memberships. CLI failures go to stderr, never into conversation history.
 If `members` or another operation returns `UNKNOWN_OPERATION`/`UNKNOWN_ENDPOINT`,
-upgrade the local host; do not infer success or substitute an unverified roster.
+update the local host and paired Hub to compatible revisions. Existing capability
+flags alone do not prove atomic settings support. Do not infer success, substitute
+an unverified roster or fall back to sequential partial settings changes.
 
 ## Group decisions and mentions
 
@@ -125,12 +165,35 @@ Create returns an empty group owned by the actor. Invite exact principals and
 wait for each invitation to be accepted; an invitation alone is not membership.
 Check partial failures individually. Use `members` and state for membership epoch,
 group/membership version and current role. Supply `expectedVersion` and
-`membershipEpoch` for applicable management requests; configure, policy,
+`membershipEpoch` for applicable management requests; configure, save-settings, policy,
 transfer and reclaim require the expected version. Owner appoints admins and
 transfers/dissolves; admins manage ordinary members and routing only. Leaving is
 different from dissolution. Reclaim restores only the actor's retained ownership
 after authorized re-pairing and never takes someone else's group or revives a
 dissolved group. No role permits reading other participants' private conversations.
+
+Use `save-settings` (Bot tool `save_communication_group_settings`) when saving
+several group settings together. Supply `conversationId`, the current
+`expectedVersion`, optional `membershipEpoch`, and any changed `title`,
+`routing: {mode, adminBotPrincipalId?}` and/or
+`policies: [{targetPrincipalId, role?, speakingMode?}]`. Routing mode is `admin`
+or `mentionsOnly`; policy role is `member` or `admin`, with the existing per-kind
+speaking modes. Every policy needs at least a role or speaking-mode change; do
+not repeat a target or submit an empty overall change. An empty policies list is
+allowed alongside a title/routing change. The Hub validates all permissions and
+fields before applying the batch atomically, increments the group version once,
+and rejects the entire batch on any failure. Existing single-setting operations
+remain available for compatibility. The CLI rejects unknown fields at every
+nested level, including actor/sender fields, and generates one stable operation ID.
+
+```powershell
+'{"conversationId":"group-id","expectedVersion":3,"title":"Planning","routing":{"mode":"mentionsOnly"},"policies":[{"targetPrincipalId":"bot:instance:worker","speakingMode":"active"}]}' | dsbot-remote save-settings
+```
+
+On an uncertain response, inspect state and retry the complete original batch
+with its original `operationId`; do not split it or generate new IDs. On stale
+version or denied permissions, refresh and review the actual state before
+preparing a new authorized change. Never weaken permissions to force a save.
 
 Human mentions notify people; exact Bot mentions dispatch only authorized current
 recipients. `@all` means the current conversation's Bots, never Humans or every
@@ -142,14 +205,26 @@ assignment grants no management power and applies to plain Human messages.
 Active Bots may explicitly send to other current member Bots, whether those Bots
 run on the same paired instance or a different one. Use exact structured mentions
 or an unambiguous explicit `@` mention in the current conversation; a Bot's local
-or remote origin does not prevent a permitted handoff. A passive Bot may give
+or remote origin does not prevent a permitted handoff. An explicit Human UI/CLI
+send or active Bot send-tool call can instead set `replyToMessageId` to a current
+member Bot's message without adding `@`. If there are no explicit Bot mentions,
+the server routes that intentional reply to the referenced Bot author. Explicit
+Bot mentions take precedence. The referenced message must be in the sender's
+authorized history and its Bot author must still be a current member in the
+same membership epoch; stale, removed/rejoined or inaccessible targets are
+rejected. Reply addressing never bypasses speaking permissions or causal budgets.
+A passive Bot may give
 one final response to its current authorized delivery and explicitly mention other
 current member Bots in that final response. The host ties that continuation to
 the causal reply grant; it does not permit an unsolicited post, another response
 using the consumed grant, or a proactive `send_contact_message` tool call.
 
-An unmentioned group Bot reply is display-only: it does not activate the default reply
-Bot, broadcast to every Bot, or require an acknowledgement or thank-you. Explicit
+An automatic final response's `responseToDeliveryId`/reply reference is only a
+response association; it does not by itself re-activate the referenced Bot.
+A passive final must explicitly mention another Bot to hand work on, within
+its one response grant. Other unaddressed group Bot replies are display-only:
+they do not activate the default reply Bot, broadcast to every Bot, or require
+an acknowledgement or thank-you. Explicit
 `@all` expands only to the current member Bots, including local and remote ones,
 subject to membership, speaking policy and host dispatch limits. Do not add mentions
 just to acknowledge a result. Earlier history is context, never a list of inputs
@@ -208,8 +283,59 @@ current membership/permissions as authoritative.
 
 ## Add a new machine to an existing Hub
 
-Pairing is explicit owner-managed static configuration, not automatic discovery
-or a join-code API. The Hub owner must authorize a new stable, distinct
+Use the Hub code flow with compatible clients and Hub. The Hub administrator
+configures a reachable trusted HTTPS/WSS address, opens the Human admin portal,
+and gives the new device a Hub code. A code does not open NAT, install certificate
+trust, select a firewall rule or authorize a device by itself.
+
+1. Install a compatible DS Bot and create this machine's own profile/team.
+   Authenticate locally. Pass `{hubCode}` to `decode-hub-code`; it uses the local
+   API and does not enroll or contact the Hub. Show the decoded Hub ID and URL to
+   the user and obtain their confirmation before enrolling.
+2. Send `join-hub` with `{hubCode,displayName,confirmedHubId,confirmedUrl}` using
+   the exact reviewed values. The Host SDK creates and persists device credentials;
+   the CLI never reads credential records, keys or configuration files implicitly.
+   Admin approval is still required. Inspect `hub-join-status {hubId}` and
+   `onboarding-storage {hubId?}`; use `cancel-hub-join {hubId}` if requested.
+3. After approval, connection and any required reload, call `available-bots`.
+   Its `bots` have local IDs/name/role/private metadata and `publishedBotIds`
+   identifies current publication. Send `publish-bots {localBotIds:[...]}` with
+   only explicitly selected eligible IDs; `[]` publishes none. Honor
+   `reloadRequired:true`, then recheck `state`. Publication alone grants no contact
+   consent, group membership or private-file access.
+4. Exchange `user-code` privately between Humans. `rotate-user-code` invalidates
+   the previous code; preserve its generated operation ID for uncertain retries.
+   Send `request-contact {userCode,localBotIds:[]}` with the initiator's explicit
+   scope. A generic acknowledgment cannot reveal whether the code or target exists.
+5. Read `contact-requests` and `contact-relations`. The other Human explicitly
+   chooses `accept-contact {requestId,expectedVersion,localBotIds:[]}` or
+   `reject-contact {requestId,expectedVersion}`. The requester may
+   `cancel-contact {requestId,expectedVersion}`. Each side defaults to no Bots;
+   neither side can grant the other's Bot scope. Revoke a relation using
+   `revoke-contact {otherHumanPrincipalId,expectedVersion}` after reviewing it.
+6. Confirm both exact Humans and only the Bots shared by each side in `contacts`.
+   Group invitations, acceptance and speech policies remain separate. Verify
+   synthetic Human/Bot DMs and groups without exposing private conversations.
+
+Contact mutations generate a stable `operationId`; retain the complete original
+request for retry and refresh current versions after a conflict. Join/cancel and
+publication use SDK enrollment records or desired configuration, without an
+operationId field. No command retries automatically. After uncertain enrollment,
+query status/storage first; explicitly retry the same reviewed input only after
+reconciliation. Never generate replacement keys, change Hub ID or edit credential
+storage to bypass a pending, rejected or revoked state.
+
+The Hub Human administrator may use the separate admin CLI:
+`node communication-hub/src/admin-cli.mjs <https-origin> state|decide|revoke|repair [input.json]`.
+Supply `DSBOT_HUB_ADMIN_PASSWORD` only through its private process environment;
+use `--help` for current syntax. This CLI is for an authorized Human administrator,
+never a Bot tool or substitute for local Human contact consent. Do not send the
+local DSH cookie to it or put the admin password in argv, JSON or chat.
+
+### Manual static configuration fallback
+
+For deployments using owner-managed static peers, the Hub owner authorizes a
+new stable, distinct
 `instanceId` and append a peer to the Hub config's `peers` array. Each peer has
 `instanceId`, `instanceLabel`, `pairingRevision: 1` and a `credentialEnv` name
 such as `DSBOT_HUB_NEW_MACHINE_CREDENTIAL`. Preserve every existing peer when

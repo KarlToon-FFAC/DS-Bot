@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 const PROTOCOL = 'dsbot-communication/1'
 const CAPABILITIES = ['text', 'markdown', 'mentions', 'group', 'dm', 'reply', 'history', 'group-policy', 'membership-epoch']
 const BOUNDED_COLLABORATION = 'bounded-bot-collaboration'
+const outboxCapacity = Symbol('outbox-capacity')
 const transient = new Set(['CONNECTION_LOST', 'REQUEST_TIMEOUT', 'STORAGE_UNAVAILABLE', 'BACKPRESSURE', 'HISTORY_GAP'])
 const errorWith = (code, message = code) => Object.assign(new Error(message), { code })
 
@@ -41,7 +42,8 @@ export class CommunicationTransport {
     return this.opening
   }
   async open() {
-    const socket = new WebSocket(this.url)
+    const credential = typeof this.credential === 'function' ? await this.credential() : this.credential
+    const socket = credential?.socketFactory ? await credential.socketFactory() : new WebSocket(this.url)
     this.socket = socket
     socket.addEventListener('message', event => {
       try {
@@ -63,15 +65,17 @@ export class CommunicationTransport {
         clearTimeout(pending.timeout); pending.reject(errorWith('CONNECTION_LOST')); this.requests.delete(id)
       }
     })
-    await new Promise((resolve, reject) => {
+    if (socket.readyState !== WebSocket.OPEN) await new Promise((resolve, reject) => {
       const deadline = setTimeout(() => { socket.close(); reject(errorWith('REQUEST_TIMEOUT')) }, this.requestTimeout)
       socket.addEventListener('open', () => { clearTimeout(deadline); resolve() }, { once: true })
       socket.addEventListener('error', () => { clearTimeout(deadline); reject(errorWith('CONNECTION_LOST')) }, { once: true })
       socket.addEventListener('close', () => { clearTimeout(deadline); reject(errorWith('CONNECTION_LOST')) }, { once: true })
     })
     try {
-      const credential = typeof this.credential === 'function' ? this.credential() : this.credential
-      const welcome = await this.send('hello', { instanceId: this.queue.instanceId, credential, capabilities: [...CAPABILITIES, BOUNDED_COLLABORATION] })
+      const capabilities = [...CAPABILITIES, BOUNDED_COLLABORATION]
+      const welcome = typeof credential?.authenticate === 'function'
+        ? await credential.authenticate((type, payload) => this.send(type, payload), capabilities)
+        : await this.send('hello', { instanceId: this.queue.instanceId, credential, capabilities })
       if (welcome.protocol !== PROTOCOL || welcome.instanceId !== this.queue.instanceId || !CAPABILITIES.every(value => welcome.capabilities?.includes(value))) throw errorWith('UNSUPPORTED_CAPABILITY')
       if (!welcome.capabilities.includes(BOUNDED_COLLABORATION)) throw errorWith('BOUNDED_COLLABORATION_REQUIRED')
       this.welcome = welcome
@@ -103,12 +107,14 @@ export class CommunicationTransport {
   }
   async synchronize() {
     if (!this.connected) throw errorWith('CONNECTION_LOST')
+    let deferredError
     for (const item of this.queue.pendingOutbox()) {
       try {
         if (item.type === 'message.publish') this.queue.validateMessage(item.payload)
         this.queue.accepted(item.id, await this.request(item.type, item.payload))
       }
       catch (error) {
+        if (['STORAGE_UNAVAILABLE', 'BACKPRESSURE'].includes(error.code)) { deferredError ??= error; continue }
         if (transient.has(error.code) || error.code === 'STALE_CONNECTION') throw error
         this.queue.rejected(item.id, error.code ?? 'INVALID_RESPONSE')
       }
@@ -144,6 +150,7 @@ export class CommunicationTransport {
       }
     }
     await this.onChange?.()
+    if (deferredError) { deferredError[outboxCapacity] = true; throw deferredError }
   }
   start({ pollMs = 500 } = {}) {
     if (this.running) return
@@ -154,13 +161,18 @@ export class CommunicationTransport {
       let delay = pollMs
       try { await this.connect(); await this.pump(); failures = 0 }
       catch (error) {
-        this.queue.disconnected()
-        this.connected = false
-        this.socket?.close()
-        this.onError?.({ code: error.code ?? 'CONNECTION_LOST' })
         failures += 1
-        if (!transient.has(error.code)) { this.running = false; return }
-        delay = Math.min(30000, 250 * 2 ** Math.min(failures, 7)) * (0.75 + Math.random() * 0.5)
+        if (error[outboxCapacity] && this.connected && this.socket?.readyState === WebSocket.OPEN) {
+          this.onError?.({ code: error.code })
+          delay = Math.min(5000, Math.max(250, pollMs) * 2 ** Math.min(failures - 1, 5))
+        } else {
+          this.queue.disconnected()
+          this.connected = false
+          this.socket?.close()
+          this.onError?.({ code: error.code ?? 'CONNECTION_LOST' })
+          if (!transient.has(error.code)) { this.running = false; return }
+          delay = Math.min(30000, 250 * 2 ** Math.min(failures, 7)) * (0.75 + Math.random() * 0.5)
+        }
       }
       if (this.running) this.timer = setTimeout(() => { void iterate() }, delay)
     }

@@ -55,10 +55,13 @@ export class CommunicationQueue {
     catch (error) { this.db.exec('ROLLBACK'); throw error }
   }
   owns(principalId) { return typeof principalId === 'string' && ['human:', 'bot:'].some(prefix => principalId.startsWith(`${prefix}${this.instanceId}:`)) }
-  localPrincipal(kind, localRef, displayName) {
+  localPrincipal(kind, localRef, displayName, assignedLocalId) {
     requireValue(['human', 'bot'].includes(kind) && typeof localRef === 'string' && displayName, 'INVALID_PRINCIPAL')
+    requireValue(assignedLocalId === undefined || typeof assignedLocalId === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(assignedLocalId), 'INVALID_PRINCIPAL')
     return this.transaction(() => {
-      this.db.prepare('INSERT INTO local_principals VALUES (?,?,?,?) ON CONFLICT(kind,local_ref) DO UPDATE SET name=excluded.name').run(kind, localRef, randomUUID(), displayName)
+      const prior = this.db.prepare('SELECT local_id FROM local_principals WHERE kind=? AND local_ref=?').get(kind, localRef)
+      requireValue(!prior || assignedLocalId === undefined || prior.local_id === assignedLocalId, 'PRINCIPAL_ID_MISMATCH')
+      this.db.prepare('INSERT INTO local_principals VALUES (?,?,?,?) ON CONFLICT(kind,local_ref) DO UPDATE SET name=excluded.name').run(kind, localRef, assignedLocalId ?? randomUUID(), displayName)
       const row = this.db.prepare('SELECT * FROM local_principals WHERE kind=? AND local_ref=?').get(kind, localRef)
       return { principalId: `${kind}:${this.instanceId}:${row.local_id}`, localId: row.local_id, localRef, kind, displayName }
     })

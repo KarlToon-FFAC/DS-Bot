@@ -10,6 +10,19 @@ test('communication adapter imports against the pinned public DSH packages', () 
   assert.equal(typeof CommunicationRuntime, 'function')
 })
 
+test('enrolled Human uses its Hub-assigned local identity without overwriting a legacy identity', () => {
+  const fresh = new CommunicationQueue(':memory:', { instanceId: 'enrolled' })
+  const legacy = new CommunicationQueue(':memory:', { instanceId: 'legacy' })
+  try {
+    const assigned = fresh.localPrincipal('human', 'local-user', 'Alice', 'local-user')
+    assert.equal(assigned.principalId, 'human:enrolled:local-user')
+    assert.equal(fresh.localPrincipal('human', 'local-user', 'Renamed', 'local-user').principalId, assigned.principalId)
+    const original = legacy.localPrincipal('human', 'local-user', 'Legacy')
+    assert.throws(() => legacy.localPrincipal('human', 'local-user', 'Unsafe replacement', 'local-user'), { code: 'PRINCIPAL_ID_MISMATCH' })
+    assert.equal(legacy.localPrincipal('human', 'local-user', 'Legacy').principalId, original.principalId)
+  } finally { fresh.close(); legacy.close() }
+})
+
 test('reply previews stay within the Human membership epoch even when its Bot cached older history', () => {
   const queue = new CommunicationQueue(':memory:', { instanceId: 'reference-test' })
   try {
