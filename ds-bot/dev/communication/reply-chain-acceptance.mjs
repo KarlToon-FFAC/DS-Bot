@@ -7,14 +7,14 @@ import { dirname, join, resolve } from 'node:path'
 import { LocalTopology, until } from './local-topology.mjs'
 import { repo } from './bench-client.mjs'
 
-const nonce=randomUUID().slice(0,8),topology=new LocalTopology({prefix:`reply-chain-${nonce}`,webPort:3211,mockPort:8891,hubPort:3213})
+const nonce=randomUUID().slice(0,8),topology=new LocalTopology({prefix:`reply-chain-${nonce}`,webPort:3211,mockPort:8891,hubPort:3213,open:process.argv.includes('--open-browser')})
 const ports=[3211,3212,8891,8892,3213],output=join(topology.root,`${topology.prefix}-acceptance.json`),live=process.argv.includes('--live-for-browser')
 const evidence={status:'RUNNING',prefix:topology.prefix,network:'same-machine loopback',model:'local deterministic Mock',cases:[],uncovered:['cross-physical-machine/WSS deployment','real model behavior','visual list layout/error placement (separate Cua acceptance)','Hub management enrollment (previous independent acceptance)']}
 const save=()=>writeFileSync(output,JSON.stringify(evidence,null,2)),stage=value=>{evidence.stage=value;save()},record=(id,detail={})=>{evidence.cases.push({id,status:'PASS',...detail});save();console.log(`PASS ${id}`)}
 const ownerEnv=process.env.DSBOT_COMMUNICATION_OWNER_PID
 process.env.DSBOT_COMMUNICATION_OWNER_PID=String(process.pid)
 const bench=topology.bench.bind(topology)
-topology.bench=(peer,action,extra={})=>bench(peer,action,{DSBOT_COMMUNICATION_OWNER_PID:String(process.pid),DSBOT_WEB_OPEN:'0',...extra})
+topology.bench=(peer,action,extra={})=>bench(peer,action,{DSBOT_COMMUNICATION_OWNER_PID:String(process.pid),DSBOT_WEB_OPEN:process.argv.includes('--open-browser')?'1':'0',...extra})
 const freePort=port=>new Promise((resolveFree,reject)=>{const server=createServer();server.once('error',()=>reject(new Error(`Required isolated port ${port} occupied`)));server.listen(port,'127.0.0.1',()=>server.close(resolveFree))})
 let ownsFixtures=false,readyPath,ready
 const deadline=setTimeout(()=>{console.error('Acceptance hard deadline exceeded');void topology.close().finally(()=>process.exit(1))},12*60*1000)
@@ -145,7 +145,7 @@ try{
   const root=await topology.send(a,group,`Thread root ${nonce}`)
   const unrelated=await topology.send(a,group,`Separate topic ${nonce}`)
   const child=await topology.send(a,group,`Thread child ${nonce}`,[],{replyToMessageId:root.messageId})
-  const deep=await topology.send(a,group,`Thread deep ${nonce}`,[],{replyToMessageId:child.messageId})
+  const deep=await topology.send(a,group,`Thread deep ${nonce}${live?' '+('Long reply — 多层上下文 '.repeat(100)):''}`,[],{replyToMessageId:child.messageId})
   const branch=await topology.send(a,group,`Thread branch ${nonce}`,[],{replyToMessageId:root.messageId})
   await until(()=>topology.hasText(b,group,branch.text),'readOnly B receives nested thread')
   const threadInput={endpoint:'thread',conversationId:group,messageId:deep.messageId,limit:2}

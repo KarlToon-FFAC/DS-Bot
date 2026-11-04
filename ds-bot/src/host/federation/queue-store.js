@@ -16,7 +16,7 @@ export class CommunicationQueue {
     if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true })
     this.db = new DatabaseSync(path)
     const version = this.db.prepare('PRAGMA user_version').get().user_version
-    if (version > 2) { this.db.close(); fail('SCHEMA_VERSION_UNSUPPORTED') }
+    if (version > 3) { this.db.close(); fail('SCHEMA_VERSION_UNSUPPORTED') }
     this.maxPending = maxPending
     this.beforeCommit = beforeCommit
     this.authorized = false
@@ -30,6 +30,7 @@ export class CommunicationQueue {
       CREATE TABLE IF NOT EXISTS receipts (id TEXT PRIMARY KEY,payload TEXT NOT NULL,state TEXT NOT NULL DEFAULT 'pending',error TEXT);
       CREATE TABLE IF NOT EXISTS exports (source_key TEXT PRIMARY KEY,binding_id TEXT NOT NULL,source_hash TEXT NOT NULL,message_id TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS export_cursors (binding_id TEXT NOT NULL,session_id TEXT NOT NULL,seq INTEGER NOT NULL,PRIMARY KEY(binding_id,session_id));
+      CREATE TABLE IF NOT EXISTS reply_targets (delivery_id TEXT PRIMARY KEY,binding_id TEXT NOT NULL,targets TEXT NOT NULL,source_key TEXT NOT NULL);
       `)
     if (version < 2) {
       this.db.exec('BEGIN IMMEDIATE')
@@ -41,6 +42,7 @@ export class CommunicationQueue {
         this.db.exec('PRAGMA user_version=2; COMMIT')
       } catch (error) { this.db.exec('ROLLBACK'); this.db.close(); throw error }
     }
+    if (version < 3) this.db.exec('PRAGMA user_version=3')
     const old = this.db.prepare('SELECT value FROM metadata WHERE key=?').get('instanceId')?.value
     if (old && instanceId && old !== instanceId) { this.db.close(); fail('INSTANCE_ID_MISMATCH') }
     this.instanceId = old ?? instanceId ?? randomUUID()
@@ -324,6 +326,20 @@ export class CommunicationQueue {
       const delivery = JSON.parse(row.body)
       this.receiptInside(delivery, 'uiApplied')
       if (humanRead) this.receiptInside(delivery, 'humanRead')
+    })
+  }
+  replyTargets(bindingId, deliveryId) {
+    const row = this.db.prepare('SELECT * FROM reply_targets WHERE delivery_id=?').get(deliveryId)
+    requireValue(!row || row.binding_id === bindingId, 'CONVERSATION_SCOPE_MISMATCH')
+    return row ? JSON.parse(row.targets) : []
+  }
+  stageReplyTargets(bindingId, deliveryId, targets, sourceKey) {
+    return this.transaction(() => {
+      const row = this.db.prepare('SELECT * FROM reply_targets WHERE delivery_id=?').get(deliveryId)
+      const value = JSON.stringify(targets)
+      if (row) { requireValue(row.binding_id === bindingId && row.targets === value, 'HANDOFF_ALREADY_SET'); return }
+      requireValue(!this.db.prepare("SELECT 1 FROM outbox WHERE type='message.publish' AND json_extract(payload,'$.responseToDeliveryId')=?").get(deliveryId), 'RESPONSE_ALREADY_SENT')
+      this.db.prepare('INSERT INTO reply_targets VALUES (?,?,?,?)').run(deliveryId, bindingId, value, sourceKey)
     })
   }
   commitExports(bindingId, outputs, positions, makeMessage) {

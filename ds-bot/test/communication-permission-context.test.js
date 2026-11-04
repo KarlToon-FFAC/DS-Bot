@@ -53,7 +53,7 @@ test('ordinary owner/admin/member and DM operations retain their actual actors a
     assert.ok(!runtime.snapshot().outbox.filter(item => item.conversationId === group).some(item => item.error === 'FORBIDDEN'))
     const message = (principalId, values = {}) => ({ protocol: PROTOCOL, type: 'message.publish', messageId: randomUUID(), conversationId: group,
       author: { principalId, homeInstanceId: principalId.split(':')[1], kind: principalId.startsWith('bot:') ? 'bot' : 'human' },
-      clientCreatedAt: new Date().toISOString(), content: { format: 'text', text: 'Authorized message' }, mentions: [], replyToMessageId: null,
+      clientCreatedAt: new Date().toISOString(), content: { format: 'text', text: 'Authorized message' }, mentions: [], ...(principalId.startsWith('bot:') ? { activationTargets: [] } : {}), replyToMessageId: null,
       membershipEpoch: member(principalId).membershipEpoch, ...values })
     assert.throws(() => store.publish(a, message(bot.principalId)), { code: 'PASSIVE_REPLY_REQUIRED' })
     store.settings(a, op({ ...scope(), policies: [{ targetPrincipalId: bot.principalId, speakingMode: 'active' }] }))

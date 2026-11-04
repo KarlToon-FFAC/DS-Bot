@@ -22,7 +22,7 @@ function fixture(t,path=':memory:'){
   const version=()=>store.memberships(a).memberships.find(member=>member.conversationId===group).membershipVersion
   const policy=(target,values={},auth=a,actor=A)=>store.policy(auth,op({conversationId:group,principalId:actor,targetPrincipalId:target,expectedVersion:version(),...values}))
   const publish=(auth,id,text,extra={})=>store.publish(auth,{protocol:PROTOCOL,type:'message.publish',messageId:randomUUID(),conversationId:group,
-    author:{principalId:id,kind:id.split(':')[0],homeInstanceId:id.split(':')[1]},clientCreatedAt:new Date().toISOString(),content:{format:'text',text},mentions:[],replyToMessageId:null,...extra})
+    author:{principalId:id,kind:id.split(':')[0],homeInstanceId:id.split(':')[1]},clientCreatedAt:new Date().toISOString(),content:{format:'text',text},mentions:[],replyToMessageId:null,...extra,...(id.startsWith('bot:')?{activationTargets:extra.activationTargets??extra.mentions??[]}: {})})
   return {store,a,b,A,B,J,K,group,version,policy,publish}
 }
 
@@ -152,6 +152,6 @@ test('v1 migration retains legacy speakers, deterministically selects owner and 
     const id=members[0].conversationId
     store.close();store=new HubStore(path)
     assert.equal(store.memberships(a).memberships[0].conversationId,id)
-    assert.equal(store.db.prepare('PRAGMA user_version').get().user_version,2)
+    assert.equal(store.db.prepare('PRAGMA user_version').get().user_version,3)
   }finally{store.close()}
 })

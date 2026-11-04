@@ -1,5 +1,10 @@
 # 跨实例通信协议与可靠性规范
 
+> Current routing amendment: [explicit Bot activation](explicit-bot-activation.md).
+> Bot display mentions no longer authorize group activation. New peers require
+> explicit-bot-activation and schema v3; upgrade Hub and clients together. This
+> supersedes older examples that infer Bot handoff from final body @ text.
+
 - 状态：建议设计，供后续实现与验收使用。
 - 适用基线：DS-Bot `5c514ad70d5f3fd1c3b72b2e76e530bef50989d7`。
 - 目标协议：`dsbot-communication/1`。

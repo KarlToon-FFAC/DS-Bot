@@ -5,7 +5,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { HubStore } from '../src/store.js'
-import { CAPABILITIES, PROTOCOL } from '../src/protocol.js'
+import { CAPABILITIES, PROTOCOL, hash } from '../src/protocol.js'
 
 function fixture(t, limits = {}, disk = false) {
   const dir = disk && mkdtempSync(join(tmpdir(), 'dsbot-causal-chain-'))
@@ -28,7 +28,7 @@ function fixture(t, limits = {}, disk = false) {
   for (const id of [f.A, f.B, f.C]) { f.join(id); f.policy(id, 'active') }
   f.input = (id, extra = {}) => ({ protocol: PROTOCOL, type: 'message.publish', messageId: randomUUID(), conversationId: f.group,
     author: { principalId: id, homeInstanceId: id.split(':')[1], kind: id.split(':')[0] }, clientCreatedAt: new Date().toISOString(),
-    content: { format: 'text', text: 'Causal collaboration' }, mentions: [], replyToMessageId: null, membershipEpoch: f.member(id).membershipEpoch, ...extra })
+    content: { format: 'text', text: 'Causal collaboration' }, mentions: [], replyToMessageId: null, membershipEpoch: f.member(id).membershipEpoch, ...extra, ...(id.startsWith('bot:') ? { activationTargets: extra.activationTargets ?? extra.mentions ?? [] } : {}) })
   f.send = (id, extra = {}) => f.store.publish(f.auth(id), f.input(id, extra))
   f.grant = (message, id, stored = true) => {
     const row = f.store.db.prepare('SELECT * FROM deliveries WHERE message_id=? AND recipient_id=?').get(message.messageId, id)
@@ -62,12 +62,12 @@ test('active tool branches and all-Bot expansion exclude the author and share a 
   assert.deepEqual(f.ai(branch), [f.C, f.B].sort())
   const suppressedInput = f.input(f.A, { causationDeliveryId: grant, mentions: [{ principalId: f.B }] })
   const suppressed = f.store.publish(f.a, suppressedInput)
-  assert.equal(suppressed.dispatchSuppressed, 'CAUSAL_LIMIT'); assert.deepEqual(f.ai(suppressed), [])
+  assert.equal(suppressed.dispatchSuppressed, 'DUPLICATE_HANDOFF'); assert.deepEqual(f.ai(suppressed), [])
   assert.equal(suppressed.causality.rootMessageId, human.messageId)
   f.store.close(); f.store = new HubStore(f.path, { limits: f.limits })
   assert.deepEqual(f.store.publish(f.a, suppressedInput), suppressed)
   const omitted = f.send(f.A, { mentions: [{ principalId: f.B }] })
-  assert.equal(omitted.dispatchSuppressed, 'CAUSAL_LIMIT')
+  assert.equal(omitted.dispatchSuppressed, 'DUPLICATE_HANDOFF')
   assert.equal(omitted.causality.rootMessageId, human.messageId)
   assert.equal(f.store.db.prepare('SELECT sum(ai_deliveries) n FROM causal_roots').get().n, 3)
   const final = f.send(f.A, { responseToDeliveryId: grant, replyToMessageId: human.messageId })
@@ -167,4 +167,78 @@ test('pre-causality journals retain original ACKs and hashes while historical AI
   assert.equal(next.causality.rootMessageId, human.messageId)
   assert.equal(next.dispatchSuppressed, 'CAUSAL_LIMIT')
   assert.deepEqual(f.ai(next), [])
+})
+
+test('display mentions, all-Bot restatement and quotes never activate without structured intent', t => {
+  const f = fixture(t)
+  const human = f.send(f.H, { mentions: [{ principalId: f.A }] }), grant = f.grant(human, f.A)
+  for (const text of ['@B done', '@all finished', '> @B quoted', 'Summary @A @B']) {
+    const result = f.send(f.A, { causationDeliveryId: grant, content: { format: 'markdown', text }, mentions: [{ principalId: f.B }], activationTargets: [] })
+    assert.deepEqual(f.ai(result), [])
+    assert.equal(result.dispatchSuppressed, undefined)
+  }
+  const delegated = f.send(f.A, { causationDeliveryId: grant, mentions: [], activationTargets: [{ principalId: f.B }] })
+  assert.deepEqual(f.ai(delegated), [f.B], 'structured targeting does not depend on visible @ text')
+})
+
+test('same-input duplicate handoffs survive restart; a fresh result permits A to B to A', t => {
+  const f = fixture(t, {}, true)
+  const human = f.send(f.H, { mentions: [{ principalId: f.A }] }), grant = f.grant(human, f.A)
+  const first = f.send(f.A, { causationDeliveryId: grant, activationTargets: [{ principalId: f.B }] })
+  const duplicate = f.input(f.A, { causationDeliveryId: grant, activationTargets: [{ principalId: f.B }] })
+  assert.equal(f.store.publish(f.a, duplicate).dispatchSuppressed, 'DUPLICATE_HANDOFF')
+  f.store.close(); f.store = new HubStore(f.path)
+  const retry = f.store.publish(f.a, duplicate)
+  assert.equal(retry.dispatchSuppressed, 'DUPLICATE_HANDOFF'); assert.deepEqual(f.ai(retry), [])
+  const result = f.send(f.B, { responseToDeliveryId: f.grant(first, f.B), replyToMessageId: first.messageId, activationTargets: [{ principalId: f.A }] })
+  assert.deepEqual(f.ai(result), [f.A])
+  const continuation = f.send(f.A, { responseToDeliveryId: f.grant(result, f.A), replyToMessageId: result.messageId, activationTargets: [{ principalId: f.B }] })
+  assert.deepEqual(f.ai(continuation), [f.B])
+})
+
+test('legacy peers and legacy new Bot intents fail explicitly; structured targets cannot forge humans or outsiders', t => {
+  const f = fixture(t)
+  assert.throws(() => f.store.connect('legacy', 'Legacy', CAPABILITIES.filter(value => value !== 'explicit-bot-activation')), { code: 'EXPLICIT_ACTIVATION_REQUIRED' })
+  const legacy = f.input(f.A); delete legacy.activationTargets
+  assert.throws(() => f.store.publish(f.a, legacy), { code: 'EXPLICIT_ACTIVATION_REQUIRED' })
+  assert.throws(() => f.send(f.A, { activationTargets: [{ principalId: f.H }] }), { code: 'UNKNOWN_ACTIVATION_TARGET' })
+  assert.throws(() => f.send(f.A, { activationTargets: [{ principalId: 'bot:other:outsider' }] }), { code: 'UNKNOWN_ACTIVATION_TARGET' })
+  assert.throws(() => f.send(f.H, { activationTargets: [{ principalId: f.B }] }), { code: 'EXPLICIT_ACTIVATION_REQUIRED' })
+  assert.throws(() => f.send(f.A, { activationTargets: [{ principalId: f.B }], content: { format: 'text', text: '  ' } }), { code: 'EMPTY_HANDOFF' })
+})
+
+test('distinct authorized input branches still enforce the aggregate root budget', t => {
+  const f = fixture(t, { maxAiDeliveriesPerRoot: 3 })
+  const human = f.send(f.H, { mentions: [{ principalId: f.A }] })
+  const first = f.send(f.A, { causationDeliveryId: f.grant(human, f.A), activationTargets: [f.B,f.C].map(principalId => ({principalId})) })
+  assert.deepEqual(f.ai(first), [f.B,f.C].sort())
+  const next = f.send(f.B, { causationDeliveryId: f.grant(first, f.B), activationTargets: [{principalId:f.A}] })
+  assert.equal(next.dispatchSuppressed, 'CAUSAL_LIMIT'); assert.deepEqual(f.ai(next), [])
+})
+
+
+test('accepted legacy history retry returns its original ACK without recalculating any delivery', t=>{
+  const f=fixture(t,{},true)
+  const modern=f.input(f.A), accepted=f.store.publish(f.a,modern)
+  const legacy={...modern};delete legacy.activationTargets
+  const digest=hash(legacy)
+  f.store.db.prepare('UPDATE messages SET hash=?,body=? WHERE id=?').run(digest,JSON.stringify(legacy),legacy.messageId)
+  const event=JSON.parse(f.store.db.prepare('SELECT body FROM events WHERE id=?').get(legacy.messageId).body)
+  event.message=legacy;event.payloadHash=digest
+  f.store.db.prepare('UPDATE events SET body=? WHERE id=?').run(JSON.stringify(event),legacy.messageId)
+  const before=f.store.db.prepare('SELECT count(*) n FROM deliveries').get().n
+  f.store.db.exec('PRAGMA user_version=2; DELETE FROM schema_version WHERE version=3; DROP TABLE bot_dispatches')
+  f.store.close();f.store=new HubStore(f.path)
+  assert.equal(f.store.db.prepare('PRAGMA user_version').get().user_version,3)
+  const retry=f.store.publish(f.a,legacy)
+  assert.equal(retry.messageId,accepted.messageId);assert.equal(retry.payloadHash,digest)
+  assert.equal(f.store.db.prepare('SELECT count(*) n FROM deliveries').get().n,before)
+})
+
+test('explicit targets respect receiving policy changes before actual publication', t=>{
+  const f=fixture(t)
+  const input=f.input(f.A,{activationTargets:[{principalId:f.B}]})
+  f.store.syncPublication(f.b,{principalIds:[]})
+  assert.throws(()=>f.store.publish(f.a,input),{code:'BOT_NOT_PUBLISHED'})
+  assert.equal(f.store.db.prepare('SELECT 1 FROM messages WHERE id=?').get(input.messageId),undefined)
 })

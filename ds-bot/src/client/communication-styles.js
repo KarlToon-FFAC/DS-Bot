@@ -2,7 +2,17 @@ export const communicationCSS = `
 .bt-comm-nav-heading .bt-comm-settings-icon{width:32px;height:32px;padding:6px;display:grid;place-items:center;flex:none;background:none;border-color:transparent}
 .bt-comm-personal-settings>section{margin-top:16px;padding-top:12px;border-top:1px solid var(--bt-line)}
 .bt-comm-personal-settings>section>button{margin:6px 8px 6px 0}
-.bt-comm-thread-log article{margin:12px 0 12px calc(var(--reply-depth)*12px);padding:12px 16px;border-left:2px solid var(--bt-line-2);border-radius:12px;background:var(--bt-bubble);font-size:14px;line-height:24px;overflow-wrap:anywhere}
+.bt-comm-thread-log{--reply-step:18px;min-width:0}
+.bt-comm-thread-log ol{list-style:none;margin:0;padding:0;min-width:0}
+.bt-comm-thread-log li{position:relative;min-width:0;padding-top:10px}
+.bt-comm-thread-log .bt-comm-thread-branches>li{padding-left:var(--reply-step)}
+.bt-comm-thread-branches>li::before{content:'';position:absolute;left:0;top:0;bottom:0;border-left:1px solid var(--bt-line-2);pointer-events:none}
+.bt-comm-thread-branches>li:last-child::before{bottom:auto;height:34px}
+.bt-comm-thread-branches>li::after{content:'';position:absolute;left:0;top:34px;width:var(--reply-step);border-top:1px solid var(--bt-line-2);pointer-events:none}
+.bt-comm-thread-log .bt-comm-thread-branches>li[data-thread-deep=true]{padding-left:0}
+.bt-comm-thread-branches>li[data-thread-deep=true]::before,.bt-comm-thread-branches>li[data-thread-deep=true]::after{display:none}
+.bt-comm-thread-log article{position:relative;margin:0;padding:12px 16px;border-left:2px solid var(--bt-line-2);border-radius:12px;background:var(--bt-bubble);font-size:14px;line-height:24px;overflow-wrap:anywhere;min-width:0}
+@media(max-width:600px){.bt-comm-thread-log{--reply-step:12px}.bt-comm-thread-log article{padding:10px}}
 .bt-comm-thread-log article[data-thread-selected=true]{border-left-color:var(--bt-accent)}
 .bt-comm-thread-parent{font-size:12px;line-height:16px;color:var(--bt-ink-2);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .bt-comm-frame{position:fixed;inset:0;z-index:60;display:grid;grid-template-columns:288px minmax(0,1fr);background:var(--bt-main);color:var(--bt-ink);font:13px/18px var(--bt-font);pointer-events:auto;opacity:1;transition:opacity .16s ease}

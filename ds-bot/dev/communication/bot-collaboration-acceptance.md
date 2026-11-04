@@ -8,10 +8,12 @@ and Mock endpoints inherit the owner-PID watchdog, the Hub closes on parent IPC
 disconnect, the run has a 12-minute deadline, and cleanup verifies all five ports
 are released. Only this run's owned process manifests are stopped.
 
-The script tests passive final-text delegation Human -> A -> B -> A, active
-tool text mentions and validated input causation, passive unsolicited denial,
-Bot-final `@all` excluding Humans/self/published nonmembers, a depth-eight stop,
-and the cumulative 32-AI-delivery budget with 35 real active tool sends.
+The script tests passive structured final handoff Human -> A -> B -> A, active
+explicit tool targets and validated input causation, passive unsolicited denial,
+single/@all/quoted final restatement with no activation, explicit all-Bot handoff
+excluding Humans/self/nonmembers, a depth-eight stop, and 35 active tool sends
+sharing one input/target with exactly one Bot dispatch (34 DUPLICATE_HANDOFF).
+Aggregate root-budget coverage remains in the independent Hub unit suite.
 
 The recovery case pauses the real host after durable final export, stops and
 restarts it, and duplicates one real authenticated Hub socket delivery. Public

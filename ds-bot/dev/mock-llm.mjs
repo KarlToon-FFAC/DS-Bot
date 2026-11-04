@@ -131,15 +131,17 @@ function decide(body) {
       > blocks.findLastIndex(block => block.type === 'text' && block.text.includes('[Communication delivery]'))
     const current = textOf(last?.content)
     const recovering = current.startsWith('[Local transport recovery notice]')
-    const commandText = recovering ? messages.findLast(message => message.role === 'user' && textOf(message.content).includes('[Communication delivery]'))?.content : last?.content
+    const stagedHandoff = isResults(last) && blocks.some(block => block.type === 'tool_result' && JSON.stringify(block.content).includes('staged'));
+    const commandText = (recovering || stagedHandoff) ? messages.findLast(message => message.role === 'user' && textOf(message.content).includes('[Communication delivery]'))?.content : last?.content
     const command = textOf(commandText).split('Current message:\n').at(-1).trimStart().split('\n')[0].trim()
       const collaboration = /^COMM-COLLAB FINAL (\d+) (\S+) (\S+) (\S+)(?:\s+@\S+)*$/.exec(command)
-      if (!communicationResults && collaboration) {
+      if ((!communicationResults || stagedHandoff) && collaboration) {
         const remaining = Number(collaboration[1]), [, , tag, nextName, returnName] = collaboration
+        if (remaining > 0 && !stagedHandoff) return [tool('set_communication_reply_targets', { allBots: true, replyToMessageId: /Message ID: ([^\n]+)/.exec(textOf(commandText))?.[1] })]
         return [text(remaining > 0 ? `COMM-COLLAB FINAL ${remaining - 1} ${tag} ${returnName} ${nextName} @${nextName}` : `COMM-COLLAB DONE ${tag}`)]
       }
       const collaborationAll = /^COMM-COLLAB ALL (\S+)$/.exec(command)
-      if (!communicationResults && collaborationAll) return [text(`COMM-COLLAB DONE ${collaborationAll[1]} @all`)]
+      if ((!communicationResults || stagedHandoff) && collaborationAll) return stagedHandoff ? [text(`COMM-COLLAB DONE ${collaborationAll[1]} @all`)] : [tool('set_communication_reply_targets', { allBots: true, replyToMessageId: /Message ID: ([^\n]+)/.exec(textOf(commandText))?.[1] })]
       const collaborationDone = /^COMM-COLLAB DONE (\S+)(?:\s+@\S+)*$/.exec(command)
       if (!communicationResults && collaborationDone) return [text(`Collaboration done ${collaborationDone[1]}`)]
       const collaborationReply = /^COMM-COLLAB REPLY (\S+) (\S+) (\S+)$/.exec(command)
@@ -150,6 +152,8 @@ function decide(body) {
         if (count < 1 || count > 40) return [text('Collaboration burst count rejected')]
         return Array.from({ length: count }, (_, index) => tool('send_contact_message', { conversationId: collaborationBurst[1], text: `COMM-COLLAB DONE ${collaborationBurst[4]}-${index}`, mentions: [collaborationBurst[2]] }))
       }
+    const restate = /^COMM-RESTATE (single|all|quote) (\S+)$/.exec(command)
+    if (!communicationResults && restate) return [text(`${restate[1] === 'quote' ? '> ' : ''}Summary ${restate[2]} ${restate[1] === 'all' ? '@all' : '@CollabB'}`)]
     const send = /^COMM-SEND (\S+) ([^\n]+)$/.exec(command)
     if (!communicationResults && send) return [tool('send_contact_message', { contactPrincipalId: send[1], text: `COMM-ECHO ${send[2]}` })]
     const post = /^COMM-POST (\S+) (\S+) (.+)$/.exec(command)

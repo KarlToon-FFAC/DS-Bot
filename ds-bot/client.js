@@ -42,6 +42,8 @@ module.exports = __toCommonJS(index_exports);
 // src/client/i18n.js
 var NAMESPACE = "ds-bot";
 var ZH = {
+  "Hide replies": "收起回复",
+  "Show {count} replies": "展开 {count} 条回复",
   "Device identity is saved locally. No request ID exists yet; access has not been requested from the Hub.": "设备身份已在本机保存，尚无申请编号，还未向 Hub 提交加入申请。",
   "The Hub certificate authority is not trusted. Verify its public CA fingerprint with the administrator and launch the app with NODE_EXTRA_CA_CERTS. Restart the app; keep TLS verification enabled.": "不信任 Hub 的证书颁发机构。请与管理员核对公开 CA 指纹，再通过 NODE_EXTRA_CA_CERTS 启动并完全重启应用；保留 TLS 校验。",
   "The Hub address does not match the certificate. Ask its administrator for a certificate covering this exact reachable hostname or IP.": "Hub 地址与证书不匹配。请管理员提供包含此实际可达域名或 IP 的证书。",
@@ -21581,12 +21583,14 @@ function CommunicationActivity({ state, member, events, outbox, operations, oper
 var import_react58 = require("react");
 function CommunicationThread({ member, messageId, request, canSpeak, onReply, onInspect }) {
   const [page, setPage] = (0, import_react58.useState)(null), [error, setError] = (0, import_react58.useState)(false), [loading, setLoading] = (0, import_react58.useState)(false);
+  const [collapsed, setCollapsed] = (0, import_react58.useState)(/* @__PURE__ */ new Set());
   const order = (0, import_react58.useRef)(0), current = (0, import_react58.useRef)(null);
   current.current = page;
   const members = member.info?.members ?? [], labels = contactLabels(members);
   (0, import_react58.useEffect)(() => {
     const token = ++order.current;
     setPage(null);
+    setCollapsed(/* @__PURE__ */ new Set());
     setError(false);
     setLoading(true);
     void request({ endpoint: "thread", conversationId: member.conversationId, membershipEpoch: member.membershipEpoch, messageId }).then((value) => {
@@ -21621,16 +21625,49 @@ function CommunicationThread({ member, messageId, request, canSpeak, onReply, on
     }
   };
   const messages = new Map((page?.events ?? []).map((event) => [event.message.messageId, event.message]));
-  const depth = (message) => {
-    let value = message, count = 0;
-    const seen = /* @__PURE__ */ new Set([message.messageId]);
-    while (messages.has(value.replyToMessageId) && !seen.has(value.replyToMessageId)) {
-      seen.add(value.replyToMessageId);
-      value = messages.get(value.replyToMessageId);
-      count += 1;
-    }
-    return Math.min(count, 4);
+  const children = /* @__PURE__ */ new Map();
+  for (const event of page?.events ?? []) {
+    const parent = event.message.replyToMessageId;
+    if (!messages.has(parent) || parent === event.message.messageId) continue;
+    const branch = children.get(parent) ?? [];
+    branch.push(event);
+    children.set(parent, branch);
+  }
+  const rendered = /* @__PURE__ */ new Set();
+  const renderBranch = (event, level = 0) => {
+    const message = event.message;
+    if (rendered.has(message.messageId)) return null;
+    rendered.add(message.messageId);
+    const person = members.find((item) => item.principalId === message.author.principalId) ?? { ...message.author, displayName: t("Participant") };
+    const parent = messages.get(message.replyToMessageId);
+    const replies = (children.get(message.messageId) ?? []).filter((child) => !rendered.has(child.message.messageId));
+    const hidden = collapsed.has(message.messageId);
+    return (0, import_react58.createElement)(
+      "li",
+      { key: message.messageId, "data-thread-depth": level, "data-thread-deep": level > 4 || void 0 },
+      (0, import_react58.createElement)(
+        "article",
+        { "data-thread-message-id": message.messageId, "data-thread-selected": message.messageId === messageId, style: { "--reply-depth": Math.min(level, 4) } },
+        (0, import_react58.createElement)("div", { className: "bt-comm-person-label" }, (0, import_react58.createElement)(CommunicationAvatar, { person, request, allowed: members.includes(person), size: 24 }), (0, import_react58.createElement)("strong", { title: person.principalId }, labels.get(person.principalId) ?? t("Participant"))),
+        parent ? (0, import_react58.createElement)("p", { className: "bt-comm-thread-parent" }, t("Reply to"), " ", labels.get(parent.author.principalId) ?? t("Participant"), ": ", referenceExcerpt(parent.content.text)) : null,
+        (0, import_react58.createElement)("div", { className: "bt-comm-body" }, (0, import_react58.createElement)(CommunicationMessage, { message, members, request, onInspect })),
+        (0, import_react58.createElement)(
+          "div",
+          { className: "bt-comm-message-actions" },
+          (0, import_react58.createElement)("time", null, new Date(event.serverAcceptedAt).toLocaleString()),
+          canSpeak ? (0, import_react58.createElement)("button", { type: "button", onClick: () => onReply(message) }, t("Reply")) : null,
+          replies.length ? (0, import_react58.createElement)("button", { type: "button", "aria-expanded": !hidden, onClick: () => setCollapsed((old) => {
+            const next = new Set(old);
+            if (hidden) next.delete(message.messageId);
+            else next.add(message.messageId);
+            return next;
+          }) }, t(hidden ? "Show {count} replies" : "Hide replies", { count: replies.length })) : null
+        )
+      ),
+      replies.length && !hidden ? (0, import_react58.createElement)("ol", { className: "bt-comm-thread-branches" }, replies.map((child) => renderBranch(child, level + 1))) : null
+    );
   };
+  const roots = (page?.events ?? []).filter((event) => !messages.has(event.message.replyToMessageId) || event.message.replyToMessageId === event.message.messageId);
   return (0, import_react58.createElement)(
     "div",
     { className: "bt-comm-thread" },
@@ -21638,18 +21675,11 @@ function CommunicationThread({ member, messageId, request, canSpeak, onReply, on
     page?.earlierUnavailable ? (0, import_react58.createElement)("p", { role: "status" }, t("Earlier context is outside your authorized history.")) : null,
     loading ? (0, import_react58.createElement)("p", { role: "status" }, t("Loading replies…")) : null,
     error ? (0, import_react58.createElement)("p", { role: "status" }, t("This reply chain is unavailable. Reopen it after synchronization.")) : null,
-    (0, import_react58.createElement)("div", { className: "bt-comm-thread-log", role: "log", "aria-label": t("Message replies") }, (page?.events ?? []).map((event) => {
-      const message = event.message, person = members.find((item) => item.principalId === message.author.principalId) ?? { ...message.author, displayName: t("Participant") };
-      const parent = messages.get(message.replyToMessageId);
-      return (0, import_react58.createElement)(
-        "article",
-        { key: message.messageId, "data-thread-message-id": message.messageId, "data-thread-selected": message.messageId === messageId, style: { "--reply-depth": depth(message) } },
-        (0, import_react58.createElement)("div", { className: "bt-comm-person-label" }, (0, import_react58.createElement)(CommunicationAvatar, { person, request, allowed: members.includes(person), size: 24 }), (0, import_react58.createElement)("strong", { title: person.principalId }, labels.get(person.principalId) ?? t("Participant"))),
-        parent ? (0, import_react58.createElement)("p", { className: "bt-comm-thread-parent" }, t("Reply to"), " ", labels.get(parent.author.principalId) ?? t("Participant"), ": ", referenceExcerpt(parent.content.text)) : null,
-        (0, import_react58.createElement)("div", { className: "bt-comm-body" }, (0, import_react58.createElement)(CommunicationMessage, { message, members, request, onInspect })),
-        (0, import_react58.createElement)("div", { className: "bt-comm-message-actions" }, (0, import_react58.createElement)("time", null, new Date(event.serverAcceptedAt).toLocaleString()), canSpeak ? (0, import_react58.createElement)("button", { type: "button", onClick: () => onReply(message) }, t("Reply")) : null)
-      );
-    })),
+    (0, import_react58.createElement)(
+      "div",
+      { className: "bt-comm-thread-log", role: "log", "aria-label": t("Message replies") },
+      (0, import_react58.createElement)("ol", { className: "bt-comm-thread-roots" }, roots.map((event) => renderBranch(event)))
+    ),
     page?.hasMore ? (0, import_react58.createElement)("button", { type: "button", disabled: loading, onClick: () => {
       void more();
     } }, t("Load more replies")) : null
@@ -21661,7 +21691,17 @@ var communicationCSS = `
 .bt-comm-nav-heading .bt-comm-settings-icon{width:32px;height:32px;padding:6px;display:grid;place-items:center;flex:none;background:none;border-color:transparent}
 .bt-comm-personal-settings>section{margin-top:16px;padding-top:12px;border-top:1px solid var(--bt-line)}
 .bt-comm-personal-settings>section>button{margin:6px 8px 6px 0}
-.bt-comm-thread-log article{margin:12px 0 12px calc(var(--reply-depth)*12px);padding:12px 16px;border-left:2px solid var(--bt-line-2);border-radius:12px;background:var(--bt-bubble);font-size:14px;line-height:24px;overflow-wrap:anywhere}
+.bt-comm-thread-log{--reply-step:18px;min-width:0}
+.bt-comm-thread-log ol{list-style:none;margin:0;padding:0;min-width:0}
+.bt-comm-thread-log li{position:relative;min-width:0;padding-top:10px}
+.bt-comm-thread-log .bt-comm-thread-branches>li{padding-left:var(--reply-step)}
+.bt-comm-thread-branches>li::before{content:'';position:absolute;left:0;top:0;bottom:0;border-left:1px solid var(--bt-line-2);pointer-events:none}
+.bt-comm-thread-branches>li:last-child::before{bottom:auto;height:34px}
+.bt-comm-thread-branches>li::after{content:'';position:absolute;left:0;top:34px;width:var(--reply-step);border-top:1px solid var(--bt-line-2);pointer-events:none}
+.bt-comm-thread-log .bt-comm-thread-branches>li[data-thread-deep=true]{padding-left:0}
+.bt-comm-thread-branches>li[data-thread-deep=true]::before,.bt-comm-thread-branches>li[data-thread-deep=true]::after{display:none}
+.bt-comm-thread-log article{position:relative;margin:0;padding:12px 16px;border-left:2px solid var(--bt-line-2);border-radius:12px;background:var(--bt-bubble);font-size:14px;line-height:24px;overflow-wrap:anywhere;min-width:0}
+@media(max-width:600px){.bt-comm-thread-log{--reply-step:12px}.bt-comm-thread-log article{padding:10px}}
 .bt-comm-thread-log article[data-thread-selected=true]{border-left-color:var(--bt-accent)}
 .bt-comm-thread-parent{font-size:12px;line-height:16px;color:var(--bt-ink-2);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .bt-comm-frame{position:fixed;inset:0;z-index:60;display:grid;grid-template-columns:288px minmax(0,1fr);background:var(--bt-main);color:var(--bt-ink);font:13px/18px var(--bt-font);pointer-events:auto;opacity:1;transition:opacity .16s ease}

@@ -233,3 +233,23 @@ Use the current `nameVersion` from admin `state`. A competing edit returns
 `INSTANCE_NAME_VERSION_CONFLICT`; refresh before deciding another edit. Supply the
 administrator password privately through `DSBOT_HUB_ADMIN_PASSWORD`, never argv.
 Do not use the Human communication CLI or a Bot tool as administrator authority.
+
+
+## Upgrade: explicit Bot activation
+
+Hub and clients now require the explicit-bot-activation capability. Upgrade all
+participating instances together. Older peers fail with EXPLICIT_ACTIVATION_REQUIRED;
+they are not silently allowed to reinterpret visible @ mentions. Bot envelopes
+separate display mentions from activationTargets exact member Bot IDs. Automatic
+final text does not activate group Bots. Human typed @ and direct replies remain
+supported. Active Bots use explicit tool targets; passive Bots stage targets for
+their current single-use final reply. Same-input/same-author/same-target dispatches
+are transactionally deduplicated through restart, in addition to causal limits.
+Accepted history and stable message IDs are unchanged. Unaccepted legacy Bot
+outbox entries require explicit reconciliation, never automatic reissuance.
+See ../docs/plans/federated-communication/explicit-bot-activation.md for the full
+permissions, compatibility and verification boundary.
+
+Databases advance to schema v3 to prevent unsafe downgrade replay. Stop and back
+up both Hub and client data before upgrade; rollback requires the matching
+pre-upgrade backup and binary. Never lower database version markers manually.

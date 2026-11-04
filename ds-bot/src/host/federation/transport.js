@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 
 const PROTOCOL = 'dsbot-communication/1'
-const CAPABILITIES = ['text', 'markdown', 'mentions', 'group', 'dm', 'reply', 'history', 'group-policy', 'membership-epoch']
+const CAPABILITIES = ['text', 'markdown', 'mentions', 'group', 'dm', 'reply', 'history', 'group-policy', 'membership-epoch', 'explicit-bot-activation']
 const BOUNDED_COLLABORATION = 'bounded-bot-collaboration'
 const outboxCapacity = Symbol('outbox-capacity')
 const transient = new Set(['CONNECTION_LOST', 'REQUEST_TIMEOUT', 'STORAGE_UNAVAILABLE', 'BACKPRESSURE', 'HISTORY_GAP'])
@@ -76,6 +76,7 @@ export class CommunicationTransport {
       const welcome = typeof credential?.authenticate === 'function'
         ? await credential.authenticate((type, payload) => this.send(type, payload), capabilities)
         : await this.send('hello', { instanceId: this.queue.instanceId, credential, capabilities })
+      if (!welcome.capabilities?.includes('explicit-bot-activation')) throw errorWith('EXPLICIT_ACTIVATION_REQUIRED')
       if (welcome.protocol !== PROTOCOL || welcome.instanceId !== this.queue.instanceId || !CAPABILITIES.every(value => welcome.capabilities?.includes(value))) throw errorWith('UNSUPPORTED_CAPABILITY')
       if (!welcome.capabilities.includes(BOUNDED_COLLABORATION)) throw errorWith('BOUNDED_COLLABORATION_REQUIRED')
       this.welcome = welcome

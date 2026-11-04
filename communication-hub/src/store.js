@@ -13,7 +13,7 @@ export class HubStore {
     if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true })
     this.db = new DatabaseSync(path)
     const version=this.db.prepare('PRAGMA user_version').get().user_version
-    if(version>2){this.db.close();throw new CommunicationError('SCHEMA_VERSION_UNSUPPORTED')}
+    if(version>3){this.db.close();throw new CommunicationError('SCHEMA_VERSION_UNSUPPORTED')}
     this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;
       CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY);
       INSERT OR IGNORE INTO schema_version VALUES (1);
@@ -38,6 +38,7 @@ export class HubStore {
       CREATE TABLE IF NOT EXISTS causal_roots (id TEXT PRIMARY KEY, conversation_id TEXT NOT NULL REFERENCES conversations(id), ai_deliveries INTEGER NOT NULL DEFAULT 0);
       CREATE TABLE IF NOT EXISTS message_causality (message_id TEXT PRIMARY KEY REFERENCES messages(id), root_id TEXT NOT NULL REFERENCES causal_roots(id), parent_id TEXT, depth INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS causal_schema (version INTEGER PRIMARY KEY);
+      CREATE TABLE IF NOT EXISTS bot_dispatches (cause_key TEXT NOT NULL,author_id TEXT NOT NULL,target_id TEXT NOT NULL,PRIMARY KEY(cause_key,author_id,target_id));
       `)
     if(version<2)this.transaction(()=>{
       this.db.exec(`ALTER TABLE conversations ADD COLUMN owner_id TEXT;
@@ -54,7 +55,8 @@ export class HubStore {
           AND d.message_id=json_extract(m.body,'$.replyToMessageId') AND d.ai=1 ORDER BY m.seq;
         INSERT OR IGNORE INTO schema_version VALUES (2); PRAGMA user_version=2;`)
     })
-    requireThat(this.db.prepare('SELECT max(version) version FROM schema_version').get().version === 2, 'SCHEMA_VERSION_UNSUPPORTED')
+    if(version<3)this.transaction(()=>this.db.exec('INSERT OR IGNORE INTO schema_version VALUES (3); PRAGMA user_version=3;'))
+    requireThat(this.db.prepare('SELECT max(version) version FROM schema_version').get().version === 3, 'SCHEMA_VERSION_UNSUPPORTED')
     if (!this.db.prepare('SELECT 1 FROM causal_schema WHERE version=1').get()) this.transaction(()=>{
       const latestHuman = new Map()
       for (const row of this.db.prepare('SELECT m.*,p.kind FROM messages m JOIN principals p ON p.id=m.author_id ORDER BY m.conversation_id,m.seq').all()) {
@@ -81,7 +83,8 @@ export class HubStore {
   connect(instanceId, label, capabilities) {
     identifier(instanceId)
     requireThat(!instanceId.includes(':')&&instanceId.length<=100, 'INVALID_REQUEST')
-    requireThat(Array.isArray(capabilities)&&CAPABILITIES.every(capability => capabilities.includes(capability)), 'UNSUPPORTED_CAPABILITY')
+    requireThat(Array.isArray(capabilities)&&CAPABILITIES.filter(value=>value!=='explicit-bot-activation').every(capability => capabilities.includes(capability)), 'UNSUPPORTED_CAPABILITY')
+    requireThat(capabilities.includes('explicit-bot-activation'),'EXPLICIT_ACTIVATION_REQUIRED')
     return this.transaction(() => {
       requireThat(this.db.prepare('SELECT trusted FROM instances WHERE id=?').get(instanceId)?.trusted!==0,'UNAUTHENTICATED')
       const named = this.db.prepare('SELECT label FROM hub_instance_names WHERE instance_id=?').get(instanceId)
@@ -564,6 +567,7 @@ export class HubStore {
     return this.transaction(()=>{
       const digest=hash(message), old=this.db.prepare('SELECT * FROM messages WHERE id=?').get(message.messageId)
       if(old){ requireThat(old.hash===digest&&old.author_id===author.principalId,'MESSAGE_ID_CONFLICT'); return this.accepted(old) }
+      requireThat(author.kind!=='bot'||Array.isArray(message.activationTargets),'EXPLICIT_ACTIVATION_REQUIRED')
       requireThat(!message.messageId.startsWith('bot-work-started:'),'MESSAGE_ID_CONFLICT')
       requireThat(this.isPublished(author.principalId),'BOT_NOT_PUBLISHED')
       this.dmPolicy?.(message.conversationId)
@@ -589,6 +593,12 @@ export class HubStore {
       }
       const members=this.db.prepare('SELECT m.*,p.kind,coalesce(pub.published,1) published FROM memberships m JOIN principals p ON p.id=m.principal_id LEFT JOIN principal_publication pub ON pub.principal_id=p.id WHERE conversation_id=? AND active=1').all(message.conversationId)
       for(const mention of message.mentions) requireThat(members.some(member=>member.principal_id===mention.principalId),'UNKNOWN_MENTION')
+      for(const target of message.activationTargets??[]){
+        const recipient=members.find(member=>member.kind==='bot'&&member.principal_id===target.principalId)
+        requireThat(recipient,'UNKNOWN_ACTIVATION_TARGET')
+        requireThat(recipient.published===1,'BOT_NOT_PUBLISHED')
+        requireThat(['passive','active'].includes(recipient.speaking_mode),'TARGET_NOT_RECEIVING')
+      }
       let replyBot
       if(message.replyToMessageId){
         const parent=this.db.prepare('SELECT m.conversation_id,m.seq,m.author_id,p.kind FROM messages m JOIN principals p ON p.id=m.author_id WHERE m.id=?').get(message.replyToMessageId)
@@ -596,7 +606,7 @@ export class HubStore {
         if(conversation.kind==='group'&&parent.kind==='bot'){
           const target=members.find(member=>member.principal_id===parent.author_id)
           requireThat(target&&parent.seq>=target.join_seq,'INVALID_REPLY_TARGET')
-          if(!message.responseToDeliveryId)replyBot=target.principal_id
+          if(author.kind==='human')replyBot=target.principal_id
         }
       }
       let rootId, parentMessageId=null, depth=0
@@ -618,16 +628,21 @@ export class HubStore {
       requireThat(pending+members.length<=this.limits.maxPendingDeliveries,'STORAGE_UNAVAILABLE','Pending delivery capacity reached')
       const acceptedAt=new Date().toISOString()
       const event={message,serverAcceptedAt:acceptedAt,payloadHash:digest,causality,conversationId:message.conversationId,conversationSeq:conversation.seq+1,eventId:message.messageId,type:'message'}
-      const explicitBots=message.mentions.filter(mention=>members.some(member=>member.kind==='bot'&&member.principal_id===mention.principalId))
+      const targets=author.kind==='bot'?message.activationTargets:message.mentions
+      const explicitBots=targets.filter(mention=>members.some(member=>member.kind==='bot'&&member.principal_id===mention.principalId))
+      const dispatchKey=cause?.message_id??parentMessageId??rootId
+      let duplicate=false
       const deliveries=members.map(member=>{
-        const mentioned=message.mentions.some(mention=>mention.principalId===member.principal_id)
+        const mentioned=targets.some(mention=>mention.principalId===member.principal_id)
         const mayReceiveAi=conversation.kind==='dm'||['passive','active'].includes(member.speaking_mode)
-        const ai=member.kind==='bot'&&member.published===1&&member.principal_id!==author.principalId&&mayReceiveAi&&(conversation.kind==='dm'?true:
+        let ai=member.kind==='bot'&&member.published===1&&member.principal_id!==author.principalId&&mayReceiveAi&&(conversation.kind==='dm'?true:
           mentioned||(!explicitBots.length&&replyBot===member.principal_id)||(!replyBot&&!message.mentions.length&&author.kind==='human'&&conversation.routing_mode==='admin'&&conversation.admin_bot===member.principal_id))
+        if(ai&&author.kind==='bot'&&this.db.prepare('SELECT 1 FROM bot_dispatches WHERE cause_key=? AND author_id=? AND target_id=?').get(dispatchKey,author.principalId,member.principal_id)){ai=false;duplicate=true}
         return {deliveryId:randomUUID(),messageId:message.messageId,conversationId:message.conversationId,recipientPrincipalId:member.principal_id,membershipEpoch:member.epoch,routingVersion:conversation.version,notify:member.kind==='human'&&member.principal_id!==author.principalId,ai:Boolean(ai),event}
       })
       const aiCount=deliveries.filter(delivery=>delivery.ai).length
       const used=this.db.prepare('SELECT ai_deliveries FROM causal_roots WHERE id=?').get(rootId).ai_deliveries
+      if(!aiCount&&duplicate)event.dispatchSuppressed='DUPLICATE_HANDOFF'
       if(aiCount && (depth>=this.limits.maxCausalDepth || used+aiCount>this.limits.maxAiDeliveriesPerRoot)){
         event.dispatchSuppressed='CAUSAL_LIMIT'
         for(const delivery of deliveries)delivery.ai=false
@@ -641,6 +656,7 @@ export class HubStore {
       this.db.prepare('INSERT INTO message_causality VALUES (?,?,?,?)').run(message.messageId,rootId,parentMessageId,depth)
       if(message.responseToDeliveryId)this.db.prepare('INSERT INTO responses VALUES (?,?)').run(message.responseToDeliveryId,message.messageId)
       for(const delivery of deliveries){
+        if(delivery.ai&&author.kind==='bot')this.db.prepare('INSERT INTO bot_dispatches VALUES (?,?,?)').run(dispatchKey,author.principalId,delivery.recipientPrincipalId)
         this.db.prepare('INSERT INTO deliveries(id,message_id,recipient_id,membership_epoch,routing_version,notify,ai) VALUES (?,?,?,?,?,?,?)').run(delivery.deliveryId,message.messageId,delivery.recipientPrincipalId,delivery.membershipEpoch,conversation.version,Number(delivery.notify),Number(delivery.ai))
       }
       return this.accepted(this.db.prepare('SELECT * FROM messages WHERE id=?').get(message.messageId))

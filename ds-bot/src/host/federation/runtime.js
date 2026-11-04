@@ -306,18 +306,21 @@ export class CommunicationRuntime {
       this.profileRefreshedAt.set(conversationId, Date.now())
     }
   }
-  message(principalId, conversationId, { text, mentions = [], replyToMessageId = null, responseToDeliveryId, causationDeliveryId, membershipEpoch, messageId = randomUUID(), clientCreatedAt = new Date().toISOString(), attachments, files } = {}) {
+  message(principalId, conversationId, { text, mentions = [], activationTargets = [], replyToMessageId = null, responseToDeliveryId, causationDeliveryId, membershipEpoch, messageId = randomUUID(), clientCreatedAt = new Date().toISOString(), attachments, files } = {}) {
     if (attachments || files) fail('UNSUPPORTED_CONTENT')
     if (typeof text !== 'string') fail('INVALID_REQUEST')
     const info = this.conversations?.get(conversationId), members = info?.members
     const contacts = members ? members.map(member => ({ ...this.contacts.find(contact => contact.principalId === member.principalId), ...member })) : this.contacts
     // Without a current participant snapshot, an @all expansion cannot be scoped safely.
     const all = mentionSpans(text.replace(/^[\t ]*>[^\n]*/gm, line => ' '.repeat(line.length)), []).some(span => span.all)
-    if (all && (!members || info.membershipVersion !== this.member(principalId, conversationId, membershipEpoch).membershipVersion)) fail('AUTHORIZATION_PENDING')
+    const bot = principalId.startsWith('bot:')
+    if (!bot && all && (!members || info.membershipVersion !== this.member(principalId, conversationId, membershipEpoch).membershipVersion)) fail('AUTHORIZATION_PENDING')
     return { protocol: PROTOCOL, type: 'message.publish', messageId, conversationId,
       author: { principalId, homeInstanceId: this.queue.instanceId, kind: principalId.startsWith('human:') ? 'human' : 'bot' },
       clientCreatedAt, content: { format: 'markdown', text },
-      mentions: communicationMentions(text, contacts, mentions), replyToMessageId, ...(responseToDeliveryId ? { responseToDeliveryId } : {}),
+      mentions: communicationMentions(text, contacts, mentions, { displayOnly: bot }),
+      ...(bot ? { activationTargets: activationTargets.map(item => ({ principalId: typeof item === 'string' ? item : item.principalId })) } : {}),
+      replyToMessageId, ...(responseToDeliveryId ? { responseToDeliveryId } : {}),
       ...(causationDeliveryId ? { causationDeliveryId } : {}),
       membershipEpoch: membershipEpoch ?? this.member(principalId, conversationId).membershipEpoch }
   }
@@ -363,10 +366,39 @@ export class CommunicationRuntime {
     const causal = exec.communicationCausation
     if (exec.communicationBinding && !causal?.causationDeliveryId) fail('COMMUNICATION_INPUT_SOURCE_UNKNOWN')
     const replyToMessageId = input.replyToMessageId ?? causal?.replyToMessageId ?? null
-    const output = { sourceKey, conversationId, parts: [{ part: 0, text: input.text }], mentions: input.mentions ?? [], replyToMessageId }
+    const targeting = { ...input }
+    if (input.replyToMessageId && input.activationTargets === undefined && !input.mentions?.length && !input.allBots) {
+      const reference = this.queue.reference(conversationId, actor.principalId, member.membershipEpoch, input.replyToMessageId)
+      if (reference.message.author.kind === 'bot') targeting.activationTargets = [reference.message.author.principalId]
+    }
+    const output = { sourceKey, conversationId, parts: [{ part: 0, text: input.text }], mentions: input.mentions ?? [],
+      activationIntent: { targets: input.activationTargets ?? input.mentions ?? [], allBots: input.allBots ?? false }, replyToMessageId }
     const [messageId] = this.queue.commitExports(`tool:${exec.agent.id}`, [output], [], () => this.message(actor.principalId, conversationId, { ...input, replyToMessageId,
+      activationTargets: CommunicationRuntime.prototype.targets.call(this, actor.principalId, conversationId, targeting, member.membershipEpoch),
       responseToDeliveryId: undefined, causationDeliveryId: causal?.causationDeliveryId, membershipEpoch: member.membershipEpoch }))
     return { messageId, conversationId, status: this.queue.outboxStatus(messageId).state }
+  }
+  targets(principalId, conversationId, input, epoch) {
+    const member = this.member(principalId, conversationId, epoch)
+    const info = this.conversations?.get(conversationId)
+    const selected = input.activationTargets ?? input.mentions ?? []
+    if (!Array.isArray(selected) || selected.some(id => typeof id !== 'string')) fail('UNKNOWN_ACTIVATION_TARGET')
+    if (input.allBots && (!info || info.membershipVersion !== member.membershipVersion)) fail('AUTHORIZATION_PENDING')
+    const contacts = info?.members ?? this.contacts
+    const ids = input.allBots ? contacts.filter(item => item.kind === 'bot').map(item => item.principalId) : selected
+    const targets = [...new Set(ids)].filter(id => id !== principalId).sort()
+    for (const id of targets) if (!contacts.some(item => item.principalId === id && (item.kind === 'bot' || id.startsWith('bot:')))) fail('UNKNOWN_ACTIVATION_TARGET')
+    return targets
+  }
+  stageHandoff(actor, input, exec) {
+    const binding = exec.communicationBinding, cause = exec.communicationCausation
+    if (!binding || !cause?.causationDeliveryId || !exec.communicationSource) fail('COMMUNICATION_INPUT_SOURCE_UNKNOWN')
+    if (input.replyToMessageId !== cause.replyToMessageId) fail('INVALID_RESPONSE_GRANT')
+    const member = this.member(actor.principalId, binding.conversationId, binding.membershipEpoch)
+    if (member.kind !== 'group' || !['passive','active'].includes(member.speakingMode)) fail('SPEAKING_FORBIDDEN')
+    const targets = this.targets(actor.principalId, binding.conversationId, input, binding.membershipEpoch)
+    this.queue.stageReplyTargets(binding.id, cause.causationDeliveryId, targets, exec.communicationSource)
+    return { status: 'staged', activationTargets: targets, sendsMessage: false }
   }
   history(principalId, input) {
     const member = this.member(principalId, input.conversationId, input.membershipEpoch)
@@ -464,7 +496,7 @@ export class CommunicationRuntime {
         ?? this.conversations?.get(delivery.conversationId)?.members.find(member => member.principalId === event.message.author.principalId)
       return JSON.stringify({ messageId: event.message.messageId, author: event.message.author,
         displayName: person?.displayName ?? event.message.author.principalId, instanceLabel: person?.instanceLabel,
-        content: event.message.content, mentions: event.message.mentions, replyToMessageId: event.message.replyToMessageId,
+        content: event.message.content, mentions: event.message.mentions, activationTargets: event.message.activationTargets ?? null, replyToMessageId: event.message.replyToMessageId,
         ...(event.causality ? { causality: event.causality } : {}),
         ...(event.dispatchSuppressed ? { dispatchSuppressed: event.dispatchSuppressed } : {}) })
     }
@@ -605,7 +637,7 @@ export class CommunicationRuntime {
       await this.ctx.parallel('ds-bot/communication-checkpoint', { point: 'before-export', conversationId: binding.conversationId,
         bindingId: binding.id, sessionId: output.sessionId, sourceKey: output.sourceKey })
       this.queue.commitExports(binding.id, [output], [{ sessionId: output.sessionId, seq: output.seq }], () => this.message(principal.principalId, binding.conversationId,
-        { text, replyToMessageId: input.messageId,
+        { text, activationTargets: this.queue.replyTargets(binding.id, input.deliveryId), replyToMessageId: input.messageId,
           responseToDeliveryId: input.deliveryId, membershipEpoch: binding.membershipEpoch }))
       await this.ctx.parallel('ds-bot/communication-checkpoint', { point: 'after-export', conversationId: binding.conversationId,
         bindingId: binding.id, sessionId: output.sessionId, sourceKey: output.sourceKey })

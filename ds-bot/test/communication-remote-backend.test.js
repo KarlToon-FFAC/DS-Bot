@@ -34,7 +34,7 @@ test('Bot-only conversation @all expands its exact members and never another con
   assert.deepEqual(message('@all review').mentions, [{ principalId: 'bot:a:one' }, { principalId: 'bot:b:two' }])
   assert.deepEqual(message('`@all`\n> @all').mentions, [])
   runtime.conversations.clear()
-  assert.throws(() => message('@all'), { code: 'AUTHORIZATION_PENDING' })
+  assert.deepEqual(message('@all').activationTargets, [], 'display-only final mentions never require dispatch expansion')
   assert.deepEqual(message('`@all`\n> @all').mentions, [])
 })
 

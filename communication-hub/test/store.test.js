@@ -13,7 +13,7 @@ const auth = (store,id) => store.connect(id,id,CAPABILITIES)
 const register = (store,owner,localId,kind='human') => store.register(owner,{localId,kind,displayName:kind==='bot'?'Chief':localId}).principalId
 const message = (principalId,conversationId,text='hello',extra={}) => ({protocol:PROTOCOL,type:'message.publish',messageId:randomUUID(),conversationId,
   author:{principalId,homeInstanceId:principalId.split(':')[1],kind:principalId.split(':')[0]},clientCreatedAt:'2026-11-03T00:00:00.000Z',
-  content:{format:'markdown',text},mentions:[],replyToMessageId:null,...extra})
+  content:{format:'markdown',text},mentions:[],replyToMessageId:null,...extra,...(principalId.startsWith('bot:')?{activationTargets:extra.activationTargets??extra.mentions??[]}: {})})
 const operation = input => ({operationId:randomUUID(),...input})
 function fixture(t,options={}){
   const store=new HubStore(':memory:',options);t.after(()=>store.close())
@@ -246,14 +246,14 @@ test('export source mapping, complete outbox and cursor commit together and reus
 test('future database schema versions are refused before migration and existing records remain intact',()=>{
   const root=directory(),path=join(root,'future.sqlite')
   const future=new DatabaseSync(path)
-  future.exec("PRAGMA user_version=3; CREATE TABLE marker(value TEXT); INSERT INTO marker VALUES ('keep');")
+  future.exec("PRAGMA user_version=4; CREATE TABLE marker(value TEXT); INSERT INTO marker VALUES ('keep');")
   future.close()
   try{
     assert.throws(()=>new HubStore(path),{code:'SCHEMA_VERSION_UNSUPPORTED'})
     assert.throws(()=>new CommunicationQueue(path,{instanceId:'a'}),{code:'SCHEMA_VERSION_UNSUPPORTED'})
     const checked=new DatabaseSync(path)
     assert.equal(checked.prepare('SELECT value FROM marker').get().value,'keep')
-    assert.equal(checked.prepare('PRAGMA user_version').get().user_version,3)
+    assert.equal(checked.prepare('PRAGMA user_version').get().user_version,4)
     checked.close()
   }finally{cleanDirectory(root)}
 })

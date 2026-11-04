@@ -26,7 +26,7 @@ function fixture(t, disk = false) {
   }
   f.input = (id, mentions = []) => ({ protocol: PROTOCOL, type: 'message.publish', messageId: randomUUID(), conversationId: f.group,
     author: { principalId: id, homeInstanceId: id.split(':')[1], kind: id.split(':')[0] }, clientCreatedAt: new Date().toISOString(),
-    content: { format: 'text', text: 'Published Bot message' }, mentions: mentions.map(principalId => ({ principalId })), replyToMessageId: null, membershipEpoch: f.member(id).membershipEpoch })
+    content: { format: 'text', text: 'Published Bot message' }, mentions: mentions.map(principalId => ({ principalId })), replyToMessageId: null, membershipEpoch: f.member(id).membershipEpoch, ...(id.startsWith('bot:') ? { activationTargets: mentions.map(principalId => ({principalId})) } : {}) })
   return f
 }
 

@@ -22,7 +22,7 @@ function fixture(t, limits = {}) {
   for (const id of [R, A, B]) join(id)
   const input = (id, values = {}) => ({ protocol: PROTOCOL, type: 'message.publish', messageId: randomUUID(), conversationId: group,
     author: { principalId: id, homeInstanceId: id.split(':')[1], kind: id.split(':')[0] }, clientCreatedAt: new Date().toISOString(),
-    content: { format: 'text', text: 'Reply text without a mention' }, mentions: [], replyToMessageId: null, membershipEpoch: member(id).membershipEpoch, ...values })
+    content: { format: 'text', text: 'Reply text without a mention' }, mentions: [], replyToMessageId: null, membershipEpoch: member(id).membershipEpoch, ...values, ...(id.startsWith('bot:') ? { activationTargets: values.activationTargets ?? values.mentions ?? [] } : {}) })
   const send = (id, values) => store.publish(auth(id), input(id, values))
   const ai = message => store.db.prepare('SELECT recipient_id FROM deliveries WHERE message_id=? AND ai=1 ORDER BY recipient_id').all(message.messageId).map(row => row.recipient_id)
   const grant = (message, id) => {
@@ -103,7 +103,7 @@ test('Human and active Bot explicit replies route to the exact current Bot witho
   assert.deepEqual(f.ai(human), [f.A]); assert.deepEqual(human.payloadHash, hash(humanInput))
   assert.deepEqual(JSON.parse(f.store.db.prepare('SELECT body FROM messages WHERE id=?').get(human.messageId).body).mentions, [])
   const target = f.send(f.B)
-  const active = f.send(f.A, { replyToMessageId: target.messageId, causationDeliveryId: f.grant(human, f.A) })
+  const active = f.send(f.A, { replyToMessageId: target.messageId, activationTargets: [{ principalId: f.B }], causationDeliveryId: f.grant(human, f.A) })
   assert.deepEqual(f.ai(active), [f.B]); assert.equal(active.causality.rootMessageId, human.messageId)
   assert.deepEqual(f.store.publish(f.a, humanInput), human)
   const explicit = f.send(f.H, { replyToMessageId: original.messageId, mentions: [{ principalId: f.B }] })
@@ -123,7 +123,7 @@ test('automatic final reply references stay silent, passive replies still need o
   assert.throws(() => f.send(f.B, { replyToMessageId: source.messageId }), { code: 'PASSIVE_REPLY_REQUIRED' })
   assert.throws(() => f.send(f.B, { responseToDeliveryId: grant, replyToMessageId: source.messageId }), { code: 'RESPONSE_ALREADY_SENT' })
   const human = f.send(f.H, { replyToMessageId: source.messageId })
-  const a = f.send(f.A, { replyToMessageId: final.messageId, causationDeliveryId: f.grant(human, f.A) })
+  const a = f.send(f.A, { replyToMessageId: final.messageId, activationTargets: [{ principalId: f.B }], causationDeliveryId: f.grant(human, f.A) })
   assert.deepEqual(f.ai(a), [f.B])
   const b = f.send(f.B, { responseToDeliveryId: f.grant(a, f.B), replyToMessageId: a.messageId, mentions: [{ principalId: f.A }] })
   assert.equal(b.dispatchSuppressed, 'CAUSAL_LIMIT'); assert.deepEqual(f.ai(b), [])

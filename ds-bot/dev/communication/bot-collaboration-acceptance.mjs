@@ -96,9 +96,18 @@ try{
   assert.ok(!(await stats()).messages.some(message=>body(message).content.text===`unsolicited-${nonce}`))
   record('passive-unsolicited-tool-send-denied')
 
+  for (const kind of ['single','all','quote']) {
+    const echoGroup=await topology.group('Restatement '+kind+' '+nonce,[a.bot,b.bot],{allowSpeaking:false})
+    await topology.send(a,echoGroup,'COMM-RESTATE '+kind+' '+nonce,[a.bot])
+    const value=await until(async()=>{const s=await stats();return groupMessages(s,echoGroup).some(row=>row.author_id===a.bot)&&s},'restatement final is exported')
+    const final=groupMessages(value,echoGroup).find(row=>row.author_id===a.bot)
+    assert.deepEqual(body(final).activationTargets,[])
+    assert.equal(value.deliveries.filter(row=>row.message_id===final.id&&row.ai).length,0)
+    record('final-'+kind+'-mention-is-display-only',{messageId:final.id})
+  }
   const active=await topology.group(`Active collaboration ${nonce}`,[a.bot,b.bot],{allowSpeaking:false})
   await policy(a,active,a.bot,'active')
-  const activeRoot=await topology.send(a,active,`COMM-POST ${active} - COMM-COLLAB DONE active-${nonce} @CollabB`,[a.bot])
+  const activeRoot=await topology.send(a,active,`COMM-POST ${active} ${b.bot} COMM-COLLAB DONE active-${nonce} @CollabB`,[a.bot])
   await until(()=>topology.hasText(a,active,`Collaboration done active-${nonce}`),'active text-mention tool reaches B')
   const activeStats=await stats(),toolMessage=groupMessages(activeStats,active).find(message=>message.author_id===a.bot&&body(message).content.text===`COMM-COLLAB DONE active-${nonce} @CollabB`)
   assert.ok(toolMessage)
@@ -135,12 +144,12 @@ try{
   const burstRoot=await topology.send(a,burstGroup,`COMM-COLLAB BURST ${burstGroup} ${b.bot} 35 burst-${nonce}`,[a.bot])
   const burst=await until(async()=>{const s=await stats();return rootMessages(s,burstRoot.messageId).filter(message=>message.author_id===a.bot).length===35&&s},'all bounded burst tool messages accepted',120000)
   const burstRows=rootMessages(burst,burstRoot.messageId),rootIds=new Set(burstRows.map(message=>message.id)),aiCount=burst.deliveries.filter(d=>rootIds.has(d.message_id)&&d.ai).length
-  assert.equal(aiCount,32)
-  const suppressed=burstRows.filter(message=>eventFor(burst,message.id).dispatchSuppressed==='CAUSAL_LIMIT')
-  assert.ok(suppressed.length>=4)
+  assert.equal(aiCount,2)
+  const suppressed=burstRows.filter(message=>eventFor(burst,message.id).dispatchSuppressed==='DUPLICATE_HANDOFF')
+  assert.equal(suppressed.length,34)
   assert.ok(suppressed.every(message=>!burst.deliveries.some(d=>d.message_id===message.id&&d.ai)))
   assert.ok(burstRows.every(message=>eventFor(burst,message.id).causality.depth<8))
-  record('server-root-AI-budget-thirty-two-across-active-tool-burst',{rootMessageId:burstRoot.messageId,toolMessages:35,aiDeliveries:aiCount,suppressedMessages:suppressed.length})
+  record('same-input-same-target-burst-deduplicates-thirty-four-repeats',{rootMessageId:burstRoot.messageId,toolMessages:35,aiDeliveries:aiCount,suppressedMessages:suppressed.length})
 
   const recoveryGroup=await topology.group(`Recovery correlation ${nonce}`,[a.bot,b.bot],{allowSpeaking:false})
   await a.client.api({operation:'production-hold',point:'after-export',conversationId:recoveryGroup})

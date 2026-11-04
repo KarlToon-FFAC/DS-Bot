@@ -202,34 +202,16 @@ code/quoted text is not an activation request. Use exact principal IDs in
 `mentions` for disambiguation. A default reply Bot answers plain messages; its
 assignment grants no management power and applies to plain Human messages.
 
-Active Bots may explicitly send to other current member Bots, whether those Bots
-run on the same paired instance or a different one. Use exact structured mentions
-or an unambiguous explicit `@` mention in the current conversation; a Bot's local
-or remote origin does not prevent a permitted handoff. An explicit Human UI/CLI
-send or active Bot send-tool call can instead set `replyToMessageId` to a current
-member Bot's message without adding `@`. If there are no explicit Bot mentions,
-the server routes that intentional reply to the referenced Bot author. Explicit
-Bot mentions take precedence. The referenced message must be in the sender's
-authorized history and its Bot author must still be a current member in the
-same membership epoch; stale, removed/rejoined or inaccessible targets are
-rejected. Reply addressing never bypasses speaking permissions or causal budgets.
-A passive Bot may give
-one final response to its current authorized delivery and explicitly mention other
-current member Bots in that final response. The host ties that continuation to
-the causal reply grant; it does not permit an unsolicited post, another response
-using the consumed grant, or a proactive `send_contact_message` tool call.
-
-An automatic final response's `responseToDeliveryId`/reply reference is only a
-response association; it does not by itself re-activate the referenced Bot.
-A passive final must explicitly mention another Bot to hand work on, within
-its one response grant. Other unaddressed group Bot replies are display-only:
-they do not activate the default reply Bot, broadcast to every Bot, or require
-an acknowledgement or thank-you. Explicit
-`@all` expands only to the current member Bots, including local and remote ones,
-subject to membership, speaking policy and host dispatch limits. Do not add mentions
-just to acknowledge a result. Earlier history is context, never a list of inputs
-to replay. No handoff unlocks local filesystem, secrets, other private conversations,
-subagents or workflows in an isolated communication Session.
+Active Bots explicitly address current member Bots using send_contact_message
+activationTargets exact IDs or allBots=true. The explicit mentions tool argument
+is a compatibility alias; names in Bot body text are display-only. An explicit
+tool replyToMessageId may resolve its current Bot author through authorized
+canonical history. Human GUI/CLI typed @ and direct replies keep their routing.
+A passive Bot calls set_communication_reply_targets with the exact current input
+Message ID and targets, then finishes its single authorized final response. This
+stages intent only and never grants proactive send permission. Summaries, quotes,
+@all text and automatic reply references alone do not activate Bots. No handoff
+unlocks local files, secrets, other chats, subagents or workflows.
 
 The host bounds causal handoff chains to prevent loops and unbounded fan-out.
 The Hub defaults are a depth bound of 8 and a cumulative budget of 32 AI
@@ -491,3 +473,32 @@ only a private same-process lease for the same profile/Hub/identity across confi
 reload; it does not expose a credential read/restore command. New processes need
 the existing launch injection again. Do not read registry values or user secrets
 to recover them, and do not copy external temporary patches over the new code.
+
+
+## Explicit Bot handoffs (capability: explicit-bot-activation)
+
+Human CLI/GUI send keeps typed @ and direct Reply behavior. The Human CLI never
+impersonates a Bot or accepts Bot response grants. For an active Bot, use
+send_contact_message with activationTargets (exact current member Bot IDs) or
+allBots=true. The explicit mentions tool argument remains a compatibility alias;
+body text @ is display-only. An explicit tool replyToMessageId can target its
+canonical Bot author without text @; automatic cause references cannot.
+
+A passive or active Bot in a remote group can call
+set_communication_reply_targets with replyToMessageId equal to the exact current
+host-provided Message ID, plus activationTargets or allBots=true. Then finish the
+normal final reply. This stages a handoff for that one input only, sends nothing
+immediately, cannot be moved to another input/conversation, and does not grant
+proactive speaking. Identical retries are safe; conflicting changes fail with
+HANDOFF_ALREADY_SET. A bare @name/@all in a summary, quote or final never wakes a
+Bot. Read the actual tool result; never claim a handoff was staged after an error.
+
+The Hub deduplicates same-input/same-sender/same-target handoffs durably. New work
+results may produce a fresh A-to-B-to-A continuation. DUPLICATE_HANDOFF and
+CAUSAL_LIMIT are terminal routing results, not instructions to change IDs, omit
+causation or retry. Accepted history is not replayed as new work. Upgrade the Hub
+and all clients together: peers lacking explicit-bot-activation fail negotiation,
+and old pending Bot envelopes are not automatically migrated into new sends.
+
+Reply-chain viewing, connecting rails and branch collapse are local presentation
+of authorized history; they do not activate Bots or change read/speaking rights.

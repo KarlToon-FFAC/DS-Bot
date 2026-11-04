@@ -3,6 +3,9 @@ import { test } from 'node:test'
 import { CommunicationRuntime } from '../src/host/federation/runtime.js'
 import { CommunicationQueue } from '../src/host/federation/queue-store.js'
 import { CommunicationTransport } from '../src/host/federation/transport.js'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 const binding = { conversationId: 'group', recipientPrincipalId: 'bot:a:one', membershipEpoch: 'epoch' }
 const source = { kind: 'ds-bot-communication', ...binding, deliveryId: 'delivery', messageId: 'parent' }
@@ -82,4 +85,89 @@ test('a new client refuses an old unbounded Hub before registration or outbox pu
   assert.equal(transport.connected, false)
   assert.equal(transport.socket.readyState, 3)
   assert.deepEqual(queue.retained, { messageId: 'original-id', state: 'pending' })
+})
+
+test('Bot automatic text is display-only even for all mentions and unknown names', () => {
+  const runtime = { queue: { instanceId: 'a' }, contacts: [{principalId:'bot:b:two',kind:'bot',displayName:'Two'}], member: () => ({membershipEpoch:'epoch'}) }
+  for (const text of ['Summary @Two', '@all', '> @Two', 'Unknown @Somebody']) {
+    const message = CommunicationRuntime.prototype.message.call(runtime,'bot:a:one','group',{text})
+    assert.deepEqual(message.activationTargets, [])
+  }
+  const message = CommunicationRuntime.prototype.message.call(runtime,'human:a:user','group',{text:'@Two'})
+  assert.deepEqual(message.mentions,[{principalId:'bot:b:two'}]); assert.equal(message.activationTargets,undefined)
+})
+
+test('reply handoff intent is durable, single-valued and cannot modify an already exported response', () => {
+  const queue = new CommunicationQueue(':memory:', { instanceId: 'a' })
+  try {
+    queue.stageReplyTargets('binding','delivery',['bot:b:two'],'source')
+    queue.stageReplyTargets('binding','delivery',['bot:b:two'],'retry-source')
+    assert.deepEqual(queue.replyTargets('binding','delivery'),['bot:b:two'])
+    assert.throws(()=>queue.stageReplyTargets('binding','delivery',[],'other'),{code:'HANDOFF_ALREADY_SET'})
+    assert.throws(()=>queue.replyTargets('foreign','delivery'),{code:'CONVERSATION_SCOPE_MISMATCH'})
+    assert.deepEqual(queue.replyTargets('binding','other-delivery'),[])
+  } finally {queue.close()}
+})
+
+test('passive handoff stages only its current authorized group input and never permits proactive send', async () => {
+  const queue = new CommunicationQueue(':memory:',{instanceId:'a'})
+  const actor={principalId:'bot:a:one'}
+  const current={id:'binding',conversationId:'group',membershipEpoch:'epoch'}
+  const runtime=Object.assign(Object.create(CommunicationRuntime.prototype),{queue,contacts:[{principalId:'bot:b:two',kind:'bot'}],member:()=>({kind:'group',speakingMode:'passive',membershipEpoch:'epoch'})})
+  const exec={agent:{id:'session'},callId:'call',communicationSource:'tool-source',communicationBinding:current,communicationCausation:{causationDeliveryId:'input',replyToMessageId:'parent'}}
+  try {
+    assert.deepEqual(runtime.stageHandoff(actor,{replyToMessageId:'parent',activationTargets:['bot:b:two']},exec),{status:'staged',activationTargets:['bot:b:two'],sendsMessage:false})
+    assert.equal(queue.pendingOutbox().length,0)
+    await assert.rejects(runtime.sendBot(actor,{conversationId:'group',text:'unsolicited'},exec),{code:'PASSIVE_REPLY_ONLY'})
+    assert.throws(()=>runtime.stageHandoff(actor,{allBots:true},{...exec,communicationBinding:null}),{code:'COMMUNICATION_INPUT_SOURCE_UNKNOWN'})
+    runtime.member=()=>({kind:'group',speakingMode:'readOnly'})
+    assert.throws(()=>runtime.stageHandoff(actor,{replyToMessageId:'parent',activationTargets:[]},exec),{code:'SPEAKING_FORBIDDEN'})
+  } finally {queue.close()}
+})
+
+
+test('new client rejects a Hub missing explicit activation before any outbox publication', async t => {
+  const original=globalThis.WebSocket, frames=[]
+  class LegacySocket extends EventTarget {
+    static OPEN=1
+    readyState=1
+    constructor(){super();queueMicrotask(()=>this.dispatchEvent(new Event('open')))}
+    close(){this.readyState=3;this.dispatchEvent(new Event('close'))}
+    send(raw){const frame=JSON.parse(raw);frames.push(frame.type);queueMicrotask(()=>this.dispatchEvent(new MessageEvent('message',{data:JSON.stringify({id:frame.id,ok:true,value:{protocol:'dsbot-communication/1',instanceId:'test',capabilities:frame.payload.capabilities.filter(value=>value!=='explicit-bot-activation')}})})))}
+  }
+  globalThis.WebSocket=LegacySocket;t.after(()=>{globalThis.WebSocket=original})
+  let changed=false
+  const transport=new CommunicationTransport({instanceId:'test',disconnected(){},setLimits(){changed=true}},{url:'ws://127.0.0.1:3190/communication',credential:'synthetic'})
+  await assert.rejects(transport.connect(),{code:'EXPLICIT_ACTIVATION_REQUIRED'})
+  assert.deepEqual(frames,['hello']);assert.equal(changed,false);assert.equal(transport.connected,false)
+})
+
+test('all-Bot tool retry keeps its original target expansion after the roster changes', async()=>{
+  const queue=new CommunicationQueue(':memory:',{instanceId:'a'})
+  const actor=queue.localPrincipal('bot','one','One')
+  const members=[{principalId:actor.principalId,kind:'bot'},{principalId:'bot:b:two',kind:'bot'}]
+  const info={membershipVersion:1,members}
+  const runtime=Object.assign(Object.create(CommunicationRuntime.prototype),{queue,contacts:members,conversations:new Map([['group',info]]),member:()=>({kind:'group',speakingMode:'active',membershipEpoch:'epoch',membershipVersion:info.membershipVersion})})
+  const exec={callId:'call',agent:{id:'session'},communicationSource:'source',communicationBinding:binding,communicationCausation:{causationDeliveryId:'delivery',replyToMessageId:'parent'}}
+  try{
+    const first=await runtime.sendBot(actor,{conversationId:'group',text:'Delegate to this batch',allBots:true},exec)
+    members.push({principalId:'bot:b:three',kind:'bot'});info.membershipVersion=2
+    const retry=await runtime.sendBot(actor,{conversationId:'group',text:'Delegate to this batch',allBots:true},exec)
+    assert.equal(retry.messageId,first.messageId)
+    assert.deepEqual(queue.intent(first.messageId).payload.activationTargets,[{principalId:'bot:b:two'}])
+  }finally{queue.close()}
+})
+
+test('staged reply targets survive process queue reopen and remain bound to the original input',()=>{
+  const dir=mkdtempSync(join(tmpdir(),'dsbot-staged-handoff-')),path=join(dir,'queue.sqlite')
+  let queue=new CommunicationQueue(path,{instanceId:'a'})
+  try{
+    queue.stageReplyTargets('binding','delivery',['bot:b:two'],'tool-source')
+    queue.db.exec('PRAGMA user_version=2')
+    queue.close();queue=new CommunicationQueue(path,{instanceId:'a'})
+    assert.deepEqual(queue.replyTargets('binding','delivery'),['bot:b:two'])
+    assert.equal(queue.db.prepare('PRAGMA user_version').get().user_version,3)
+    assert.deepEqual(queue.replyTargets('binding','new-input'),[])
+    assert.throws(()=>queue.replyTargets('new-binding','delivery'),{code:'CONVERSATION_SCOPE_MISMATCH'})
+  }finally{queue.close();rmSync(dir,{recursive:true,force:true})}
 })

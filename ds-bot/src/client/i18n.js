@@ -5,6 +5,8 @@
 export const NAMESPACE = 'ds-bot'
 
 const ZH = {
+  "Hide replies": "收起回复",
+  "Show {count} replies": "展开 {count} 条回复",
   "Device identity is saved locally. No request ID exists yet; access has not been requested from the Hub.": "设备身份已在本机保存，尚无申请编号，还未向 Hub 提交加入申请。",
   "The Hub certificate authority is not trusted. Verify its public CA fingerprint with the administrator and launch the app with NODE_EXTRA_CA_CERTS. Restart the app; keep TLS verification enabled.": "不信任 Hub 的证书颁发机构。请与管理员核对公开 CA 指纹，再通过 NODE_EXTRA_CA_CERTS 启动并完全重启应用；保留 TLS 校验。",
   "The Hub address does not match the certificate. Ask its administrator for a certificate covering this exact reachable hostname or IP.": "Hub 地址与证书不匹配。请管理员提供包含此实际可达域名或 IP 的证书。",
