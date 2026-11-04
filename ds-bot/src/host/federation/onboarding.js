@@ -20,9 +20,9 @@ const configFailureCode = cause => {
 const phase = async (code, work) => {
   try { return await work() }
   catch (cause) {
-    if (typeof cause?.code === 'string') throw cause
     if (code === 'COMMUNICATION_CONFIG_WRITE_FAILED') code = configFailureCode(cause)
-    throw Object.assign(new Error(code, { cause }), { code })
+    const failureCode = typeof cause?.code === 'string' ? cause.code : code
+    throw Object.assign(new Error(failureCode, { cause }), { code: failureCode, phase: code })
   }
 }
 const serviceOf = (ctx, name, code) => {
@@ -151,14 +151,20 @@ export async function connectHubSocket(url, { allowLoopback = false, resolve = l
   socket.on('error', () => {})
   await new Promise((resolveOpen, reject) => {
     let settled = false
-    const finish = ok => {
+    const finish = (ok, code = 'HUB_UNREACHABLE') => {
       if (settled) return
       settled = true; clearTimeout(timer)
       socket.off('error', failure); socket.off('close', failure); socket.off('open', success)
       if (ok) resolveOpen()
-      else { socket.terminate(); reject(Object.assign(new Error('HUB_UNREACHABLE'), { code: 'HUB_UNREACHABLE' })) }
+      else { socket.terminate(); reject(Object.assign(new Error(code), { code })) }
     }
-    const failure = () => finish(false), success = () => finish(true), timer = setTimeout(failure, timeoutMs)
+    const failure = error => finish(false, ({
+      DEPTH_ZERO_SELF_SIGNED_CERT: 'HUB_TLS_UNTRUSTED', SELF_SIGNED_CERT_IN_CHAIN: 'HUB_TLS_UNTRUSTED',
+      UNABLE_TO_VERIFY_LEAF_SIGNATURE: 'HUB_TLS_UNTRUSTED', UNABLE_TO_GET_ISSUER_CERT_LOCALLY: 'HUB_TLS_UNTRUSTED',
+      CERT_HAS_EXPIRED: 'HUB_TLS_CERT_EXPIRED', CERT_NOT_YET_VALID: 'HUB_TLS_CERT_TIME_INVALID',
+      ERR_TLS_CERT_ALTNAME_INVALID: 'HUB_TLS_HOSTNAME_MISMATCH', ECONNREFUSED: 'HUB_CONNECTION_REFUSED', ETIMEDOUT: 'HUB_CONNECTION_TIMEOUT',
+    })[error?.code] ?? 'HUB_UNREACHABLE')
+    const success = () => finish(true), timer = setTimeout(() => finish(false, 'HUB_CONNECTION_TIMEOUT'), timeoutMs)
     socket.once('error', failure); socket.once('close', failure); socket.once('open', success)
   })
   return socket

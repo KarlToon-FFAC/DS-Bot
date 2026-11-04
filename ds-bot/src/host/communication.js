@@ -4,6 +4,7 @@ import { output } from './tools.js'
 import { assertConversationToolScope } from './federation/tool-scope.js'
 import { communicationPreset, hasCommunicationPreset } from './federation/session-scope.js'
 import { profileHuman, readPrincipalAvatar } from './federation/avatars.js'
+import { legacyCredential } from './federation/legacy-credential.js'
 
 const fail = code => { throw Object.assign(new Error(code), { code }) }
 const toolOperation = (kind, exec) => {
@@ -14,10 +15,8 @@ const toolOperation = (kind, exec) => {
 export function install(rt) {
   const settings = rt.config.communication ?? {}
   const { ctx } = rt
-  const key = settings.credentialEnv ?? 'DSBOT_COMMUNICATION_CREDENTIAL'
-  let credential = settings.enabled && /^DSBOT_COMMUNICATION_[A-Z0-9_]+$/.test(key) ? process.env[key] : undefined
-  // This reference belongs only to the communication host, not to model tools.
-  if (credential) delete process.env[key]
+  const legacy = legacyCredential(rt, settings)
+  let credential = legacy?.read
   let runtime, starting, stopped = false, startupError, disposePreset, onboarding
   // Only the owned development bench sets both flags; request bodies cannot relax TLS.
   const testLoopback = process.env.DSBOT_COMMUNICATION_PROBE === '1' && process.env.DSBOT_COMMUNICATION_TEST_LOOPBACK === '1'
@@ -34,14 +33,14 @@ export function install(rt) {
       if (settings.credentialKey) {
         const { communicationAuthentication, connectHubSocket } = await import('./federation/onboarding.js')
         credential = { authenticate: communicationAuthentication(rt, settings.credentialKey, settings), socketFactory: () => connectHubSocket(settings.url, { allowLoopback: testLoopback }) }
-      } else if (!credential || credential.length < 32) fail('CREDENTIAL_UNAVAILABLE')
+      } else if (!credential) fail('CREDENTIAL_UNAVAILABLE')
       if (rt.readOnly() !== undefined) fail('COMMUNICATION_READ_ONLY')
       const presets = ctx.get('agentPresets')
       if (!presets || typeof presets.register !== 'function') fail('COMMUNICATION_PRESET_UNAVAILABLE')
       if ((await presets.list()).some(preset => preset.id === communicationPreset.id)) fail('COMMUNICATION_PRESET_CONFLICT')
       disposePreset = await presets.register(communicationPreset)
       const { CommunicationRuntime } = await import('./federation/runtime.js')
-      runtime = new CommunicationRuntime(rt, settings, credential, definitions)
+      runtime = new CommunicationRuntime(rt, settings, credential, definitions, { onAuthenticationFailure: () => legacy?.invalidate() })
       rt.communication = runtime
       return runtime
     })().catch(error => {
@@ -146,7 +145,7 @@ export function install(rt) {
       }
     }
     void start()
-    return async () => { stopped = true; clearTimeout(timer); await starting?.catch(() => {}); await runtime?.close(); await disposePreset?.() }
+    return async () => { stopped = true; clearTimeout(timer); await starting?.catch(() => {}); await runtime?.close(); credential = undefined; await disposePreset?.() }
   }, 'ds-bot: communication')
   ctx.effect(() => ctx.connection.fetch.register({ path: '/api/communication', methods: ['POST'], requestBody: 'buffered',
     fetch: async request => {
@@ -218,6 +217,7 @@ export function install(rt) {
           default: fail('UNKNOWN_OPERATION')
         }
         return Response.json({ ok: true, value })
-      } catch (error) { return Response.json({ ok: false, error: { code: error.code ?? 'COMMUNICATION_UNAVAILABLE', message: error.code ?? 'Communication is unavailable' } }) }
+      } catch (error) { return Response.json({ ok: false, error: { code: error.code ?? 'COMMUNICATION_UNAVAILABLE', message: error.code ?? 'Communication is unavailable',
+        ...(/^(ENROLLMENT_(CONNECT|CHALLENGE|PROOF)_FAILED|COMMUNICATION_CREDENTIAL_(READ|WRITE|DESCRIBE|LIST)_FAILED|COMMUNICATION_CONFIG_WRITE_FAILED|CONFIG_EDIT_(OVERLAID|ENTRY_CHANGED|NOT_ACTIVE|INVALID_DOCUMENT))$/.test(error.phase ?? '') ? { phase: error.phase } : {}) } }) }
     } }), 'ds-bot: communication channel')
 }

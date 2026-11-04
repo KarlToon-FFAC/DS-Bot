@@ -62,6 +62,54 @@ const membership = { conversationId: 'group', title: 'Shared group', kind: 'grou
   ownerPrincipalId: 'human:a:owner', joinSeq: 1, watermark: 1, info: { members: [{ principalId: 'human:a:owner', displayName: 'Owner', kind: 'human', role: 'owner', speakingMode: 'speak' }] } }
 const state = () => ({ connected: true, instanceId: 'a', humanPrincipalId: 'human:a:owner', contacts: [], conversations: [], invites: [], outbox: [], errors: [] })
 
+test('uncertain enrollment restores its saved request, exposes safe diagnostics and never automatically resubmits', async () => {
+  const hub = { hubId: 'onboarding-test', url: 'wss://hub.example.test/communication' }, storage = { defaultProvider: 'test', encryptedByDefault: false }
+  let saved = null, absent = false
+  await pane({ enabled: false, handle: async body => {
+    if (body.endpoint === 'onboarding-storage') return saved ? { configured: true, storage, ...saved } : { configured: false, storage, enrollments: [] }
+    if (body.endpoint === 'decode-hub-code') return hub
+    if (body.endpoint === 'join-hub') { saved = { ...hub, requestId: 'same-request', status: 'prepared' }; throw Object.assign(new Error('DO_NOT_DISPLAY_RAW_FAILURE'), { code: 'CONNECTION_LOST', phase: 'ENROLLMENT_PROOF_FAILED' }) }
+    if (body.endpoint === 'hub-join-status') { if (absent) throw Object.assign(new Error('not found'), { code: 'JOIN_NOT_FOUND' }); saved.status = 'pending'; return saved }
+    assert.fail('Unexpected endpoint')
+  } }, async ({ doc, click, edit, calls, button }) => {
+    await click('Personal settings'); await click('Add a device')
+    await edit(doc.querySelector('[aria-label="Hub code"]'), 'synthetic-public-hub-code'); await click('Review Hub')
+    assert.match(doc.querySelector('.bt-comm-onboarding').textContent, /does not test network access or submit/)
+    await click('Confirm and request access')
+    assert.match(doc.querySelector('.bt-comm-onboarding').textContent, /same-request/)
+    assert.match(doc.querySelector('.bt-comm-error').textContent, /CONNECTION_LOST.*ENROLLMENT_PROOF_FAILED/)
+    assert.doesNotMatch(doc.querySelector('.bt-comm-error').textContent, /DO_NOT_DISPLAY_RAW_FAILURE/)
+    assert.equal(button('Confirm and request access').disabled, true)
+    assert.equal(calls.filter(call => call.endpoint === 'hub-join-status').length, 0)
+    await click('Refresh saved request'); await click('Check approval')
+    assert.equal(calls.filter(call => call.endpoint === 'join-hub').length, 1)
+    assert.match(doc.querySelector('.bt-comm-onboarding').textContent, /pending/)
+    absent = true; await click('Check approval')
+    assert.equal(button('Confirm and request access').disabled, false, 'explicit not-found status permits an explicit retry')
+    assert.equal(calls.filter(call => call.endpoint === 'join-hub').length, 1)
+  })
+})
+
+test('an unreadable local request after an ambiguous join keeps submission blocked until local status is recovered', async () => {
+  const storage = { defaultProvider: 'test' }, hub = { hubId: 'unreadable-test', url: 'wss://hub.example.test/communication' }
+  let reads = 0
+  await pane({ enabled: false, handle: async body => {
+    if (body.endpoint === 'onboarding-storage') { reads++; if (reads === 2) throw Error('DO_NOT_DISPLAY_LOCAL_FAILURE'); return { configured: false, storage, enrollments: [] } }
+    if (body.endpoint === 'decode-hub-code') return hub
+    if (body.endpoint === 'join-hub') throw Object.assign(new Error('DO_NOT_DISPLAY_JOIN_FAILURE'), { phase: 'COMMUNICATION_CREDENTIAL_WRITE_FAILED' })
+    assert.fail('Unexpected endpoint')
+  } }, async ({ doc, click, edit, button, calls }) => {
+    await click('Personal settings'); await click('Add a device')
+    await edit(doc.querySelector('[aria-label="Hub code"]'), 'synthetic-public-hub-code'); await click('Review Hub'); await click('Confirm and request access')
+    assert.match(doc.querySelector('.bt-comm-error').textContent, /COMMUNICATION_CREDENTIAL_WRITE_FAILED/)
+    assert.doesNotMatch(doc.querySelector('.bt-comm-error').textContent, /DO_NOT_DISPLAY/)
+    assert.equal(button('Confirm and request access').disabled, true)
+    await click('Refresh saved request')
+    assert.equal(button('Confirm and request access').disabled, false)
+    assert.equal(calls.filter(call => call.endpoint === 'join-hub').length, 1)
+  })
+})
+
 test('personal gear owns profile, closed visibility, identity and connection settings; closing discards an unsaved profile', async () => {
   const snapshot = { ...state(), conversations: [membership] }
   await pane({ snapshot }, async ({ doc, click, edit, calls }) => {

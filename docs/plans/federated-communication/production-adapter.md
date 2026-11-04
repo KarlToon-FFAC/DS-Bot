@@ -26,7 +26,11 @@ For real use, the owner supplies the referenced credential through their normal
 local secret mechanism. Never put it in YAML, a message, a model tool or a log.
 The host consumes only the explicitly named `DSBOT_COMMUNICATION_*` process
 variable and removes that variable before model tools run. It holds the value in
-the communication transport closure; no provider or persistent credential is added.
+a host-only process lease bound to this exact profile, Hub and identity, so ordinary
+configuration reactivation can reconnect after the environment value is consumed.
+Disable, rebinding, rotation or authentication rejection invalidates it. A new
+process needs its normal launch bootstrap again; no provider or persistent
+credential is added. See [reload and join diagnostics](join-diagnostics-credential-reload.md).
 Plain WS is allowed only on literal loopback. Non-loopback communication requires
 WSS with normal certificate validation. No real deployment is performed here.
 

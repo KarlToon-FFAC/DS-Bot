@@ -102,7 +102,19 @@ test('the shared socket pins validated DNS while retaining TLS verification, rej
   assert.equal(created.at(-1).options.followRedirects, false, 'enrollment uses the exact shared connection path')
   rpc.close()
   class Stalled extends EventEmitter { terminate() { this.terminated = true } }
-  await assert.rejects(connectHubSocket(hub.url, { socketClass: Stalled, timeoutMs: 5 }), { code: 'HUB_UNREACHABLE' })
+  await assert.rejects(connectHubSocket(hub.url, { socketClass: Stalled, timeoutMs: 5 }), { code: 'HUB_CONNECTION_TIMEOUT' })
+})
+
+test('enrollment distinguishes untrusted CA, hostname mismatch, expired TLS and refusal without exposing raw errors or disabling verification', async () => {
+  for (const [failureCode, code] of [['DEPTH_ZERO_SELF_SIGNED_CERT', 'HUB_TLS_UNTRUSTED'], ['ERR_TLS_CERT_ALTNAME_INVALID', 'HUB_TLS_HOSTNAME_MISMATCH'], ['CERT_HAS_EXPIRED', 'HUB_TLS_CERT_EXPIRED'], ['ECONNREFUSED', 'HUB_CONNECTION_REFUSED']]) {
+    let options
+    class Failed extends EventEmitter {
+      constructor(_url, value) { super(); options = value; queueMicrotask(() => this.emit('error', Object.assign(new Error('DO_NOT_DISPLAY_RAW_SOCKET_ERROR'), { code: failureCode }))) }
+      terminate() {}
+    }
+    await assert.rejects(connectHubSocket(hub.url, { socketClass: Failed }), error => error.code === code && error.message === code)
+    assert.equal(options.rejectUnauthorized, true); assert.equal(options.followRedirects, false)
+  }
 })
 
 test('construction and unauthenticated or Bot calls cannot create a key, connect, or enroll', async () => {

@@ -466,3 +466,28 @@ Use the current `nameVersion` from admin state; refresh on a version conflict,
 never blindly overwrite another administrator's edit. The administrator supplies
 its existing password privately through `DSBOT_HUB_ADMIN_PASSWORD`; do not read,
 create or disclose it to a Bot. This skill grants no administrator authority.
+
+## An uncertain join or certificate failure
+
+Review Hub decodes a public code locally; it does not test a connection. Never
+repeat Join merely because Review succeeded. Use onboarding-storage / Refresh
+saved request first, then hub-join-status / Check approval for an existing request
+ID. Match that public ID in the intended Hub administrator's Device requests.
+Prepared without an ID means no request has been submitted. Only an explicit
+JOIN_NOT_FOUND permits a deliberate retry with the same saved identity; preserve
+credentials and databases. Share only safe error code/phase, version and public
+Hub/request metadata, never cookies, private keys, headers or raw logs.
+
+HUB_TLS_UNTRUSTED requires verifying the administrator's public CA fingerprint
+and supplying its PEM in NODE_EXTRA_CA_CERTS before the actual app/Node process
+starts. Fully restart it. This is process-level trust, not a system-store change
+or per-Hub pin. It cannot repair a SAN mismatch or unreachable address. Current
+Hub codes contain no certificate fingerprint; Hub ID is not a pin. Keep TLS and
+hostname verification enabled. Enrollment/trust configuration remain Human-only
+operations; this skill grants no new authority to import trust or provision keys.
+
+Legacy static bootstrap values stay removed from process.env. The host reuses
+only a private same-process lease for the same profile/Hub/identity across config
+reload; it does not expose a credential read/restore command. New processes need
+the existing launch injection again. Do not read registry values or user secrets
+to recover them, and do not copy external temporary patches over the new code.

@@ -23,3 +23,18 @@ test('unconfigured instances expose only authenticated Human setup routes withou
   assert.equal(relax.error.code, 'AUTHOR_MISMATCH')
   assert.equal(loaded, 0)
 })
+
+test('enrollment HTTP diagnostics expose only safe failure phase and never an underlying service message', async () => {
+  let route
+  const rt = { config: {}, teamTools: [], load: async () => {}, refresh: async () => {}, ctx: {
+    credentials: { readRecord: async () => { throw Error('DO_NOT_DISPLAY_SERVICE_DETAILS') }, modifyRecord: async () => {}, describeRecord: async () => ({ writable: true }) },
+    effect: fn => fn(), connection: { fetch: { register: value => { route = value; return () => {} } } },
+  } }
+  install(rt)
+  const hub = { hubId: 'diagnostic-test', url: 'wss://hub.example.test/communication' }
+  const response = await route.fetch(new Request('http://127.0.0.1/api/communication', { method: 'POST', body: JSON.stringify({ endpoint: 'join-hub', hubCode: 'dsbot-hub:1:' + Buffer.from(JSON.stringify(hub)).toString('base64url'), displayName: 'Synthetic device', confirmedHubId: hub.hubId, confirmedUrl: hub.url }) }))
+  const body = await response.json()
+  assert.equal(body.error.code, 'COMMUNICATION_CREDENTIAL_READ_FAILED')
+  assert.equal(body.error.phase, 'COMMUNICATION_CREDENTIAL_READ_FAILED')
+  assert.ok(!JSON.stringify(body).includes('DO_NOT_DISPLAY'))
+})

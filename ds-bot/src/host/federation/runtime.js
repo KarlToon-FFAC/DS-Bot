@@ -21,7 +21,7 @@ const operationId = source => `communication-${createHash('sha256').update(sourc
 const humanSendIntent = input => JSON.stringify([input.conversationId, input.text, input.clientCreatedAt, input.mentions ?? [], input.replyToMessageId ?? null, input.membershipEpoch ?? null])
 
 export class CommunicationRuntime {
-  constructor(rt, settings, credential, toolDefinitions) {
+  constructor(rt, settings, credential, toolDefinitions, { onAuthenticationFailure } = {}) {
     communicationUrl(settings.url)
     if (!Array.isArray(settings.publishedBotIds ?? []) || (settings.publishedBotIds ?? []).some(id => !rt.botOf(id))) fail('BOT_NOT_FOUND')
     if (typeof (settings.humanDisplayName ?? 'You') !== 'string' || !(settings.humanDisplayName ?? 'You').trim()) fail('INVALID_CONFIG')
@@ -105,7 +105,7 @@ export class CommunicationRuntime {
         await this.processing
         this.transportError = null
       },
-      onError: error => { this.transportError = error.code },
+      onError: error => { this.transportError = error.code; if (error.code === 'UNAUTHENTICATED') onAuthenticationFailure?.() },
     })
     this.installHooks()
     this.transport.start({ pollMs: settings.pollMs ?? 500 })
@@ -646,6 +646,7 @@ export class CommunicationRuntime {
     await this.transport.pumping?.catch(() => {})
     await this.processing.catch(() => {})
     await this.workEvents?.catch(() => {})
+    this.transport.credential = undefined
     for (const dispose of this.disposers.reverse()) if (typeof dispose === 'function') dispose()
     this.queue.close()
   }

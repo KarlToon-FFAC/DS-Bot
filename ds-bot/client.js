@@ -42,6 +42,39 @@ module.exports = __toCommonJS(index_exports);
 // src/client/i18n.js
 var NAMESPACE = "ds-bot";
 var ZH = {
+  "Device identity is saved locally. No request ID exists yet; access has not been requested from the Hub.": "设备身份已在本机保存，尚无申请编号，还未向 Hub 提交加入申请。",
+  "The Hub certificate authority is not trusted. Verify its public CA fingerprint with the administrator and launch the app with NODE_EXTRA_CA_CERTS. Restart the app; keep TLS verification enabled.": "不信任 Hub 的证书颁发机构。请与管理员核对公开 CA 指纹，再通过 NODE_EXTRA_CA_CERTS 启动并完全重启应用；保留 TLS 校验。",
+  "The Hub address does not match the certificate. Ask its administrator for a certificate covering this exact reachable hostname or IP.": "Hub 地址与证书不匹配。请管理员提供包含此实际可达域名或 IP 的证书。",
+  "The Hub certificate has expired. Ask its administrator to renew it.": "Hub 证书已过期，请管理员更新证书。",
+  "The Hub certificate is not valid yet. Check both clocks and the certificate dates.": "Hub 证书尚未生效，请检查双方时钟与证书日期。",
+  "The Hub refused the connection. Check its listening address and existing network routing with the administrator.": "Hub 拒绝连接，请与管理员核对监听地址和现有网络路由。",
+  "The Hub connection timed out. Local code review does not establish reachability; check the actual address and network route.": "连接 Hub 超时。核对 Hub 码不代表网络可达，请检查实际地址和网络路由。",
+  "Request ID": "申请编号",
+  "Review only decodes the Hub code locally. It does not test network access or submit a request.": "核对仅在本地解析 Hub 码，不会测试网络连通性或提交申请。",
+  "Refresh saved request": "刷新本机申请状态",
+  "Cannot establish the Hub connection. Check its reachable WSS address and trusted certificate.": "无法建立 Hub 连接。请检查外网可达的 WSS 地址及受信任证书。",
+  "The Hub requires a trusted WSS connection.": "Hub 需要使用证书受信任的 WSS 连接。",
+  "The Hub address is not allowed. Ask its owner for a reachable trusted WSS address.": "此 Hub 地址不可用，请向管理员获取可访问且受信任的 WSS 地址。",
+  "Hub enrollment is disabled. Ask its administrator to enable management.": "Hub 尚未启用设备加入，请管理员启用管理功能。",
+  "The Hub has no saved request with this ID. You may explicitly request access again using the saved device identity.": "Hub 未保存此申请编号。现在可使用已保存的设备身份明确重新申请。",
+  "No request has been submitted. Fix the reported local or connection problem before requesting access.": "尚未提交申请。请先解决本机或连接问题，再申请加入。",
+  "The local credential service is unavailable. Check the app version and credential provider.": "本机凭据服务不可用，请检查应用版本和凭据提供程序。",
+  "The local credential store is read only. No new enrollment can be saved.": "本机凭据存储为只读，无法保存新申请。",
+  "The saved enrollment belongs to another identity or Hub. Preserve it and check the configured profile.": "已保存申请与当前身份或 Hub 不匹配。请保留数据并核对所用配置。",
+  "This profile is already bound to another Hub or instance. Use the intended separate profile.": "当前配置已绑定其他 Hub 或实例，请使用正确的独立配置。",
+  "Review and confirm the exact Hub address again.": "请重新核对并确认准确的 Hub 地址。",
+  "The Hub returned an invalid or different enrollment identity. Do not retry until the Hub is checked.": "Hub 返回的申请身份无效或不一致，请核实 Hub 后再操作。",
+  "Enrollment approval is saved, but a home or command-line overlay blocks configuration changes.": "申请批准结果已保存，但全局或命令行覆盖配置阻止了修改。",
+  "The app configuration editor is unavailable. Update the app before applying approved enrollment.": "应用配置编辑服务不可用，请更新应用后再应用已批准的申请。",
+  "The enrollment result is uncertain. Check the saved request and its approval before requesting access again.": "加入结果尚不确定。请先刷新本机申请状态并检查批准情况，不要重复申请。",
+  "The enrollment request timed out. Check the saved request and its approval before requesting access again.": "申请响应超时。请先刷新本机申请状态并检查批准情况，不要重复申请。",
+  "The connection failed before the enrollment exchange completed.": "申请交换完成前连接失败。",
+  "The Hub challenge could not be confirmed. Check the saved request before retrying.": "无法确认 Hub 的身份挑战，请先检查已保存的申请。",
+  "The saved local enrollment could not be read.": "无法读取本机已保存的申请。",
+  "The local enrollment could not be saved. Preserve existing data and check the credential provider.": "无法保存本机申请，请保留现有数据并检查凭据提供程序。",
+  "The local credential provider status is unavailable.": "无法获取本机凭据提供程序状态。",
+  "Saved local enrollments could not be listed.": "无法列出本机已保存的申请。",
+  "Enrollment approval may be saved, but app configuration could not be updated. Check approval before retrying.": "申请批准结果可能已保存，但应用配置未能更新。请先检查批准状态，不要重新申请。",
   "Replies stay in this conversation.": "这里只显示当前会话中的同一回复链。",
   "Personal settings": "个人设置",
   "Your profile": "本人资料",
@@ -21089,6 +21122,46 @@ var import_react54 = require("react");
 var statuses = /* @__PURE__ */ new Set(["prepared", "pending", "approved", "rejected", "cancelled", "expired", "accepted"]);
 var statusLabel = (value) => t(statuses.has(value) ? value : "Status unavailable");
 var failureLabel2 = () => t("The action could not be confirmed. Refresh status before trying again.");
+var enrollmentErrors = {
+  HUB_TLS_UNTRUSTED: "The Hub certificate authority is not trusted. Verify its public CA fingerprint with the administrator and launch the app with NODE_EXTRA_CA_CERTS. Restart the app; keep TLS verification enabled.",
+  HUB_TLS_HOSTNAME_MISMATCH: "The Hub address does not match the certificate. Ask its administrator for a certificate covering this exact reachable hostname or IP.",
+  HUB_TLS_CERT_EXPIRED: "The Hub certificate has expired. Ask its administrator to renew it.",
+  HUB_TLS_CERT_TIME_INVALID: "The Hub certificate is not valid yet. Check both clocks and the certificate dates.",
+  HUB_CONNECTION_REFUSED: "The Hub refused the connection. Check its listening address and existing network routing with the administrator.",
+  HUB_CONNECTION_TIMEOUT: "The Hub connection timed out. Local code review does not establish reachability; check the actual address and network route.",
+  HUB_UNREACHABLE: "Cannot establish the Hub connection. Check its reachable WSS address and trusted certificate.",
+  TLS_REQUIRED: "The Hub requires a trusted WSS connection.",
+  HUB_ADDRESS_FORBIDDEN: "The Hub address is not allowed. Ask its owner for a reachable trusted WSS address.",
+  MANAGEMENT_DISABLED: "Hub enrollment is disabled. Ask its administrator to enable management.",
+  JOIN_NOT_FOUND: "The Hub has no saved request with this ID. You may explicitly request access again using the saved device identity.",
+  JOIN_NOT_SUBMITTED: "No request has been submitted. Fix the reported local or connection problem before requesting access.",
+  CREDENTIAL_STORAGE_UNAVAILABLE: "The local credential service is unavailable. Check the app version and credential provider.",
+  CREDENTIAL_STORAGE_READ_ONLY: "The local credential store is read only. No new enrollment can be saved.",
+  COMMUNICATION_CREDENTIAL_MISMATCH: "The saved enrollment belongs to another identity or Hub. Preserve it and check the configured profile.",
+  COMMUNICATION_PAIRING_CONFLICT: "This profile is already bound to another Hub or instance. Use the intended separate profile.",
+  HUB_CONFIRMATION_REQUIRED: "Review and confirm the exact Hub address again.",
+  INVALID_ENROLLMENT_CHALLENGE: "The Hub returned an invalid or different enrollment identity. Do not retry until the Hub is checked.",
+  CONFIG_EDIT_OVERLAID: "Enrollment approval is saved, but a home or command-line overlay blocks configuration changes.",
+  CONFIG_EDITOR_UNAVAILABLE: "The app configuration editor is unavailable. Update the app before applying approved enrollment.",
+  CONNECTION_LOST: "The enrollment result is uncertain. Check the saved request and its approval before requesting access again.",
+  REQUEST_TIMEOUT: "The enrollment request timed out. Check the saved request and its approval before requesting access again."
+};
+var enrollmentPhases = {
+  ENROLLMENT_CONNECT_FAILED: "The connection failed before the enrollment exchange completed.",
+  ENROLLMENT_CHALLENGE_FAILED: "The Hub challenge could not be confirmed. Check the saved request before retrying.",
+  ENROLLMENT_PROOF_FAILED: "The enrollment result is uncertain. Check the saved request and its approval before requesting access again.",
+  COMMUNICATION_CREDENTIAL_READ_FAILED: "The saved local enrollment could not be read.",
+  COMMUNICATION_CREDENTIAL_WRITE_FAILED: "The local enrollment could not be saved. Preserve existing data and check the credential provider.",
+  COMMUNICATION_CREDENTIAL_DESCRIBE_FAILED: "The local credential provider status is unavailable.",
+  COMMUNICATION_CREDENTIAL_LIST_FAILED: "Saved local enrollments could not be listed.",
+  COMMUNICATION_CONFIG_WRITE_FAILED: "Enrollment approval may be saved, but app configuration could not be updated. Check approval before retrying."
+};
+function enrollmentFailure(error) {
+  const code = typeof error?.code === "string" && Object.hasOwn(enrollmentErrors, error.code) ? error.code : ["TimeoutError", "AbortError"].includes(error?.name) ? "REQUEST_TIMEOUT" : null;
+  const phase = typeof error?.phase === "string" && Object.hasOwn(enrollmentPhases, error.phase) ? error.phase : null;
+  const message = code ? enrollmentErrors[code] : phase ? enrollmentPhases[phase] : "The action could not be confirmed. Refresh status before trying again.";
+  return t(message) + (code || phase ? ` [${[code, phase].filter(Boolean).join(" · ")}]` : "");
+}
 function hubManagementAddress(value) {
   if (typeof value !== "string") return null;
   try {
@@ -21104,6 +21177,8 @@ var adminLink = (url) => hubManagementAddress(url) ? (0, import_react54.createEl
 function AddDevice({ request, manualGuide, displayName = "Human" }) {
   const [code, setCode] = (0, import_react54.useState)(""), [name, setName] = (0, import_react54.useState)(displayName), [hub, setHub] = (0, import_react54.useState)(null);
   const [storage, setStorage] = (0, import_react54.useState)(null), [enrollments, setEnrollments] = (0, import_react54.useState)([]), [busy, setBusy] = (0, import_react54.useState)(false), [error, setError] = (0, import_react54.useState)("");
+  const [absentHub, setAbsentHub] = (0, import_react54.useState)(null);
+  const [uncertainHub, setUncertainHub] = (0, import_react54.useState)(null);
   const generation = (0, import_react54.useRef)(0);
   (0, import_react54.useEffect)(() => {
     let active = true;
@@ -21126,17 +21201,33 @@ function AddDevice({ request, manualGuide, displayName = "Human" }) {
     setError("");
     try {
       await work(token);
-    } catch {
-      if (token === generation.current) setError(failureLabel2());
+    } catch (failure) {
+      if (token === generation.current) {
+        setError(enrollmentFailure(failure));
+        try {
+          await refreshStorage(token);
+        } catch {
+        }
+      }
     } finally {
       if (token === generation.current) setBusy(false);
     }
   };
   const update = (value) => setEnrollments((current) => [...current.filter((item) => item.hubId !== value.hubId), value]);
+  const refreshStorage = async (token) => {
+    const value = await request({ endpoint: "onboarding-storage", ...hub ? { hubId: hub.hubId } : {} });
+    if (token !== generation.current) return;
+    setStorage(value.storage ?? storage);
+    if (hub) setUncertainHub((current) => current === hub.hubId ? null : current);
+    if (value.enrollments) setEnrollments(value.enrollments);
+    else if (value.hubId) update(value);
+  };
+  const existingRequest = hub && enrollments.some((item) => item.hubId === hub.hubId && item.requestId && ["prepared", "pending", "approved"].includes(item.status)) && absentHub !== hub.hubId;
   return (0, import_react54.createElement)(
     "div",
     { className: "bt-comm-onboarding" },
     (0, import_react54.createElement)("p", null, t("Paste a Hub code from its owner. Review the actual address before requesting access. Devices are not discovered automatically.")),
+    (0, import_react54.createElement)("p", { className: "bt-comm-reference" }, t("Review only decodes the Hub code locally. It does not test network access or submit a request.")),
     (0, import_react54.createElement)("label", { className: "bt-comm-field" }, t("Hub code"), (0, import_react54.createElement)("textarea", { value: code, rows: 2, maxLength: 4096, "aria-label": t("Hub code"), onChange: (event) => {
       generation.current += 1;
       setBusy(false);
@@ -21157,13 +21248,21 @@ function AddDevice({ request, manualGuide, displayName = "Human" }) {
       (0, import_react54.createElement)("p", null, t("Hub address"), ": ", (0, import_react54.createElement)("code", null, hub.url)),
       (0, import_react54.createElement)("p", null, "Hub ID: ", (0, import_react54.createElement)("code", null, hub.hubId)),
       (0, import_react54.createElement)("label", { className: "bt-comm-field" }, t("Device display name"), (0, import_react54.createElement)("input", { value: name, maxLength: 100, "aria-label": t("Device display name"), onChange: (event) => setName(event.target.value) })),
-      (0, import_react54.createElement)("button", { type: "button", disabled: busy || !name.trim() || !storage, onClick: () => {
+      (0, import_react54.createElement)("button", { type: "button", disabled: busy || !name.trim() || !storage || existingRequest || uncertainHub === hub.hubId, onClick: () => {
         void run2(async (token) => {
+          setAbsentHub(null);
+          setUncertainHub(hub.hubId);
           const value = await request({ endpoint: "join-hub", hubCode: code, displayName: name, confirmedHubId: hub.hubId, confirmedUrl: hub.url });
-          if (token === generation.current) update(value);
+          if (token === generation.current) {
+            update(value);
+            setUncertainHub(null);
+          }
         });
       } }, t("Confirm and request access"))
     ) : null,
+    (0, import_react54.createElement)("button", { type: "button", disabled: busy, onClick: () => {
+      void run2((token) => refreshStorage(token));
+    } }, t("Refresh saved request")),
     (0, import_react54.createElement)("p", { className: "bt-comm-storage-note" }, t("Pairing keys are created only when you confirm a request. The default local credential store is plaintext protected by your OS account permissions, not encryption or isolation from tools running as the same user.")),
     storage ? (0, import_react54.createElement)("p", { className: "bt-comm-reference" }, t("Credential storage"), ": ", storage.defaultProvider, " · ", t(storage.encryptedByDefault ? "Encrypted by provider" : "Not encrypted by default")) : null,
     enrollments.map((item) => (0, import_react54.createElement)(
@@ -21171,14 +21270,20 @@ function AddDevice({ request, manualGuide, displayName = "Human" }) {
       { key: item.hubId, className: "bt-comm-address" },
       (0, import_react54.createElement)("p", null, (0, import_react54.createElement)("code", null, item.hubId), " · ", statusLabel(item.status)),
       (0, import_react54.createElement)("p", { className: "bt-comm-reference" }, item.url),
+      item.requestId ? (0, import_react54.createElement)("p", { className: "bt-comm-reference" }, t("Request ID"), ": ", (0, import_react54.createElement)("code", null, item.requestId)) : null,
       item.status === "approved" ? (0, import_react54.createElement)("p", { role: "status" }, t("Approved. The device configuration is saved through the app and will reload. Existing settings are preserved.")) : null,
-      (0, import_react54.createElement)("button", { type: "button", disabled: busy, onClick: () => {
+      item.requestId ? (0, import_react54.createElement)("button", { type: "button", disabled: busy, onClick: () => {
         void run2(async (token) => {
-          const value = await request({ endpoint: "hub-join-status", hubId: item.hubId });
-          if (token === generation.current) update(value);
+          try {
+            const value = await request({ endpoint: "hub-join-status", hubId: item.hubId });
+            if (token === generation.current) update(value);
+          } catch (failure) {
+            if (token === generation.current && failure.code === "JOIN_NOT_FOUND") setAbsentHub(item.hubId);
+            throw failure;
+          }
         });
-      } }, t("Check approval")),
-      ["prepared", "pending"].includes(item.status) ? (0, import_react54.createElement)("button", { type: "button", disabled: busy, onClick: () => {
+      } }, t("Check approval")) : (0, import_react54.createElement)("p", { role: "status" }, t("Device identity is saved locally. No request ID exists yet; access has not been requested from the Hub.")),
+      item.requestId && ["prepared", "pending"].includes(item.status) ? (0, import_react54.createElement)("button", { type: "button", disabled: busy, onClick: () => {
         void run2(async (token) => {
           const value = await request({ endpoint: "cancel-hub-join", hubId: item.hubId });
           if (token === generation.current) update(value);
@@ -21756,7 +21861,7 @@ async function communicationRequest(body) {
   const response = await fetch("/api/communication", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(15e3) });
   if ([401, 403].includes(response.status)) throw Object.assign(new Error("INSTANCE_AUTHENTICATION_REQUIRED"), { code: "INSTANCE_AUTHENTICATION_REQUIRED" });
   const result = await response.json();
-  if (!result.ok) throw Object.assign(new Error(result.error?.code ?? "COMMUNICATION_UNAVAILABLE"), { code: result.error?.code });
+  if (!result.ok) throw Object.assign(new Error(result.error?.code ?? "COMMUNICATION_UNAVAILABLE"), { code: result.error?.code, phase: result.error?.phase });
   return result.value;
 }
 var friendly = (error) => ({
