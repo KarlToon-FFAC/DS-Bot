@@ -249,6 +249,25 @@ export class CommunicationQueue {
     requireValue(row, 'REFERENCE_NOT_AVAILABLE')
     return JSON.parse(row.body)
   }
+  thread(conversationId, principalId, epoch, messageId, { after = 0, limit = 50, watermark } = {}) {
+    const member = this.member(conversationId, principalId, epoch)
+    requireValue(typeof messageId === 'string' && messageId.length > 0, 'INVALID_REQUEST')
+    requireValue(Number.isSafeInteger(after) && after >= 0 && Number.isSafeInteger(limit) && limit > 0 && limit <= 100, 'INVALID_CURSOR')
+    const cursor = this.cursor(conversationId, principalId, epoch)
+    requireValue(watermark === undefined || Number.isSafeInteger(watermark) && watermark >= member.join_seq - 1 && watermark <= cursor, 'INVALID_CURSOR')
+    const upper = watermark ?? cursor
+    // Reply ancestry is a view of authorized canonical messages, not Bot causal
+    // ancestry. Scope every recursive edge before following it; UNION ends cycles.
+    const visible = `SELECT body,seq,json_extract(body,'$.message.messageId') id,json_extract(body,'$.message.replyToMessageId') parent FROM events WHERE conversation_id=? AND principal_id=? AND epoch=? AND seq>=? AND seq<=? AND json_extract(body,'$.type')='message'`
+    const scope = [conversationId, principalId, epoch, member.join_seq, upper]
+    const root = this.db.prepare(`WITH RECURSIVE visible AS (${visible}), ancestors AS (SELECT * FROM visible WHERE id=? UNION SELECT v.* FROM visible v JOIN ancestors a ON v.id=a.parent) SELECT * FROM ancestors ORDER BY seq LIMIT 1`).get(...scope, messageId)
+    requireValue(root, 'REFERENCE_NOT_AVAILABLE')
+    const rows = this.db.prepare(`WITH RECURSIVE visible AS (${visible}), descendants AS (SELECT * FROM visible WHERE id=? UNION SELECT v.* FROM visible v JOIN descendants d ON v.parent=d.id) SELECT body,seq FROM descendants WHERE seq>? ORDER BY seq LIMIT ?`).all(...scope, root.id, after, limit + 1)
+    const events = rows.slice(0, limit).map(row => JSON.parse(row.body))
+    const parentAvailable = !root.parent || Boolean(this.db.prepare(`WITH visible AS (${visible}) SELECT 1 FROM visible WHERE id=?`).get(...scope, root.parent))
+    return { conversationId, membershipEpoch: epoch, messageId, rootMessageId: root.id, watermark: upper,
+      earlierUnavailable: !parentAvailable, events, hasMore: rows.length > limit, nextAfter: events.at(-1)?.conversationSeq ?? after }
+  }
   markView(conversationId, principalId, epoch, seq, { humanRead = false } = {}) {
     const member = this.member(conversationId, principalId, epoch)
     requireValue(Number.isSafeInteger(seq) && seq >= member.join_seq - 1 && seq <= this.cursor(conversationId, principalId, epoch), 'HISTORY_GAP')

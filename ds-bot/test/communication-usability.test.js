@@ -62,6 +62,65 @@ const membership = { conversationId: 'group', title: 'Shared group', kind: 'grou
   ownerPrincipalId: 'human:a:owner', joinSeq: 1, watermark: 1, info: { members: [{ principalId: 'human:a:owner', displayName: 'Owner', kind: 'human', role: 'owner', speakingMode: 'speak' }] } }
 const state = () => ({ connected: true, instanceId: 'a', humanPrincipalId: 'human:a:owner', contacts: [], conversations: [], invites: [], outbox: [], errors: [] })
 
+test('personal gear owns profile, closed visibility, identity and connection settings; closing discards an unsaved profile', async () => {
+  const snapshot = { ...state(), conversations: [membership] }
+  await pane({ snapshot }, async ({ doc, click, edit, calls }) => {
+    assert.equal(doc.querySelectorAll('.bt-comm-nav-heading button[aria-label="Personal settings"]').length, 1)
+    assert.doesNotMatch(doc.querySelector('.bt-comm-nav').textContent, /Human profile|Show closed conversations|Add a device|Manage contacts/)
+    await click('Personal settings')
+    const modal = doc.querySelector('.bt-comm-personal-settings')
+    assert.match(modal.textContent, /Show closed conversations.*Your profile.*Device identity.*Connection and contacts/s)
+    await edit(modal.querySelector('input[aria-label="Human name"]'), 'Uncommitted profile')
+    await click('Cancel'); await click('Personal settings')
+    assert.notEqual(doc.querySelector('input[aria-label="Human name"]').value, 'Uncommitted profile')
+    assert.equal(calls.some(call => call.endpoint === 'profile-human'), false)
+    await click('Cancel'); await click('Shared group'); await click('Close on this device')
+    assert.equal(doc.querySelector('nav button[data-conversation-id="group"]'), null)
+    await click('Personal settings')
+    await act(async () => doc.querySelector('.bt-comm-personal-settings input[type=checkbox]').click())
+    await click('Cancel')
+    assert.ok(doc.querySelector('nav button[data-conversation-id="group"]'))
+  })
+})
+
+test('reply chains render nested branches separately, preserve exact reply intents and offer no read-only send controls', async () => {
+  const snapshot = { ...state(), conversations: [{ ...membership }] }
+  const events = ['Root', 'Child', 'Deep reply', 'Another branch'].map((text, i) => ({ type: 'message', conversationSeq: i + 1, serverAcceptedAt: '2026-11-04T00:00:00Z', message: { messageId: `m${i}`, author: membership.info.members[0], content: { text }, mentions: [], replyToMessageId: i ? i === 2 ? 'm1' : 'm0' : null } }))
+  await pane({ snapshot, history: events, handle: async body => body.endpoint === 'thread' ? { conversationId: 'group', membershipEpoch: 'epoch', messageId: body.messageId, rootMessageId: 'm0', watermark: 4, events, hasMore: false } : {} }, async ({ doc, click, edit, calls }) => {
+    await click('Shared group')
+    await click('View replies')
+    assert.equal(doc.querySelectorAll('.bt-comm-thread-log article').length, 4)
+    assert.equal(doc.querySelector('[data-thread-message-id="m2"]').style.getPropertyValue('--reply-depth'), '2')
+    assert.match(doc.querySelector('[data-thread-message-id="m2"] .bt-comm-thread-parent').textContent, /Child/)
+    await act(async () => doc.querySelector('[data-thread-message-id="m2"] button').click())
+    await edit(doc.querySelector('footer textarea'), 'Continue this exact reply')
+    await click('Send message')
+    assert.equal(calls.find(call => call.endpoint === 'send').replyToMessageId, 'm2')
+    snapshot.conversations[0].speakingMode = 'readOnly'; await click('Refresh status')
+    assert.equal(doc.querySelector('footer'), null)
+    assert.equal(doc.querySelector('.bt-comm-log button')?.textContent, 'View replies')
+    await click('View replies')
+    assert.equal(doc.querySelectorAll('.bt-comm-thread button').length, 0)
+    assert.equal(doc.querySelectorAll('.bt-comm-thread-log article').length, 4)
+    assert.equal(calls.filter(call => call.endpoint === 'send').length, 1)
+  })
+})
+
+test('late thread responses cannot survive a selected conversation change or membership revocation', async () => {
+  const snapshot = { ...state(), conversations: [{ ...membership }, { ...membership, conversationId: 'other', title: 'Other group', membershipEpoch: 'other' }] }
+  const event = { type: 'message', conversationSeq: 1, serverAcceptedAt: '2026-11-04T00:00:00Z', message: { messageId: 'late', author: membership.info.members[0], content: { text: 'Thread canary' }, mentions: [] } }
+  let release
+  await pane({ snapshot, history: [event], handle: body => body.endpoint === 'thread' ? new Promise(resolve => { release = resolve }) : {} }, async ({ doc, click }) => {
+    await click('Shared group'); await click('View replies')
+    await click('Cancel'); await click('Other group')
+    await act(async () => release({ conversationId: 'group', membershipEpoch: 'epoch', messageId: 'late', rootMessageId: 'late', events: [event] }))
+    assert.equal(doc.querySelector('.bt-comm-thread'), null)
+    snapshot.conversations = []; await click('Refresh status')
+    assert.equal(doc.querySelector('footer'), null)
+    assert.equal(doc.querySelector('.bt-comm-thread'), null)
+  })
+})
+
 test('unconfigured communication explains pairing without API calls, and keyboard users can return to local chats', async () => {
   await pane({ enabled: false }, async ({ doc, dom, panel, calls, button }) => {
     assert.ok(doc.querySelector('[role=dialog][aria-modal=true]'))
@@ -188,7 +247,7 @@ test('Human and group rename send authenticated versioned requests and failed se
   snapshot.outbox = [{ type: 'message.publish', id: 'failed', conversationId: 'group', state: 'failed', text: 'Denied original', error: 'FORBIDDEN' }]
   await pane({ snapshot }, async ({ doc, calls, click, edit, button }) => {
     await click('Shared group')
-    await click('Edit Human profile')
+    await click('Personal settings')
     await edit(doc.querySelector('input[aria-label="Human name"]'), 'Renamed Human')
     await click('Save profile')
     assert.equal(calls.find(call => call.endpoint === 'profile-human').displayName, 'Renamed Human')
@@ -218,6 +277,7 @@ test('Human and group rename send authenticated versioned requests and failed se
 test('pairing guide is available before and after configuration and never performs API mutations', async () => {
   for (const enabled of [false, true]) {
     await pane({ enabled, snapshot: state(), handle: async body => { assert.equal(body.endpoint, 'onboarding-storage'); return { storage: { defaultProvider: 'owner-acl-plaintext', encryptedByDefault: false, agentIsolation: false }, enrollments: [] } } }, async ({ doc, dom, calls, click, panel }) => {
+      await click('Personal settings')
       await click('Add a device')
       const guide = doc.querySelector('.bt-comm-modal[aria-label="Pairing guide"]')
       assert.ok(guide)
@@ -226,7 +286,7 @@ test('pairing guide is available before and after configuration and never perfor
       assert.match(guide.textContent, /environment variable names may differ/)
       assert.match(guide.textContent, /local secret mechanism/)
       assert.match(guide.textContent, /publishedBotIds/)
-      assert.match(guide.textContent, /Each instance has its own Human/)
+      assert.match(guide.textContent, /Each instance has one person identity/)
       assert.match(guide.textContent, /Readiness alone does not prove pairing/)
       const peer = JSON.parse(guide.querySelector('pre[aria-label="Hub configuration example"]').textContent).peers[0]
       assert.equal(peer.instanceId, 'new-device')
@@ -655,8 +715,9 @@ test('routine failures, queues and reconciliation have no bottom console and act
 
 test('Hub management uses only the advertised enabled URL and explains unavailable or unsafe entries', async () => {
   const snapshot = { ...state(), hubUrl: 'wss://hub.example.test:3190/communication', managementAvailable: true, managementUrl: 'https://manage.example.test:9443/admin/' }
-  await pane({ snapshot }, async ({ doc, calls }) => {
-    const link = doc.querySelector('aside.bt-comm-nav a.bt-comm-admin-link')
+  await pane({ snapshot }, async ({ doc, calls, click }) => {
+    await click('Personal settings')
+    const link = doc.querySelector('.bt-comm-personal-settings a.bt-comm-admin-link')
     assert.equal(link.href, snapshot.managementUrl)
     assert.match(link.textContent, /https:\/\/manage.example.test:9443/)
     assert.equal(link.target, '_blank'); assert.match(link.rel, /noopener/); assert.match(link.rel, /noreferrer/)
@@ -665,6 +726,7 @@ test('Hub management uses only the advertised enabled URL and explains unavailab
   for (const options of [{ managementAvailable: false, managementUrl: null }, { managementAvailable: true, managementUrl: 'https://user:password@hub.example.test/admin/' }, { managementAvailable: true, managementUrl: 'http://remote.example.test/admin/' }]) {
     await pane({ snapshot: { ...snapshot, ...options } }, async ({ doc, click }) => {
       assert.equal(doc.querySelector('a.bt-comm-admin-link'), null)
+      await click('Personal settings')
       await click('Hub management')
       assert.match(doc.querySelector('.bt-comm-modal').textContent, /has not provided an active management entry/)
       await click('Open setup guide')

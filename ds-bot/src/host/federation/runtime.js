@@ -375,6 +375,10 @@ export class CommunicationRuntime {
     return { conversationId: input.conversationId, membershipEpoch: member.membershipEpoch, joinSeq: member.joinSeq,
       watermark: this.queue.cursor(input.conversationId, principalId, member.membershipEpoch), events }
   }
+  thread(principalId, input) {
+    const member = this.member(principalId, input.conversationId, input.membershipEpoch)
+    return this.queue.thread(input.conversationId, principalId, member.membershipEpoch, input.messageId, input)
+  }
   async members(principalId, input) {
     const member = this.member(principalId, input.conversationId, input.membershipEpoch)
     return this.transport.request('conversation.members', { conversationId: input.conversationId, principalId, membershipEpoch: member.membershipEpoch })

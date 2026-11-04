@@ -12,6 +12,7 @@ import { install, remotePackagePaths } from '../src/host/prompt.js'
 const requests = {
   state: {}, contacts: {}, conversations: {}, invites: {}, outbox: {}, members: { conversationId: 'group' },
   history: { conversationId: 'group', after: 1, before: 20, limit: 10, latest: false, membershipEpoch: 'epoch' },
+  thread: { conversationId: 'group', messageId: 'message', after: 1, limit: 20, watermark: 10, membershipEpoch: 'epoch' },
   reference: { conversationId: 'group', messageId: 'message' }, read: { conversationId: 'group', seq: 5 },
   send: { conversationId: 'group', text: 'Hello @all', mentions: ['bot:a:id'], replyToMessageId: 'previous' },
   dm: { otherPrincipalId: 'human:a:id' }, 'create-group': { title: 'Group' },

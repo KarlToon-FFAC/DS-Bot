@@ -61,7 +61,7 @@ export function install(rt) {
         comm.member(actor.principalId, communicationBinding.conversationId, communicationBinding.membershipEpoch)
         args = { ...args, membershipEpoch: communicationBinding.membershipEpoch }
       }
-      const read = ['list_contacts', 'list_communication_conversations', 'read_communication_history', 'read_communication_members', 'read_communication_reference'].includes(exec.name)
+      const read = ['list_contacts', 'list_communication_conversations', 'read_communication_history', 'read_communication_members', 'read_communication_reference', 'read_communication_thread'].includes(exec.name)
       const provenance = read ? null : await comm.toolProvenance(exec)
       return JSON.stringify(await work(comm, actor, args, { ...exec, communicationSource: provenance?.sourceKey,
         communicationCausation: provenance, communicationBinding }))
@@ -83,6 +83,9 @@ export function install(rt) {
     defineTool({ name: 'read_communication_history', description: 'Read authorized canonical history from one communication conversation, without causing a new send or model delivery. Other chats and membership epochs are inaccessible.',
       parameters: { conversationId: { type: 'string', required: true }, after: { type: 'integer' }, before: { type: 'integer' }, limit: { type: 'integer' } }, output,
       execute: execute((comm, actor, args) => comm.history(actor.principalId, args)) }),
+    defineTool({ name: 'read_communication_thread', description: 'Read one authorized message reply chain, including its visible ancestors and subsequent replies. It cannot access another conversation or membership epoch. Continue with nextAfter and the same watermark.',
+      parameters: { conversationId: { type: 'string', required: true }, messageId: { type: 'string', required: true }, after: { type: 'integer' }, limit: { type: 'integer' }, watermark: { type: 'integer' } }, output,
+      execute: execute((comm, actor, args) => comm.thread(actor.principalId, args)) }),
     defineTool({ name: 'create_communication_group', description: 'Create an explicit communication group as yourself. Other people/Bots join only through invitations and acceptance.',
       parameters: { title: { type: 'string', required: true } }, output,
       execute: execute((comm, actor, args, exec) => comm.operation(actor.principalId, 'group.create', { title: args.title }, toolOperation('group', exec))) }),
@@ -175,6 +178,7 @@ export function install(rt) {
         switch (body.endpoint) {
           case 'state': value = comm.snapshot(); break
           case 'history': value = comm.history(comm.human.principalId, body); break
+          case 'thread': value = comm.thread(comm.human.principalId, body); break
           case 'members': value = await comm.members(comm.human.principalId, body); break
           case 'reference': {
             const member = comm.member(comm.human.principalId, body.conversationId)

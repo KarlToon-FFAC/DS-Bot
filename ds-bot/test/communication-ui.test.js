@@ -85,8 +85,8 @@ test('production pane ignores a late history response and retries an uncertain H
     snapshot.conversations[1].speakingMode = 'readOnly'
     await act(async () => { panel.set(false) })
     await act(async () => { panel.set(true) })
-    assert.equal(field().disabled, true)
-    assert.ok(dom.window.document.querySelector('.bt-comm-main').textContent.includes('You have read-only access to this group.'))
+    assert.equal(field(), null)
+    assert.equal(dom.window.document.querySelector('.bt-comm-main footer'), null)
     snapshot.outbox = [{ type: 'message.publish', id: 'old-send', conversationId: 'two', state: 'pending', text: 'previous epoch local send' }]
     snapshot.conversations = []
     await act(async () => { panel.set(false) })

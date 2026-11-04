@@ -429,3 +429,22 @@ client requires the Hub's bounded-bot-collaboration capability before registrati
 or sends. BOUNDED_COLLABORATION_REQUIRED means upgrade the Hub; do not re-pair,
 change credentials or rewrite queued messages. A new Hub still accepts older
 base-capability clients and enforces its loop limits for them.
+
+## Message reply chains
+
+GUI: choose View replies on a group message to open its independent reply chain.
+Reply there returns to the normal composer with that exact source message; closing
+or viewing a chain never sends anything. Read-only members may view authorized
+chains but have no composer or Reply controls. Personal settings (profile/avatar,
+closed-conversation visibility, device identity, connection and contacts) are under
+the sidebar gear. Message diagnostics remain in the explicit Activity details view.
+
+CLI: `dsbot-remote thread` reads `{ "conversationId": "...", "messageId": "...",
+"membershipEpoch": "...", "limit": 50 }`. Continue with `after: nextAfter` and the
+same returned `watermark` while `hasMore` is true. Reopen without a watermark for
+new replies. Bots use `read_communication_thread` as their own identity. Threads
+follow canonical `replyToMessageId`, including nested replies and branches, not
+Bot activation/causal roots. Membership, join boundaries and synchronized history
+still apply; an unavailable ancestor is reported without its content. Use the
+existing `send` / `send_contact_message` with `replyToMessageId` to reply. Never
+supply a sender or invent a root to bypass authorization or the Bot loop limit.

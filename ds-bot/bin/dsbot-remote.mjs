@@ -7,6 +7,7 @@ const text = 'string', integer = 'integer'
 const schemas = {
   state: {}, contacts: {}, conversations: {}, invites: {}, outbox: {},
   members: { conversationId: text },
+  thread: { conversationId: text, messageId: text, after: integer, limit: integer, watermark: integer, membershipEpoch: text },
   history: { conversationId: text, after: integer, before: integer, limit: integer, latest: 'boolean', membershipEpoch: text },
   reference: { conversationId: text, messageId: text }, read: { conversationId: text, seq: integer },
   send: { conversationId: text, text, messageId: text, clientCreatedAt: text, membershipEpoch: text, mentions: 'strings', replyToMessageId: text },
@@ -43,6 +44,7 @@ const schemas = {
   'available-bots': {}, 'publish-bots': { localBotIds: 'strings' },
 }
 const required = {
+  thread: ['conversationId', 'messageId'],
   members: ['conversationId'], history: ['conversationId'], reference: ['conversationId', 'messageId'], read: ['conversationId', 'seq'],
   send: ['conversationId', 'text'], dm: ['otherPrincipalId'], 'create-group': ['title'], invite: ['conversationId', 'inviteePrincipalId'],
   accept: ['inviteId'], remove: ['conversationId'], leave: ['conversationId'], routing: ['conversationId', 'mode'],

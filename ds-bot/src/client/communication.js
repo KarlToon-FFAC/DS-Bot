@@ -9,6 +9,8 @@ import { CommunicationAvatar, HumanProfile, syncAvatarDirectory } from './commun
 import { CommunicationMessage, BotWorkStarted } from './communication-message.js'
 import { ConversationRow } from './communication-list.js'
 import { CommunicationActivity } from './communication-activity.js'
+import { CommunicationThread } from './communication-thread.js'
+import { GearIcon } from './icons.js'
 import { communicationCSS } from './communication-styles.js'
 
 const OPEN = 'ds-bot:communication:open', SELECTED = 'ds-bot:communication:selected'
@@ -66,7 +68,7 @@ function PairingGuide({ connectionLabel }) {
     h('h3', null, t('2. New device')),
     h('ol', null,
       h('li', null, t('Quit the app, including its tray process. Merge the communication settings into the existing bot configuration in your own profile cordis.patch.yml. Use the exact instanceId approved by the Hub owner.')),
-      h('li', null, t('Set the trusted WSS url, credentialEnv, humanDisplayName and publishedBotIds. Publish only Bot IDs from this device that you intend to make available. Each instance has its own Human; rename it later under Human profile and connection.')),
+      h('li', null, t('Set the trusted WSS url, credentialEnv, humanDisplayName and publishedBotIds. Publish only Bot IDs from this device that you intend to make available. Each instance has one person identity; rename it under Personal settings.')),
       h('li', null, t('Supply the pairing credential to the app launch environment through your local secret mechanism, then restart the app. Never put the value in configuration, command arguments, URLs, screenshots or chat.'))),
     h('pre', { 'aria-label': t('Device configuration example') }, h('code', null, clientPairingExample)),
     h('h3', null, t('3. Verify the connection')),
@@ -190,11 +192,13 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
   const [completion, setCompletion] = useState(null), [completionIndex, setCompletionIndex] = useState(0), [composing, setComposing] = useState(false)
   const chooser = useRef(null), chooserTrigger = useRef(null)
   const [browse, setBrowse] = useState(false), [activePanel, setActivePanel] = useState(''), [inspectedIds, setInspectedIds] = useState([])
+  const [threadMessageId, setThreadMessageId] = useState(null)
   const input = useRef(null), frame = useRef(null), log = useRef(null), autoScroll = useRef(true), pageOrder = useRef(0), operationIds = useRef(new Map(read(OPERATION_IDS, [])))
   const labels = contactLabels(state?.contacts ?? [], state?.instanceId, t)
   const member = state?.conversations?.find(item => item.conversationId === selected)
   const key = `${state?.instanceId}:${selected}`
   contextKey.current = `${key}:${member?.membershipEpoch}`
+  useEffect(() => { setThreadMessageId(null); setActivePanel(current => ['thread', 'participant'].includes(current) ? '' : current) }, [selected, member?.membershipEpoch])
   const draft = drafts[key] ?? { text: '', mentions: [] }
   const changeDraft = value => setDrafts(current => { const next = { ...current, [key]: { ...draft, ...value } }; save(DRAFTS, next); return next })
   const close = () => { panel.set(false); save(OPEN, false) }
@@ -303,7 +307,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
     try { await work() } catch (failure) { setError(friendly(failure)) } finally { setBusy(false) }
   }
   const send = () => act(async () => {
-    if (!member || !draft.text.trim()) return
+    if (!member || member.kind === 'group' && member.speakingMode !== 'speak' || !draft.text.trim()) return
     const intent = attempts[key] ?? { endpoint: 'send', conversationId: selected, membershipEpoch: member.membershipEpoch, messageId: crypto.randomUUID(), clientCreatedAt: new Date().toISOString(),
       text: draft.text, mentions: draft.mentions, replyToMessageId: reply?.messageId ?? null }
     const next = { ...attempts, [key]: intent }; save(ATTEMPTS, next); setAttempts(next)
@@ -377,21 +381,15 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
 
   return createPortal(h('section', { ref: frame, className: 'bt-comm-frame', role: 'dialog', 'aria-modal': true, 'data-closing': closing, 'data-browse': browse || !member, 'data-setup': !team.communicationEnabled, 'aria-label': t('Remote communication') },
     h('aside', { className: 'bt-comm-nav' },
-      h('div', { className: 'bt-comm-nav-heading' }, h('h2', null, t('Remote communication')), btn('Back to local chats', close, { className: 'bt-comm-back' })),
+      h('div', { className: 'bt-comm-nav-heading' }, h('h2', null, t('Remote communication')), btn('Personal settings', () => showPanel('settings'), { className: 'bt-comm-settings-icon', 'aria-label': t('Personal settings'), title: t('Personal settings'), children: h(GearIcon) })),
+      btn('Back to local chats', close, { className: 'bt-comm-back' }),
       member ? btn('Back to conversation', () => setBrowse(false), { className: 'bt-comm-mobile' }) : null,
       h('section', { className: 'bt-comm-connection', 'aria-label': t('Connection status') },
         h('p', { className: 'bt-comm-connection-label', role: 'status', 'data-connected': Boolean(state?.connected && !pollError) }, h('span', { className: 'bt-comm-dot', 'aria-hidden': true }), t(connectionLabel)),
         state ? h('p', { className: 'bt-comm-reference' }, `${state.instanceId} · ${t('Remote contacts')}: ${remoteCount}`) : null,
         team.communicationEnabled && !state?.connected && !connectionBlocked ? h('p', { className: 'bt-comm-reference' }, t('Queued messages send automatically when the connection returns.')) : null,
         team.communicationEnabled ? btn('Refresh status', () => { void act(refresh) }) : null,
-        state ? h('details', { className: 'bt-comm-identity' }, h('summary', null, t('Human profile and connection')),
-          h('p', null, t('This device')), h('code', null, state.instanceId),
-          h('p', null, t('Your identity')), personLabel(contacts.find(person => person.principalId === state.humanPrincipalId) ?? { principalId: state.humanPrincipalId, displayName: 'Human' }), h('code', null, state.humanPrincipalId),
-          btn('Edit Human profile', () => showPanel('profile')),
-          null) : null),
-      btn('Add a device', () => showPanel('pairing')),
-      adminUrl ? h('a', { className: 'bt-comm-admin-link', href: adminUrl, target: '_blank', rel: 'noopener noreferrer' }, t('Open Hub management'), h('small', null, new URL(adminUrl).origin)) : btn('Hub management', () => showPanel('hub-management')),
-      btn('Manage contacts', () => showPanel('manage-contacts'), { disabled: !team.communicationEnabled }),
+        null),
       h('div', { className: 'bt-comm-start-actions' },
         btn('New message', () => showPanel('contacts'), { disabled: busy || !team.communicationEnabled }),
         btn('New group', () => showPanel('group'), { className: 'bt-comm-primary', disabled: busy || !team.communicationEnabled })),
@@ -399,7 +397,6 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
       h('nav', { 'aria-label': t('Communication conversations') }, (state?.conversations ?? []).filter(item => showHidden || !hidden.includes(`${state.instanceId}:${item.conversationId}`)).map(item =>
         h(ConversationRow, { key: item.conversationId, conversation: item, humanId: state.humanPrincipalId, labels, request, selected: item.conversationId === selected, onChoose: choose, disabled: busy }))),
       !state?.conversations?.length ? h('p', { className: 'bt-comm-reference' }, t('Your cross-device conversations will appear here.')) : null,
-      btn(showHidden ? 'Hide closed conversations' : 'Show closed conversations', () => setShowHidden(value => !value)),
       state?.invites?.length ? h('div', null, h('h3', null, t('Invitations')), state.invites.map(invitation => h('div', { key: invitation.inviteId },
         avatar(invitation.principalId), h('p', null, `${invitation.title} · ${labels.get(invitation.principalId) ?? invitation.principalId}`),
         btn('Accept invitation', () => { void act(() => operation('accept', { inviteId: invitation.inviteId, recipientPrincipalId: invitation.principalId })) })))) : null,
@@ -407,11 +404,18 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
         btn('Restore retained ownership', () => { void act(() => operation('reclaim', { conversationId: item.conversationId, expectedVersion: item.membershipVersion })) }))),
       null),
     activePanel ? h('div', { className: 'bt-comm-modal-backdrop', onMouseDown: event => { if (event.target === event.currentTarget) { setActivePanel(''); chooserTrigger.current?.focus() } } },
-      h('section', { ref: chooser, className: 'bt-comm-modal', role: 'dialog', 'aria-modal': true, 'aria-label': t(activePanel === 'hub-management' ? 'Hub management' : activePanel === 'activity' ? 'Activity details' : activePanel === 'participant' ? 'Participant information' : activePanel === 'manage-contacts' ? 'Manage contacts' : activePanel === 'profile' ? 'Human profile' : activePanel === 'pairing' ? 'Pairing guide' : activePanel === 'group' ? 'New group' : 'New message') },
-        h('h2', null, t(activePanel === 'hub-management' ? 'Hub management' : activePanel === 'activity' ? 'Activity details' : activePanel === 'participant' ? 'Participant information' : activePanel === 'manage-contacts' ? 'Manage contacts' : activePanel === 'profile' ? 'Human profile' : activePanel === 'pairing' ? 'Pairing guide' : activePanel === 'group' ? 'New group' : 'New message')),
-        activePanel === 'hub-management' ? h('div', null, h('p', null, t('The Hub administrator has not provided an active management entry. Ask the administrator to start the Hub and enable its management page.')), btn('Open setup guide', () => setActivePanel('pairing'))) : activePanel === 'activity' ? h(CommunicationActivity, { state, member, events, outbox: activityOutbox, operations, operationPending: pendingForConversation, pendingAttempt: attempts[key], error, pollError: pollError || (syncError?.conversationId === selected ? syncError.message : ''), friendly, labels, busy,
+      h('section', { ref: chooser, className: 'bt-comm-modal', role: 'dialog', 'aria-modal': true, 'aria-label': t(activePanel === 'settings' ? 'Personal settings' : activePanel === 'thread' ? 'Message replies' : activePanel === 'hub-management' ? 'Hub management' : activePanel === 'activity' ? 'Activity details' : activePanel === 'participant' ? 'Participant information' : activePanel === 'manage-contacts' ? 'Manage contacts' : activePanel === 'profile' ? 'Human profile' : activePanel === 'pairing' ? 'Pairing guide' : activePanel === 'group' ? 'New group' : 'New message') },
+        h('h2', null, t(activePanel === 'settings' ? 'Personal settings' : activePanel === 'thread' ? 'Message replies' : activePanel === 'hub-management' ? 'Hub management' : activePanel === 'activity' ? 'Activity details' : activePanel === 'participant' ? 'Participant information' : activePanel === 'manage-contacts' ? 'Manage contacts' : activePanel === 'profile' ? 'Human profile' : activePanel === 'pairing' ? 'Pairing guide' : activePanel === 'group' ? 'New group' : 'New message')),
+        activePanel === 'settings' ? h('div', { className: 'bt-comm-personal-settings' },
+          h('label', { className: 'bt-comm-check' }, h('input', { type: 'checkbox', checked: showHidden, onChange: event => setShowHidden(event.target.checked) }), t('Show closed conversations')),
+          state ? h('section', null, h('h3', null, t('Your profile')), h(HumanProfile, { key: state.humanPrincipalId, human: contacts.find(person => person.principalId === state.humanPrincipalId) ?? { principalId: state.humanPrincipalId, displayName: t('You'), kind: 'human' }, request, operation }),
+            h('details', null, h('summary', null, t('Device identity')), h('p', null, state.instanceId), h('code', null, state.humanPrincipalId))) : null,
+          h('section', null, h('h3', null, t('Connection and contacts')), btn('Add a device', () => setActivePanel('pairing')),
+            adminUrl ? h('a', { className: 'bt-comm-admin-link', href: adminUrl, target: '_blank', rel: 'noopener noreferrer' }, t('Open Hub management'), h('small', null, new URL(adminUrl).origin)) : btn('Hub management', () => setActivePanel('hub-management')),
+            btn('Manage contacts', () => setActivePanel('manage-contacts'), { disabled: !team.communicationEnabled }))) : activePanel === 'thread' ? member && threadMessageId ? h(CommunicationThread, { key: `${contextKey.current}:${threadMessageId}`, member, messageId: threadMessageId, request, canSpeak, onInspect: inspect,
+              onReply: message => { setReply(message); setActivePanel(''); requestAnimationFrame(() => input.current?.focus()) } }) : null : activePanel === 'hub-management' ? h('div', null, h('p', null, t('The Hub administrator has not provided an active management entry. Ask the administrator to start the Hub and enable its management page.')), btn('Open setup guide', () => setActivePanel('pairing'))) : activePanel === 'activity' ? h(CommunicationActivity, { state, member, events, outbox: activityOutbox, operations, operationPending: pendingForConversation, pendingAttempt: attempts[key], error, pollError: pollError || (syncError?.conversationId === selected ? syncError.message : ''), friendly, labels, busy,
           onRefresh: () => { void act(refresh) }, onRetry: () => { setActivePanel(''); void send() }, copyDisabled: Boolean(draft.text) || Boolean(attempts[key]) || !member,
-          onCopy: item => { if (draft.text || attempts[key] || !member) return; changeDraft({ text: item.text, mentions: [], manualMentions: [] }); setActivePanel(''); input.current?.focus() } }) : activePanel === 'participant' ? h('div', { className: 'bt-comm-participant-information' }, currentMembers.filter(person => inspectedIds.includes(person.principalId)).map(person => h('section', { key: person.principalId }, personLabel(person), h('p', null, t(roleLabel(person.role ?? 'member'))), h('code', null, person.principalId)))) : activePanel === 'manage-contacts' ? h(ContactManager, { request, operation, contacts, managementUrl: adminUrl }) : activePanel === 'profile' ? h(HumanProfile, { human: contacts.find(person => person.principalId === state?.humanPrincipalId) ?? { principalId: state?.humanPrincipalId ?? 'human:local', displayName: 'Human', kind: 'human' }, request, operation }) : activePanel === 'pairing' ? h(AddDevice, { request, displayName: contacts.find(person => person.principalId === state?.humanPrincipalId)?.displayName ?? 'Human', manualGuide: h(PairingGuide, { connectionLabel }) }) : h(Fragment, null,
+          onCopy: item => { if (draft.text || attempts[key] || !member) return; changeDraft({ text: item.text, mentions: [], manualMentions: [] }); setActivePanel(''); input.current?.focus() } }) : activePanel === 'participant' ? h('div', { className: 'bt-comm-participant-information' }, currentMembers.filter(person => inspectedIds.includes(person.principalId)).map(person => h('section', { key: person.principalId }, personLabel(person), h('p', null, t(roleLabel(person.role ?? 'member'))), h('code', null, person.principalId)))) : activePanel === 'manage-contacts' ? h(ContactManager, { request, operation, contacts, managementUrl: adminUrl }) : activePanel === 'profile' ? h(HumanProfile, { human: contacts.find(person => person.principalId === state?.humanPrincipalId) ?? { principalId: state?.humanPrincipalId ?? 'human:local', displayName: t('You'), kind: 'human' }, request, operation }) : activePanel === 'pairing' ? h(AddDevice, { request, displayName: contacts.find(person => person.principalId === state?.humanPrincipalId)?.displayName ?? t('You'), manualGuide: h(PairingGuide, { connectionLabel }) }) : h(Fragment, null,
         activePanel === 'group' ? h('label', { className: 'bt-comm-field' }, t('Group name'), h('input', { value: title, onChange: event => setTitle(event.target.value), 'aria-label': t('Group name') })) : null,
         groupedContacts(contact => activePanel === 'group' ? h('label', { key: contact.principalId, className: 'bt-comm-check' },
           h('input', { type: 'checkbox', checked: invitees.includes(contact.principalId), onChange: event => setInvitees(current => event.target.checked ? [...current, contact.principalId] : current.filter(id => id !== contact.principalId)) }), personLabel(contact)) :
@@ -439,7 +443,6 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
         h('h2', null, t(team.communicationEnabled ? 'Start a conversation across devices' : 'Pair this device to get started')),
         h('p', null, t(team.communicationEnabled ? 'Message a Human or Bot directly, or bring them together in a group.' : 'Ask the Hub owner to configure communication and pair this device.')),
         team.communicationEnabled ? h('div', { className: 'bt-comm-start-actions' }, btn('New message', () => showPanel('contacts')), btn('New group', () => showPanel('group'), { className: 'bt-comm-primary' })) : null,
-        btn('Add a device', () => showPanel('pairing')),
         h('p', { className: 'bt-comm-reference' }, t('Local chats stay separate from communication conversations.'))) : null,
       member?.kind === 'group' ? h(GroupSettings, { key: `${selected}:${member.membershipEpoch}`, member, contacts, labels, operation, operationPending, act, busy, humanId: state.humanPrincipalId, btn, personLabel, chooseContact,
         pendingSettings: id => [...operationIds.current.keys()].map(item => JSON.parse(item)).find(([instanceId, endpoint, values]) => instanceId === state.instanceId && endpoint === 'save-settings' && values.conversationId === id)?.[2] ?? null }) : null,
@@ -453,11 +456,11 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
           event.message.replyToMessageId ? h(ReferenceQuote, { key: `${selected}:${member.membershipEpoch}:${event.message.replyToMessageId}`, conversationId: selected,
             membershipEpoch: member.membershipEpoch, messageId: event.message.replyToMessageId, request, labels, onJump: openReference }) : null,
           h('div', { className: 'bt-comm-body' }, h(CommunicationMessage, { message: event.message, members: currentMembers, request, onInspect: inspect })),
-          h('div', { className: 'bt-comm-message-actions' }, h('time', null, new Date(event.serverAcceptedAt).toLocaleString()), btn('Reply', () => { setReply(event.message); input.current?.focus() })),
+          h('div', { className: 'bt-comm-message-actions' }, h('time', null, new Date(event.serverAcceptedAt).toLocaleString()), canSpeak ? btn('Reply', () => { setReply(event.message); input.current?.focus() }) : null, member.kind === 'group' ? btn('View replies', () => { setThreadMessageId(event.message.messageId); showPanel('thread') }) : null),
           ownOutbox.find(item => item.id === event.message.messageId)?.deliveries.filter(delivery => delivery.recipientPrincipalId !== state.humanPrincipalId).map(delivery => h('p', { key: delivery.deliveryId, className: 'bt-comm-reference' }, `${labels.get(delivery.recipientPrincipalId) ?? delivery.recipientPrincipalId} · ${t(deliveryPhase(delivery))}`)))),
         ownOutbox.filter(item => item.state !== 'failed' && !visibleIds.has(item.id) && (item.state !== 'accepted' || older === null && item.result?.conversationSeq > (page?.watermark ?? 0))).map(item => h('article', { key: item.id, 'data-message-id': item.id, 'data-self': true, 'data-failed': item.state === 'failed' },
           avatar(state.humanPrincipalId, contacts.find(person => person.principalId === state.humanPrincipalId)?.displayName), h('strong', { title: state.humanPrincipalId }, contacts.find(person => person.principalId === state.humanPrincipalId)?.displayName ?? t('You'), identityIcons({ principalId: state.humanPrincipalId, kind: 'human', homeInstanceId: state.instanceId })), h('p', { className: 'bt-comm-pending-text' }, item.text), h('p', { role: 'status' }, t(item.state === 'accepted' ? 'Hub accepted' : 'Queued on this device'))))),
-      member ? h('footer', null,
+      canSpeak ? h('footer', null,
         reply ? h('div', { className: 'bt-comm-reference' }, `${t('Reply to')} ${reply.content.text.slice(0,120)}`, btn('Cancel reply', () => setReply(null))) : null,
         h('div', { className: 'bt-comm-mentions' }, (draft.mentions ?? []).map(id => btn(`@${labels.get(id) ?? id} ×`, () => changeDraft({ mentions: draft.mentions.filter(item => item !== id), manualMentions: (draft.manualMentions ?? []).filter(item => item !== id) }), { key: id, 'data-manual-mention': (draft.manualMentions ?? []).includes(id), 'aria-label': `${t('Remove mention')}: ${labels.get(id) ?? id}` }))),
         suggestions.length ? h('div', { className: 'bt-comm-completion', role: 'listbox', id: 'bt-comm-completion', 'aria-label': t('Mention participant') }, suggestions.map((person, index) =>
@@ -481,7 +484,6 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
           }, onPaste: event => { if (event.clipboardData?.files.length) { event.preventDefault(); setError('Only text and Markdown are supported.') } },
           onDrop: event => { event.preventDefault(); setError('Only text and Markdown are supported.') }, 'aria-label': t('Communication message') })),
         btn(attempts[key] ? 'Retry same send' : 'Send message', () => { void send() }, { disabled: busy || !canSpeak || !draft.text.trim() }),
-        !canSpeak ? h('p', { role: 'status' }, t('You have read-only access to this group.')) : null,
         h('span', { className: 'bt-comm-reference' }, t('Enter to send · Shift+Enter for a new line')),
         null) : null)), document.body)
 }
