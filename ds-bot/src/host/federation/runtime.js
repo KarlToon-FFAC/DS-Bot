@@ -8,6 +8,7 @@ import { completedOutputs, inspectBinding, interruptedInputs, reconcileInput, re
 import { communicationMentions } from '../../shared/communication-mentions.js'
 import { mentionSpans } from '../../shared/mentions.js'
 import { syncBotAvatars } from './avatars.js'
+import { startedSources } from './work-events.js'
 import { splitRef } from '../text.js'
 import { communicationPrompt } from './prompt.js'
 import { OUTSIDE_CONVERSATION_TOOLS } from './tool-scope.js'
@@ -166,16 +167,47 @@ export class CommunicationRuntime {
       principalId: binding.recipientPrincipalId, membershipEpoch: binding.membershipEpoch })
   }
   installHooks() {
+    this.workInputs ??= new Map()
+    this.workSteps ??= new Map()
+    this.workEvents ??= Promise.resolve()
     this.disposers.push(this.ctx.on('agent/created', ({ agent }) => { if (this.owners.has(agent.id)) this.scope(agent) }))
+    const recordWork = (sessionId, owner, event, staged) => {
+      this.workEvents = this.workEvents.catch(() => {}).then(async () => {
+        try {
+          const { events } = await this.ctx.sessionController.inspect(sessionId, AbortSignal.timeout(15000))
+          const actual = startedSources(events, event).map(source => sourceDelivery(this.queue, owner, source))
+          const allowed = new Set(staged.map(source => sourceDelivery(this.queue, owner, source).deliveryId))
+          for (const delivery of actual) if (allowed.has(delivery.deliveryId)) this.queue.aiStarted(delivery.deliveryId)
+        } catch { this.errors.set(owner.id, 'WORK_START_NOT_RECORDED') }
+      })
+    }
+    this.disposers.push(this.ctx.on('session/event', (session, event) => {
+      const owner = this.owners.get(session?.id)
+      if (!owner) return
+      if (event.type === 'turn/end') { this.workInputs.delete(session.id); this.workSteps.delete(session.id) }
+      if (!['step/start', 'user/message'].includes(event.type) || !this.transport?.welcome?.capabilities?.includes('bot-work-events')) return
+      if (event.type === 'step/start') this.workSteps.set(session.id, event)
+      const staged = this.workInputs.get(session.id), step = this.workSteps.get(session.id)
+      if (staged && step) recordWork(session.id, owner, step, staged)
+    }))
     this.disposers.push(this.ctx.on('agent/pre-step', async ({ agent, messages }, next) => {
       const owner = this.owners.get(agent.id)
       if (!owner) return next()
+      this.workInputs.delete(agent.id)
       await this.authorize(owner)
       if (!hasCommunicationPreset(this.ctx.get('agentPresets'), agent)) fail('COMMUNICATION_SESSION_MIGRATION_REQUIRED')
       try {
         communicationInputs(this.queue, owner, messages)
         const decision = await next()
-        return decision.kind === 'enter' ? { ...decision, messages: communicationInputs(this.queue, owner, decision.messages) } : decision
+        if (decision.kind !== 'enter') return decision
+        const inputs = communicationInputs(this.queue, owner, decision.messages)
+        if (this.transport?.welcome?.capabilities?.includes('bot-work-events')) {
+          const staged = inputs.map(input => input.source)
+          this.workInputs.set(agent.id, staged)
+          const step = this.workSteps.get(agent.id)
+          if (step) recordWork(agent.id, owner, step, staged)
+        }
+        return { ...decision, messages: inputs }
       }
       catch (error) {
         if (error.code !== 'COMMUNICATION_INPUT_SOURCE_UNKNOWN') throw error
@@ -544,6 +576,14 @@ export class CommunicationRuntime {
       await this.ctx.sessions.flush(resolved.agent.session)
     }
     const sessions = (await inspectBinding(this.ctx.sessionController, binding, AbortSignal.timeout(15000))).filter(s => safeIds.has(s.sessionId))
+    if (this.transport?.welcome?.capabilities?.includes('bot-work-events')) {
+      for (const session of sessions) for (const step of session.events.filter(event => event.type === 'step/start')) {
+        try {
+          const deliveries = startedSources(session.events, step).map(source => sourceDelivery(this.queue, binding, source))
+          for (const delivery of deliveries) this.queue.aiStarted(delivery.deliveryId)
+        } catch { this.errors.set(binding.id, 'WORK_START_NOT_RECORDED') }
+      }
+    }
     for (const output of completedOutputs(sessions, binding, { recoverSettled: true })) {
       if (this.queue.db.prepare('SELECT 1 FROM exports WHERE source_key=?').get(output.sourceKey)) continue
       const input = sourceDelivery(this.queue, binding, output.inputSource)
@@ -591,6 +631,7 @@ export class CommunicationRuntime {
     await this.transport.opening?.catch(() => {})
     await this.transport.pumping?.catch(() => {})
     await this.processing.catch(() => {})
+    await this.workEvents?.catch(() => {})
     for (const dispose of this.disposers.reverse()) if (typeof dispose === 'function') dispose()
     this.queue.close()
   }

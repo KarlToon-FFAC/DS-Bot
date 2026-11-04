@@ -124,3 +124,39 @@ export function referenceExcerpt(text, limit = 160) {
   const chars = [...String(text ?? '').replace(/\s+/g, ' ').trim()]
   return chars.length > limit ? chars.slice(0, limit - 1).join('') + '…' : chars.join('')
 }
+
+// Presentation is deliberately conservative: canonical IDs authorize a chip, while
+// current conversation members supply its name. Ambiguous or historical text stays
+// ordinary Markdown. Whole literal/markup lines are excluded rather than guessing
+// at Markdown nesting or turning a quoted reference into an actionable mention.
+export function messageMentionSpans(message, members) {
+  const text = String(message?.content?.text ?? '')
+  const selected = new Set((message?.mentions ?? []).map(value => typeof value === 'string' ? value : value.principalId))
+  const candidates = members.filter(person => selected.has(person.principalId) && person.displayName).map(person => ({ ...person, name: person.displayName }))
+  let fence = '', quoted = false
+  const masked = text.split(/(?<=\n)/).map(line => {
+    const marker = line.match(/^\s{0,3}(`{3,}|~{3,})/)
+    if (fence) { if (marker && marker[1][0] === fence[0] && marker[1].length >= fence.length) fence = ''; return line.replace(/[^\n]/g, ' ') }
+    if (marker) { fence = marker[1]; return line.replace(/[^\n]/g, ' ') }
+    if (!line.trim()) quoted = false
+    if (/^\s*>/.test(line)) quoted = true
+    return quoted || /[\[\]<>`$]/.test(line) || /^(?: {4}|\t)/.test(line) ? line.replace(/[^\n]/g, ' ') : line
+  }).join('')
+  return mentionSpans(masked, candidates, { reservedAllFirst: true }).flatMap(span => {
+    const slash = text.slice(0, span.start).match(/\\+$/)?.[0].length ?? 0
+    if (slash % 2) return []
+    const people = span.all ? candidates.filter(person => person.kind === 'bot') : candidates.filter(person => person.name.toLowerCase() === span.bot.name.toLowerCase())
+    if (!people.length || !span.all && people.length !== 1) return []
+    return [{ start: span.start, end: span.end, all: Boolean(span.all), people }]
+  })
+}
+
+export function communicationLogEvents(events) {
+  const seen = new Set()
+  return events.filter(event => {
+    if (event.type === 'message') return true
+    if (event.type !== 'bot.work.started' || !event.deliveryId || event.eventId !== `bot-work-started:${event.deliveryId}` || !event.messageId || !event.principalId?.startsWith('bot:') || !event.serverStartedAt || seen.has(event.eventId)) return false
+    seen.add(event.eventId)
+    return true
+  })
+}

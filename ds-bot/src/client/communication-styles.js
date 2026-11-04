@@ -79,7 +79,7 @@ export const communicationCSS = `
 .bt-comm-main footer .bt-comm-field:has(select){max-width:420px}
 .bt-comm-status-help{margin-top:8px;font-size:12px;color:var(--bt-ink-2);max-height:112px;overflow:auto}
 .bt-comm-status-help summary{font-weight:400}
-.bt-comm-body>div{color:inherit!important;font-size:inherit!important;line-height:inherit!important}
+.bt-comm-body>div,.bt-comm-body>div>div{color:inherit!important;font-size:inherit!important;line-height:inherit!important}
 .bt-comm-log article[data-self=true] .bt-comm-reference{color:inherit;opacity:.8}
 .bt-comm-frame .bt-comm-mobile{display:none}
 @media(max-width:760px){
@@ -148,4 +148,15 @@ export const communicationCSS = `
 .bt-comm-avatar[data-kind=human][data-avatar="1"]{background:color-mix(in srgb,var(--bt-green) 14%,var(--bt-card));color:var(--bt-ink)}
 .bt-comm-avatar[data-kind=human][data-avatar="2"]{background:color-mix(in srgb,var(--bt-star) 14%,var(--bt-card));color:var(--bt-ink)}
 .bt-comm-avatar[data-kind=human][data-avatar="3"]{background:var(--bt-tag-bg);color:var(--bt-tag-ink)}
+
+.bt-comm-body .bt-comm-inline-mention{display:inline-flex;align-items:center;vertical-align:-3px;max-width:100%;padding:0 1px;border:0;background:none;color:var(--bt-accent);font-size:0;line-height:inherit;cursor:pointer;border-radius:6px;white-space:nowrap;text-decoration:none}
+.bt-comm-mention-targets .bt-comm-inline-mention{margin-inline-end:6px}
+.bt-comm-inline-mention-content{display:inline-flex;align-items:center;gap:3px;font-size:13px;font-weight:600;line-height:inherit;font-family:inherit}
+.bt-comm-inline-mention .bt-comm-avatar{flex:none;vertical-align:middle}
+.bt-comm-body .bt-comm-inline-mention:hover{text-decoration:underline}
+.bt-comm-body .bt-comm-inline-mention:focus-visible{outline:2px solid var(--bt-accent);outline-offset:2px}
+.bt-comm-work-started{display:flex;align-items:center;min-height:24px;margin:2px 0;padding-inline-start:40px;color:var(--bt-ink-2);font-size:12px;line-height:16px}
+.bt-comm-work-started>button,.bt-comm-work-started>span{display:inline-flex;align-items:center;gap:4px;padding:4px 6px;border:0;border-radius:6px;background:none;color:inherit;font:inherit}
+.bt-comm-work-started>button{cursor:pointer}
+.bt-comm-work-started>button:hover{background:var(--bt-hover)}
 `

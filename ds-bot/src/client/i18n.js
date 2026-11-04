@@ -5,6 +5,9 @@
 export const NAMESPACE = 'ds-bot'
 
 const ZH = {
+  'View participant': '查看成员',
+  'Participant information': '成员信息',
+
   None: '无',
   "Edit Human profile": "编辑 Human 资料",
   "Human profile": "Human 资料",

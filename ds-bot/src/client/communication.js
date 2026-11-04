@@ -2,12 +2,11 @@ import { createElement as h, Fragment, useEffect, useLayoutEffect, useRef, useSt
 import { createPortal } from 'react-dom'
 import { createSource } from './sources.js'
 import { t } from './i18n.js'
-import { MarkdownText } from './dsh-primitives.js'
-import { mdLabels } from './btw.js'
 import { useLinger } from './motion.js'
-import { contactLabels, conversationTitle, deliveryPhase, contactsByAddress, mentionQuery, mentionChoices, insertMention, retainedMentions, collaborationStops, groupSettingsValues, groupSettingsChanges, referenceExcerpt } from './communication-model.js'
+import { contactLabels, conversationTitle, deliveryPhase, contactsByAddress, mentionQuery, mentionChoices, insertMention, retainedMentions, collaborationStops, groupSettingsValues, groupSettingsChanges, referenceExcerpt, communicationLogEvents } from './communication-model.js'
 import { AddDevice, ContactManager } from './communication-onboarding.js'
 import { CommunicationAvatar, HumanProfile, syncAvatarDirectory } from './communication-profile.js'
+import { CommunicationMessage, BotWorkStarted } from './communication-message.js'
 import { communicationCSS } from './communication-styles.js'
 
 const OPEN = 'ds-bot:communication:open', SELECTED = 'ds-bot:communication:selected'
@@ -188,7 +187,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
   const [title, setTitle] = useState(''), [invitees, setInvitees] = useState([])
   const [completion, setCompletion] = useState(null), [completionIndex, setCompletionIndex] = useState(0), [composing, setComposing] = useState(false)
   const chooser = useRef(null), chooserTrigger = useRef(null)
-  const [browse, setBrowse] = useState(false), [activePanel, setActivePanel] = useState('')
+  const [browse, setBrowse] = useState(false), [activePanel, setActivePanel] = useState(''), [inspectedIds, setInspectedIds] = useState([])
   const input = useRef(null), frame = useRef(null), log = useRef(null), autoScroll = useRef(true), pageOrder = useRef(0), operationIds = useRef(new Map(read(OPERATION_IDS, [])))
   const labels = contactLabels(state?.contacts ?? [], state?.instanceId, t)
   const member = state?.conversations?.find(item => item.conversationId === selected)
@@ -339,6 +338,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
   const operations = state?.outbox?.filter(item => item.type !== 'message.publish' && item.state !== 'accepted') ?? []
   const pendingCount = (state?.outbox ?? []).filter(item => item.type === 'message.publish' && item.state === 'pending').length
   const remoteCount = contacts.filter(contact => contact.homeInstanceId !== state?.instanceId).length
+  const inspect = ids => { const authorized = ids.filter(id => currentMembers.some(person => person.principalId === id)); if (authorized.length) { setInspectedIds(authorized); showPanel('participant') } }
   const showPanel = name => { chooserTrigger.current = document.activeElement; setActivePanel(name) }
   const connectionBlocked = state?.error && !['CONNECTION_LOST','REQUEST_TIMEOUT','STORAGE_UNAVAILABLE','BACKPRESSURE','HISTORY_GAP'].includes(state.error)
   const connectionLabel = !team.communicationEnabled ? 'Not configured' : pollError ? 'Offline' : !state ? 'Connecting…' : state.connected ? 'Connected to Hub' : connectionBlocked ? 'Offline' : 'Reconnecting to Hub'
@@ -399,9 +399,9 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
         btn('Restore retained ownership', () => { void act(() => operation('reclaim', { conversationId: item.conversationId, expectedVersion: item.membershipVersion })) }))),
       null),
     activePanel ? h('div', { className: 'bt-comm-modal-backdrop', onMouseDown: event => { if (event.target === event.currentTarget) { setActivePanel(''); chooserTrigger.current?.focus() } } },
-      h('section', { ref: chooser, className: 'bt-comm-modal', role: 'dialog', 'aria-modal': true, 'aria-label': t(activePanel === 'manage-contacts' ? 'Manage contacts' : activePanel === 'profile' ? 'Human profile' : activePanel === 'pairing' ? 'Pairing guide' : activePanel === 'group' ? 'New group' : 'New message') },
-        h('h2', null, t(activePanel === 'manage-contacts' ? 'Manage contacts' : activePanel === 'profile' ? 'Human profile' : activePanel === 'pairing' ? 'Pairing guide' : activePanel === 'group' ? 'New group' : 'New message')),
-        activePanel === 'manage-contacts' ? h(ContactManager, { request, operation, contacts, hubUrl: state?.hubUrl }) : activePanel === 'profile' ? h(HumanProfile, { human: contacts.find(person => person.principalId === state?.humanPrincipalId) ?? { principalId: state?.humanPrincipalId ?? 'human:local', displayName: 'Human', kind: 'human' }, request, operation }) : activePanel === 'pairing' ? h(AddDevice, { request, displayName: contacts.find(person => person.principalId === state?.humanPrincipalId)?.displayName ?? 'Human', manualGuide: h(PairingGuide, { connectionLabel }) }) : h(Fragment, null,
+      h('section', { ref: chooser, className: 'bt-comm-modal', role: 'dialog', 'aria-modal': true, 'aria-label': t(activePanel === 'participant' ? 'Participant information' : activePanel === 'manage-contacts' ? 'Manage contacts' : activePanel === 'profile' ? 'Human profile' : activePanel === 'pairing' ? 'Pairing guide' : activePanel === 'group' ? 'New group' : 'New message') },
+        h('h2', null, t(activePanel === 'participant' ? 'Participant information' : activePanel === 'manage-contacts' ? 'Manage contacts' : activePanel === 'profile' ? 'Human profile' : activePanel === 'pairing' ? 'Pairing guide' : activePanel === 'group' ? 'New group' : 'New message')),
+        activePanel === 'participant' ? h('div', { className: 'bt-comm-participant-information' }, currentMembers.filter(person => inspectedIds.includes(person.principalId)).map(person => h('section', { key: person.principalId }, personLabel(person), h('p', null, t(roleLabel(person.role ?? 'member'))), h('code', null, person.principalId)))) : activePanel === 'manage-contacts' ? h(ContactManager, { request, operation, contacts, hubUrl: state?.hubUrl }) : activePanel === 'profile' ? h(HumanProfile, { human: contacts.find(person => person.principalId === state?.humanPrincipalId) ?? { principalId: state?.humanPrincipalId ?? 'human:local', displayName: 'Human', kind: 'human' }, request, operation }) : activePanel === 'pairing' ? h(AddDevice, { request, displayName: contacts.find(person => person.principalId === state?.humanPrincipalId)?.displayName ?? 'Human', manualGuide: h(PairingGuide, { connectionLabel }) }) : h(Fragment, null,
         activePanel === 'group' ? h('label', { className: 'bt-comm-field' }, t('Group name'), h('input', { value: title, onChange: event => setTitle(event.target.value), 'aria-label': t('Group name') })) : null,
         groupedContacts(contact => activePanel === 'group' ? h('label', { key: contact.principalId, className: 'bt-comm-check' },
           h('input', { type: 'checkbox', checked: invitees.includes(contact.principalId), onChange: event => setInvitees(current => event.target.checked ? [...current, contact.principalId] : current.filter(id => id !== contact.principalId)) }), personLabel(contact)) :
@@ -436,12 +436,11 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
       } },
         member && events.length > 0 && events[0].conversationSeq > member.joinSeq ? btn('Load earlier messages', () => setOlder(events[0].conversationSeq - 1)) : null,
         older !== null ? btn('Show latest messages', () => setOlder(null)) : null,
-        events.filter(event => event.type === 'message').map(event => h('article', { key: event.message.messageId, 'data-message-id': event.message.messageId, 'data-self': event.message.author.principalId === state.humanPrincipalId, 'data-referenced': event.message.messageId === referenced },
+        communicationLogEvents(events).map(event => event.type === 'bot.work.started' ? h(BotWorkStarted, { key: event.eventId, event, members: currentMembers, request, onInspect: inspect }) : h('article', { key: event.message.messageId, 'data-message-id': event.message.messageId, 'data-self': event.message.author.principalId === state.humanPrincipalId, 'data-referenced': event.message.messageId === referenced },
           avatar(event.message.author.principalId, contacts.find(person => person.principalId === event.message.author.principalId)?.displayName ?? event.message.author.displayName), h('strong', { title: event.message.author.principalId }, labels.get(event.message.author.principalId) ?? event.message.author.displayName ?? (event.message.author.principalId === state.humanPrincipalId ? t('You') : event.message.author.principalId), identityIcons(contacts.find(person => person.principalId === event.message.author.principalId) ?? event.message.author)),
           event.message.replyToMessageId ? h(ReferenceQuote, { key: `${selected}:${member.membershipEpoch}:${event.message.replyToMessageId}`, conversationId: selected,
             membershipEpoch: member.membershipEpoch, messageId: event.message.replyToMessageId, request, labels, onJump: openReference }) : null,
-          h('div', { className: 'bt-comm-body' }, h(MarkdownText, { text: event.message.content.text, labels: mdLabels(), variant: 'compact' })),
-          event.message.mentions.length ? h('p', { className: 'bt-comm-reference' }, event.message.mentions.map(mention => `@${labels.get(mention.principalId) ?? mention.principalId}`).join(' · ')) : null,
+          h('div', { className: 'bt-comm-body' }, h(CommunicationMessage, { message: event.message, members: currentMembers, request, onInspect: inspect })),
           h('div', { className: 'bt-comm-message-actions' }, h('time', null, new Date(event.serverAcceptedAt).toLocaleString()), btn('Reply', () => { setReply(event.message); input.current?.focus() })),
           ownOutbox.find(item => item.id === event.message.messageId)?.deliveries.filter(delivery => delivery.recipientPrincipalId !== state.humanPrincipalId).map(delivery => h('p', { key: delivery.deliveryId, className: 'bt-comm-reference' }, `${labels.get(delivery.recipientPrincipalId) ?? delivery.recipientPrincipalId} · ${t(deliveryPhase(delivery))}`)))),
         ownOutbox.filter(item => item.state !== 'failed' && !visibleIds.has(item.id) && (item.state !== 'accepted' || older === null && item.result?.conversationSeq > (page?.watermark ?? 0))).map(item => h('article', { key: item.id, 'data-message-id': item.id, 'data-self': true, 'data-failed': item.state === 'failed' },

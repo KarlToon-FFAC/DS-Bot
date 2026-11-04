@@ -253,6 +253,16 @@ recovery rules below.
 
 ## Outcomes and recovery
 
+Delivery admission (`aiAccepted`, “Bot admitted”) does not prove work started.
+When the Hub advertises `bot-work-events`, authorized history can contain a
+`bot.work.started` event linked by `deliveryId` and `messageId` to the actual
+recipient `principalId` and membership epoch. It records a target-host-attested
+DSH processing-step entry, not a model's textual claim. The historical event does
+not mean the Bot is still running or has finished. Old Hubs may have no such
+events; absence is not proof of failure. Do not send a message or retry work to
+manufacture a status line. Read ordinary history through GUI, CLI `history` or
+`read_communication_history`; the receipt is a host operation, not a Bot tool.
+
 stdout returns `{ok:true,value,request}`. A failure returns
 `{ok:false,error:{code},request?}` on stderr. Save the `request` object, including
 its operation ID or message ID/timestamp, in an appropriately private task record.

@@ -559,6 +559,7 @@ export class HubStore {
     return this.transaction(()=>{
       const digest=hash(message), old=this.db.prepare('SELECT * FROM messages WHERE id=?').get(message.messageId)
       if(old){ requireThat(old.hash===digest&&old.author_id===author.principalId,'MESSAGE_ID_CONFLICT'); return this.accepted(old) }
+      requireThat(!message.messageId.startsWith('bot-work-started:'),'MESSAGE_ID_CONFLICT')
       requireThat(this.isPublished(author.principalId),'BOT_NOT_PUBLISHED')
       this.dmPolicy?.(message.conversationId)
       requireThat(typeof message.membershipEpoch==='string','MEMBERSHIP_EPOCH_REQUIRED')
@@ -709,6 +710,23 @@ export class HubStore {
       requireThat(!row.revoked,'MEMBERSHIP_REVOKED')
       requireThat(input.membershipEpoch===row.membership_epoch,'MEMBERSHIP_REVOKED')
       this.member(auth,row.conversation_id,row.recipient_id,input.membershipEpoch)
+      if(input.status==='aiStarted'){
+        requireThat(row.kind==='bot'&&row.ai===1,'INVALID_RECEIPT')
+        requireThat(this.isPublished(row.recipient_id),'BOT_NOT_PUBLISHED')
+        this.dmPolicy?.(row.conversation_id)
+        requireThat(row.stored===1,'RECEIPT_OUT_OF_ORDER')
+        const eventId=`bot-work-started:${row.id}`
+        const old=this.db.prepare('SELECT type,body FROM events WHERE id=?').get(eventId)
+        if(old){
+          const event=JSON.parse(old.body)
+          requireThat(old.type==='bot.work.started'&&event.deliveryId===row.id,'MESSAGE_ID_CONFLICT')
+          return {deliveryId:row.id,status:input.status,eventId,conversationSeq:event.conversationSeq,serverStartedAt:event.serverStartedAt}
+        }
+        const serverStartedAt=new Date().toISOString()
+        const event=this.event(row.conversation_id,'bot.work.started',{deliveryId:row.id,messageId:row.message_id,principalId:row.recipient_id,membershipEpoch:row.membership_epoch,serverStartedAt},eventId)
+        this.db.prepare('UPDATE deliveries SET ai_accepted=1 WHERE id=?').run(row.id)
+        return {deliveryId:row.id,status:input.status,eventId,conversationSeq:event.conversationSeq,serverStartedAt}
+      }
       const columns={targetStored:'stored',uiApplied:'applied',humanRead:'human_read',aiAccepted:'ai_accepted'}
       const column=Object.hasOwn(columns,input.status)?columns[input.status]:null
       requireThat(column,'INVALID_REQUEST')

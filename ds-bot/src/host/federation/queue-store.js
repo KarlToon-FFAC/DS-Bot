@@ -277,6 +277,15 @@ export class CommunicationQueue {
       if (state === 'accepted') this.receiptInside(JSON.parse(row.body), 'aiAccepted')
     })
   }
+  aiStarted(deliveryId) {
+    return this.transaction(() => {
+      const row = this.db.prepare('SELECT * FROM inbox WHERE delivery_id=?').get(deliveryId)
+      requireValue(this.authorized && row?.ai && !row.revoked && row.principal_id.startsWith('bot:'), 'MEMBERSHIP_REVOKED')
+      this.member(row.conversation_id, row.principal_id, row.epoch)
+      requireValue(this.cursor(row.conversation_id, row.principal_id, row.epoch) >= row.seq, 'HISTORY_GAP')
+      this.receiptInside(JSON.parse(row.body), 'aiStarted')
+    })
+  }
   applied(deliveryId, { humanRead = false } = {}) {
     return this.transaction(() => {
       const row = this.db.prepare('SELECT * FROM inbox WHERE delivery_id=?').get(deliveryId)

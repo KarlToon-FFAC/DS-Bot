@@ -12,7 +12,7 @@ const { JSDOM } = harness('jsdom'), React = harness('react'), { act } = React
 const { outputFiles } = await build({ entryPoints: [fileURLToPath(new URL('../src/client/communication.js', import.meta.url))],
   bundle: true, platform: 'browser', format: 'cjs', external: ['react', 'react-dom', '@deepseek-ai/dsh-client-ui-primitives'], write: false })
 
-async function pane({ enabled = true, snapshot, history = [], getState, handle = async () => ({}) }, check) {
+async function pane({ enabled = true, snapshot, history = [], getState, MarkdownText = ({ text }) => React.createElement('p', null, text), handle = async () => ({}) }, check) {
   const dom = new JSDOM('<!doctype html><body><textarea id="native">private draft</textarea><div id="root"></div></body>', { url: 'http://127.0.0.1:3138/', pretendToBeVisual: true })
   const saved = Object.fromEntries(['window', 'document', 'navigator', 'HTMLElement', 'IS_REACT_ACT_ENVIRONMENT'].map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]))
   for (const [key, value] of Object.entries({ window: dom.window, document: dom.window.document, navigator: dom.window.navigator, HTMLElement: dom.window.HTMLElement, IS_REACT_ACT_ENVIRONMENT: true })) Object.defineProperty(globalThis, key, { configurable: true, value })
@@ -20,7 +20,7 @@ async function pane({ enabled = true, snapshot, history = [], getState, handle =
   const { createRoot } = harness('react-dom/client')
   const mod = { exports: {} }
   runInNewContext(outputFiles[0].text, { module: mod, exports: mod.exports,
-    require: id => id === 'react' ? React : id === 'react-dom' ? harness('react-dom') : { MarkdownText: ({ text }) => React.createElement('p', null, text) },
+    require: id => id === 'react' ? React : id === 'react-dom' ? harness('react-dom') : { MarkdownText },
     window: dom.window, document: dom.window.document, sessionStorage: dom.window.sessionStorage, localStorage: dom.window.localStorage,
     setTimeout, clearTimeout, crypto: globalThis.crypto, AbortSignal, requestAnimationFrame: dom.window.requestAnimationFrame, cancelAnimationFrame: dom.window.cancelAnimationFrame })
   const panel = createSource(true), roster = createSource({ communicationEnabled: enabled }), surface = createSource({ mode: 'bot' }), calls = []
@@ -547,5 +547,29 @@ test('an acknowledged settings save stays confirmed when the follow-up status re
     await click('Save')
     assert.deepEqual(versions, [1, 2])
     assert.equal(doc.querySelector('[aria-label="Save group settings"]').disabled, true)
+  })
+})
+
+test('canonical started history deduplicates beneath messages and member chips open only read-only participant information', async () => {
+  const bot = { principalId: 'bot:a:chief', kind: 'bot', displayName: 'Chief', homeInstanceId: 'a', role: 'member', speakingMode: 'passive' }
+  const snapshot = { ...state(), contacts: [bot], conversations: [{ ...membership, role: 'member', info: { members: [...membership.info.members, bot] } }] }
+  const started = { type: 'bot.work.started', eventId: 'bot-work-started:d1', deliveryId: 'd1', messageId: 'm1', principalId: bot.principalId, serverStartedAt: '2026-11-04T00:00:00.000Z', conversationSeq: 2 }
+  const history = [{ type: 'message', serverAcceptedAt: '2026-11-04T00:00:00.000Z', conversationSeq: 1, message: { messageId: 'm1', author: membership.info.members[0], mentions: [{ principalId: bot.principalId }], content: { text: 'Please ask @Chief' } } }, started, structuredClone(started), { type: 'receipt', aiAccepted: true, conversationSeq: 3 }]
+  const MarkdownText = ({ text }) => {
+    const match = text.match(/\[([^\]]*)\]\((https:\/\/remote-mentions\.dsbot\.invalid\/[^)]+)\)/)
+    return React.createElement('p', null, match ? React.createElement('a', { href: match[2] }, match[1]) : text)
+  }
+  await pane({ snapshot, history, MarkdownText }, async ({ doc, calls, click }) => {
+    await click('Shared group')
+    assert.equal(doc.querySelectorAll('.bt-comm-log article').length, 1)
+    assert.equal(doc.querySelectorAll('.bt-comm-work-started').length, 1)
+    assert.equal(doc.querySelector('.bt-comm-work-started').previousElementSibling.dataset.messageId, 'm1')
+    await act(async () => doc.querySelector('.bt-comm-inline-mention').click())
+    const inspector = doc.querySelector('[role=dialog][aria-label="Participant information"]')
+    assert.ok(inspector)
+    assert.equal(inspector.querySelector('code').textContent, bot.principalId)
+    assert.equal(inspector.querySelector('input,select,textarea'), null)
+    assert.equal(inspector.querySelectorAll('button').length, 1)
+    assert.ok(calls.every(body => ['state', 'history', 'read'].includes(body.endpoint)), 'inspection performs no writes or local Bot navigation')
   })
 })
