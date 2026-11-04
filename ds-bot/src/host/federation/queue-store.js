@@ -124,10 +124,15 @@ export class CommunicationQueue {
     this.db.prepare('INSERT INTO outbox(id,type,payload,hash) VALUES (?,?,?,?)').run(id, type, body, hash)
     return id
   }
-  enqueueMessage(payload) {
+  enqueueMessage(payload, humanIntent) {
     requireValue(this.owns(payload.author?.principalId), 'AUTHOR_MISMATCH')
-    return this.transaction(() => this.enqueueInside('message.publish', payload, payload.messageId))
+    return this.transaction(() => {
+      const id = this.enqueueInside('message.publish', payload, payload.messageId)
+      if (humanIntent !== undefined) this.db.prepare('INSERT INTO metadata VALUES (?,?) ON CONFLICT(key) DO NOTHING').run(`human-send:${id}`, humanIntent)
+      return id
+    })
   }
+  humanIntent(id) { return this.db.prepare('SELECT value FROM metadata WHERE key=?').get(`human-send:${id}`)?.value }
   enqueueOperation(type, payload) { return this.transaction(() => this.enqueueInside(type, payload, payload.operationId)) }
   pendingOutbox() { return this.db.prepare("SELECT * FROM outbox WHERE state='pending' ORDER BY rowid").all().map(row => ({ id: row.id, type: row.type, payload: JSON.parse(row.payload) })) }
   intent(id) { const row=this.db.prepare('SELECT type,payload FROM outbox WHERE id=?').get(id);return row?{type:row.type,payload:JSON.parse(row.payload)}:null }

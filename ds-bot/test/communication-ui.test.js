@@ -5,7 +5,8 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { runInNewContext } from 'node:vm'
 import { build } from 'esbuild'
-import { contactLabels, deliveryPhase } from '../src/client/communication-model.js'
+import { contactLabels, deliveryPhase, contactsByAddress, principalAvatar, mentionQuery, mentionChoices, insertMention, retainedMentions } from '../src/client/communication-model.js'
+import { communicationMentions } from '../src/shared/communication-mentions.js'
 import { createSource } from '../src/client/sources.js'
 
 test('communication labels disambiguate same-name origins and never equate storage, Human read and AI admission', () => {
@@ -62,7 +63,7 @@ test('production pane ignores a late history response and retries an uncertain H
     await act(async () => [...dom.window.document.querySelectorAll('nav button')].find(button => button.textContent === 'two').click())
     await act(async () => releaseFirst(history('one')))
     assert.equal(dom.window.document.querySelector('.bt-comm-main h2').textContent, 'two')
-    assert.equal(dom.window.document.querySelectorAll('.bt-comm-log .bt-comm-event').length, 1)
+    assert.equal(dom.window.document.querySelectorAll('.bt-comm-feedback .bt-comm-event').length, 1)
     await act(async () => {
       Object.getOwnPropertyDescriptor(dom.window.HTMLTextAreaElement.prototype, 'value').set.call(field(), 'same original intent')
       field().dispatchEvent(new dom.window.Event('input', { bubbles: true }))
@@ -94,5 +95,54 @@ test('production pane ignores a late history response and retries an uncertain H
   } finally {
     await act(async () => root.unmount()); dom.window.close()
     for (const [key, descriptor] of Object.entries(saved)) { if (descriptor) Object.defineProperty(globalThis, key, descriptor); else delete globalThis[key] }
+  }
+})
+
+
+test('directory grouping is a display projection and avatar keys survive an address change', () => {
+  const people = [
+    { principalId: 'human:a', homeInstanceId: 'a', displayName: 'One', ipAddress: '203.0.113.1' },
+    { principalId: 'human:b', homeInstanceId: 'b', displayName: 'Two', ipAddress: '203.0.113.1' },
+  ]
+  const groups = contactsByAddress([...people, people[0]])
+  assert.equal(groups.length, 1)
+  assert.equal(groups[0].instances.length, 2)
+  assert.deepEqual(groups[0].instances.flatMap(instance => instance.contacts.map(person => person.principalId)), ['human:a', 'human:b'])
+  const avatar = principalAvatar(people[0].principalId, people[0].displayName)
+  people[0].ipAddress = '203.0.113.2'
+  assert.equal(contactsByAddress(people).length, 2)
+  assert.deepEqual(principalAvatar(people[0].principalId, people[0].displayName), avatar)
+})
+
+test('mention insertion preserves exact IDs and excludes literal quote and code completion', () => {
+  const members = [{ principalId: 'human:a', displayName: 'Human', kind: 'human' }, { principalId: 'bot:b', displayName: 'Twin', kind: 'bot' }]
+  assert.equal(mentionChoices(members, 'all')[0].principalId, '@all')
+  assert.equal(mentionChoices(members.slice(0, 1), 'all').length, 0)
+  const draft = { text: 'Ask @Tw later', mentions: [] }
+  assert.deepEqual(insertMention(draft, mentionQuery(draft.text, 7), members[1]), { text: 'Ask @Twin  later', mentions: ['bot:b'], manualMentions: [], caret: 10 })
+  for (const text of ['email@example', '> @Tw', '`@Tw', '```js\n@Tw']) assert.equal(mentionQuery(text, text.length), null)
+  assert.deepEqual(mentionQuery('```x```\n@Tw', 11), { start: 8, end: 11, query: 'Tw' })
+})
+
+
+test('editing mentions removes deleted or quoted explicit targets and preserves exact same-name selection', () => {
+  const members = [{ principalId: 'bot:a', displayName: 'Twin', kind: 'bot' }, { principalId: 'bot:b', displayName: 'Twin', kind: 'bot' }, { principalId: 'human:a', displayName: 'Renamed (Human)!', kind: 'human' }]
+  assert.deepEqual(retainedMentions('@Twin hi', ['bot:b'], members), ['bot:b'])
+  for (const text of ['hi', '`@Twin`', '> @Twin', '```\n@Twin\n```']) assert.deepEqual(retainedMentions(text, ['bot:b'], members), [])
+  assert.deepEqual(retainedMentions('@Renamed (Human)! hi', ['human:a'], members), ['human:a'])
+})
+
+
+test('reserved Human names insert plain text with an explicit chip and never broadcast', () => {
+  for (const displayName of ['all', 'Everyone', '所有人', '全体', 'all review', 'everyone (Human)', '所有人 review']) {
+    const person = { principalId: 'human:legacy', displayName, kind: 'human' }
+    const members = [person, { principalId: 'bot:here', displayName: 'Bot here', kind: 'bot' }]
+    const chosen = insertMention({ text: '@' + displayName, mentions: [] }, { start: 0, end: displayName.length + 1 }, person)
+    assert.equal(chosen.text.includes('@'), false)
+    assert.deepEqual(chosen.manualMentions, ['human:legacy'])
+    assert.deepEqual(retainedMentions('Edited ordinary text', chosen.mentions, members, chosen.manualMentions), ['human:legacy'])
+    assert.deepEqual(communicationMentions(chosen.text, members, chosen.mentions), [{ principalId: 'human:legacy' }])
+    assert.deepEqual(communicationMentions('@all', members), [{ principalId: 'bot:here' }])
+    assert.deepEqual(retainedMentions(chosen.text, chosen.mentions, members), [])
   }
 })

@@ -259,6 +259,12 @@ export function install(rt) {
   async function updateBot(id, patch, actorId, fromSessionId) {
     const bot = rt.botOf(id)
     if (bot === undefined) throw new Error('Unknown Bot')
+    const assertActor = () => {
+      if (actorId !== undefined && (rt.botOf(actorId) === undefined || actorId !== id && !rt.isMain(actorId))) {
+        throw new Error('Only a Main Bot can change another Bot')
+      }
+    }
+    assertActor()
     if (patch.browserGrants !== undefined && actorId !== undefined) {
       throw new Error(`Only the user can set what ${bot.name} may do in the browser`)
     }
@@ -286,6 +292,8 @@ export function install(rt) {
         effortId = await rt.resolveEffort(effortRef, patch.effort)
       }
     }
+    // Folder/model checks may await; the actor must retain authority before mutation.
+    assertActor()
     if (patch.name !== undefined) {
       const next = String(patch.name).trim().slice(0, 40)
       const clash = rt.findBot(next)

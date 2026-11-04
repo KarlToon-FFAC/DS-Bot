@@ -10,7 +10,7 @@ const digest = value => createHash('sha256').update(value).digest()
 const routes = {
   'principal.register':'register', 'contacts.list':'contacts', 'dm.open':'createDm', 'group.create':'createGroup',
   'group.invite':'invite', 'group.accept':'accept', 'group.remove':'remove', 'group.routing':'routing', 'group.dissolve':'dissolve',
-  'group.policy':'policy', 'group.transfer':'transfer', 'group.reclaim':'reclaim',
+  'group.policy':'policy', 'group.transfer':'transfer', 'group.reclaim':'reclaim', 'principal.rename':'renameHuman', 'group.configure':'configureGroup',
   'message.publish':'publish', 'memberships.list':'memberships', 'conversation.sync':'sync', 'conversation.authorize':'authorize', 'conversation.members':'members',
   'conversation.ack':'acknowledgeCursor', 'deliveries.pull':'pending', 'delivery.receipt':'receipt', 'message.status':'deliveryStatus',
 }
@@ -39,7 +39,7 @@ export async function startHub({ databasePath, peers, host='127.0.0.1', port=319
   const sockets=new WebSocketServer({server,path:'/communication',maxPayload:store.limits.maxEnvelopeBytes,perMessageDeflate:false})
   const connections=new Set()
   const identities=new Map()
-  sockets.on('connection',socket=>{
+  sockets.on('connection',(socket,request)=>{
     if(connections.size>=64){socket.close(1013,'Connection capacity reached');return}
     connections.add(socket)
     let auth=null
@@ -64,6 +64,7 @@ export async function startHub({ databasePath, peers, host='127.0.0.1', port=319
           requireThat(peer&&typeof frame.payload.credential==='string'&&timingSafeEqual(peer.credentialHash,digest(frame.payload.credential)),'UNAUTHENTICATED')
           value=store.connect(frame.payload.instanceId,peer.label,frame.payload.capabilities)
           auth={instanceId:value.instanceId,epoch:value.epoch}
+          store.observeAddress(auth,(request.socket.remoteAddress??'unknown').replace(/^::ffff:/,''))
           identities.set(socket,auth.instanceId)
           clearTimeout(deadline)
         }else{

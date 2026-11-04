@@ -51,7 +51,7 @@ export function install(rt) {
         comm.member(actor.principalId, communicationBinding.conversationId, communicationBinding.membershipEpoch)
         args = { ...args, membershipEpoch: communicationBinding.membershipEpoch }
       }
-      const read = ['list_contacts', 'list_communication_conversations', 'read_communication_history'].includes(exec.name)
+      const read = ['list_contacts', 'list_communication_conversations', 'read_communication_history', 'read_communication_members', 'read_communication_reference'].includes(exec.name)
       const communicationSource = read ? null : await comm.toolSource(exec)
       return JSON.stringify(await work(comm, actor, args, { ...exec, communicationSource, communicationBinding }))
     }
@@ -73,6 +73,18 @@ export function install(rt) {
     defineTool({ name: 'create_communication_group', description: 'Create an explicit communication group as yourself. Other people/Bots join only through invitations and acceptance.',
       parameters: { title: { type: 'string', required: true } }, output,
       execute: execute((comm, actor, args, exec) => comm.operation(actor.principalId, 'group.create', { title: args.title }, toolOperation('group', exec))) }),
+    defineTool({ name: 'read_communication_members', description: 'Read the current participants, exact IDs, group title, roles, speaking modes, receiving rule and membershipVersion of one authorized communication conversation.',
+      parameters: { conversationId: { type: 'string', required: true } }, output,
+      execute: execute((comm, actor, args) => comm.members(actor.principalId, args)) }),
+    defineTool({ name: 'read_communication_reference', description: 'Read an authorized canonical message reference from the current membership epoch of one communication conversation.',
+      parameters: { conversationId: { type: 'string', required: true }, messageId: { type: 'string', required: true } }, output,
+      execute: execute((comm, actor, args) => {
+        const member = comm.member(actor.principalId, args.conversationId, args.membershipEpoch)
+        return comm.queue.reference(args.conversationId, actor.principalId, member.membershipEpoch, args.messageId)
+      }) }),
+    defineTool({ name: 'configure_communication_group', description: 'As group owner or admin, change the group title using the latest membershipVersion as expectedVersion.',
+      parameters: { conversationId: { type: 'string', required: true }, title: { type: 'string', required: true }, expectedVersion: { type: 'integer', required: true } }, output,
+      execute: execute((comm, actor, args, exec) => comm.operation(actor.principalId, 'group.configure', args, toolOperation('configure', exec))) }),
     defineTool({ name: 'invite_communication_member', description: 'Invite an exact published participant to a communication group you manage.',
       parameters: { conversationId: { type: 'string', required: true }, inviteePrincipalId: { type: 'string', required: true } }, output,
       execute: execute((comm, actor, args, exec) => comm.operation(actor.principalId, 'group.invite', args, toolOperation('invite', exec))) }),
@@ -126,6 +138,7 @@ export function install(rt) {
         switch (body.endpoint) {
           case 'state': value = comm.snapshot(); break
           case 'history': value = comm.history(comm.human.principalId, body); break
+          case 'members': value = await comm.members(comm.human.principalId, body); break
           case 'reference': {
             const member = comm.member(comm.human.principalId, body.conversationId)
             value = comm.queue.reference(body.conversationId, comm.human.principalId, member.membershipEpoch, body.messageId)
@@ -133,6 +146,13 @@ export function install(rt) {
           }
           case 'read': value = comm.markRead(body); break
           case 'send': value = comm.sendHuman(body); break
+          case 'rename-human': {
+            value = await comm.transport.request('principal.rename',{principalId:comm.human.principalId,displayName:body.displayName})
+            comm.human.displayName = value.displayName
+            comm.contacts = comm.contacts.map(contact => contact.principalId === value.principalId ? { ...contact, displayName: value.displayName } : contact)
+            break
+          }
+          case 'configure-group': value = await comm.operation(comm.human.principalId,'group.configure',{conversationId:body.conversationId,membershipEpoch:body.membershipEpoch,expectedVersion:body.expectedVersion,title:body.title},body.operationId); break
           case 'dm': value = await comm.operation(comm.human.principalId, 'dm.open', { otherPrincipalId: body.otherPrincipalId }, body.operationId); break
           case 'create-group': value = await comm.operation(comm.human.principalId, 'group.create', { title: body.title }, body.operationId); break
           case 'invite': value = await comm.operation(comm.human.principalId, 'group.invite', { membershipEpoch: body.membershipEpoch, expectedVersion: body.expectedVersion, conversationId: body.conversationId, inviteePrincipalId: body.inviteePrincipalId }, body.operationId); break

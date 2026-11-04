@@ -101,4 +101,24 @@ export const communicationCSS = `
   .bt-comm-main footer textarea{max-height:120px}
 }
 @media(prefers-reduced-motion:reduce){.bt-comm-frame{transition:none}}
+
+.bt-comm-pairing-guide pre{white-space:pre-wrap;overflow-wrap:anywhere;user-select:text;background:var(--bt-sidebar);padding:12px;border:1px solid var(--bt-line);border-radius:8px}
+.bt-comm-pairing-guide li{margin:8px 0}
+.bt-comm-avatar{width:28px;height:28px;flex:0 0 28px;display:inline-grid;place-items:center;border-radius:50%;background:var(--bt-bubble);color:var(--bt-ink);font:500 11px/16px var(--bt-font);vertical-align:middle;margin-right:8px}
+.bt-comm-avatar::before{content:attr(data-initials)}
+.bt-comm-avatar[data-avatar="1"]{background:var(--bt-tag-bg);color:var(--bt-tag-ink)}
+.bt-comm-avatar[data-avatar="2"]{border:1px solid var(--bt-line-2)}
+.bt-comm-avatar[data-avatar="3"]{background:var(--bt-sidebar);border:1px solid var(--bt-line)}
+.bt-comm-person-label{display:inline-flex;align-items:center;overflow-wrap:anywhere}
+.bt-comm-modal-backdrop{position:absolute;inset:0;z-index:8;background:color-mix(in srgb,var(--bt-ink) 25%,transparent);display:grid;place-items:center;padding:24px}
+.bt-comm-modal{width:min(560px,100%);max-height:calc(100dvh - 48px);overflow:auto;padding:24px;border-radius:16px;border:.5px solid var(--bt-line-2);background:var(--bt-card);box-shadow:0 12px 40px color-mix(in srgb,var(--bt-ink) 15%,transparent)}
+.bt-comm-modal>button{margin:8px 8px 0 0}
+.bt-comm-address{border-top:1px solid var(--bt-line);padding:8px 0}
+.bt-comm-address button,.bt-comm-participant-picker>button{display:block;width:100%;margin:4px 0}
+.bt-comm-completion{max-height:220px;overflow:auto;border:.5px solid var(--bt-line-2);border-radius:12px;background:var(--bt-card);padding:6px}
+.bt-comm-completion button{display:block;width:100%;border-color:transparent}
+.bt-comm-completion button[aria-selected=true]{background:var(--bt-active)}
+.bt-comm-feedback{max-height:140px;overflow:auto;border-top:1px solid var(--bt-line);font-size:12px}
+.bt-comm-feedback:empty{display:none}
+.bt-comm-heading>.bt-comm-avatar{float:left;width:36px;height:36px}
 `

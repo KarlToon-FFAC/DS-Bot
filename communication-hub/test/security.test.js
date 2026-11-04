@@ -70,7 +70,7 @@ test('an absent owner retains a reserved group slot and can reclaim without exce
   const { store, a, b, A, B, group, scoped, invite, accept } = fixture(t, { limits: { maxMembers: 2 } })
   accept(invite())
   store.policy(a, scoped(A, { targetPrincipalId: B, role: 'admin', expectedVersion: store.members(a, scoped(A)).membershipVersion }))
-  const C = store.register(b, { localId: 'C', kind: 'human', displayName: 'C' }).principalId
+  const C = store.register(b, { localId: 'C', kind: 'bot', displayName: 'C' }).principalId
   const invitation = store.invite(b, scoped(B, { inviteePrincipalId: C }))
   store.revokeInstance('a'); store.configurePeer('a', 'A', 2)
   const next = store.connect('a', 'A', CAPABILITIES)

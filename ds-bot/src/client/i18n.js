@@ -5,6 +5,35 @@
 export const NAMESPACE = 'ds-bot'
 
 const ZH = {
+  'An operation is not confirmed. Check status, then retry the same action.': '有操作尚未确认。请核对状态，再重试同一操作。',
+  'Remove mention': '取消点名',
+  "Add a device": "添加设备",
+  "Pairing guide": "设备接入引导",
+  "Close guide": "关闭引导",
+  "Hub configuration example": "Hub 配置示例",
+  "Device configuration example": "新设备配置示例",
+  "1. Hub owner": "1. Hub 管理员",
+  "2. New device": "2. 新设备",
+  "3. Verify the connection": "3. 验证连接",
+  "The Hub owner must authorize each device in the Hub configuration and restart the Hub. This guide does not pair a device or change permissions.": "每台设备都需要 Hub 管理员在 Hub 配置中授权并重启 Hub。本引导不会直接配对设备或修改权限。",
+  "Agree on a unique, stable instanceId for the new device. Keep existing peer entries and add the new peer to the Hub configuration.": "为新设备约定唯一且稳定的 instanceId。保留已有 peer，在 Hub 配置中添加新 peer。",
+  "Use credentialEnv to name a private environment variable. The Hub and this device need the same dedicated pairing credential value, supplied privately through each local secret mechanism. The environment variable names may differ.": "credentialEnv 只填写私密环境变量的名称。Hub 与此设备使用相同的专用配对凭据值，分别通过各自本机的秘密机制提供；两端环境变量名称可以不同。",
+  "Provide a reachable trusted WSS address whose certificate matches its hostname. Restart the Hub with the updated peer configuration and its private launch environment.": "提供新设备可访问、证书受信任且与主机名匹配的 WSS 地址。更新 peer 配置后，使用私密启动环境重启 Hub。",
+  "Quit the app, including its tray process. Merge the communication settings into the existing bot configuration in your own profile cordis.patch.yml. Use the exact instanceId approved by the Hub owner.": "退出应用及其托盘进程。在自己配置目录的 cordis.patch.yml 中，将 communication 设置合并到已有 bot 配置。使用 Hub 管理员批准的准确 instanceId。",
+  "Set the trusted WSS url, credentialEnv, humanDisplayName and publishedBotIds. Publish only Bot IDs from this device that you intend to make available. Each instance has its own Human; rename it later under Human profile and connection.": "填写受信任的 WSS url、credentialEnv、humanDisplayName 和 publishedBotIds。只发布本设备上明确希望开放的 Bot ID。每个实例保留自己的 Human，之后可在“Human 资料与连接”中改名。",
+  "Supply the pairing credential to the app launch environment through your local secret mechanism, then restart the app. Never put the value in configuration, command arguments, URLs, screenshots or chat.": "通过本机秘密机制把配对凭据提供给应用启动环境，然后重启应用。不要把凭据值写进配置、命令参数、URL、截图或聊天。",
+  "Open Remote communication on both devices. Check Connected to Hub, then New message: verify the other device’s Human and published Bots under its observed IP and exact instance identity. A shared IP does not merge devices.": "在两端打开“远程通信”，确认“已连接通信服务”，再打开“发起私聊”，按观察到的 IP 和准确实例身份核对对方的 Human 及已发布 Bot。相同 IP 不会合并设备。",
+  "If disconnected, check the exact instanceId, matching privately supplied credential, trusted certificate and hostname, and Hub restart. Readiness alone does not prove pairing. Revoked devices need the Hub owner to increase pairingRevision before re-pairing.": "连接失败时，检查准确 instanceId、私密提供的匹配凭据、受信任的证书及主机名，并确认 Hub 已重启。服务就绪不等于配对成功。被撤销的设备需要 Hub 管理员提高 pairingRevision 后才能重新配对。",
+
+  'Remote communication': '远程通信',
+  'Human profile and connection': 'Human 资料与连接',
+  'Human name': 'Human 名称',
+  'Save Human name': '保存 Human 名称',
+  'Save group name': '保存群名称',
+  'Address unavailable': '地址暂不可用',
+  'Activity and send status': '操作与发送状态',
+  'Copy to draft': '复制到输入框',
+
   // Explicit cross-instance communication.
   'This browser session needs the instance startup login.': '此浏览器会话需要通过实例启动入口登录。',
   'Cannot reach this instance': '暂时无法连接此实例',

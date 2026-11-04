@@ -6,6 +6,7 @@ import { CommunicationQueue } from './queue-store.js'
 import { CommunicationTransport, communicationUrl } from './transport.js'
 import { completedOutputs, inspectBinding, interruptedInputs, reconcileInput, recoverBinding, resumePendingInput, resumeInterruptedInput, SOURCE_KIND } from './session-journal.js'
 import { communicationMentions } from '../../shared/communication-mentions.js'
+import { mentionSpans } from '../../shared/mentions.js'
 import { splitRef } from '../text.js'
 import { communicationPrompt } from './prompt.js'
 import { OUTSIDE_CONVERSATION_TOOLS } from './tool-scope.js'
@@ -14,6 +15,7 @@ import { COMMUNICATION_PRESET, hasCommunicationPreset, communicationInputs, sour
 const PROTOCOL = 'dsbot-communication/1'
 const fail = code => { throw Object.assign(new Error(code), { code }) }
 const operationId = source => `communication-${createHash('sha256').update(source).digest('hex')}`
+const humanSendIntent = input => JSON.stringify([input.conversationId, input.text, input.clientCreatedAt, input.mentions ?? [], input.replyToMessageId ?? null, input.membershipEpoch ?? null])
 
 export class CommunicationRuntime {
   constructor(rt, settings, credential, toolDefinitions) {
@@ -62,13 +64,20 @@ export class CommunicationRuntime {
       onChange: async () => {
         this.everReconciled = true
         this.contacts = await this.transport.request('contacts.list')
-        for (const member of this.queue.memberships().filter(item => item.principalId === this.human.principalId)) {
+        const authorized = new Set(this.queue.memberships().map(member => member.conversationId))
+        for (const id of this.conversations.keys()) if (!authorized.has(id)) this.conversations.delete(id)
+        for (const member of this.queue.memberships()) {
           if (this.conversations.get(member.conversationId)?.membershipVersion === member.membershipVersion) continue
           try {
-            this.conversations.set(member.conversationId, await this.transport.request('conversation.members', { conversationId: member.conversationId,
-              principalId: member.principalId, membershipEpoch: member.membershipEpoch }))
+            await this.refreshConversation(member.conversationId)
           } catch (error) { if (!['NOT_A_MEMBER', 'MEMBERSHIP_REVOKED'].includes(error.code)) throw error }
         }
+        // Directory renames do not change group membership versions.
+        const directory = new Map(this.contacts.map(contact => [contact.principalId, contact]))
+        for (const [id, info] of this.conversations) this.conversations.set(id, { ...info, members: info.members.map(member => {
+          const contact = directory.get(member.principalId)
+          return contact ? { ...member, displayName: contact.displayName, instanceLabel: contact.instanceLabel } : member
+        }) })
         const sent = this.queue.outboxFor(this.human.principalId).filter(item => item.type === 'message.publish' && item.state === 'accepted')
         for (let i = 0; i < Math.min(5, sent.length); i += 1) {
           const item = sent[(this.statusOffset + i) % sent.length]
@@ -95,7 +104,8 @@ export class CommunicationRuntime {
       const name = principal.kind === 'bot' ? this.rt.botOf(principal.localRef)?.name : this.settings.humanDisplayName ?? 'You'
       if (!name) continue
       principal.displayName = name
-      await this.transport.request('principal.register', { localId: principal.localId, kind: principal.kind, displayName: name })
+      const registered = await this.transport.request('principal.register', { localId: principal.localId, kind: principal.kind, displayName: name })
+      principal.displayName = registered.displayName
     }
   }
   actorForSession(sessionId) {
@@ -205,33 +215,63 @@ export class CommunicationRuntime {
       throw error
     }
     this.queue.accepted(id, result)
-    this.queue.applyMemberships(await this.transport.request('memberships.list'))
+    const affected = payload.conversationId ?? result.conversationId
+    if (affected) this.conversations.delete(affected)
+    try {
+      this.queue.applyMemberships(await this.transport.request('memberships.list'))
+      if (affected) await this.refreshConversation(affected)
+    } catch (error) {
+      // The operation is already committed; a projection refresh cannot undo its ACK.
+      this.lastError = error.code ?? 'COMMUNICATION_UNAVAILABLE'
+    }
     return result
+  }
+  async refreshConversation(conversationId) {
+    const member = this.queue.memberships().find(item => item.conversationId === conversationId)
+    if (!member) { this.conversations.delete(conversationId); return }
+    const info = await this.transport.request('conversation.members', { conversationId, principalId: member.principalId, membershipEpoch: member.membershipEpoch })
+    const current = this.queue.memberships().find(item => item.conversationId === conversationId && item.principalId === member.principalId && item.membershipEpoch === member.membershipEpoch)
+    if (!current) return
+    if ((this.conversations.get(conversationId)?.membershipVersion ?? 0) <= info.membershipVersion) this.conversations.set(conversationId, info)
   }
   message(principalId, conversationId, { text, mentions = [], replyToMessageId = null, responseToDeliveryId, membershipEpoch, messageId = randomUUID(), clientCreatedAt = new Date().toISOString(), attachments, files } = {}) {
     if (attachments || files) fail('UNSUPPORTED_CONTENT')
     if (typeof text !== 'string') fail('INVALID_REQUEST')
+    const info = this.conversations?.get(conversationId), members = info?.members
+    const contacts = members ? this.contacts.filter(contact => members.some(member => member.principalId === contact.principalId)) : this.contacts
+    // Without a current participant snapshot, an @all expansion cannot be scoped safely.
+    const all = mentionSpans(text.replace(/^[\t ]*>[^\n]*/gm, line => ' '.repeat(line.length)), []).some(span => span.all)
+    if (all && (!members || info.membershipVersion !== this.member(principalId, conversationId, membershipEpoch).membershipVersion)) fail('AUTHORIZATION_PENDING')
     return { protocol: PROTOCOL, type: 'message.publish', messageId, conversationId,
       author: { principalId, homeInstanceId: this.queue.instanceId, kind: principalId.startsWith('human:') ? 'human' : 'bot' },
       clientCreatedAt, content: { format: 'markdown', text },
-      mentions: communicationMentions(text, this.contacts, mentions), replyToMessageId, ...(responseToDeliveryId ? { responseToDeliveryId } : {}),
+      mentions: communicationMentions(text, contacts, mentions), replyToMessageId, ...(responseToDeliveryId ? { responseToDeliveryId } : {}),
       membershipEpoch: membershipEpoch ?? this.member(principalId, conversationId).membershipEpoch }
   }
   sendHuman(input) {
     if (typeof input.messageId !== 'string' || typeof input.clientCreatedAt !== 'string') fail('INVALID_REQUEST')
     if (input.responseToDeliveryId !== undefined) fail('INVALID_REQUEST')
+    if (input.attachments || input.files) fail('UNSUPPORTED_CONTENT')
     const saved = this.queue.intent(input.messageId)
     if (saved) {
       if (saved.type !== 'message.publish' || saved.payload.author?.principalId !== this.human.principalId) fail('MESSAGE_ID_CONFLICT')
-      const retry = this.message(this.human.principalId, input.conversationId, { ...input, membershipEpoch: saved.payload.membershipEpoch ?? 'legacy-unscoped' })
-      if (!Object.hasOwn(saved.payload, 'membershipEpoch')) delete retry.membershipEpoch
-      this.queue.enqueueMessage(retry)
+      const original = this.queue.humanIntent?.(input.messageId)
+      if (original !== undefined) {
+        if (original !== humanSendIntent(input)) fail('MESSAGE_ID_CONFLICT')
+        return { messageId: input.messageId, conversationId: input.conversationId, status: this.queue.outboxStatus(input.messageId).state }
+      }
+      if (input.conversationId !== saved.payload.conversationId || input.text !== saved.payload.content?.text
+        || input.clientCreatedAt !== saved.payload.clientCreatedAt || (input.replyToMessageId ?? null) !== saved.payload.replyToMessageId
+        || input.membershipEpoch !== undefined && input.membershipEpoch !== saved.payload.membershipEpoch) fail('MESSAGE_ID_CONFLICT')
+      const literal = input.text.replace(/^[\t ]*>[^\n]*/gm, line => ' '.repeat(line.length))
+      // Older journals cannot distinguish selected IDs from names expanded by the directory.
+      if (saved.payload.mentions?.length || input.mentions?.length || mentionSpans(literal, [], { unknown: true }).length) fail('LEGACY_RECONCILIATION_REQUIRED')
       return {messageId:input.messageId,conversationId:input.conversationId,status:this.queue.outboxStatus(input.messageId).state}
     }
     const member = this.member(this.human.principalId, input.conversationId, input.membershipEpoch)
     if (member.kind === 'group' && member.speakingMode !== 'speak') fail('SPEAKING_FORBIDDEN')
     const message = this.message(this.human.principalId, input.conversationId, input)
-    this.queue.enqueueMessage(message)
+    this.queue.enqueueMessage(message, humanSendIntent(input))
     return { messageId: message.messageId, conversationId: message.conversationId, status: this.queue.outboxStatus(message.messageId).state }
   }
   async sendBot(actor, input, exec) {
@@ -257,6 +297,10 @@ export class CommunicationRuntime {
       before: input.before, limit: input.limit ?? 50, latest: input.latest ?? true })
     return { conversationId: input.conversationId, membershipEpoch: member.membershipEpoch, joinSeq: member.joinSeq,
       watermark: this.queue.cursor(input.conversationId, principalId, member.membershipEpoch), events }
+  }
+  async members(principalId, input) {
+    const member = this.member(principalId, input.conversationId, input.membershipEpoch)
+    return this.transport.request('conversation.members', { conversationId: input.conversationId, principalId, membershipEpoch: member.membershipEpoch })
   }
   markRead(input) {
     const member = this.member(this.human.principalId, input.conversationId)

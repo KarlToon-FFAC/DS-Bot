@@ -14,7 +14,8 @@ const digest = value => createHash('sha256').update(value).digest('hex')
 const integer = (value, minimum, maximum) => Number.isSafeInteger(value) && value >= minimum && value <= maximum
 const MODEL_TOOLS = new Set(['list_contacts','list_communication_conversations','send_contact_message','read_communication_history',
   'invite_communication_member','leave_communication_group','remove_communication_member','set_communication_receiving_rule',
-  'end_communication_group','set_communication_member_policy','transfer_communication_ownership'])
+  'end_communication_group','set_communication_member_policy','transfer_communication_ownership',
+  'read_communication_members','read_communication_reference','configure_communication_group'])
 
 export function budgetPolicy(options = {}) {
   const policy = { model: OPENAI_MODEL, origin: OPENAI_ORIGIN, serviceTier: 'default', maxRequests: options.maxRequests ?? 8,

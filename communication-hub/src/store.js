@@ -27,6 +27,8 @@ export class HubStore {
       CREATE TABLE IF NOT EXISTS operations (id TEXT PRIMARY KEY, instance_id TEXT NOT NULL, hash TEXT NOT NULL, result TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS invites (id TEXT PRIMARY KEY, conversation_id TEXT NOT NULL REFERENCES conversations(id), principal_id TEXT NOT NULL REFERENCES principals(id), inviter_id TEXT NOT NULL REFERENCES principals(id), active INTEGER NOT NULL DEFAULT 1);
       CREATE TABLE IF NOT EXISTS cursors (conversation_id TEXT NOT NULL, principal_id TEXT NOT NULL, membership_epoch TEXT NOT NULL, seq INTEGER NOT NULL, PRIMARY KEY(conversation_id,principal_id,membership_epoch));
+      CREATE TABLE IF NOT EXISTS instance_addresses (instance_id TEXT PRIMARY KEY REFERENCES instances(id), address TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS principal_preferences (principal_id TEXT PRIMARY KEY REFERENCES principals(id), display_name TEXT NOT NULL);
       `)
     if(version<2)this.transaction(()=>{
       this.db.exec(`ALTER TABLE conversations ADD COLUMN owner_id TEXT;
@@ -91,7 +93,10 @@ export class HubStore {
     requireThat(['human','bot'].includes(kind) && typeof displayName === 'string' && displayName.trim() && displayName.length <= 256, 'INVALID_REQUEST')
     const principalId = `${kind}:${auth.instanceId}:${localId}`
     return this.transaction(() => {
+      // Legacy Humans retain their identities, history and authority; only new identities are limited.
       const existing=this.db.prepare('SELECT 1 FROM principals WHERE id=?').get(principalId)
+      requireThat(existing || kind !== 'human' || !this.db.prepare("SELECT 1 FROM principals WHERE instance_id=? AND kind='human'").get(auth.instanceId),'HUMAN_ALREADY_REGISTERED')
+      displayName=this.db.prepare('SELECT display_name FROM principal_preferences WHERE principal_id=?').get(principalId)?.display_name??displayName
       requireThat(existing||this.db.prepare('SELECT count(*) count FROM principals').get().count<this.limits.maxPrincipals,'DIRECTORY_FULL')
       this.db.prepare('INSERT INTO principals VALUES (?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name').run(principalId,auth.instanceId,kind,localId,displayName)
       return { principalId, homeInstanceId: auth.instanceId, kind, displayName }
@@ -99,7 +104,20 @@ export class HubStore {
   }
   contacts(auth) {
     this.check(auth)
-    return this.db.prepare('SELECT p.id principalId,p.instance_id homeInstanceId,p.kind,p.name displayName,i.label instanceLabel FROM principals p JOIN instances i ON i.id=p.instance_id WHERE i.trusted=1 ORDER BY p.id').all()
+    return this.db.prepare('SELECT p.id principalId,p.instance_id homeInstanceId,p.kind,coalesce(n.display_name,p.name) displayName,i.label instanceLabel,a.address ipAddress FROM principals p JOIN instances i ON i.id=p.instance_id LEFT JOIN instance_addresses a ON a.instance_id=i.id LEFT JOIN principal_preferences n ON n.principal_id=p.id WHERE i.trusted=1 ORDER BY p.id').all()
+  }
+  observeAddress(auth,address) {
+    this.check(auth)
+    this.db.prepare('INSERT INTO instance_addresses VALUES (?,?) ON CONFLICT(instance_id) DO UPDATE SET address=excluded.address').run(auth.instanceId,address)
+  }
+  renameHuman(auth,input) {
+    const principal=this.principal(auth,input.principalId)
+    requireThat(principal.kind==='human'&&typeof input.displayName==='string'&&input.displayName.trim()&&input.displayName.length<=256,'INVALID_REQUEST')
+    return this.transaction(()=>{
+      this.db.prepare('INSERT INTO principal_preferences VALUES (?,?) ON CONFLICT(principal_id) DO UPDATE SET display_name=excluded.display_name').run(principal.principalId,input.displayName.trim())
+      this.db.prepare('UPDATE principals SET name=? WHERE id=?').run(input.displayName.trim(),principal.principalId)
+      return {principalId:principal.principalId,displayName:input.displayName.trim()}
+    })
   }
   member(auth, conversationId, principalId, epoch) {
     this.principal(auth, principalId)
@@ -256,6 +274,16 @@ export class HubStore {
     requireThat(Number.isSafeInteger(input.expectedVersion)&&input.expectedVersion===group.version,'GROUP_VERSION_CONFLICT')
     return {caller,group}
   }
+  configureGroup(auth,input) {
+    return this.operation(auth,input.operationId,input,()=>{
+      const {caller}=this.groupActor(auth,input)
+      requireThat(['owner','admin'].includes(caller.role),'FORBIDDEN')
+      requireThat(typeof input.title==='string'&&input.title.trim()&&input.title.length<=256,'INVALID_REQUEST')
+      this.db.prepare('UPDATE conversations SET title=?,version=version+1 WHERE id=?').run(input.title.trim(),input.conversationId)
+      this.event(input.conversationId,'conversation.renamed',{title:input.title.trim()})
+      return {conversationId:input.conversationId,title:input.title.trim(),updated:true}
+    })
+  }
   policy(auth,input) {
     return this.operation(auth,input.operationId,input,()=>{
       const {caller}=this.groupActor(auth,input)
@@ -408,9 +436,9 @@ export class HubStore {
   }
   members(auth,input) {
     this.member(auth,input.conversationId,input.principalId,input.membershipEpoch)
-    const conversation=this.db.prepare('SELECT version,routing_mode,admin_bot,owner_id FROM conversations WHERE id=?').get(input.conversationId)
+    const conversation=this.db.prepare('SELECT title,kind,version,routing_mode,admin_bot,owner_id FROM conversations WHERE id=?').get(input.conversationId)
     const members=this.db.prepare('SELECT p.id principalId,p.kind,p.name displayName,p.instance_id homeInstanceId,i.label instanceLabel,m.manager,m.role,m.speaking_mode speakingMode FROM memberships m JOIN principals p ON p.id=m.principal_id JOIN instances i ON i.id=p.instance_id WHERE m.conversation_id=? AND m.active=1 ORDER BY p.id').all(input.conversationId)
-    return {conversationId:input.conversationId,membershipVersion:conversation.version,routingMode:conversation.routing_mode,adminBotPrincipalId:conversation.admin_bot,ownerPrincipalId:conversation.owner_id,members}
+    return {conversationId:input.conversationId,title:conversation.title,kind:conversation.kind,membershipVersion:conversation.version,routingMode:conversation.routing_mode,adminBotPrincipalId:conversation.admin_bot,ownerPrincipalId:conversation.owner_id,members}
   }
   acknowledgeCursor(auth,input) {
     const member=this.member(auth,input.conversationId,input.principalId,input.membershipEpoch)

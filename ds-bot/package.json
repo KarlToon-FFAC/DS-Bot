@@ -39,7 +39,9 @@
     "web-search.js",
     "cordis.patch.yml",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "bin/",
+    "skills/"
   ],
   "scripts": {
     "build": "node scripts/build-client.mjs",
@@ -69,5 +71,9 @@
   },
   "dependencies": {
     "deep-view": "0.1.0"
+  },
+  "bin": {
+    "dsbot-remote": "./bin/dsbot-remote.mjs",
+    "dsbot-team": "./bin/dsbot-team.mjs"
   }
 }

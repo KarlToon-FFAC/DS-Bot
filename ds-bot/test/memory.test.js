@@ -205,7 +205,7 @@ async function until(check) {
 test('remember saves one entry with its source, and forget removes it, both in the journal', async (t) => {
   const { tool, read, journal, stop } = start()
   t.after(() => stop())
-  assert.match(await tool('remember', { text: '- User prefers short replies' }, 'b2'), /^Saved to your memory, in MEMORY\.md \(MEMORY\.md: \d+ of 4000 characters\)\. It shows in your memory from your next conversation; recall finds it now\.$/)
+  assert.match(await tool('remember', { text: '- User prefers short replies' }, 'b2'), /^Saved to your memory, in MEMORY\.md \(MEMORY\.md: \d+ of 10000 characters\)\. It shows in your memory from your next conversation; recall finds it now\.$/)
   assert.match(read('bots', 'b2', 'MEMORY.md'), /^# Memory\n\n- User prefers short replies \[source: part 1 #10; added: \d{4}-\d{2}-\d{2}\]\n\n## Index\n$/)
   assert.match(await tool('remember', { text: 'user prefers  SHORT replies' }, 'b2'), /^Already in your memory \(MEMORY\.md\): "User prefers short replies"\. Nothing changed\.$/)
 
@@ -235,7 +235,7 @@ test('topics hold details, linked from MEMORY.md, and go when their last entry d
 
   assert.match(await tool('recall', { topic: 'travel' }, 'b2'), /^Topic \[\[travel\]\] in your memory \(travel\.md: \d+ of 16000 characters\):\n# travel\n\n- Flies from Hangzhou/)
   assert.match(await tool('recall', { query: 'window' }, 'b2'), /^Entries with "window" in your memory and the team memory:\n\[yours · \[\[travel\]\]\] Prefers window seats \[source: part 1 #10; added: /)
-  assert.match(await tool('recall', {}, 'b2'), /^Your memory: MEMORY\.md has 0 entries \(MEMORY\.md: \d+ of 4000 characters\); topics \[\[travel\]\] \(2\)\.\n\nThe team memory: MEMORY\.md has 0 entries/)
+  assert.match(await tool('recall', {}, 'b2'), /^Your memory: MEMORY\.md has 0 entries \(MEMORY\.md: \d+ of 10000 characters\); topics \[\[travel\]\] \(2\)\.\n\nThe team memory: MEMORY\.md has 0 entries/)
 
   await tool('forget', { entry: 'Flies' }, 'b2')
   assert.match(await tool('forget', { entry: 'window', topic: 'travel' }, 'b2'), /The topic \[\[travel\]\] was empty, so it is gone too\./)
@@ -326,11 +326,11 @@ test('keys, long entries, and full files are refused with what to do instead', a
   await assert.rejects(tool('remember', { text: '  ' }, 'b2'), /Write the entry to save\.$/)
 
   // A MEMORY.md written past its size by hand still takes a shorter replacement.
-  const big = Array.from({ length: 16 }, (_, index) => `- Fact ${index} ${'y'.repeat(250)}`)
+  const big = Array.from({ length: 40 }, (_, index) => `- Fact ${index} ${'y'.repeat(250)}`)
   mkdirSync(join(home, 'memory', 'bots', 'b2'), { recursive: true })
   writeFileSync(join(home, 'memory', 'bots', 'b2', 'MEMORY.md'), `# Memory\n\n${big.join('\n')}\n`)
-  await assert.rejects(tool('remember', { text: 'One more' }, 'b2'), /MEMORY\.md would have \d+ of its 4000 characters\. Make room first: move details into a topic/)
-  assert.match(await tool('remember', { text: 'Fact 3 is short now', replace: 'Fact 3 ' }, 'b2'), /is now "Fact 3 is short now"/)
+  await assert.rejects(tool('remember', { text: 'One more' }, 'b2'), /MEMORY\.md would have \d+ of its 10000 characters\. Make room first: move details into a topic/)
+  assert.match(await tool('remember', { text: 'Fact 3 is short now', replace: 'Fact 3 y' }, 'b2'), /is now "Fact 3 is short now"/)
   assert.match(read('bots', 'b2', 'MEMORY.md'), /- Fact 3 is short now \[/)
   await assert.rejects(tool('forget', { entry: 'Fact 1' }, 'b2'), /matches \d+ entries in your memory; quote more of the one you mean:\n- Fact 1 y+ \(MEMORY\.md\)\n- Fact 10/)
 })
@@ -339,7 +339,7 @@ test('a write that changed nothing fails the call with a code, and a saved one k
   const { tool, stop } = start()
   t.after(() => stop())
   // What a saved write answers is what the model reads, word for word.
-  assert.match(await tool('remember', { text: 'Likes tea' }, 'b2'), /^Saved to your memory, in MEMORY\.md \(MEMORY\.md: \d+ of 4000 characters\)\. It shows in your memory from your next conversation; recall finds it now\.$/)
+  assert.match(await tool('remember', { text: 'Likes tea' }, 'b2'), /^Saved to your memory, in MEMORY\.md \(MEMORY\.md: \d+ of 10000 characters\)\. It shows in your memory from your next conversation; recall finds it now\.$/)
   // A refusal is a failure, with the kind of failure in its code.
   await assert.rejects(tool('remember', { text: 'Ship on Friday', scope: 'team' }, 'b2'), (error) => {
     assert.equal(error.code, 'memory/refused')
@@ -678,7 +678,7 @@ test('when a turn ends, the memory review keeps what the user said, through the 
   assert.equal(requests[0].messages[0].content[0].text, [
     'The Bot: Writer, 写作.',
     '',
-    'MEMORY.md has 81 of 4000 characters (own) and 0 of 4000 (team).',
+    'MEMORY.md has 81 of 10000 characters (own) and 0 of 10000 (team).',
     '',
     'Its memory now (own: this Bot\'s; team: shared by every Bot):',
     '[1] (own) The user writes Go',
@@ -741,7 +741,7 @@ test('a group\'s review keeps what is said there in the group memory, read once 
   assert.doesNotMatch(requests[0].system, /"team": true/)
   assert.equal(requests[0].sessionId, 'r1')
   const text = requests[0].messages[0].content[0].text
-  assert.match(text, /^The group chat: "Launch", with the user and Writer, Coder \(admin\)\.\n\nMEMORY\.md has 0 of 4000 characters \(group\) and 0 of 4000 \(team\)\.\n\nIts memory now \(group: shared by the members of this group; team: shared by every Bot\):\n\(none yet\)\n/)
+  assert.match(text, /^The group chat: "Launch", with the user and Writer, Coder \(admin\)\.\n\nMEMORY\.md has 0 of 10000 characters \(group\) and 0 of 10000 \(team\)\.\n\nIts memory now \(group: shared by the members of this group; team: shared by every Bot\):\n\(none yet\)\n/)
   assert.match(text, /New in the group chat "Launch", oldest first:\nUser: Keep everything you send me under one page\nCoder: Will do\.\n\nWrite every new or changed entry in English\.$/)
   assert.match(read('groups', 'r1', 'MEMORY.md'), /- The user wants everything under one page \[source: group "Launch" \d{2}-\d{2} \d{2}:\d{2}; added: /)
   for (const elsewhere of [['team'], ['bots', 'b2'], ['bots', 'b3']]) assert.equal(existsSync(join(home, 'memory', ...elsewhere, 'MEMORY.md')), false, elsewhere.join('/'))
@@ -974,8 +974,9 @@ test('a change set aside is no part of the change limit, so the same lines are n
 test('a full MEMORY.md sets an add aside, says so, and an add with a topic still lands', async (t) => {
   const home = mkdtempSync(join(tmpdir(), 'ds-bot-memory-'))
   mkdirSync(join(home, 'memory', 'bots', 'b2'), { recursive: true })
-  const filler = Array.from({ length: 13 }, (_, at) => `- Filler fact number ${at + 1} ${'y'.repeat(280)}`)
-  writeFileSync(join(home, 'memory', 'bots', 'b2', 'MEMORY.md'), `# Memory\n\n${filler.join('\n')}\n\n## Index\n`)
+  const filler = Array.from({ length: 32 }, (_, at) => `- Filler fact number ${at + 1} ${'y'.repeat(280)}`)
+  const full = `# Memory\n\n${filler.join('\n')}\n\n## Index\n`
+  writeFileSync(join(home, 'memory', 'bots', 'b2', 'MEMORY.md'), full.replace('# Memory', '# Memory' + 'y'.repeat(MEMORY_LIMITS.main - 25 - full.length)))
   const history = { b2: [...ownChat] }
   const replies = [
     JSON.stringify({ changes: [{ op: 'add', text: 'The user flies with Air China' }] }),
@@ -986,12 +987,12 @@ test('a full MEMORY.md sets an add aside, says so, and an add with a topic still
   await call('state', {})
   ctx.emit('agent/status', { agent: { id: 'b2' }, status: 'idle' })
   await reviewed(call)
-  assert.match(requests[0].messages[0].content[0].text, /MEMORY\.md has 3\d{3} of 4000 characters \(own\)/)
+  assert.match(requests[0].messages[0].content[0].text, /MEMORY\.md has 9975 of 10000 characters \(own\)/)
   assert.match(requests[0].system, /"topic": "travel"/)
   // The add had no room: it was set aside and said — named by its text and where
   // it was headed — and the batch is marked read.
-  assert.equal(parseMemory(read('bots', 'b2', 'MEMORY.md')).entries.length, 13)
-  assert.ok(warnings.some(line => line.includes('left out a change') && line.includes('"The user flies with Air China"') && line.includes('for MEMORY.md') && line.includes('of its 4000 characters')), warnings.join('\n'))
+  assert.equal(parseMemory(read('bots', 'b2', 'MEMORY.md')).entries.length, 32)
+  assert.ok(warnings.some(line => line.includes('left out a change') && line.includes('"The user flies with Air China"') && line.includes('for MEMORY.md') && line.includes('of its 10000 characters')), warnings.join('\n'))
   assert.deepEqual(JSON.parse(read('reviewed.json')), { 'chat:b2': 11 })
   // The review request goes on telling how full MEMORY.md is, so the next one
   // can put the detail in a topic instead.
@@ -1076,7 +1077,7 @@ test('in a group, remember and forget write the group memory unless told otherwi
   twoMembers(home)
   const { tool, call, read, journal, stop } = start({ home })
   t.after(() => stop())
-  assert.match(await tool('remember', { text: 'Builds go in the out folder' }, 'g2'), /^Saved to the group memory, in MEMORY\.md \(MEMORY\.md: \d+ of 4000 characters\)\. Every member sees it in its next conversation in this group; recall finds it now\.$/)
+  assert.match(await tool('remember', { text: 'Builds go in the out folder' }, 'g2'), /^Saved to the group memory, in MEMORY\.md \(MEMORY\.md: \d+ of 10000 characters\)\. Every member sees it in its next conversation in this group; recall finds it now\.$/)
   assert.match(read('groups', 'r1', 'MEMORY.md'), /- Builds go in the out folder \[source: group "Launch" \d{2}-\d{2} \d{2}:\d{2}; by: Writer; added: /)
   assert.equal(existsSync(join(home, 'memory', 'bots', 'b2', 'MEMORY.md')), false)
   // "own" keeps it for the Bot itself, in all its conversations.
@@ -1445,4 +1446,43 @@ test('a memory call names the current part of the Bot chat', async (t) => {
   const answer = await call('memory-ask', { botId: 'b2', text: 'Which part?' })
   assert.equal(answer.ok, true)
   assert.equal(requests[0].sessionId, 'b2-part2')
+})
+
+
+test('all resident Memory scopes accept exactly 10000 UTF-16 units and reject growth to 10001, including Chinese and emoji', async t => {
+  const host = start()
+  t.after(() => host.stop())
+  for (const [sessionId, scope, file] of [
+    ['b2', 'own', ['bots', 'b2', 'MEMORY.md']],
+    ['m1', 'team', ['team', 'MEMORY.md']],
+    ['g3', 'group', ['groups', 'r1', 'MEMORY.md']],
+  ]) {
+    await host.tool('remember', { text: 'new', scope }, sessionId)
+    const saved = host.read(...file)
+    const path = join(host.home, 'memory', ...file)
+    for (const symbol of ['界', '😀']) for (const extra of [0, 1]) {
+      const units = 10000 + extra - saved.length
+      const filler = symbol.repeat(Math.floor(units / symbol.length)) + '界'.repeat(units % symbol.length)
+      const expected = saved.replace('# Memory', '# Memory' + filler)
+      assert.equal(expected.length, 10000 + extra)
+      const before = expected.replace('- new [', '- o [')
+      writeFileSync(path, before)
+      if (extra === 0) {
+        assert.match(await host.tool('remember', { text: 'new', replace: 'o', scope }, sessionId), /Updated/)
+        assert.equal(host.read(...file), expected)
+      } else {
+        await assert.rejects(host.tool('remember', { text: 'new', replace: 'o', scope }, sessionId), error => {
+          assert.equal(error.code, 'memory/full')
+          assert.match(error.message, /10001 of its 10000 characters/)
+          return true
+        })
+        assert.equal(host.read(...file), before)
+      }
+      const body = scope === 'group' ? { roomId: 'r1' } : { botId: sessionId }
+      const view = (await host.call('memory-view', body)).value
+      assert.equal(view.limits.main, 10000)
+      assert.equal(view.sizes[scope], host.read(...file).length)
+    }
+  }
+  assert.deepEqual(MEMORY_LIMITS, { entry: 300, main: 10000, topic: 16000, topics: 40 })
 })

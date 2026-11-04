@@ -7,6 +7,12 @@ import { join, dirname, resolve } from 'node:path'
 import { OpenAIBudget, OpenAITestGate, officialOpenAISender, startOpenAITestGuard, prepareOpenAIRequest, budgetPolicy } from '../dev/communication/openai-budget.mjs'
 
 const request = extra => ({ model: 'gpt-6-luna', input: 'Synthetic test only', ...extra })
+test('the new scoped remote tools remain explicitly allowlisted while arbitrary tools stay blocked',()=>{
+  for(const name of ['read_communication_members','read_communication_reference','configure_communication_group']){
+    assert.doesNotThrow(()=>prepareOpenAIRequest(request({tools:[{type:'function',name,parameters:{type:'object',properties:{}}}]}),budgetPolicy()))
+  }
+  assert.throws(()=>prepareOpenAIRequest(request({tools:[{type:'function',name:'read_private_files',parameters:{}}]}),budgetPolicy()),{code:'TOOL_NOT_ALLOWED'})
+})
 const json = value => new Response(JSON.stringify(value), { headers: { 'content-type': 'application/json' } })
 const fixture = (t, options = {}, extra = {}) => {
   const budget = new OpenAIBudget(':memory:', { maxCostMicroUsd: 100000, ...options }); t.after(() => budget.close())

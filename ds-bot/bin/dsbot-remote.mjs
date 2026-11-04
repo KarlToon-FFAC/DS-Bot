@@ -1,0 +1,171 @@
+#!/usr/bin/env node
+import { readFile } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+
+const text = 'string', integer = 'integer'
+const schemas = {
+  state: {}, contacts: {}, conversations: {}, invites: {}, outbox: {},
+  members: { conversationId: text },
+  history: { conversationId: text, after: integer, before: integer, limit: integer, latest: 'boolean', membershipEpoch: text },
+  reference: { conversationId: text, messageId: text }, read: { conversationId: text, seq: integer },
+  send: { conversationId: text, text, messageId: text, clientCreatedAt: text, membershipEpoch: text, mentions: 'strings', replyToMessageId: text },
+  dm: { otherPrincipalId: text, operationId: text },
+  'create-group': { title: text, operationId: text },
+  invite: { conversationId: text, inviteePrincipalId: text, membershipEpoch: text, expectedVersion: integer, operationId: text },
+  accept: { inviteId: text, recipientPrincipalId: text, operationId: text },
+  remove: { conversationId: text, targetPrincipalId: text, membershipEpoch: text, expectedVersion: integer, operationId: text },
+  leave: { conversationId: text, membershipEpoch: text, expectedVersion: integer, operationId: text },
+  routing: { conversationId: text, mode: ['admin', 'mentionsOnly'], adminBotPrincipalId: text, membershipEpoch: text, expectedVersion: integer, operationId: text },
+  policy: { conversationId: text, targetPrincipalId: text, role: ['member', 'admin'], speakingMode: ['readOnly', 'speak', 'passive', 'active'], membershipEpoch: text, expectedVersion: integer, operationId: text },
+  transfer: { conversationId: text, targetPrincipalId: text, expectedVersion: integer, membershipEpoch: text, operationId: text },
+  reclaim: { conversationId: text, expectedVersion: integer, operationId: text },
+  dissolve: { conversationId: text, operationId: text },
+  'configure-group': { conversationId: text, title: text, expectedVersion: integer, membershipEpoch: text, operationId: text },
+  'rename-human': { displayName: text },
+}
+const required = {
+  members: ['conversationId'], history: ['conversationId'], reference: ['conversationId', 'messageId'], read: ['conversationId', 'seq'],
+  send: ['conversationId', 'text'], dm: ['otherPrincipalId'], 'create-group': ['title'], invite: ['conversationId', 'inviteePrincipalId'],
+  accept: ['inviteId'], remove: ['conversationId'], leave: ['conversationId'], routing: ['conversationId', 'mode'],
+  policy: ['conversationId', 'targetPrincipalId', 'expectedVersion'], transfer: ['conversationId', 'targetPrincipalId', 'expectedVersion'],
+  reclaim: ['conversationId', 'expectedVersion'], dissolve: ['conversationId'], 'configure-group': ['conversationId', 'title', 'expectedVersion'], 'rename-human': ['displayName'],
+}
+const projections = new Set(['contacts', 'conversations', 'invites', 'outbox'])
+const fail = (code, exitCode = 2, request) => { throw Object.assign(new Error(code), { code, exitCode, request }) }
+const object = value => value && typeof value === 'object' && !Array.isArray(value)
+
+export const pairingGuide = {
+  title: 'Add a machine to Remote communication',
+  mode: 'Instructions and non-secret templates only. No network request, credential generation or configuration change.',
+  requirements: ['Node 24 or newer; same compatible DS Bot version on Hub and clients',
+    'An existing Hub reachable by the clients with a trusted WSS certificate matching its hostname',
+    'Hub owner authorization to add a distinct stable instanceId; no self-service pairing API exists'],
+  steps: [
+    'Hub owner: privately provision a distinct high-entropy pairing secret of at least 32 characters for the new instance. This is not a model API key or DSH login cookie.',
+    'Hub owner: preserve all existing peers; add the peer template to the explicit Hub JSON peers list, inject its credential into the named environment variable, then restart the Hub with that same complete configuration. Removing an existing peer revokes it.',
+    'New machine: create a separate local DS Bot profile/team; quit the app completely before editing that profile. Do not copy another machine\'s profile, database or credentials.',
+    'New machine: merge clientCommunication into the existing id: bot config.communication row; choose its own local Bot IDs for explicit publication. Supply the matching pairing secret only in the private client launch environment under credentialEnv, then start that profile.',
+    'Use a real trusted WSS hostname. For an existing private CA, NODE_EXTRA_CA_CERTS may name its public PEM in the client launch environment. Never disable TLS verification or use non-loopback plaintext ws.',
+    'Each new instance has one Human; publishedBotIds selects only explicit local Bots. Human display names/IP headings do not merge identities or grant rights.',
+    'Both machines: check the Remote communication panel or authenticated CLI state/contacts. Confirm connected/reconciled and four exact distinct principals for A Human, A published Bot, B Human and B published Bot. A health response alone does not prove pairing.',
+    'Test synthetic DMs in all Human/Bot directions, then create a group, invite exact principals and explicitly accept. A Human DM does not activate that Human\'s private Chief. Invitees start readOnly/passive; assign speaking permissions explicitly.',
+    'If revoked, reconnect is insufficient: Hub owner must intentionally increase pairingRevision. Retained owners may reclaim only their own group identity; other re-entry requires fresh invitations.',
+  ],
+  hubPeerToAppend: { instanceId: 'new-machine', instanceLabel: 'New machine', pairingRevision: 1, credentialEnv: 'DSBOT_HUB_NEW_MACHINE_CREDENTIAL' },
+  hubTransportExample: { host: '0.0.0.0', port: 3190, databasePath: './hub.sqlite', tls: { certificateEnv: 'DSBOT_TLS_CERT', privateKeyEnv: 'DSBOT_TLS_KEY' } },
+  clientCommunication: { enabled: true, instanceId: 'new-machine', url: 'wss://YOUR_TRUSTED_HUB:3190/communication', credentialEnv: 'DSBOT_COMMUNICATION_CREDENTIAL', humanDisplayName: 'New person', publishedBotIds: ['REPLACE_WITH_LOCAL_BOT_ID'] },
+  sourceTrialProfileExample: '.ds-bot-local/trial/data/profiles/ds-bot/cordis.patch.yml (for start.ps1 -DataRoot .ds-bot-local/trial only; use your actual selected profile otherwise)',
+  commands: { hub: 'npm start --prefix communication-hub -- ./local/hub.json', sourceClient: './start.ps1 -DataRoot .ds-bot-local/trial', verify: 'dsbot-remote state; dsbot-remote contacts (authentication supplied privately)' },
+  recovery: 'Do not delete/copy communication.sqlite, silently reuse another instanceId or lower pairingRevision. Inspect sanitized state errors. Wrong credentials, untrusted certificates, unreachable endpoints and revoked peers need their respective owner to correct them.',
+}
+
+export function prepare(operation, input = {}) {
+  if (operation === 'retry') {
+    if (!object(input) || typeof input.endpoint !== 'string') fail('RETRY_REQUIRES_ORIGINAL_REQUEST')
+    operation = input.endpoint
+    input = { ...input }; delete input.endpoint
+    if (operation === 'send' && (!input.messageId || !input.clientCreatedAt) || schemas[operation]?.operationId && !input.operationId) fail('RETRY_REQUIRES_ORIGINAL_ID')
+  }
+  if (!Object.hasOwn(schemas, operation) || !object(input)) fail('INVALID_OPERATION_OR_INPUT')
+  const schema = schemas[operation]
+  for (const [key, value] of Object.entries(input)) {
+    const type = schema[key]
+    const valid = Array.isArray(type) ? type.includes(value) : type === integer ? Number.isSafeInteger(value) && value >= 0
+      : type === 'strings' ? Array.isArray(value) && value.every(item => typeof item === 'string' && item.length > 0)
+        : typeof value === type && (type !== text || value.trim().length > 0)
+    if (!Object.hasOwn(schema, key) || !valid) fail('INVALID_FIELD_' + key.replace(/[^A-Za-z0-9_]/g, '').slice(0, 40))
+  }
+  if ((required[operation] ?? []).some(key => input[key] === undefined)) fail('MISSING_REQUIRED_FIELD')
+  if (operation === 'policy' && input.role === undefined && input.speakingMode === undefined) fail('POLICY_CHANGE_REQUIRED')
+  if (operation === 'history' && input.limit !== undefined && (input.limit < 1 || input.limit > 200)) fail('INVALID_HISTORY_LIMIT')
+  if (operation === 'send' && input.clientCreatedAt !== undefined && !Number.isFinite(Date.parse(input.clientCreatedAt))) fail('INVALID_TIMESTAMP')
+  const request = { ...input, endpoint: projections.has(operation) ? 'state' : operation === 'leave' ? 'remove' : operation }
+  if (projections.has(operation)) delete request.conversationId
+  if (schema.operationId && request.operationId === undefined) request.operationId = randomUUID()
+  if (operation === 'send') {
+    request.messageId ??= randomUUID()
+    request.clientCreatedAt ??= new Date().toISOString()
+  }
+  return { operation, request, input }
+}
+
+export const help = operation => JSON.stringify({
+  name: 'dsbot-remote', usage: 'dsbot-remote <operation> [--json] [--config <explicit-file>] < request.json',
+  authentication: 'DSBOT_REMOTE_URL and DSBOT_REMOTE_COOKIE, or explicit --config JSON {url,cookie}. Local loopback only; no discovery. Never put a cookie in argv.',
+  operations: operation && schemas[operation] ? { [operation]: { fields: schemas[operation], required: required[operation] ?? [] } }
+    : Object.fromEntries(Object.entries(schemas).map(([name, fields]) => [name, { fields, required: required[name] ?? [] }])),
+  retry: 'dsbot-remote retry < original-request.json; use the request object from the previous result/error unchanged. No automatic retries.',
+  setup: 'dsbot-remote setup-guide (alias pairing-guide): unauthenticated offline pairing steps and non-secret configuration templates',
+  skill: fileURLToPath(new URL('../skills/dsbot-remote/SKILL.md', import.meta.url)),
+  exitCodes: { 0: 'success/accepted (inspect queued delivery status)', 2: 'usage/input', 3: 'configuration/authentication', 4: 'API rejection', 5: 'uncertain outcome; preserve request ID' },
+}, null, 2)
+
+export async function execute(prepared, { url, cookie, fetchImpl = fetch, timeout = 15000, apiPath = '/api/communication' }) {
+  let base
+  try { base = new URL(url) } catch { fail('INVALID_LOCAL_URL', 3) }
+  if (!['http:', 'https:'].includes(base.protocol) || !['localhost', '127.0.0.1', '[::1]'].includes(base.hostname)
+    || base.username || base.password || base.search || base.hash || base.pathname !== '/') fail('LOCAL_ORIGIN_REQUIRED', 3)
+  if (typeof cookie !== 'string' || !cookie.trim() || /[\r\n]/.test(cookie)) fail('SESSION_COOKIE_REQUIRED', 3)
+  if (!['/api/communication', '/api/bot'].includes(apiPath)) fail('LOCAL_API_REQUIRED', 3)
+  const { request, operation } = prepared
+  let response, result
+  try {
+    response = await fetchImpl(new URL(apiPath, base), { method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(timeout),
+      headers: { 'content-type': 'application/json', cookie }, body: JSON.stringify(request) })
+    if ([401, 403].includes(response.status)) fail('AUTHENTICATION_REJECTED', 3, request)
+    if (response.status >= 300 && response.status < 400) fail('REDIRECT_REFUSED', 3, request)
+    if (!response.ok) fail('HTTP_FAILURE_UNCERTAIN', 5, request)
+    result = await response.json()
+    if (!object(result) || typeof result.ok !== 'boolean' || result.ok && !Object.hasOwn(result, 'value')) fail('INVALID_RESPONSE_UNCERTAIN', 5, request)
+  } catch (error) {
+    if (error.exitCode) throw error
+    fail('NETWORK_OUTCOME_UNCERTAIN', 5, request)
+  }
+  if (!result.ok) {
+    const code = /^[A-Z][A-Z0-9_]{0,100}$/.test(result.error?.code ?? '') ? result.error.code : 'API_REJECTED'
+    fail(code, ['CONNECTION_LOST', 'REQUEST_TIMEOUT', 'STORAGE_UNAVAILABLE', 'BACKPRESSURE', 'STALE_CONNECTION'].includes(code) ? 5 : 4, request)
+  }
+  let value = result.value
+  if (projections.has(operation)) {
+    value = value?.[operation] ?? []
+  }
+  return { ok: true, value, request }
+}
+
+export async function main(argv = process.argv.slice(2), env = process.env, stdin = process.stdin, stdout = process.stdout, stderr = process.stderr) {
+  let cookie
+  const write = (stream, value) => {
+    let encoded = JSON.stringify(value)
+    if (cookie) encoded = encoded.split(JSON.stringify(cookie).slice(1, -1)).join('[REDACTED]')
+    stream.write(encoded + '\n')
+  }
+  try {
+    const [operation, ...args] = argv
+    if (!operation || operation === '--help' || operation === 'help' || args.includes('--help')) { stdout.write(help(operation === 'help' ? args[0] : operation) + '\n'); return 0 }
+    if (['setup-guide', 'pairing-guide'].includes(operation)) {
+      if (args.some(arg => arg !== '--json')) fail('INVALID_ARGUMENT')
+      write(stdout, { ok: true, value: pairingGuide })
+      return 0
+    }
+    let config = {}
+    for (let i = 0; i < args.length; i++) {
+      if (args[i] === '--json') continue
+      if (args[i] !== '--config' || !args[i + 1]) fail('INVALID_ARGUMENT')
+      try { config = JSON.parse(await readFile(args[++i], 'utf8')) } catch { fail('INVALID_EXPLICIT_CONFIG', 3) }
+      if (!object(config) || Object.keys(config).some(key => !['url', 'cookie'].includes(key))) fail('INVALID_EXPLICIT_CONFIG', 3)
+    }
+    cookie = env.DSBOT_REMOTE_COOKIE ?? config.cookie
+    let source = ''
+    if (!stdin.isTTY) for await (const chunk of stdin) { source += chunk; if (source.length > 1024 * 1024) fail('INPUT_TOO_LARGE') }
+    let input
+    try { input = source.trim() ? JSON.parse(source) : {} } catch { fail('INVALID_JSON') }
+    write(stdout, await execute(prepare(operation, input), { url: env.DSBOT_REMOTE_URL ?? config.url, cookie }))
+    return 0
+  } catch (error) {
+    write(stderr, { ok: false, error: { code: error.code ?? 'CLI_FAILURE' }, ...(error.request ? { request: error.request } : {}) })
+    return error.exitCode ?? 2
+  }
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) process.exitCode = await main()
