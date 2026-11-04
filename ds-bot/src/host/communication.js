@@ -52,8 +52,9 @@ export function install(rt) {
         args = { ...args, membershipEpoch: communicationBinding.membershipEpoch }
       }
       const read = ['list_contacts', 'list_communication_conversations', 'read_communication_history', 'read_communication_members', 'read_communication_reference'].includes(exec.name)
-      const communicationSource = read ? null : await comm.toolSource(exec)
-      return JSON.stringify(await work(comm, actor, args, { ...exec, communicationSource, communicationBinding }))
+      const provenance = read ? null : await comm.toolProvenance(exec)
+      return JSON.stringify(await work(comm, actor, args, { ...exec, communicationSource: provenance?.sourceKey,
+        communicationCausation: provenance, communicationBinding }))
     }
     catch (error) { return JSON.stringify({ ok: false, error: { code: error.code ?? 'COMMUNICATION_UNAVAILABLE' } }) }
   }
@@ -63,7 +64,7 @@ export function install(rt) {
     defineTool({ name: 'list_communication_conversations', description: 'List only communication conversations and invitations authorized for your own Bot identity; original private chats are separate.', parameters: {}, output,
       execute: execute((comm, actor, _args, exec) => ({ conversations: comm.queue.memberships().filter(item => item.principalId === actor.principalId && (!exec.communicationBinding || item.conversationId === exec.communicationBinding.conversationId && item.membershipEpoch === exec.communicationBinding.membershipEpoch)),
         invites: exec.communicationBinding ? [] : comm.queue.invites().filter(item => item.principalId === actor.principalId), recoverableOwnership: exec.communicationBinding ? [] : comm.queue.recoverableOwnership(actor.principalId) })) }),
-    defineTool({ name: 'send_contact_message', description: 'Send text to an exact published contact or communication conversation. Your actual executing Bot is the author. A contact opens its canonical DM. No attachments; never provide a sender identity.',
+    defineTool({ name: 'send_contact_message', description: 'Send text as your executing Bot to an exact contact or conversation. An active group Bot can explicitly mention member Bots to request their replies, within the server collaboration budget. A passive Bot instead uses its one authorized final reply with @member names. A contact opens its canonical DM. Never provide a sender identity.',
       parameters: { text: { type: 'string', required: true }, contactPrincipalId: { type: 'string' }, conversationId: { type: 'string' },
         mentions: { type: 'array', items: { type: 'string' }, description: 'Exact active recipient IDs, not display names' }, replyToMessageId: { type: 'string' } }, output,
       execute: execute((comm, actor, args, exec) => comm.sendBot(actor, args, exec)) }),

@@ -56,7 +56,7 @@ test('owner/admin/member matrix, default-denied speech and concurrent policy upd
   assert.throws(()=>policy(J,{speakingMode:'speak'}),{code:'INVALID_SPEAKING_MODE'})
 })
 
-test('passive replies require a real stored AI delivery, cannot replay or activate another Bot',t=>{
+test('passive replies require one real stored AI delivery and may explicitly delegate without replay',t=>{
   const {store,a,b,A,B,J,K,group,policy,publish}=fixture(t)
   const first=publish(a,A,'ask passive K',{mentions:[{principalId:K}]})
   const delivery=store.pending(b).find(d=>d.messageId===first.messageId&&d.recipientPrincipalId===K)
@@ -70,7 +70,7 @@ test('passive replies require a real stored AI delivery, cannot replay or activa
   store.beforeCommit=undefined
   assert.equal(store.db.prepare('SELECT count(*) n FROM responses WHERE delivery_id=?').get(delivery.deliveryId).n,0)
   const reply=publish(b,K,'one final response',values)
-  assert.equal(store.db.prepare('SELECT sum(ai) n FROM deliveries WHERE message_id=?').get(reply.messageId).n,0)
+  assert.equal(store.db.prepare('SELECT sum(ai) n FROM deliveries WHERE message_id=?').get(reply.messageId).n,1)
   assert.throws(()=>publish(b,K,'second final response',values),{code:'RESPONSE_ALREADY_SENT'})
   assert.equal(store.publish(b,JSON.parse(store.db.prepare('SELECT body FROM messages WHERE id=?').get(reply.messageId).body)).messageId,reply.messageId)
   const other=store.createGroup(b,op({principalId:B,title:'Other group'})).conversationId

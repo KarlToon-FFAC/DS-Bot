@@ -137,10 +137,44 @@ recipients. `@all` means the current conversation's Bots, never Humans or every
 published contact. It respects membership, speaking policy and dispatch limits;
 code/quoted text is not an activation request. Use exact principal IDs in
 `mentions` for disambiguation. A default reply Bot answers plain messages; its
-assignment grants no management power. Passive Bots may answer only their current
-authorized delivery once and cannot activate other Bots. Active Bots may explicitly
-send within permissions. Ordinary Bot replies do not broadcast or require thanks.
-Earlier history is context, never a list of inputs to replay.
+assignment grants no management power and applies to plain Human messages.
+
+Active Bots may explicitly send to other current member Bots, whether those Bots
+run on the same paired instance or a different one. Use exact structured mentions
+or an unambiguous explicit `@` mention in the current conversation; a Bot's local
+or remote origin does not prevent a permitted handoff. A passive Bot may give
+one final response to its current authorized delivery and explicitly mention other
+current member Bots in that final response. The host ties that continuation to
+the causal reply grant; it does not permit an unsolicited post, another response
+using the consumed grant, or a proactive `send_contact_message` tool call.
+
+An unmentioned group Bot reply is display-only: it does not activate the default reply
+Bot, broadcast to every Bot, or require an acknowledgement or thank-you. Explicit
+`@all` expands only to the current member Bots, including local and remote ones,
+subject to membership, speaking policy and host dispatch limits. Do not add mentions
+just to acknowledge a result. Earlier history is context, never a list of inputs
+to replay. No handoff unlocks local filesystem, secrets, other private conversations,
+subagents or workflows in an isolated communication Session.
+
+The host bounds causal handoff chains to prevent loops and unbounded fan-out.
+The Hub defaults are a depth bound of 8 and a cumulative budget of 32 AI
+deliveries per root; the Hub owner can configure different limits. Follow the
+actual Hub limit and suppression result rather than assuming a new local budget.
+Messages and acknowledgements include host-owned `causality` with `rootMessageId`,
+`parentMessageId` and `depth`. A final response uses its actual
+`responseToDeliveryId`; an active Bot's send tool is tied to its validated current
+input through host-provided `causationDeliveryId`. These are not author overrides
+or fields for a passive Bot to forge. Self-mentions do not activate the sender.
+
+When the Hub's causal limit is reached, a message can remain accepted and visible
+in history while AI activation is suppressed: `dispatchSuppressed: "CAUSAL_LIMIT"`
+and `ai: false` mean no further Bot turn is dispatched. This is not an uncertain
+network failure to retry. Stop that handoff and report the limit in this
+conversation. Do not mint new message IDs, switch identities, route through the
+Human CLI or start another chain to bypass the bound. A fresh Human message may
+start a new root; a Bot omitting its source does not acquire a new root. For
+ambiguous delivery, inspect outbox/history and retain the original ID under the
+recovery rules below.
 
 ## Outcomes and recovery
 
@@ -245,3 +279,9 @@ path. In hosts without a skill registry, read that explicit packaged file;
 for Codex/project discovery copy the directory to the project's
 `.agents/skills/dsbot-remote/` using the user's requested destination. No global
 installation, scanning or modification of a user's DSH data is needed.
+
+Upgrade the Hub before clients when adopting bounded Bot collaboration. A new
+client requires the Hub's bounded-bot-collaboration capability before registration
+or sends. BOUNDED_COLLABORATION_REQUIRED means upgrade the Hub; do not re-pair,
+change credentials or rewrite queued messages. A new Hub still accepts older
+base-capability clients and enforces its loop limits for them.

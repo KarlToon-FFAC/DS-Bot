@@ -78,3 +78,15 @@ export function retainedMentions(text, selected, members, manualMentions = []) {
     return person && (manualMentions.includes(id) || spans.some(span => span.bot?.name.toLocaleLowerCase() === person.displayName.toLocaleLowerCase()))
   })
 }
+
+// Canonical history and an accepted outbox ACK can describe the same stop.
+export function collaborationStops(events, outbox) {
+  const stopped = new Map()
+  for (const event of events) {
+    if (event.type === 'message' && event.dispatchSuppressed === 'CAUSAL_LIMIT') stopped.set(event.message.messageId, event.causality)
+  }
+  for (const item of outbox) {
+    if (item.state === 'accepted' && item.result?.dispatchSuppressed === 'CAUSAL_LIMIT' && !stopped.has(item.id)) stopped.set(item.id, item.result.causality)
+  }
+  return [...stopped].map(([messageId, causality]) => ({ messageId, causality }))
+}

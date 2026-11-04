@@ -2,7 +2,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { randomUUID } from 'node:crypto'
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { CAPABILITIES, DEFAULT_LIMITS, PROTOCOL, CommunicationError, hash, identifier, normalizeMessage, requireThat, responseBytes } from './protocol.js'
+import { CAPABILITIES, HUB_CAPABILITIES, DEFAULT_LIMITS, PROTOCOL, CommunicationError, hash, identifier, normalizeMessage, requireThat, responseBytes } from './protocol.js'
 
 export class HubStore {
   constructor(path, { limits = {}, beforeCommit } = {}) {
@@ -29,6 +29,9 @@ export class HubStore {
       CREATE TABLE IF NOT EXISTS cursors (conversation_id TEXT NOT NULL, principal_id TEXT NOT NULL, membership_epoch TEXT NOT NULL, seq INTEGER NOT NULL, PRIMARY KEY(conversation_id,principal_id,membership_epoch));
       CREATE TABLE IF NOT EXISTS instance_addresses (instance_id TEXT PRIMARY KEY REFERENCES instances(id), address TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS principal_preferences (principal_id TEXT PRIMARY KEY REFERENCES principals(id), display_name TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS causal_roots (id TEXT PRIMARY KEY, conversation_id TEXT NOT NULL REFERENCES conversations(id), ai_deliveries INTEGER NOT NULL DEFAULT 0);
+      CREATE TABLE IF NOT EXISTS message_causality (message_id TEXT PRIMARY KEY REFERENCES messages(id), root_id TEXT NOT NULL REFERENCES causal_roots(id), parent_id TEXT, depth INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS causal_schema (version INTEGER PRIMARY KEY);
       `)
     if(version<2)this.transaction(()=>{
       this.db.exec(`ALTER TABLE conversations ADD COLUMN owner_id TEXT;
@@ -46,6 +49,22 @@ export class HubStore {
         INSERT OR IGNORE INTO schema_version VALUES (2); PRAGMA user_version=2;`)
     })
     requireThat(this.db.prepare('SELECT max(version) version FROM schema_version').get().version === 2, 'SCHEMA_VERSION_UNSUPPORTED')
+    if (!this.db.prepare('SELECT 1 FROM causal_schema WHERE version=1').get()) this.transaction(()=>{
+      const latestHuman = new Map()
+      for (const row of this.db.prepare('SELECT m.*,p.kind FROM messages m JOIN principals p ON p.id=m.author_id ORDER BY m.conversation_id,m.seq').all()) {
+        const body = JSON.parse(row.body)
+        if (row.kind === 'human') latestHuman.set(row.conversation_id,row.id)
+        const deliveryId = body.responseToDeliveryId ?? body.causationDeliveryId
+        const parent = deliveryId && this.db.prepare('SELECT message_id FROM deliveries WHERE id=?').get(deliveryId)?.message_id
+        const ancestry = parent && this.db.prepare('SELECT * FROM message_causality WHERE message_id=?').get(parent)
+        const root = row.kind === 'human' ? `message:${row.id}` : ancestry?.root_id ?? (latestHuman.has(row.conversation_id) ? `message:${latestHuman.get(row.conversation_id)}` : `genesis:${row.conversation_id}`)
+        this.db.prepare('INSERT OR IGNORE INTO causal_roots(id,conversation_id) VALUES (?,?)').run(root,row.conversation_id)
+        this.db.prepare('INSERT INTO message_causality VALUES (?,?,?,?)').run(row.id,root,ancestry ? parent : null,row.kind === 'human' ? 0 : ancestry ? ancestry.depth+1 : 1)
+        const count = this.db.prepare('SELECT count(*) count FROM deliveries WHERE message_id=? AND ai=1').get(row.id).count
+        this.db.prepare('UPDATE causal_roots SET ai_deliveries=ai_deliveries+? WHERE id=?').run(count,root)
+      }
+      this.db.prepare('INSERT INTO causal_schema VALUES (1)').run()
+    })
   }
   close() { this.db.close() }
   transaction(work) {
@@ -62,7 +81,7 @@ export class HubStore {
       this.db.prepare('INSERT INTO instances(id,label) VALUES (?,?) ON CONFLICT(id) DO UPDATE SET label=excluded.label').run(instanceId, String(label ?? instanceId).slice(0,256))
       this.db.prepare('UPDATE instances SET epoch=epoch+1 WHERE id=?').run(instanceId)
       return { instanceId, epoch: this.db.prepare('SELECT epoch FROM instances WHERE id=?').get(instanceId).epoch,
-        protocol: PROTOCOL, capabilities: CAPABILITIES, limits: this.limits }
+        protocol: PROTOCOL, capabilities: HUB_CAPABILITIES, limits: this.limits }
     })
   }
   configurePeer(instanceId,label,revision=1) {
@@ -371,11 +390,15 @@ export class HubStore {
         requireThat(author.kind==='human'?sender.speaking_mode==='speak':['passive','active'].includes(sender.speaking_mode),'SPEAKING_FORBIDDEN')
         requireThat(author.kind!=='bot'||sender.speaking_mode!=='passive'||message.responseToDeliveryId,'PASSIVE_REPLY_REQUIRED')
       }
-      if(message.responseToDeliveryId){
-        const delivery=this.db.prepare('SELECT d.*,m.conversation_id FROM deliveries d JOIN messages m ON m.id=d.message_id WHERE d.id=?').get(message.responseToDeliveryId)
+      let cause
+      if(message.responseToDeliveryId || message.causationDeliveryId){
+        requireThat(!message.responseToDeliveryId || !message.causationDeliveryId || message.responseToDeliveryId===message.causationDeliveryId,'INVALID_CAUSATION_GRANT')
+        const delivery=this.db.prepare('SELECT d.*,m.conversation_id FROM deliveries d JOIN messages m ON m.id=d.message_id WHERE d.id=?').get(message.responseToDeliveryId ?? message.causationDeliveryId)
         requireThat(author.kind==='bot'&&delivery?.ai===1&&delivery.stored===1&&!delivery.revoked&&delivery.recipient_id===author.principalId
-          &&delivery.membership_epoch===sender.epoch&&delivery.conversation_id===message.conversationId&&delivery.message_id===message.replyToMessageId,'INVALID_RESPONSE_GRANT')
-        requireThat(!this.db.prepare('SELECT 1 FROM responses WHERE delivery_id=?').get(delivery.id),'RESPONSE_ALREADY_SENT')
+          &&delivery.membership_epoch===sender.epoch&&delivery.conversation_id===message.conversationId
+          &&(!message.responseToDeliveryId || delivery.message_id===message.replyToMessageId),message.responseToDeliveryId?'INVALID_RESPONSE_GRANT':'INVALID_CAUSATION_GRANT')
+        if(message.responseToDeliveryId)requireThat(!this.db.prepare('SELECT 1 FROM responses WHERE delivery_id=?').get(delivery.id),'RESPONSE_ALREADY_SENT')
+        cause=delivery
       }
       const members=this.db.prepare('SELECT m.*,p.kind FROM memberships m JOIN principals p ON p.id=m.principal_id WHERE conversation_id=? AND active=1').all(message.conversationId)
       for(const mention of message.mentions) requireThat(members.some(member=>member.principal_id===mention.principalId),'UNKNOWN_MENTION')
@@ -383,23 +406,45 @@ export class HubStore {
         const parent=this.db.prepare('SELECT conversation_id,seq FROM messages WHERE id=?').get(message.replyToMessageId)
         requireThat(parent?.conversation_id===message.conversationId&&parent.seq>=sender.join_seq,'INVALID_REPLY_TARGET')
       }
+      let rootId, parentMessageId=null, depth=0
+      if(author.kind==='human')rootId=`message:${message.messageId}`
+      else if(cause){
+        const parent=this.db.prepare('SELECT * FROM message_causality WHERE message_id=?').get(cause.message_id)
+        requireThat(parent,'INVALID_CAUSATION_GRANT')
+        rootId=parent.root_id;parentMessageId=cause.message_id;depth=parent.depth+1
+      }else{
+        const human=this.db.prepare("SELECT m.id FROM messages m JOIN principals p ON p.id=m.author_id WHERE m.conversation_id=? AND p.kind='human' ORDER BY m.seq DESC LIMIT 1").get(message.conversationId)
+        rootId=human ? `message:${human.id}` : `genesis:${message.conversationId}`
+        const incoming=this.db.prepare('SELECT c.message_id,c.depth FROM message_causality c JOIN messages m ON m.id=c.message_id JOIN deliveries d ON d.message_id=m.id WHERE c.root_id=? AND d.recipient_id=? AND d.membership_epoch=? AND d.ai=1 ORDER BY m.seq DESC LIMIT 1').get(rootId,author.principalId,sender.epoch)
+        parentMessageId=incoming?.message_id ?? human?.id ?? null
+        depth=(incoming?.depth ?? 0)+1
+      }
+      this.db.prepare('INSERT OR IGNORE INTO causal_roots(id,conversation_id) VALUES (?,?)').run(rootId,message.conversationId)
+      const causality={rootMessageId:rootId.startsWith('message:')?rootId.slice(8):rootId,parentMessageId,depth}
       const pending=this.db.prepare('SELECT count(*) count FROM deliveries WHERE stored=0 AND revoked=0').get().count
       requireThat(pending+members.length<=this.limits.maxPendingDeliveries,'STORAGE_UNAVAILABLE','Pending delivery capacity reached')
       const acceptedAt=new Date().toISOString()
-      const event={message,serverAcceptedAt:acceptedAt,payloadHash:digest,conversationId:message.conversationId,conversationSeq:conversation.seq+1,eventId:message.messageId,type:'message'}
+      const event={message,serverAcceptedAt:acceptedAt,payloadHash:digest,causality,conversationId:message.conversationId,conversationSeq:conversation.seq+1,eventId:message.messageId,type:'message'}
       const deliveries=members.map(member=>{
         const mentioned=message.mentions.some(mention=>mention.principalId===member.principal_id)
         const mayReceiveAi=conversation.kind==='dm'||['passive','active'].includes(member.speaking_mode)
-        const ai=member.kind==='bot'&&mayReceiveAi&&(conversation.kind==='dm'?member.principal_id!==author.principalId:author.kind==='bot'&&sender.speaking_mode==='passive'?false:
+        const ai=member.kind==='bot'&&member.principal_id!==author.principalId&&mayReceiveAi&&(conversation.kind==='dm'?true:
           mentioned||(!message.mentions.length&&author.kind==='human'&&conversation.routing_mode==='admin'&&conversation.admin_bot===member.principal_id))
         return {deliveryId:randomUUID(),messageId:message.messageId,conversationId:message.conversationId,recipientPrincipalId:member.principal_id,membershipEpoch:member.epoch,routingVersion:conversation.version,notify:member.kind==='human'&&member.principal_id!==author.principalId,ai:Boolean(ai),event}
       })
+      const aiCount=deliveries.filter(delivery=>delivery.ai).length
+      const used=this.db.prepare('SELECT ai_deliveries FROM causal_roots WHERE id=?').get(rootId).ai_deliveries
+      if(aiCount && (depth>=this.limits.maxCausalDepth || used+aiCount>this.limits.maxAiDeliveriesPerRoot)){
+        event.dispatchSuppressed='CAUSAL_LIMIT'
+        for(const delivery of deliveries)delivery.ai=false
+      }else this.db.prepare('UPDATE causal_roots SET ai_deliveries=ai_deliveries+? WHERE id=?').run(aiCount,rootId)
       for(let index=0;index<members.length;index++){
         requireThat(responseBytes(this.syncValue(members[index],Number.MAX_SAFE_INTEGER,[event]))<=this.limits.maxEnvelopeBytes
           &&responseBytes([deliveries[index]])<=this.limits.maxEnvelopeBytes,'PAYLOAD_TOO_LARGE')
       }
-      this.event(message.conversationId,'message',{message,serverAcceptedAt:acceptedAt,payloadHash:digest},message.messageId)
+      this.event(message.conversationId,'message',{message,serverAcceptedAt:acceptedAt,payloadHash:digest,causality,...(event.dispatchSuppressed?{dispatchSuppressed:event.dispatchSuppressed}:{})},message.messageId)
       this.db.prepare('INSERT INTO messages VALUES (?,?,?,?,?,?,?)').run(message.messageId,message.conversationId,event.conversationSeq,digest,author.principalId,JSON.stringify(message),acceptedAt)
+      this.db.prepare('INSERT INTO message_causality VALUES (?,?,?,?)').run(message.messageId,rootId,parentMessageId,depth)
       if(message.responseToDeliveryId)this.db.prepare('INSERT INTO responses VALUES (?,?)').run(message.responseToDeliveryId,message.messageId)
       for(const delivery of deliveries){
         this.db.prepare('INSERT INTO deliveries(id,message_id,recipient_id,membership_epoch,routing_version,notify,ai) VALUES (?,?,?,?,?,?,?)').run(delivery.deliveryId,message.messageId,delivery.recipientPrincipalId,delivery.membershipEpoch,conversation.version,Number(delivery.notify),Number(delivery.ai))
@@ -407,7 +452,11 @@ export class HubStore {
       return this.accepted(this.db.prepare('SELECT * FROM messages WHERE id=?').get(message.messageId))
     })
   }
-  accepted(row) { return {messageId:row.id,conversationId:row.conversation_id,conversationSeq:row.seq,payloadHash:row.hash,serverAcceptedAt:row.accepted_at,status:'hubAccepted'} }
+  accepted(row) {
+    const event=JSON.parse(this.db.prepare('SELECT body FROM events WHERE id=?').get(row.id).body)
+    return {messageId:row.id,conversationId:row.conversation_id,conversationSeq:row.seq,payloadHash:row.hash,serverAcceptedAt:row.accepted_at,status:'hubAccepted',
+      ...(event.causality?{causality:event.causality}:{}),...(event.dispatchSuppressed?{dispatchSuppressed:event.dispatchSuppressed}:{})}
+  }
   memberships(auth) {
     this.check(auth)
     const members=this.db.prepare('SELECT m.*,c.title,c.kind,c.version,c.routing_mode,c.admin_bot,c.owner_id,c.closed,c.seq FROM memberships m JOIN principals p ON p.id=m.principal_id JOIN conversations c ON c.id=m.conversation_id WHERE p.instance_id=?').all(auth.instanceId)

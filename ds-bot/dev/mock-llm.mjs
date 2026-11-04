@@ -133,6 +133,21 @@ function decide(body) {
     const recovering = current.startsWith('[Local transport recovery notice]')
     const commandText = recovering ? messages.findLast(message => message.role === 'user' && textOf(message.content).includes('[Communication delivery]'))?.content : last?.content
     const command = textOf(commandText).split('Current message:\n').at(-1).trimStart().split('\n')[0].trim()
+      const collaboration = /^COMM-COLLAB FINAL (\d+) (\S+) (\S+) (\S+)(?:\s+@\S+)*$/.exec(command)
+      if (!communicationResults && collaboration) {
+        const remaining = Number(collaboration[1]), [, , tag, nextName, returnName] = collaboration
+        return [text(remaining > 0 ? `COMM-COLLAB FINAL ${remaining - 1} ${tag} ${returnName} ${nextName} @${nextName}` : `COMM-COLLAB DONE ${tag}`)]
+      }
+      const collaborationAll = /^COMM-COLLAB ALL (\S+)$/.exec(command)
+      if (!communicationResults && collaborationAll) return [text(`COMM-COLLAB DONE ${collaborationAll[1]} @all`)]
+      const collaborationDone = /^COMM-COLLAB DONE (\S+)(?:\s+@\S+)*$/.exec(command)
+      if (!communicationResults && collaborationDone) return [text(`Collaboration done ${collaborationDone[1]}`)]
+      const collaborationBurst = /^COMM-COLLAB BURST (\S+) (\S+) (\d+) (\S+)$/.exec(command)
+      if (!communicationResults && collaborationBurst) {
+        const count = Number(collaborationBurst[3])
+        if (count < 1 || count > 40) return [text('Collaboration burst count rejected')]
+        return Array.from({ length: count }, (_, index) => tool('send_contact_message', { conversationId: collaborationBurst[1], text: `COMM-COLLAB DONE ${collaborationBurst[4]}-${index}`, mentions: [collaborationBurst[2]] }))
+      }
     const send = /^COMM-SEND (\S+) ([^\n]+)$/.exec(command)
     if (!communicationResults && send) return [tool('send_contact_message', { contactPrincipalId: send[1], text: `COMM-ECHO ${send[2]}` })]
     const post = /^COMM-POST (\S+) (\S+) (.+)$/.exec(command)
@@ -141,7 +156,8 @@ function decide(body) {
     if (!communicationResults && history) return [tool('read_communication_history', { conversationId: history[1], limit: 100 })]
     if (!communicationResults && command === 'COMM-LIST') return [tool('list_communication_conversations', {})]
     const echo = /^COMM-ECHO ([^\n]+)$/.exec(command)
-    if (!communicationResults && echo) return [text(`Communication reply ${echo[1]}`)]
+      // Echoed mentions are quoted data; intentional delegation uses COMM-COLLAB.
+      if (!communicationResults && echo) return [text(`${echo[1].includes('@') ? '> ' : ''}Communication reply ${echo[1]}`)]
     const delayed = /^COMM-DELAY-ECHO (\d+) ([^\n]+)$/.exec(command)
     if (!communicationResults && delayed) return Object.assign([text(`Communication reply ${delayed[2]}`)], { delay: Number(delayed[1]) })
     if (system.includes('This Session belongs only to one explicit communication conversation')) return [text('')]

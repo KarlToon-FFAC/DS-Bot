@@ -10,7 +10,7 @@ import { mentionSpans } from '../../shared/mentions.js'
 import { splitRef } from '../text.js'
 import { communicationPrompt } from './prompt.js'
 import { OUTSIDE_CONVERSATION_TOOLS } from './tool-scope.js'
-import { COMMUNICATION_PRESET, hasCommunicationPreset, communicationInputs, sourceDelivery, legacySessionSettled } from './session-scope.js'
+import { COMMUNICATION_PRESET, hasCommunicationPreset, communicationInputs, sourceDelivery, legacySessionSettled, isCommunicationContext } from './session-scope.js'
 
 const PROTOCOL = 'dsbot-communication/1'
 const fail = code => { throw Object.assign(new Error(code), { code }) }
@@ -115,13 +115,30 @@ export class CommunicationRuntime {
     return actor
   }
   async toolSource(exec) {
+    return (await CommunicationRuntime.prototype.toolProvenance.call(this, exec)).sourceKey
+  }
+  async toolProvenance(exec) {
     if (!exec.callId || !exec.agent?.id) fail('UNSUPPORTED_CAPABILITY')
     await this.ctx.sessions.flush(exec.agent.session)
     const { events } = await this.ctx.sessionController.inspect(exec.agent.id, AbortSignal.timeout(15000))
     const event = events.findLast(event => event.type === 'assistant/message' && event.data.message.content.some(block =>
       block.type === 'tool-call' && block.id === (exec.rootCallId ?? exec.callId)))
     if (!event?.data.message.id) fail('TOOL_SOURCE_UNKNOWN')
-    return JSON.stringify(['tool', exec.agent.id, event.seq, event.data.message.id, exec.callId])
+    const sourceKey = JSON.stringify(['tool', exec.agent.id, event.seq, event.data.message.id, exec.callId])
+    const binding = this.owners?.get(exec.agent.id)
+    if (!binding) return { sourceKey }
+    let turn
+    const inputs = []
+    for (const record of events) {
+      if (record.seq > event.seq) break
+      if (record.type === 'turn/start') turn = record.data.turn
+      if (record.type === 'user/message' && (record.data.turn ?? turn) === event.data.turn
+        && !isCommunicationContext(record.data.source)) inputs.push(record.data.source)
+    }
+    if (!inputs.length) fail('COMMUNICATION_INPUT_SOURCE_UNKNOWN')
+    const deliveries = inputs.map(source => sourceDelivery(this.queue, binding, source))
+    const input = deliveries.at(-1)
+    return { sourceKey, causationDeliveryId: input.deliveryId, replyToMessageId: input.messageId }
   }
   member(principalId, conversationId, epoch) {
     if (!this.everReconciled) fail('AUTHORIZATION_PENDING')
@@ -234,7 +251,7 @@ export class CommunicationRuntime {
     if (!current) return
     if ((this.conversations.get(conversationId)?.membershipVersion ?? 0) <= info.membershipVersion) this.conversations.set(conversationId, info)
   }
-  message(principalId, conversationId, { text, mentions = [], replyToMessageId = null, responseToDeliveryId, membershipEpoch, messageId = randomUUID(), clientCreatedAt = new Date().toISOString(), attachments, files } = {}) {
+  message(principalId, conversationId, { text, mentions = [], replyToMessageId = null, responseToDeliveryId, causationDeliveryId, membershipEpoch, messageId = randomUUID(), clientCreatedAt = new Date().toISOString(), attachments, files } = {}) {
     if (attachments || files) fail('UNSUPPORTED_CONTENT')
     if (typeof text !== 'string') fail('INVALID_REQUEST')
     const info = this.conversations?.get(conversationId), members = info?.members
@@ -246,11 +263,12 @@ export class CommunicationRuntime {
       author: { principalId, homeInstanceId: this.queue.instanceId, kind: principalId.startsWith('human:') ? 'human' : 'bot' },
       clientCreatedAt, content: { format: 'markdown', text },
       mentions: communicationMentions(text, contacts, mentions), replyToMessageId, ...(responseToDeliveryId ? { responseToDeliveryId } : {}),
+      ...(causationDeliveryId ? { causationDeliveryId } : {}),
       membershipEpoch: membershipEpoch ?? this.member(principalId, conversationId).membershipEpoch }
   }
   sendHuman(input) {
     if (typeof input.messageId !== 'string' || typeof input.clientCreatedAt !== 'string') fail('INVALID_REQUEST')
-    if (input.responseToDeliveryId !== undefined) fail('INVALID_REQUEST')
+    if (input.responseToDeliveryId !== undefined || input.causationDeliveryId !== undefined) fail('INVALID_REQUEST')
     if (input.attachments || input.files) fail('UNSUPPORTED_CONTENT')
     const saved = this.queue.intent(input.messageId)
     if (saved) {
@@ -287,8 +305,12 @@ export class CommunicationRuntime {
     if (!conversationId) fail('CONVERSATION_REQUIRED')
     const member = this.member(actor.principalId, conversationId, exec.communicationBinding?.membershipEpoch ?? input.membershipEpoch)
     if (member.kind === 'group' && member.speakingMode !== 'active') fail('PASSIVE_REPLY_ONLY')
-    const output = { sourceKey, conversationId, parts: [{ part: 0, text: input.text }], mentions: input.mentions ?? [], replyToMessageId: input.replyToMessageId ?? null }
-    const [messageId] = this.queue.commitExports(`tool:${exec.agent.id}`, [output], [], () => this.message(actor.principalId, conversationId, { ...input, responseToDeliveryId: undefined, membershipEpoch: member.membershipEpoch }))
+    const causal = exec.communicationCausation
+    if (exec.communicationBinding && !causal?.causationDeliveryId) fail('COMMUNICATION_INPUT_SOURCE_UNKNOWN')
+    const replyToMessageId = input.replyToMessageId ?? causal?.replyToMessageId ?? null
+    const output = { sourceKey, conversationId, parts: [{ part: 0, text: input.text }], mentions: input.mentions ?? [], replyToMessageId }
+    const [messageId] = this.queue.commitExports(`tool:${exec.agent.id}`, [output], [], () => this.message(actor.principalId, conversationId, { ...input, replyToMessageId,
+      responseToDeliveryId: undefined, causationDeliveryId: causal?.causationDeliveryId, membershipEpoch: member.membershipEpoch }))
     return { messageId, conversationId, status: this.queue.outboxStatus(messageId).state }
   }
   history(principalId, input) {
@@ -377,7 +399,9 @@ export class CommunicationRuntime {
       const person = this.contacts.find(contact => contact.principalId === event.message.author.principalId)
       return JSON.stringify({ messageId: event.message.messageId, author: event.message.author,
         displayName: person?.displayName ?? event.message.author.principalId, instanceLabel: person?.instanceLabel,
-        content: event.message.content, mentions: event.message.mentions, replyToMessageId: event.message.replyToMessageId })
+        content: event.message.content, mentions: event.message.mentions, replyToMessageId: event.message.replyToMessageId,
+        ...(event.causality ? { causality: event.causality } : {}),
+        ...(event.dispatchSuppressed ? { dispatchSuppressed: event.dispatchSuppressed } : {}) })
     }
     const history = []
     let bytes = 0

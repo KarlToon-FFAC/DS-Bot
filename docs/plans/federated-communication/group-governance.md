@@ -35,7 +35,7 @@ GROUP_VERSION_CONFLICT，不覆盖较新的决定。操作 ID 重试复用原结
 - Human `readOnly`：可读、可被通知、可退出；不能发新消息或回复。`speak`：可发送/回复。
 - Bot `passive`：可按 Hub 既有 @/默认回复规则收件，仅允许对一次真实 AI delivery 输出一次最终回复。
   Hub 校验 responseToDeliveryId、接收者、会话、membership epoch、原消息和落盘回执，并原子消耗回复资格。
-  仅填写 replyTo 或伪造“回复”文字不能越过限制。被动回复的 @ 不再唤醒其他 Bot，避免被动身份发起接力。
+  A replyTo reference or claimed reply text grants nothing. The one authorized final response may explicitly @ current local or remote member Bots, within the server causal budget.
 - Bot `active`：可通过实际 Bot 工具主动向该群发言和点名；普通无点名回复仍不广播。
 - 被动 Bot 的显式 send 工具不能代替最终回复；它的正常最终输出由适配层自动携带来源 delivery。
   所有模式均不授权读取其他会话、凭据或本机文件，也不等于允许执行远端业务指令。

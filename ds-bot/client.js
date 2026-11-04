@@ -42,6 +42,9 @@ module.exports = __toCommonJS(index_exports);
 // src/client/i18n.js
 var NAMESPACE = "ds-bot";
 var ZH = {
+  "Upgrade the Hub to support bounded Bot collaboration. Your queued messages are retained.": "请升级 Hub 以支持有界 Bot 协作。排队消息已保留。",
+  "Bot collaboration stopped at the safety limit. Send a new Human message to continue.": "Bot 协作已达到安全限制。请由 Human 发送新消息继续。",
+  "Both Bot modes may @mention current group Bots in an authorized final reply. Reply-only Bots cannot initiate messages or send proactively with tools. Active Bots may also initiate with tools. Bot delegation chains stop at the server’s finite limit.": "两种 Bot 模式都可在获准的最终回复中 @当前群内 Bot。被动回复 Bot 不能主动发起消息或使用工具主动发送；主动 Bot 也可通过工具发起消息。Bot 委派链达到服务端的有限额度后会停止。",
   "An operation is not confirmed. Check status, then retry the same action.": "有操作尚未确认。请核对状态，再重试同一操作。",
   "Remove mention": "取消点名",
   "Add a device": "添加设备",
@@ -20789,6 +20792,16 @@ function retainedMentions(text, selected, members, manualMentions = []) {
     return person && (manualMentions.includes(id) || spans.some((span) => span.bot?.name.toLocaleLowerCase() === person.displayName.toLocaleLowerCase()));
   });
 }
+function collaborationStops(events, outbox) {
+  const stopped = /* @__PURE__ */ new Map();
+  for (const event of events) {
+    if (event.type === "message" && event.dispatchSuppressed === "CAUSAL_LIMIT") stopped.set(event.message.messageId, event.causality);
+  }
+  for (const item of outbox) {
+    if (item.state === "accepted" && item.result?.dispatchSuppressed === "CAUSAL_LIMIT" && !stopped.has(item.id)) stopped.set(item.id, item.result.causality);
+  }
+  return [...stopped].map(([messageId, causality]) => ({ messageId, causality }));
+}
 
 // src/client/communication-styles.js
 var communicationCSS = `
@@ -20968,6 +20981,7 @@ var friendly = (error) => ({
   HISTORY_GAP: "Some history is missing. Wait for synchronization before sending.",
   STALE_CONNECTION: "Another connection replaced this one. Close the duplicate instance and restart this one.",
   UNSUPPORTED_CAPABILITY: "This device and the Hub use incompatible versions. Update them to the same revision.",
+  BOUNDED_COLLABORATION_REQUIRED: "Upgrade the Hub to support bounded Bot collaboration. Your queued messages are retained.",
   TLS_REQUIRED: "This Hub address requires a secure connection. Ask the Hub owner for its trusted WSS address."
 })[error.code] ?? "The action could not be confirmed. Refresh status before trying again.";
 var hubPairingExample = JSON.stringify({ peers: [{ instanceId: "new-device", instanceLabel: "New device", pairingRevision: 1, credentialEnv: "DSBOT_HUB_NEW_DEVICE_CREDENTIAL" }] }, null, 2);
@@ -21537,7 +21551,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
             }) : null
           );
         }),
-        (0, import_react53.createElement)("p", { className: "bt-comm-reference" }, t("Reply-only Bots respond to admitted messages. Bots allowed to speak may also initiate messages.")),
+        (0, import_react53.createElement)("p", { className: "bt-comm-reference" }, t("Both Bot modes may @mention current group Bots in an authorized final reply. Reply-only Bots cannot initiate messages or send proactively with tools. Active Bots may also initiate with tools. Bot delegation chains stop at the server’s finite limit.")),
         canManage ? (0, import_react53.createElement)(
           import_react53.Fragment,
           null,
@@ -21710,6 +21724,11 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
       (0, import_react53.createElement)(
         "section",
         { className: "bt-comm-feedback", "aria-label": t("Activity and send status") },
+        collaborationStops(events, ownOutbox).map((item) => (0, import_react53.createElement)(
+          "p",
+          { key: `causal:${item.messageId}`, role: "status", className: "bt-comm-reference", "data-causal-stop": item.messageId, title: item.messageId },
+          t("Bot collaboration stopped at the safety limit. Send a new Human message to continue.")
+        )),
         events.filter((event) => event.type !== "message").map((event) => (0, import_react53.createElement)("p", { key: event.eventId, className: "bt-comm-event" }, t("Membership or receiving rule changed"))),
         ownOutbox.filter((item) => item.state === "failed").map((item) => (0, import_react53.createElement)(
           "div",

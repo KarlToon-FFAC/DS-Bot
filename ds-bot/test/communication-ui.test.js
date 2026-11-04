@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { runInNewContext } from 'node:vm'
 import { build } from 'esbuild'
-import { contactLabels, deliveryPhase, contactsByAddress, principalAvatar, mentionQuery, mentionChoices, insertMention, retainedMentions } from '../src/client/communication-model.js'
+import { contactLabels, deliveryPhase, contactsByAddress, principalAvatar, mentionQuery, mentionChoices, insertMention, retainedMentions, collaborationStops } from '../src/client/communication-model.js'
 import { communicationMentions } from '../src/shared/communication-mentions.js'
 import { createSource } from '../src/client/sources.js'
 
@@ -145,4 +145,14 @@ test('reserved Human names insert plain text with an explicit chip and never bro
     assert.deepEqual(communicationMentions('@all', members), [{ principalId: 'bot:here' }])
     assert.deepEqual(retainedMentions(chosen.text, chosen.mentions, members), [])
   }
+})
+
+
+test('collaboration stop status trusts canonical messages or accepted ACKs and deduplicates the same message', () => {
+  const causality = { rootMessageId: 'root', parentMessageId: 'previous', depth: 8 }
+  const event = { type: 'message', message: { messageId: 'stopped' }, dispatchSuppressed: 'CAUSAL_LIMIT', causality }
+  const ack = { id: 'stopped', state: 'accepted', result: { dispatchSuppressed: 'CAUSAL_LIMIT', causality } }
+  assert.deepEqual(collaborationStops([event], [ack]), [{ messageId: 'stopped', causality }])
+  assert.deepEqual(collaborationStops([], [ack]), [{ messageId: 'stopped', causality }])
+  assert.deepEqual(collaborationStops([{ ...event, dispatchSuppressed: 'OTHER' }], [{ ...ack, state: 'pending' }]), [])
 })

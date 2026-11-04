@@ -5,6 +5,9 @@
 export const NAMESPACE = 'ds-bot'
 
 const ZH = {
+  'Upgrade the Hub to support bounded Bot collaboration. Your queued messages are retained.': '请升级 Hub 以支持有界 Bot 协作。排队消息已保留。',
+  'Bot collaboration stopped at the safety limit. Send a new Human message to continue.': 'Bot 协作已达到安全限制。请由 Human 发送新消息继续。',
+  "Both Bot modes may @mention current group Bots in an authorized final reply. Reply-only Bots cannot initiate messages or send proactively with tools. Active Bots may also initiate with tools. Bot delegation chains stop at the server’s finite limit.": "两种 Bot 模式都可在获准的最终回复中 @当前群内 Bot。被动回复 Bot 不能主动发起消息或使用工具主动发送；主动 Bot 也可通过工具发起消息。Bot 委派链达到服务端的有限额度后会停止。",
   'An operation is not confirmed. Check status, then retry the same action.': '有操作尚未确认。请核对状态，再重试同一操作。',
   'Remove mention': '取消点名',
   "Add a device": "添加设备",

@@ -9,7 +9,7 @@ import { join, dirname, resolve, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { WebSocket } from 'ws'
 import { startHub } from '../src/server.js'
-import { PROTOCOL, CAPABILITIES } from '../src/protocol.js'
+import { PROTOCOL, CAPABILITIES, HUB_CAPABILITIES } from '../src/protocol.js'
 import { CommunicationQueue } from '../../ds-bot/src/host/federation/queue-store.js'
 import { CommunicationTransport } from '../../ds-bot/src/host/federation/transport.js'
 
@@ -229,6 +229,26 @@ test('authenticated WS handshake enforces protocol/capabilities and a successor 
     for(const value of clients){value.client.stop();value.queue.close()}
     await hub.close()
   }
+})
+
+test('base-capability legacy clients still connect while the Hub advertises bounded Bot collaboration',async()=>{
+  const hub=await startHub({databasePath:':memory:',port:0,peers})
+  const socket=new WebSocket(hub.url)
+  try{
+    await once(socket,'open')
+    const response=once(socket,'message')
+    socket.send(JSON.stringify({protocol:PROTOCOL,id:randomUUID(),type:'hello',payload:{instanceId:'a',credential:credentials.a,capabilities:CAPABILITIES}}))
+    const welcome=JSON.parse((await response)[0].toString())
+    assert.equal(welcome.ok,true)
+    assert.equal(CAPABILITIES.includes('bounded-bot-collaboration'),false)
+    assert.deepEqual(welcome.value.capabilities,HUB_CAPABILITIES)
+    assert.ok(welcome.value.capabilities.includes('bounded-bot-collaboration'))
+    const contacts=once(socket,'message')
+    socket.send(JSON.stringify({protocol:PROTOCOL,id:randomUUID(),type:'contacts.list',payload:{}}))
+    const directory=JSON.parse((await contacts)[0].toString())
+    assert.equal(directory.ok,true)
+    assert.deepEqual(directory.value,[])
+  }finally{socket.terminate();await hub.close()}
 })
 
 test('revoked trust stays rejected after ordinary Hub restart until the owner increases the pairing revision',async()=>{

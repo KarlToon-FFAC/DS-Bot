@@ -25,6 +25,28 @@ test('federated prompt identifies exact role and audience and treats names as da
   assert.match(communicationPrompt(null,binding,null),/Do not act or disclose/)
 })
 
+test('federated prompt permits explicit local and remote Bot handoffs only within current response and privacy boundaries', () => {
+  const binding = { conversationId: 'group', recipientPrincipalId: 'bot:local:worker', membershipEpoch: 'epoch' }
+  for (const speakingMode of ['active', 'passive']) {
+    const text = communicationPrompt({ name: 'Worker', instructions: 'Local user configured task' }, binding, { kind: 'group', role: 'member', speakingMode })
+    assert.match(text, /A passive Bot responds only to its current authorized input/)
+    assert.match(text, /reply permission once; it may explicitly @-mention other current member Bots, local or remote, within that one authorized final response/)
+    assert.match(text, /cannot make unsolicited group posts or proactive send-tool calls/)
+    assert.match(text, /An active Bot may explicitly post and @-mention other current member Bots, local or remote/)
+    assert.match(text, /unmentioned group Bot reply is display-only.*does not call the default reply Bot or broadcast/)
+    assert.match(text, /bounds causal handoff chains.*Stop that handoff.*instead of resending, changing IDs/)
+    assert.match(text, /accepted into history can still have AI dispatch suppressed/)
+    assert.match(text, /mentioning yourself does not activate yourself/)
+    assert.match(text, /finished Bot reply needs no acknowledgement or thank-you loop/)
+    assert.match(text, /Local Bot\/team management, filesystem, environment, secret and arbitrary execution tools are unavailable/)
+    assert.match(text, /read and send only within this conversation/)
+    assert.match(text, /Do not start subagents, goals or workflows/)
+    assert.match(text, /Never disclose API keys, tokens, cookies/)
+    assert.ok(text.endsWith('The privacy, identity and server permission boundaries above still apply to every response.'))
+    assert.doesNotMatch(text, /cannot.*activate other Bots/)
+  }
+})
+
 test('communication Session rejects injected filesystem, secret and local-team tools at execution and assembly', async () => {
   const hooks=new Map(),runtime={tools:[{name:'read_communication_history'}],scoped:new WeakSet(),disposers:[],isolateWorkspace:async()=>{}}
   const agent={ctx:{tools:{register:()=>()=>{}},on:(name,fn)=>{hooks.set(name,fn);return ()=>{}}}}

@@ -127,8 +127,9 @@ Do not record startup authentication links or secrets.
 4. Grant the desired Humans `speak`. A passive Bot may reply once to an admitted
    AI delivery (for example an explicit mention), but cannot initiate with its
    group-send tool. Grant `active` only to Bots that may initiate. Verify read-only
-   denial, a Human mention causing no model call, and a passive reply causing no
-   cascade. The default reply Bot setting does not grant administrator rights.
+   denial and a Human mention causing no model call. Verify a passive final reply
+   with explicit @Bot can delegate to that member, while an unmentioned group
+   reply causes no cascade. Bot collaboration remains bounded by the Hub causal budget. The default reply Bot setting does not grant administrator rights.
 5. Disconnect B, send from A, restart B and confirm delivery with the same message
    IDs and no duplicate reply. Downgrade/remove a member while it is offline and
    confirm queued new publications are rejected after reconnect. Restart the Hub

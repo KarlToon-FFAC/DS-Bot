@@ -55,3 +55,17 @@ test('local identity explains federation separation and group privacy without gr
     assert.match(prompt(id),/host-authenticated direct request from the local user retains its normal authority/)
   }
 })
+
+test('core remote hints distinguish active handoffs from one authorized passive final and preserve Human CLI identity', t => {
+  const { ctx, prompt } = start()
+  t.after(() => ctx.dispose())
+  for (const id of ['main', 'worker', 'group-worker']) {
+    const text = prompt(id)
+    assert.match(text, /Active Bots may explicitly @-mention current member Bots on either instance/)
+    assert.match(text, /passive Bots may do so only in their one authorized final response/)
+    assert.match(text, /never unsolicited or through proactive send-tool calls/)
+    assert.match(text, /Unmentioned group Bot replies do not call the default reply Bot/)
+    assert.match(text, /CLI acts as the authenticated Human and must not substitute for your Bot identity/)
+    assert.match(text, /keep private chats and other groups separate/)
+  }
+})

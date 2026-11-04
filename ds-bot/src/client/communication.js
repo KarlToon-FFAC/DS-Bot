@@ -5,7 +5,7 @@ import { t } from './i18n.js'
 import { MarkdownText } from './dsh-primitives.js'
 import { mdLabels } from './btw.js'
 import { useLinger } from './motion.js'
-import { contactLabels, conversationTitle, deliveryPhase, contactsByAddress, principalAvatar, mentionQuery, mentionChoices, insertMention, retainedMentions } from './communication-model.js'
+import { contactLabels, conversationTitle, deliveryPhase, contactsByAddress, principalAvatar, mentionQuery, mentionChoices, insertMention, retainedMentions, collaborationStops } from './communication-model.js'
 import { communicationCSS } from './communication-styles.js'
 
 const OPEN = 'ds-bot:communication:open', SELECTED = 'ds-bot:communication:selected'
@@ -38,6 +38,7 @@ const friendly = error => ({
   HISTORY_GAP: 'Some history is missing. Wait for synchronization before sending.',
   STALE_CONNECTION: 'Another connection replaced this one. Close the duplicate instance and restart this one.',
   UNSUPPORTED_CAPABILITY: 'This device and the Hub use incompatible versions. Update them to the same revision.',
+  BOUNDED_COLLABORATION_REQUIRED: 'Upgrade the Hub to support bounded Bot collaboration. Your queued messages are retained.',
   TLS_REQUIRED: 'This Hub address requires a secure connection. Ask the Hub owner for its trusted WSS address.',
 }[error.code] ?? 'The action could not be confirmed. Refresh status before trying again.')
 
@@ -336,7 +337,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
                 speakingMode: policy.speakingMode, ...(isOwner && person.role !== 'owner' ? { role: policy.role } : {}) })) })) : h('span', null, t(['readOnly','passive'].includes(person.speakingMode) ? person.kind === 'human' ? 'Read only' : 'Reply only' : 'Can speak')),
             canManage && person.role !== 'owner' && (isOwner || person.role === 'member') && person.principalId !== state.humanPrincipalId ? btn('Remove from group', () => { void act(() => operation('remove', { conversationId: selected, targetPrincipalId: person.principalId })) }) : null)
         }),
-        h('p', { className: 'bt-comm-reference' }, t('Reply-only Bots respond to admitted messages. Bots allowed to speak may also initiate messages.')),
+        h('p', { className: 'bt-comm-reference' }, t('Both Bot modes may @mention current group Bots in an authorized final reply. Reply-only Bots cannot initiate messages or send proactively with tools. Active Bots may also initiate with tools. Bot delegation chains stop at the server’s finite limit.')),
         canManage ? h(Fragment, null,
           h('label', { className: 'bt-comm-field' }, t('Group name'), h('input', { value: groupName, onChange: event => setGroupName(event.target.value), 'aria-label': t('Group name') })),
           btn('Save group name', () => { void act(() => operation('configure-group', { conversationId: selected, title: groupName })) }, { disabled: busy || !groupName.trim() || groupName === member.title }),
@@ -398,6 +399,8 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
           h('p', null, t('Stored means the destination saved the message. Read means a Human opened it. Bot admitted means processing was accepted, not that a reply is complete.')),
           h('p', null, t('Text and Markdown · attachments unavailable')))) : null,
       h('section', { className: 'bt-comm-feedback', 'aria-label': t('Activity and send status') },
+        collaborationStops(events, ownOutbox).map(item => h('p', { key: `causal:${item.messageId}`, role: 'status', className: 'bt-comm-reference', 'data-causal-stop': item.messageId, title: item.messageId },
+          t('Bot collaboration stopped at the safety limit. Send a new Human message to continue.'))),
         events.filter(event => event.type !== 'message').map(event => h('p', { key: event.eventId, className: 'bt-comm-event' }, t('Membership or receiving rule changed'))),
         ownOutbox.filter(item => item.state === 'failed').map(item => h('div', { key: item.id, className: 'bt-comm-error' },
           h('p', { role: 'status' }, t('Send failed'), ' · ', item.error ? t(friendly({ code: item.error })) : '', ' · ', item.text),

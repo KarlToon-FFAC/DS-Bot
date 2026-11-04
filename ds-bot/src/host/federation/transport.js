@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 
 const PROTOCOL = 'dsbot-communication/1'
 const CAPABILITIES = ['text', 'markdown', 'mentions', 'group', 'dm', 'reply', 'history', 'group-policy', 'membership-epoch']
+const BOUNDED_COLLABORATION = 'bounded-bot-collaboration'
 const transient = new Set(['CONNECTION_LOST', 'REQUEST_TIMEOUT', 'STORAGE_UNAVAILABLE', 'BACKPRESSURE', 'HISTORY_GAP'])
 const errorWith = (code, message = code) => Object.assign(new Error(message), { code })
 
@@ -70,8 +71,9 @@ export class CommunicationTransport {
     })
     try {
       const credential = typeof this.credential === 'function' ? this.credential() : this.credential
-      const welcome = await this.send('hello', { instanceId: this.queue.instanceId, credential, capabilities: CAPABILITIES })
+      const welcome = await this.send('hello', { instanceId: this.queue.instanceId, credential, capabilities: [...CAPABILITIES, BOUNDED_COLLABORATION] })
       if (welcome.protocol !== PROTOCOL || welcome.instanceId !== this.queue.instanceId || !CAPABILITIES.every(value => welcome.capabilities?.includes(value))) throw errorWith('UNSUPPORTED_CAPABILITY')
+      if (!welcome.capabilities.includes(BOUNDED_COLLABORATION)) throw errorWith('BOUNDED_COLLABORATION_REQUIRED')
       this.welcome = welcome
       this.queue.setLimits(welcome.limits)
       this.connected = true

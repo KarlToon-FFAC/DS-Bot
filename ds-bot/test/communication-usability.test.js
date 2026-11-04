@@ -12,7 +12,7 @@ const { JSDOM } = harness('jsdom'), React = harness('react'), { act } = React
 const { outputFiles } = await build({ entryPoints: [fileURLToPath(new URL('../src/client/communication.js', import.meta.url))],
   bundle: true, platform: 'browser', format: 'cjs', external: ['react', 'react-dom', '@deepseek-ai/dsh-client-ui-primitives'], write: false })
 
-async function pane({ enabled = true, snapshot, handle = async () => ({}) }, check) {
+async function pane({ enabled = true, snapshot, history = [], handle = async () => ({}) }, check) {
   const dom = new JSDOM('<!doctype html><body><textarea id="native">private draft</textarea><div id="root"></div></body>', { url: 'http://127.0.0.1:3138/', pretendToBeVisual: true })
   const saved = Object.fromEntries(['window', 'document', 'navigator', 'HTMLElement', 'IS_REACT_ACT_ENVIRONMENT'].map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]))
   for (const [key, value] of Object.entries({ window: dom.window, document: dom.window.document, navigator: dom.window.navigator, HTMLElement: dom.window.HTMLElement, IS_REACT_ACT_ENVIRONMENT: true })) Object.defineProperty(globalThis, key, { configurable: true, value })
@@ -27,7 +27,7 @@ async function pane({ enabled = true, snapshot, handle = async () => ({}) }, che
   const request = async body => {
     calls.push(body)
     if (body.endpoint === 'state') return snapshot
-    if (body.endpoint === 'history') return { conversationId: body.conversationId, membershipEpoch: 'epoch', events: [] }
+    if (body.endpoint === 'history') return { conversationId: body.conversationId, membershipEpoch: 'epoch', events: history }
     if (body.endpoint === 'read') return {}
     return handle(body)
   }
@@ -301,4 +301,48 @@ test('an uncertain group creation reuses its persisted operation ID after a full
     assert.deepEqual(persisted, [])
     assert.equal(doc.querySelector('.bt-comm-main h2').textContent, 'Shared group')
   })
+})
+
+
+test('member permissions explain authorized delegation for both Bot modes without permitting passive tool initiation', async () => {
+  const snapshot = state()
+  snapshot.conversations = [{ ...membership, info: { members: [...membership.info.members,
+    { principalId: 'bot:a:passive', displayName: 'Passive', kind: 'bot', role: 'member', speakingMode: 'passive' },
+    { principalId: 'bot:a:active', displayName: 'Active', kind: 'bot', role: 'member', speakingMode: 'active' },
+  ] } }]
+  await pane({ snapshot }, async ({ doc, click, calls }) => {
+    await click('Shared group')
+    const drawer = doc.querySelector('.bt-comm-members')
+    assert.match(drawer.textContent, /Both Bot modes may @mention current group Bots in an authorized final reply/)
+    assert.match(drawer.textContent, /Reply-only Bots cannot initiate messages or send proactively with tools/)
+    assert.match(drawer.textContent, /Active Bots may also initiate with tools/)
+    assert.match(drawer.textContent, /delegation chains stop at the server’s finite limit/)
+    const modes = [...drawer.querySelectorAll('select[aria-label="Speaking permission"]')].map(node => node.value)
+    assert.ok(modes.includes('passive'))
+    assert.ok(modes.includes('active'))
+    assert.equal(calls.some(call => ['send', 'policy'].includes(call.endpoint)), false)
+  })
+})
+
+
+test('causal-limit stops render once outside chat from canonical history or an accepted ACK without automatic retry', async () => {
+  const message = { messageId: 'stopped-message', author: { principalId: 'bot:a:one', displayName: 'One' }, content: { text: 'Original final reply remains visible' }, mentions: [], replyToMessageId: null }
+  const causality = { rootMessageId: 'human-root', parentMessageId: 'previous-bot', depth: 8 }
+  const event = { type: 'message', eventId: 'stopped-event', conversationSeq: 2, serverAcceptedAt: '2026-11-04T00:00:00Z', message, causality, dispatchSuppressed: 'CAUSAL_LIMIT' }
+  for (const history of [[event], []]) {
+    const snapshot = state(); snapshot.conversations = [membership]
+    snapshot.outbox = [{ id: message.messageId, type: 'message.publish', conversationId: 'group', state: 'accepted', text: message.content.text, deliveries: [], result: { conversationSeq: 2, causality, dispatchSuppressed: 'CAUSAL_LIMIT' } }]
+    await pane({ snapshot, history }, async ({ doc, calls, click }) => {
+      await click('Shared group')
+      const feedback = doc.querySelector('.bt-comm-feedback')
+      assert.equal(feedback.querySelectorAll('[data-causal-stop]').length, 1)
+      assert.match(feedback.textContent, /Bot collaboration stopped at the safety limit. Send a new Human message to continue/)
+      assert.equal(feedback.querySelector('button'), null)
+      assert.doesNotMatch(doc.querySelector('.bt-comm-log').textContent, /safety limit/)
+      assert.equal(doc.querySelector('article[data-failed=true]'), null)
+      if (history.length) assert.match(doc.querySelector('.bt-comm-log').textContent, /Original final reply remains visible/)
+      assert.equal(calls.some(call => ['send', 'retry'].includes(call.endpoint)), false)
+      assert.equal(message.content.text, 'Original final reply remains visible')
+    })
+  }
 })

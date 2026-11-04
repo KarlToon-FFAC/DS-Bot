@@ -2,8 +2,9 @@ import { createHash } from 'node:crypto'
 
 export const PROTOCOL = 'dsbot-communication/1'
 export const CAPABILITIES = ['text', 'markdown', 'mentions', 'group', 'dm', 'reply', 'history', 'group-policy', 'membership-epoch']
+export const HUB_CAPABILITIES = [...CAPABILITIES, 'bounded-bot-collaboration']
 export const DEFAULT_LIMITS = { maxTextBytes: 65536, maxEnvelopeBytes: 131072, maxMembers: 64, maxPendingDeliveries: 10000,
-  maxPrincipals: 64, maxMembershipsPerInstance: 64, maxPendingInvitesPerInstance: 64 }
+  maxPrincipals: 64, maxMembershipsPerInstance: 64, maxPendingInvitesPerInstance: 64, maxCausalDepth: 8, maxAiDeliveriesPerRoot: 32 }
 
 export class CommunicationError extends Error {
   constructor(code, message = code, details) { super(message); this.code = code; this.details = details }
@@ -42,9 +43,12 @@ export function normalizeMessage(input, author, limits) {
   requireThat(typeof input.clientCreatedAt === 'string' && input.clientCreatedAt.length <= 64 && Number.isFinite(Date.parse(input.clientCreatedAt)), 'INVALID_REQUEST')
   if (input.replyToMessageId !== null) identifier(input.replyToMessageId)
   if (input.responseToDeliveryId !== undefined) identifier(input.responseToDeliveryId)
+  if (input.causationDeliveryId !== undefined) identifier(input.causationDeliveryId)
+  requireThat(['causality','rootMessageId','parentMessageId','depth','dispatchSuppressed'].every(key => !Object.hasOwn(input,key)), 'INVALID_CAUSALITY')
   if (input.membershipEpoch !== undefined) identifier(input.membershipEpoch)
   return { protocol: PROTOCOL, type: 'message.publish', messageId: input.messageId, conversationId: input.conversationId,
     author, clientCreatedAt: input.clientCreatedAt, content: { format: input.content.format, text: input.content.text }, mentions,
     replyToMessageId: input.replyToMessageId, ...(input.responseToDeliveryId === undefined ? {} : { responseToDeliveryId: input.responseToDeliveryId }),
+    ...(input.causationDeliveryId === undefined ? {} : { causationDeliveryId: input.causationDeliveryId }),
     ...(input.membershipEpoch === undefined ? {} : { membershipEpoch: input.membershipEpoch }) }
 }
