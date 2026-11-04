@@ -29,6 +29,7 @@ export class HubStore {
       CREATE TABLE IF NOT EXISTS invites (id TEXT PRIMARY KEY, conversation_id TEXT NOT NULL REFERENCES conversations(id), principal_id TEXT NOT NULL REFERENCES principals(id), inviter_id TEXT NOT NULL REFERENCES principals(id), active INTEGER NOT NULL DEFAULT 1);
       CREATE TABLE IF NOT EXISTS cursors (conversation_id TEXT NOT NULL, principal_id TEXT NOT NULL, membership_epoch TEXT NOT NULL, seq INTEGER NOT NULL, PRIMARY KEY(conversation_id,principal_id,membership_epoch));
       CREATE TABLE IF NOT EXISTS instance_addresses (instance_id TEXT PRIMARY KEY REFERENCES instances(id), address TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS hub_instance_names (instance_id TEXT PRIMARY KEY REFERENCES instances(id), label TEXT NOT NULL, version INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS principal_preferences (principal_id TEXT PRIMARY KEY REFERENCES principals(id), display_name TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS principal_profiles (principal_id TEXT PRIMARY KEY REFERENCES principals(id), default_name TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS principal_publication (principal_id TEXT PRIMARY KEY REFERENCES principals(id), published INTEGER NOT NULL CHECK(published IN (0,1)));
@@ -83,7 +84,8 @@ export class HubStore {
     requireThat(Array.isArray(capabilities)&&CAPABILITIES.every(capability => capabilities.includes(capability)), 'UNSUPPORTED_CAPABILITY')
     return this.transaction(() => {
       requireThat(this.db.prepare('SELECT trusted FROM instances WHERE id=?').get(instanceId)?.trusted!==0,'UNAUTHENTICATED')
-      this.db.prepare('INSERT INTO instances(id,label) VALUES (?,?) ON CONFLICT(id) DO UPDATE SET label=excluded.label').run(instanceId, String(label ?? instanceId).slice(0,256))
+      const named = this.db.prepare('SELECT label FROM hub_instance_names WHERE instance_id=?').get(instanceId)
+      this.db.prepare('INSERT INTO instances(id,label) VALUES (?,?) ON CONFLICT(id) DO UPDATE SET label=excluded.label').run(instanceId, named?.label ?? String(label ?? instanceId).slice(0,256))
       this.db.prepare('UPDATE instances SET epoch=epoch+1 WHERE id=?').run(instanceId)
       return { instanceId, epoch: this.db.prepare('SELECT epoch FROM instances WHERE id=?').get(instanceId).epoch,
         protocol: PROTOCOL, capabilities: HUB_CAPABILITIES, limits: this.limits }
@@ -97,7 +99,10 @@ export class HubStore {
       const old=this.db.prepare('SELECT pairing_revision FROM instances WHERE id=?').get(instanceId)
       requireThat(!old||revision>=old.pairing_revision,'STALE_PAIRING_REVISION')
       if(!old)this.db.prepare('INSERT INTO instances(id,label,pairing_revision) VALUES (?,?,?)').run(instanceId,String(label??instanceId).slice(0,256),revision)
-      else if(revision>old.pairing_revision)this.db.prepare('UPDATE instances SET trusted=1,epoch=epoch+1,pairing_revision=?,label=? WHERE id=?').run(revision,String(label??instanceId).slice(0,256),instanceId)
+      else if(revision>old.pairing_revision){
+        const named=this.db.prepare('SELECT label FROM hub_instance_names WHERE instance_id=?').get(instanceId)
+        this.db.prepare('UPDATE instances SET trusted=1,epoch=epoch+1,pairing_revision=?,label=? WHERE id=?').run(revision,named?.label??String(label??instanceId).slice(0,256),instanceId)
+      }
     })
   }
   check(auth) {

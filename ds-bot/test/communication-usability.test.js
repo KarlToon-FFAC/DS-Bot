@@ -716,6 +716,8 @@ test('routine failures, queues and reconciliation have no bottom console and act
 test('Hub management uses only the advertised enabled URL and explains unavailable or unsafe entries', async () => {
   const snapshot = { ...state(), hubUrl: 'wss://hub.example.test:3190/communication', managementAvailable: true, managementUrl: 'https://manage.example.test:9443/admin/' }
   await pane({ snapshot }, async ({ doc, calls, click }) => {
+    assert.equal(doc.querySelector('.bt-comm-nav a.bt-comm-admin-link'), null)
+    assert.doesNotMatch(doc.querySelector('.bt-comm-nav').textContent, /Open Hub management|Hub management/)
     await click('Personal settings')
     const link = doc.querySelector('.bt-comm-personal-settings a.bt-comm-admin-link')
     assert.equal(link.href, snapshot.managementUrl)

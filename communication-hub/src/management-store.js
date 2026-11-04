@@ -134,7 +134,23 @@ export class HubManagement {
       return { requestId: row.id, status: 'approved', instanceId: id }
     })
   }
-  instances() { return this.db.prepare('SELECT i.id instanceId,i.label,i.trusted,i.pairing_revision pairingRevision,p.revision FROM instances i LEFT JOIN hub_enrolled_peers p ON p.instance_id=i.id ORDER BY i.id').all() }
+  instances() { return this.db.prepare('SELECT i.id instanceId,i.label,i.trusted,i.pairing_revision pairingRevision,p.revision,coalesce(n.version,0) nameVersion FROM instances i LEFT JOIN hub_enrolled_peers p ON p.instance_id=i.id LEFT JOIN hub_instance_names n ON n.instance_id=i.id ORDER BY i.id').all() }
+  rename(input) {
+    requireThat(input && typeof input === 'object' && !Array.isArray(input) && Object.keys(input).every(key => ['instanceId', 'label', 'expectedNameVersion'].includes(key)), 'INVALID_REQUEST')
+    identifier(input.instanceId)
+    requireThat(typeof input.label === 'string' && input.label.trim().length > 0 && input.label.length <= 100 && !/[\u0000-\u001f\u007f]/.test(input.label), 'INVALID_REQUEST')
+    requireThat(Number.isSafeInteger(input.expectedNameVersion) && input.expectedNameVersion >= 0, 'INVALID_REQUEST')
+    return this.store.transaction(() => {
+      const row = this.db.prepare('SELECT i.id,coalesce(n.version,0) version FROM instances i LEFT JOIN hub_instance_names n ON n.instance_id=i.id WHERE i.id=?').get(input.instanceId)
+      requireThat(row, 'INSTANCE_NOT_FOUND')
+      requireThat(row.version === input.expectedNameVersion, 'INSTANCE_NAME_VERSION_CONFLICT')
+      const label = input.label.trim(), version = row.version + 1
+      this.db.prepare('INSERT INTO hub_instance_names VALUES (?,?,?) ON CONFLICT(instance_id) DO UPDATE SET label=excluded.label,version=excluded.version').run(row.id, label, version)
+      this.db.prepare('UPDATE instances SET label=? WHERE id=?').run(label, row.id)
+      this.audit('admin.instance.rename', row.id)
+      return { instanceId: row.id, label, nameVersion: version }
+    })
+  }
   revoke(instanceId) { identifier(instanceId); const result = this.store.revokeInstance(instanceId); this.audit('instance.revoke', instanceId); return result }
   repair(input) {
     identifier(input.instanceId)

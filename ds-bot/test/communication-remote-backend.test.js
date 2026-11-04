@@ -49,10 +49,10 @@ test('reconciliation loads Bot-only participants without exposing that conversat
     const principalId = runtime.bots.get('one').principalId
     runtime.queue.applyMemberships({ memberships: [{ principalId, conversationId: 'bot-only', membershipEpoch: 'epoch', membershipVersion: 1, joinSeq: 1, watermark: 1, active: 1 }], invites: [] })
     const calls = []
-    let displayName = 'One'
+    let displayName = 'One', instanceLabel = 'Original device'
     runtime.transport.request = async (type, payload) => {
       calls.push({ type, payload })
-      if (type === 'contacts.list') return [{ principalId, kind: 'bot', displayName }]
+      if (type === 'contacts.list') return [{ principalId, kind: 'bot', displayName, instanceLabel }]
       if (type === 'conversation.members') return { membershipVersion: 1, members: [{ principalId }] }
       assert.fail(`Unexpected request: ${type}`)
     }
@@ -61,9 +61,11 @@ test('reconciliation loads Bot-only participants without exposing that conversat
     assert.deepEqual(calls[1], { type: 'conversation.members', payload: { conversationId: 'bot-only', principalId, membershipEpoch: 'epoch' } })
     assert.equal(runtime.conversations.get('bot-only').members[0].principalId, principalId)
     assert.deepEqual(runtime.snapshot().conversations, [])
-    displayName = 'Renamed'
+    displayName = 'Renamed'; instanceLabel = 'Renamed device'
     await runtime.transport.onChange()
     assert.equal(runtime.conversations.get('bot-only').members[0].displayName, 'Renamed')
+    assert.equal(runtime.contacts[0].instanceLabel, 'Renamed device')
+    assert.equal(runtime.conversations.get('bot-only').members[0].instanceLabel, 'Renamed device')
     assert.equal(calls.filter(call => call.type === 'conversation.members').length, 1)
   } finally { CommunicationTransport.prototype.start = start; await runtime?.close() }
 })

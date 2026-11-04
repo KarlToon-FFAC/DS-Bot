@@ -52,10 +52,11 @@ test('approval assigns stable Human, user code and persistent dynamic peer; revo
   let store = new HubStore(join(dir, 'hub.sqlite')), m = new HubManagement(store), device = enroll(m)
   t.after(() => { store.close(); rmSync(dir, { recursive: true, force: true }) })
   const code = m.code(device.auth, { principalId: device.principalId }), hubId = m.hubId
+  m.rename({ instanceId: device.auth.instanceId, label: 'Renamed enrolled device', expectedNameVersion: 0 })
   store.close(); store = new HubStore(join(dir, 'hub.sqlite')); m = new HubManagement(store)
   assert.equal(m.hubId, hubId); assert.ok(m.peer(device.auth.instanceId))
   const socket = {}, challenge = m.challenge(socket, { purpose: 'login', instanceId: device.auth.instanceId })
-  assert.equal(m.prove(socket, proof(device.key, challenge)).instanceId, device.auth.instanceId)
+  assert.deepEqual(m.prove(socket, proof(device.key, challenge)), { instanceId: device.auth.instanceId, label: 'Renamed enrolled device' })
   assert.equal(m.code(device.auth, { principalId: device.principalId }).userCode, code.userCode)
   m.revoke(device.auth.instanceId)
   assert.throws(() => m.challenge(socket, { purpose: 'login', instanceId: device.auth.instanceId }), { code: 'UNAUTHENTICATED' })

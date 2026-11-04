@@ -53,7 +53,8 @@ authoritative if you change the port or public origin. This starter is loopback
 only. For other machines, configure reachable trusted WSS/TLS as described below.
 The existing `config.example.json` keeps management disabled for static-peer
 compatibility; starting that file alone does not enable an administrator page.
-The client exposes a **Hub management** entry and uses only an actual management
+The client exposes **Personal settings (sidebar gear) → Hub management**, with no
+permanent Hub link in the sidebar, and uses only an actual management
 URL advertised by an enabled Hub. Old or disabled Hubs show setup guidance rather
 than inventing a working page. Opening a link does not start the Hub or sign in.
 
@@ -97,7 +98,7 @@ memberships. Reconnecting or sharing a public code cannot undo revocation.
 The local Human CLI `dsbot-remote` covers these device, contact, profile and
 publication operations; run `help` for exact JSON schemas. Administrative CLI:
 `node communication-hub/src/admin-cli.mjs --help` from the repository root.
-Supply `DSBOT_HUB_ADMIN_PASSWORD` privately for state/decide/revoke/repair commands.
+Supply `DSBOT_HUB_ADMIN_PASSWORD` privately for state/decide/revoke/repair/rename commands.
 These administrative operations do not belong to a Bot or group owner.
 See [management design](../docs/plans/federated-communication/management-design.md)
 and the [final acceptance matrix](../docs/plans/federated-communication/follow-up-matrix.md).
@@ -215,3 +216,20 @@ retains the owner ID. After explicit re-pairing, only that exact identity can us
 `group.reclaim` to join with a fresh epoch/history boundary. Admins never inherit
 ownership automatically; dissolved groups cannot be reclaimed. There is no
 impersonation or administrative takeover backdoor.
+
+### Rename an instance
+
+Sign in at `/admin/`, find the instance under **Devices**, edit **Instance name**
+and select **Save name**. Only the Hub administrator may do this; group roles and
+pairing credentials do not grant access. Names are display metadata: immutable
+instance/principal IDs, user codes, memberships, trust and history stay intact.
+Connected clients update their contacts and group member labels through normal
+synchronization. The name survives Hub restart and static/enrolled reconnects,
+even if an old static peer configuration still has the original label.
+
+Administrative CLI `rename` reads an explicitly named JSON file with
+`{"instanceId":"...","label":"Office device","expectedNameVersion":0}`.
+Use the current `nameVersion` from admin `state`. A competing edit returns
+`INSTANCE_NAME_VERSION_CONFLICT`; refresh before deciding another edit. Supply the
+administrator password privately through `DSBOT_HUB_ADMIN_PASSWORD`, never argv.
+Do not use the Human communication CLI or a Bot tool as administrator authority.

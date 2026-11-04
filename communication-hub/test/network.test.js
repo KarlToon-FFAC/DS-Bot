@@ -23,6 +23,24 @@ const makeClient=(id,url,path=':memory:')=>{
   const client=new CommunicationTransport(queue,{url,credential:credentials[id],requestTimeout:4000})
   return {queue,client}
 }
+
+test('a paired instance and group owner cannot rename devices; only the separate authenticated admin route can', async () => {
+  const password = 'synthetic-test-device-name-password'
+  const hub = await startHub({ databasePath: ':memory:', port: 0, peers, management: { enabled: true, password } })
+  const a = makeClient('a', hub.url)
+  try {
+    await a.client.connect()
+    const principalId = (await a.client.request('principal.register', { localId: 'owner', kind: 'human', displayName: 'Owner' })).principalId
+    await a.client.request('group.create', op({ principalId, title: 'Owner has no Hub administrator authority' }))
+    await assert.rejects(a.client.request('instance.rename', { instanceId: 'b', label: 'Unauthorized', expectedNameVersion: 0 }), { code: 'UNKNOWN_OPERATION' })
+    const url = new URL('/admin/api/rename', hub.managementUrl)
+    const request = credential => fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + credential }, body: JSON.stringify({ instanceId: 'b', label: 'Administrator approved', expectedNameVersion: 0 }), redirect: 'error' })
+    assert.equal((await request(credentials.a)).status, 401)
+    assert.equal(hub.management.instances().find(item => item.instanceId === 'b').label, 'b')
+    assert.equal((await request(password)).status, 200)
+    assert.equal(hub.management.instances().find(item => item.instanceId === 'b').label, 'Administrator approved')
+  } finally { a.client.stop(); a.queue.close(); await hub.close() }
+})
 async function ipc(child,type){
   return new Promise((resolve,reject)=>{
     const timeout=setTimeout(()=>{cleanup();reject(new Error(`Child ${type} timed out`))},15000)

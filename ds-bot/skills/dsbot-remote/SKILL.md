@@ -448,3 +448,21 @@ Bot activation/causal roots. Membership, join boundaries and synchronized histor
 still apply; an unavailable ancestor is reported without its content. Use the
 existing `send` / `send_contact_message` with `replyToMessageId` to reply. Never
 supply a sender or invent a root to bypass authorization or the Bot loop limit.
+
+## Hub instance display names (Human administrator only)
+
+The permanent sidebar has no Hub management link. Open Personal settings (gear),
+then Hub management; this uses the enabled Hub's actual advertised URL. Sign in
+as its administrator, find the immutable instance ID under Devices, edit Instance
+name and Save name. Pairing credentials or group owner/admin roles do not grant
+this authority. This cosmetic change preserves identity, trust, membership and
+history, and survives static/enrolled reconnect and Hub restart. Connected
+contacts/member labels update through normal synchronization.
+
+The separate administrative CLI is `node communication-hub/src/admin-cli.mjs
+<https-origin> rename <explicit-input.json>` with
+`{"instanceId":"...","label":"Office device","expectedNameVersion":0}`.
+Use the current `nameVersion` from admin state; refresh on a version conflict,
+never blindly overwrite another administrator's edit. The administrator supplies
+its existing password privately through `DSBOT_HUB_ADMIN_PASSWORD`; do not read,
+create or disclose it to a Bot. This skill grants no administrator authority.

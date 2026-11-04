@@ -84,10 +84,11 @@ export function createManagementHttp(management, { password, origin, onRevoke = 
       else if (path === '/admin/api/decide') value = management.decide(input)
       else if (path === '/admin/api/revoke') { value = await onRevoke(input.instanceId); management.audit('admin.instance.revoke', input.instanceId) }
       else if (path === '/admin/api/repair') value = management.repair(input)
+      else if (path === '/admin/api/rename') value = management.rename(input)
       else requireThat(false, 'UNKNOWN_OPERATION')
       send(res, 200, { ok: true, value })
     } catch (error) {
-      const code = ['INVALID_REQUEST', 'UNAUTHENTICATED', 'ORIGIN_REJECTED', 'RATE_LIMITED', 'PAYLOAD_TOO_LARGE', 'JOIN_VERSION_CONFLICT', 'PAIRING_REVISION_CONFLICT', 'UNKNOWN_OPERATION', 'ALREADY_ENROLLED', 'DIRECTORY_FULL'].includes(error.code) ? error.code : 'MANAGEMENT_UNAVAILABLE'
+      const code = ['INVALID_REQUEST', 'UNAUTHENTICATED', 'ORIGIN_REJECTED', 'RATE_LIMITED', 'PAYLOAD_TOO_LARGE', 'JOIN_VERSION_CONFLICT', 'PAIRING_REVISION_CONFLICT', 'INSTANCE_NOT_FOUND', 'INSTANCE_NAME_VERSION_CONFLICT', 'UNKNOWN_OPERATION', 'ALREADY_ENROLLED', 'DIRECTORY_FULL'].includes(error.code) ? error.code : 'MANAGEMENT_UNAVAILABLE'
       send(res, code === 'RATE_LIMITED' ? 429 : code === 'UNAUTHENTICATED' ? 401 : 400, { ok: false, error: { code } })
     }
     return true
