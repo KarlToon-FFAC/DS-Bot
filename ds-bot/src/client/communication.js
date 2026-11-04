@@ -12,6 +12,7 @@ import { CommunicationActivity } from './communication-activity.js'
 import { CommunicationThread } from './communication-thread.js'
 import { GearIcon } from './icons.js'
 import { communicationCSS } from './communication-styles.js'
+import { communicationFailure as friendly, operationOutcomeUncertain } from './communication-errors.js'
 
 const OPEN = 'ds-bot:communication:open', SELECTED = 'ds-bot:communication:selected'
 const OPERATION_IDS = 'ds-bot:communication:operation-ids'
@@ -25,28 +26,6 @@ export async function communicationRequest(body) {
   if (!result.ok) throw Object.assign(new Error(result.error?.code ?? 'COMMUNICATION_UNAVAILABLE'), { code: result.error?.code, phase: result.error?.phase })
   return result.value
 }
-const friendly = error => ({
-  INSTANCE_AUTHENTICATION_REQUIRED: 'This browser session needs the instance startup login.',
-  AMBIGUOUS_MENTION: 'Choose the exact participant in the mention picker.', UNKNOWN_MENTION: 'Choose a current participant to mention.',
-  PAYLOAD_TOO_LARGE: 'The message exceeds the text limit. Split it into separate messages.', UNSUPPORTED_CONTENT: 'Only text and Markdown are supported.',
-  OUTBOX_FULL: 'The send queue is full. Wait for the connection to recover.', NOT_A_MEMBER: 'You are no longer a member of this conversation.',
-  MEMBERSHIP_REVOKED: 'Your membership changed. Refresh the conversation.', FORBIDDEN: 'You do not have permission for this group operation.',
-  INVALID_REPLY_TARGET: 'That message is not an authorized reply target in this conversation.',
-  REFERENCE_NOT_AVAILABLE: 'The referenced message is outside your authorized history.',
-  SPEAKING_FORBIDDEN: 'You have read-only access to this group.', PASSIVE_REPLY_REQUIRED: 'This Bot can only reply to an authorized message.',
-  PASSIVE_REPLY_ONLY: 'This Bot can only reply to an authorized message.', GROUP_VERSION_CONFLICT: 'Group settings changed. Review the current members and try again.',
-  OWNER_TRANSFER_REQUIRED: 'Transfer ownership before leaving or removing the owner.', OWNER_RECLAIM_REQUIRED: 'Restore your retained ownership first.',
-  CONVERSATION_PENDING: 'The conversation is waiting for a connection.', COMMUNICATION_READ_ONLY: 'This instance is read-only.',
-  UNAUTHENTICATED: 'The Hub rejected this device. Ask the Hub owner to check its pairing.',
-  PEER_REVOKED: 'This device was unpaired. Ask the Hub owner to pair it again.',
-  AUTHORIZATION_PENDING: 'Membership is still syncing. Wait for the connection to recover.',
-  HISTORY_GAP: 'Some history is missing. Wait for synchronization before sending.',
-  STALE_CONNECTION: 'Another connection replaced this one. Close the duplicate instance and restart this one.',
-  UNSUPPORTED_CAPABILITY: 'This device and the Hub use incompatible versions. Update them to the same revision.',
-  BOUNDED_COLLABORATION_REQUIRED: 'Upgrade the Hub to support bounded Bot collaboration. Your queued messages are retained.',
-  TLS_REQUIRED: 'This Hub address requires a secure connection. Ask the Hub owner for its trusted WSS address.',
-}[error.code] ?? 'The action could not be confirmed. Refresh status before trying again.')
-
 const hubPairingExample = JSON.stringify({ peers: [{ instanceId: 'new-device', instanceLabel: 'New device', pairingRevision: 1, credentialEnv: 'DSBOT_HUB_NEW_DEVICE_CREDENTIAL' }] }, null, 2)
 const clientPairingExample = `communication:
   enabled: true
@@ -131,7 +110,7 @@ function GroupSettings({ member, contacts, operation, pendingSettings, operation
       if (revision.current === editedAt && (!pending || editedAt === 0)) setDraft(savedValues)
       setPending(null)
     } catch (error) {
-      if (token === generation.current) { setFailure(friendly(error)); setPending(error.code ? null : intent) }
+      if (token === generation.current) { setFailure(friendly(error)); setPending(operationOutcomeUncertain(error) ? intent : null) }
     } finally { if (token === generation.current) setSaving(false) }
   }
   const values = draft ?? groupSettingsValues(member)
@@ -293,7 +272,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
     let value
     try { value = await request({ endpoint, ...values, operationId: operationIds.current.get(operationKey) }) }
     catch (failure) {
-      if (failure.code) { operationIds.current.delete(operationKey); persist() }
+      if (!operationOutcomeUncertain(failure)) { operationIds.current.delete(operationKey); persist() }
       throw failure
     }
     if (value.status !== 'queued') { operationIds.current.delete(operationKey); persist() }

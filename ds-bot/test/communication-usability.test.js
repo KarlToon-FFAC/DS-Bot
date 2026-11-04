@@ -404,7 +404,7 @@ test('an uncertain group creation reuses its persisted operation ID after a full
   await pane({ snapshot, handle: async body => {
     assert.equal(body.endpoint, 'create-group')
     attempts.push(body)
-    if (attempts.length === 1) throw new TypeError('response lost')
+    if (attempts.length === 1) throw Object.assign(new Error('Hub ACK lost'),{code:'REQUEST_TIMEOUT'})
     snapshot.conversations = [membership]
     return { conversationId: 'group' }
   } }, async ({ doc, dom, click, edit, remount }) => {
@@ -830,5 +830,35 @@ test('background read acknowledgement denial clears stale history without a toas
     assert.equal(doc.querySelector('.bt-comm-toast'), null)
     assert.equal(doc.querySelector('.bt-comm-log article'), null)
     assert.equal(calls.some(body => body.endpoint === 'send'), false)
+  })
+})
+
+test('publication diagnostics retain real safe errors and refresh local settings without repeating a save', async()=>{
+  const snapshot=state();let mode='blocked',published=[],saves=0
+  await pane({snapshot,handle:async body=>{
+    if(body.endpoint==='available-bots')return {bots:[{id:'one',name:'One'}],publishedBotIds:published}
+    if(body.endpoint==='user-code')throw Object.assign(new Error('DO_NOT_DISPLAY_RAW_FAILURE'),{code:'COMMUNICATION_UNAVAILABLE'})
+    if(body.endpoint==='contact-requests'||body.endpoint==='contact-relations')return []
+    if(body.endpoint==='publish-bots'){
+      saves++
+      if(mode==='blocked')throw Object.assign(new Error('DO_NOT_DISPLAY_RAW_CONFIG'),{code:'CONFIG_EDIT_OVERLAID',phase:'COMMUNICATION_CONFIG_WRITE_FAILED'})
+      published=[...body.localBotIds];throw new TypeError('DO_NOT_DISPLAY_RAW_AFTER_SAVE')
+    }
+    assert.fail('Unexpected endpoint '+body.endpoint)
+  }},async({doc,click,calls,button})=>{
+    await click('Personal settings');await click('Manage contacts')
+    await act(async()=>[...doc.querySelectorAll('summary')].find(node=>node.textContent==='Published Bots').click())
+    assert.ok(doc.querySelector('.bt-comm-contact-manager details [data-local-bot-id="one"]'),'local publication state remains readable when Hub contact reads fail')
+    await act(async()=>doc.querySelector('.bt-comm-contact-manager details [data-local-bot-id="one"]').click())
+    await click('Save published Bots')
+    assert.match(doc.querySelector('.bt-comm-contact-manager .bt-comm-error').textContent,/CONFIG_EDIT_OVERLAID.*COMMUNICATION_CONFIG_WRITE_FAILED/)
+    assert.equal(saves,1);assert.doesNotMatch(doc.querySelector('.bt-comm-contact-manager').textContent,/DO_NOT_DISPLAY_RAW/)
+    mode='ack-lost';await click('Save published Bots');assert.equal(saves,2)
+    const refresh=[...doc.querySelectorAll('.bt-comm-contact-manager button')].find(node=>node.textContent==='Refresh status')
+    await act(async()=>refresh.click())
+    assert.equal(saves,2,'refresh performs reads only')
+    assert.equal(doc.querySelector('.bt-comm-contact-manager details [data-local-bot-id="one"]').checked,true)
+    assert.equal(button('Save published Bots').disabled,true,'effective config confirms the original save without another write')
+    assert.equal(calls.filter(call=>call.endpoint==='publish-bots').length,2)
   })
 })

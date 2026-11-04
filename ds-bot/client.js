@@ -42,6 +42,24 @@ module.exports = __toCommonJS(index_exports);
 // src/client/i18n.js
 var NAMESPACE = "ds-bot";
 var ZH = {
+  "This DSH runtime lacks the required isolated communication preset API. Check the supported DSH version.": "此 DSH 运行时缺少远程通信所需的隔离预设 API，请核对受支持的 DSH 版本。",
+  "An isolated communication preset is already registered. Check for duplicate DS Bot plugin instances; do not remove isolation.": "远程通信隔离预设已被注册，请检查是否重复加载 DS Bot 插件，勿移除隔离限制。",
+  "The stored communication database requires a different application version. Preserve the data and check the matching Hub/client versions.": "通信数据库与当前程序版本不匹配，请保留数据并核对 Hub 与客户端版本。",
+  "This runtime lacks a required Node built-in module. Use the supported Node and DSH versions.": "运行时缺少必要的 Node 内置模块，请使用受支持的 Node 与 DSH 版本。",
+  "Update this device and the Hub together: explicit Bot activation is required. Queued intents are retained.": "请将本实例和 Hub 一起升级，以支持结构化 Bot 唤醒。队列中的原始操作会保留。",
+  "The Hub connection was lost. Refresh status before retrying the same operation; it may already be committed.": "Hub 连接已断开。操作可能已完成，请先刷新状态；重试须沿用原操作。",
+  "The Hub response timed out. Refresh status before retrying the same operation; it may already be committed.": "等待 Hub 响应超时。操作可能已完成，请先刷新状态；重试须沿用原操作。",
+  "The Hub temporarily cannot store this operation. Its original request ID is retained.": "Hub 暂时无法保存操作，已保留原请求编号。",
+  "The Hub is busy. Its original request ID is retained.": "Hub 繁忙，已保留原请求编号。",
+  "Remote communication is not ready. Check connection status and refresh without repeating the operation.": "远程通信尚未就绪，请检查连接并刷新状态，不要重复提交操作。",
+  "This profile has no active Hub configuration. Check the approved device profile.": "当前资料没有生效的 Hub 配置，请核对已批准设备使用的资料。",
+  "The instance credential provider is unavailable. Restart with the intended private credential source; do not send its value.": "实例凭据提供器不可用。请使用原定的私密凭据来源重启，不要发送凭据值。",
+  "This DSH version has no supported configuration editor. Check the installed DSH version.": "此 DSH 版本缺少受支持的配置编辑器，请核对安装版本。",
+  "The active DS Bot configuration entry could not be identified. Check the loaded profile and plugin.": "无法确定当前 DS Bot 配置项，请核对已加载的资料与插件。",
+  "A home or command-line overlay blocks saving this setting. Review the launch configuration without exposing credentials.": "主目录或命令行覆盖阻止保存此设置，请检查启动配置，勿泄露凭据。",
+  "The configuration changed during reload. Refresh the published Bot selection before applying again.": "重载时配置发生变化，请先刷新已发布 Bot 状态。",
+  "The configuration plugin reloaded. Refresh the effective settings before applying again.": "配置插件已重载，请先刷新生效设置。",
+  "The configuration save could not be confirmed. Refresh the published Bot selection before applying again.": "无法确认配置保存结果，请先刷新已发布 Bot 状态。",
   "Hide replies": "收起回复",
   "Show {count} replies": "展开 {count} 条回复",
   "Device identity is saved locally. No request ID exists yet; access has not been requested from the Hub.": "设备身份已在本机保存，尚无申请编号，还未向 Hub 提交加入申请。",
@@ -21119,11 +21137,97 @@ function HumanProfile({ human, request, operation, onSaved, convertImage = avata
   );
 }
 
+// src/client/communication-errors.js
+var descriptions = {
+  HUB_TLS_UNTRUSTED: "The Hub certificate authority is not trusted. Verify its public CA fingerprint with the administrator and launch the app with NODE_EXTRA_CA_CERTS. Restart the app; keep TLS verification enabled.",
+  HUB_TLS_HOSTNAME_MISMATCH: "The Hub address does not match the certificate. Ask its administrator for a certificate covering this exact reachable hostname or IP.",
+  HUB_TLS_CERT_EXPIRED: "The Hub certificate has expired. Ask its administrator to renew it.",
+  HUB_TLS_CERT_TIME_INVALID: "The Hub certificate is not valid yet. Check both clocks and the certificate dates.",
+  HUB_CONNECTION_REFUSED: "The Hub refused the connection. Check its listening address and existing network routing with the administrator.",
+  HUB_CONNECTION_TIMEOUT: "The Hub connection timed out. Local code review does not establish reachability; check the actual address and network route.",
+  HUB_UNREACHABLE: "Cannot establish the Hub connection. Check its reachable WSS address and trusted certificate.",
+  INSTANCE_AUTHENTICATION_REQUIRED: "This browser session needs the instance startup login.",
+  AMBIGUOUS_MENTION: "Choose the exact participant in the mention picker.",
+  UNKNOWN_MENTION: "Choose a current participant to mention.",
+  PAYLOAD_TOO_LARGE: "The message exceeds the text limit. Split it into separate messages.",
+  UNSUPPORTED_CONTENT: "Only text and Markdown are supported.",
+  OUTBOX_FULL: "The send queue is full. Wait for the connection to recover.",
+  NOT_A_MEMBER: "You are no longer a member of this conversation.",
+  MEMBERSHIP_REVOKED: "Your membership changed. Refresh the conversation.",
+  FORBIDDEN: "You do not have permission for this group operation.",
+  INVALID_REPLY_TARGET: "That message is not an authorized reply target in this conversation.",
+  REFERENCE_NOT_AVAILABLE: "The referenced message is outside your authorized history.",
+  SPEAKING_FORBIDDEN: "You have read-only access to this group.",
+  PASSIVE_REPLY_REQUIRED: "This Bot can only reply to an authorized message.",
+  PASSIVE_REPLY_ONLY: "This Bot can only reply to an authorized message.",
+  GROUP_VERSION_CONFLICT: "Group settings changed. Review the current members and try again.",
+  OWNER_TRANSFER_REQUIRED: "Transfer ownership before leaving or removing the owner.",
+  OWNER_RECLAIM_REQUIRED: "Restore your retained ownership first.",
+  CONVERSATION_PENDING: "The conversation is waiting for a connection.",
+  COMMUNICATION_READ_ONLY: "This instance is read-only.",
+  UNAUTHENTICATED: "The Hub rejected this device. Ask the Hub owner to check its pairing.",
+  PEER_REVOKED: "This device was unpaired. Ask the Hub owner to pair it again.",
+  AUTHORIZATION_PENDING: "Membership is still syncing. Wait for the connection to recover.",
+  HISTORY_GAP: "Some history is missing. Wait for synchronization before sending.",
+  STALE_CONNECTION: "Another connection replaced this one. Close the duplicate instance and restart this one.",
+  UNSUPPORTED_CAPABILITY: "This device and the Hub use incompatible versions. Update them to the same revision.",
+  BOUNDED_COLLABORATION_REQUIRED: "Upgrade the Hub to support bounded Bot collaboration. Your queued messages are retained.",
+  EXPLICIT_ACTIVATION_REQUIRED: "Update this device and the Hub together: explicit Bot activation is required. Queued intents are retained.",
+  CONNECTION_LOST: "The Hub connection was lost. Refresh status before retrying the same operation; it may already be committed.",
+  REQUEST_TIMEOUT: "The Hub response timed out. Refresh status before retrying the same operation; it may already be committed.",
+  STORAGE_UNAVAILABLE: "The Hub temporarily cannot store this operation. Its original request ID is retained.",
+  BACKPRESSURE: "The Hub is busy. Its original request ID is retained.",
+  COMMUNICATION_UNAVAILABLE: "Remote communication is not ready. Check connection status and refresh without repeating the operation.",
+  COMMUNICATION_NOT_CONFIGURED: "This profile has no active Hub configuration. Check the approved device profile.",
+  CREDENTIAL_UNAVAILABLE: "The instance credential provider is unavailable. Restart with the intended private credential source; do not send its value.",
+  COMMUNICATION_PRESET_UNAVAILABLE: "This DSH runtime lacks the required isolated communication preset API. Check the supported DSH version.",
+  COMMUNICATION_PRESET_CONFLICT: "An isolated communication preset is already registered. Check for duplicate DS Bot plugin instances; do not remove isolation.",
+  SCHEMA_VERSION_UNSUPPORTED: "The stored communication database requires a different application version. Preserve the data and check the matching Hub/client versions.",
+  ERR_UNKNOWN_BUILTIN_MODULE: "This runtime lacks a required Node built-in module. Use the supported Node and DSH versions.",
+  CONFIG_EDITOR_UNAVAILABLE: "This DSH version has no supported configuration editor. Check the installed DSH version.",
+  CONFIG_ENTRY_UNAVAILABLE: "The active DS Bot configuration entry could not be identified. Check the loaded profile and plugin.",
+  CONFIG_EDIT_OVERLAID: "A home or command-line overlay blocks saving this setting. Review the launch configuration without exposing credentials.",
+  CONFIG_EDIT_ENTRY_CHANGED: "The configuration changed during reload. Refresh the published Bot selection before applying again.",
+  CONFIG_EDIT_NOT_ACTIVE: "The configuration plugin reloaded. Refresh the effective settings before applying again.",
+  COMMUNICATION_CONFIG_WRITE_FAILED: "The configuration save could not be confirmed. Refresh the published Bot selection before applying again.",
+  TLS_REQUIRED: "This Hub address requires a secure connection. Ask the Hub owner for its trusted WSS address."
+};
+var knownCommunicationFailure = (error) => Object.hasOwn(descriptions, error?.code ?? "");
+var communicationFailure = (error) => knownCommunicationFailure(error) ? t(descriptions[error.code]) + ` [${error.code}]` : t("The action could not be confirmed. Refresh status before trying again.");
+var definitive = /* @__PURE__ */ new Set([
+  "INSTANCE_AUTHENTICATION_REQUIRED",
+  "AMBIGUOUS_MENTION",
+  "UNKNOWN_MENTION",
+  "PAYLOAD_TOO_LARGE",
+  "UNSUPPORTED_CONTENT",
+  "NOT_A_MEMBER",
+  "MEMBERSHIP_REVOKED",
+  "FORBIDDEN",
+  "INVALID_REPLY_TARGET",
+  "REFERENCE_NOT_AVAILABLE",
+  "SPEAKING_FORBIDDEN",
+  "PASSIVE_REPLY_REQUIRED",
+  "PASSIVE_REPLY_ONLY",
+  "GROUP_VERSION_CONFLICT",
+  "OWNER_TRANSFER_REQUIRED",
+  "OWNER_RECLAIM_REQUIRED",
+  "INVALID_REQUEST",
+  "INVALID_OPERATION",
+  "UNAUTHENTICATED",
+  "PEER_REVOKED",
+  "MEMBERSHIP_LIMIT",
+  "BOT_NOT_PUBLISHED",
+  "CONTACT_REQUIRED",
+  "UNKNOWN_PRINCIPAL",
+  "OPERATION_ID_CONFLICT"
+]);
+var operationOutcomeUncertain = (error) => !definitive.has(error?.code);
+
 // src/client/communication-onboarding.js
 var import_react54 = require("react");
 var statuses = /* @__PURE__ */ new Set(["prepared", "pending", "approved", "rejected", "cancelled", "expired", "accepted"]);
 var statusLabel = (value) => t(statuses.has(value) ? value : "Status unavailable");
-var failureLabel2 = () => t("The action could not be confirmed. Refresh status before trying again.");
+var failureLabel2 = (error) => t(communicationFailure(error ?? {}));
 var enrollmentErrors = {
   HUB_TLS_UNTRUSTED: "The Hub certificate authority is not trusted. Verify its public CA fingerprint with the administrator and launch the app with NODE_EXTRA_CA_CERTS. Restart the app; keep TLS verification enabled.",
   HUB_TLS_HOSTNAME_MISMATCH: "The Hub address does not match the certificate. Ask its administrator for a certificate covering this exact reachable hostname or IP.",
@@ -21161,7 +21265,8 @@ var enrollmentPhases = {
 function enrollmentFailure(error) {
   const code = typeof error?.code === "string" && Object.hasOwn(enrollmentErrors, error.code) ? error.code : ["TimeoutError", "AbortError"].includes(error?.name) ? "REQUEST_TIMEOUT" : null;
   const phase = typeof error?.phase === "string" && Object.hasOwn(enrollmentPhases, error.phase) ? error.phase : null;
-  const message = code ? enrollmentErrors[code] : phase ? enrollmentPhases[phase] : "The action could not be confirmed. Refresh status before trying again.";
+  const shared2 = communicationFailure(error);
+  const message = code ? enrollmentErrors[code] : knownCommunicationFailure(error) ? shared2 : phase ? enrollmentPhases[phase] : shared2;
   return t(message) + (code || phase ? ` [${[code, phase].filter(Boolean).join(" · ")}]` : "");
 }
 function hubManagementAddress(value) {
@@ -21313,19 +21418,22 @@ function ContactManager({ request, operation, contacts, managementUrl }) {
   const generation = (0, import_react54.useRef)(0);
   const load = async () => {
     const token = generation.current;
-    const [ownCode, requests2, relations, available2] = await Promise.all([
+    const results = await Promise.allSettled([
       request({ endpoint: "user-code" }),
       request({ endpoint: "contact-requests" }),
       request({ endpoint: "contact-relations" }),
       request({ endpoint: "available-bots" })
     ]);
     if (token !== generation.current) return;
-    setCode(ownCode.userCode);
-    setData({ requests: requests2, relations, available: available2 });
-    setPublished(available2.publishedBotIds ?? []);
+    const [ownCode, requests2, relations, available2] = results.map((result) => result.status === "fulfilled" ? result.value : null);
+    if (ownCode) setCode(ownCode.userCode);
+    if (available2) setPublished(available2.publishedBotIds ?? []);
+    setData((previous) => ({ requests: requests2 ?? [], relations: relations ?? [], available: available2 ?? previous?.available ?? { bots: [], publishedBotIds: [] } }));
+    const failed = results.find((result) => result.status === "rejected");
+    if (failed) throw failed.reason;
   };
   (0, import_react54.useEffect)(() => {
-    void load().catch(() => setError(failureLabel2()));
+    void load().catch((failure) => setError(failureLabel2(failure)));
     return () => {
       generation.current += 1;
     };
@@ -21338,8 +21446,8 @@ function ContactManager({ request, operation, contacts, managementUrl }) {
     try {
       await work();
       if (token === generation.current) await load();
-    } catch {
-      if (token === generation.current) setError(failureLabel2());
+    } catch (failure) {
+      if (token === generation.current) setError(enrollmentFailure(failure));
     } finally {
       if (token === generation.current) setBusy(false);
     }
@@ -21351,6 +21459,10 @@ function ContactManager({ request, operation, contacts, managementUrl }) {
     "div",
     { className: "bt-comm-contact-manager" },
     adminLink(managementUrl),
+    (0, import_react54.createElement)("button", { type: "button", disabled: busy, onClick: () => {
+      void run2(async () => {
+      });
+    } }, t("Refresh status")),
     (0, import_react54.createElement)("h3", null, t("Your user code")),
     (0, import_react54.createElement)("p", { className: "bt-comm-user-code", tabIndex: 0 }, code || t("Loading…")),
     (0, import_react54.createElement)("p", { className: "bt-comm-reference" }, t("Share this code with the person you want to add. Both people choose which local Bots to share; none are selected by default.")),
@@ -21545,7 +21657,7 @@ ${conversation.conversationId}`,
 
 // src/client/communication-activity.js
 var import_react57 = require("react");
-function CommunicationActivity({ state, member, events, outbox, operations, operationPending, pendingAttempt, error, pollError, friendly: friendly2, labels, onRefresh, onRetry, onCopy, copyDisabled, busy }) {
+function CommunicationActivity({ state, member, events, outbox, operations, operationPending, pendingAttempt, error, pollError, friendly, labels, onRefresh, onRetry, onCopy, copyDisabled, busy }) {
   const failures = (state?.errors ?? []).filter((item) => !member || item.conversationId === member.conversationId);
   const exports = (state?.exportFailures ?? []).filter((item) => !member || item.conversationId === member.conversationId);
   const stops = collaborationStops(events, outbox);
@@ -21556,18 +21668,18 @@ function CommunicationActivity({ state, member, events, outbox, operations, oper
     member ? (0, import_react57.createElement)("p", { className: "bt-comm-reference" }, member.title ?? t("Private conversation")) : null,
     (0, import_react57.createElement)("button", { type: "button", disabled: busy, onClick: onRefresh }, t("Refresh status")),
     error ? notice(error) : null,
-    state?.error ? notice(friendly2({ code: state.error })) : null,
+    state?.error ? notice(friendly({ code: state.error })) : null,
     pollError ? notice(pollError) : null,
     pendingAttempt ? (0, import_react57.createElement)("section", null, notice("Send not confirmed. Retry the same message to avoid sending it twice."), (0, import_react57.createElement)("button", { type: "button", onClick: onRetry, disabled: busy }, t("Retry same send"))) : null,
     operationPending ? notice("An operation is not confirmed. Check status, then retry the same action.") : null,
-    operations.map((item) => (0, import_react57.createElement)("section", { key: item.id }, !member && item.conversationId ? (0, import_react57.createElement)("p", { className: "bt-comm-reference" }, item.conversationId) : null, notice(item.state === "failed" ? "Operation failed" : "Operation queued"), item.error ? notice(friendly2({ code: item.error })) : notice("Waiting for the Hub"))),
+    operations.map((item) => (0, import_react57.createElement)("section", { key: item.id }, !member && item.conversationId ? (0, import_react57.createElement)("p", { className: "bt-comm-reference" }, item.conversationId) : null, notice(item.state === "failed" ? "Operation failed" : "Operation queued"), item.error ? notice(friendly({ code: item.error })) : notice("Waiting for the Hub"))),
     outbox.filter((item) => item.state !== "accepted").map((item) => (0, import_react57.createElement)(
       "section",
       { key: item.id, "data-activity-message-id": item.id },
       !member && item.conversationId ? (0, import_react57.createElement)("p", { className: "bt-comm-reference" }, item.conversationId) : null,
       notice(item.state === "failed" ? "Send failed" : item.state === "accepted" ? "Hub accepted" : "Queued on this device"),
       (0, import_react57.createElement)("p", { className: "bt-comm-pending-text" }, item.text),
-      item.error ? notice(friendly2({ code: item.error })) : null,
+      item.error ? notice(friendly({ code: item.error })) : null,
       item.membershipEpoch && item.membershipEpoch !== member?.membershipEpoch ? notice("This record belongs to an earlier membership.") : null,
       (item.deliveries ?? []).filter((delivery) => delivery.recipientPrincipalId !== state?.humanPrincipalId).map((delivery) => (0, import_react57.createElement)("p", { key: delivery.deliveryId, className: "bt-comm-reference" }, `${labels.get(delivery.recipientPrincipalId) ?? t("Participant")}: ${t(deliveryPhase(delivery))}`)),
       item.state === "failed" ? (0, import_react57.createElement)("button", { type: "button", disabled: copyDisabled || busy, onClick: () => onCopy(item) }, t("Copy to draft")) : null
@@ -21904,35 +22016,6 @@ async function communicationRequest(body) {
   if (!result.ok) throw Object.assign(new Error(result.error?.code ?? "COMMUNICATION_UNAVAILABLE"), { code: result.error?.code, phase: result.error?.phase });
   return result.value;
 }
-var friendly = (error) => ({
-  INSTANCE_AUTHENTICATION_REQUIRED: "This browser session needs the instance startup login.",
-  AMBIGUOUS_MENTION: "Choose the exact participant in the mention picker.",
-  UNKNOWN_MENTION: "Choose a current participant to mention.",
-  PAYLOAD_TOO_LARGE: "The message exceeds the text limit. Split it into separate messages.",
-  UNSUPPORTED_CONTENT: "Only text and Markdown are supported.",
-  OUTBOX_FULL: "The send queue is full. Wait for the connection to recover.",
-  NOT_A_MEMBER: "You are no longer a member of this conversation.",
-  MEMBERSHIP_REVOKED: "Your membership changed. Refresh the conversation.",
-  FORBIDDEN: "You do not have permission for this group operation.",
-  INVALID_REPLY_TARGET: "That message is not an authorized reply target in this conversation.",
-  REFERENCE_NOT_AVAILABLE: "The referenced message is outside your authorized history.",
-  SPEAKING_FORBIDDEN: "You have read-only access to this group.",
-  PASSIVE_REPLY_REQUIRED: "This Bot can only reply to an authorized message.",
-  PASSIVE_REPLY_ONLY: "This Bot can only reply to an authorized message.",
-  GROUP_VERSION_CONFLICT: "Group settings changed. Review the current members and try again.",
-  OWNER_TRANSFER_REQUIRED: "Transfer ownership before leaving or removing the owner.",
-  OWNER_RECLAIM_REQUIRED: "Restore your retained ownership first.",
-  CONVERSATION_PENDING: "The conversation is waiting for a connection.",
-  COMMUNICATION_READ_ONLY: "This instance is read-only.",
-  UNAUTHENTICATED: "The Hub rejected this device. Ask the Hub owner to check its pairing.",
-  PEER_REVOKED: "This device was unpaired. Ask the Hub owner to pair it again.",
-  AUTHORIZATION_PENDING: "Membership is still syncing. Wait for the connection to recover.",
-  HISTORY_GAP: "Some history is missing. Wait for synchronization before sending.",
-  STALE_CONNECTION: "Another connection replaced this one. Close the duplicate instance and restart this one.",
-  UNSUPPORTED_CAPABILITY: "This device and the Hub use incompatible versions. Update them to the same revision.",
-  BOUNDED_COLLABORATION_REQUIRED: "Upgrade the Hub to support bounded Bot collaboration. Your queued messages are retained.",
-  TLS_REQUIRED: "This Hub address requires a secure connection. Ask the Hub owner for its trusted WSS address."
-})[error.code] ?? "The action could not be confirmed. Refresh status before trying again.";
 var hubPairingExample = JSON.stringify({ peers: [{ instanceId: "new-device", instanceLabel: "New device", pairingRevision: 1, credentialEnv: "DSBOT_HUB_NEW_DEVICE_CREDENTIAL" }] }, null, 2);
 var clientPairingExample = `communication:
   enabled: true
@@ -22071,8 +22154,8 @@ function GroupSettings({ member, contacts, operation, pendingSettings, operation
       setPending(null);
     } catch (error) {
       if (token === generation.current) {
-        setFailure(friendly(error));
-        setPending(error.code ? null : intent);
+        setFailure(communicationFailure(error));
+        setPending(operationOutcomeUncertain(error) ? intent : null);
       }
     } finally {
       if (token === generation.current) setSaving(false);
@@ -22231,7 +22314,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
           setPollError("");
         }
       } catch (failure) {
-        if (active) setPollError(friendly(failure));
+        if (active) setPollError(communicationFailure(failure));
       }
       if (active) timer = setTimeout(() => {
         void poll();
@@ -22334,7 +22417,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
     }).catch((failure) => {
       if (active) {
         setPage(null);
-        setSyncError({ conversationId: selected, message: friendly(failure) });
+        setSyncError({ conversationId: selected, message: communicationFailure(failure) });
       }
     });
     return () => {
@@ -22347,7 +22430,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
     const mark = () => {
       if (document.visibilityState === "visible" && document.hasFocus()) void request({ endpoint: "read", conversationId: selected, seq: page.events.at(-1).conversationSeq }).catch((failure) => {
         if (!active) return;
-        setSyncError({ conversationId: selected, message: friendly(failure) });
+        setSyncError({ conversationId: selected, message: communicationFailure(failure) });
         if (["FORBIDDEN", "NOT_A_MEMBER", "MEMBERSHIP_REVOKED"].includes(failure.code)) setPage(null);
       });
     };
@@ -22374,7 +22457,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
     try {
       value = await request({ endpoint, ...values, operationId: operationIds.current.get(operationKey) });
     } catch (failure) {
-      if (failure.code) {
+      if (!operationOutcomeUncertain(failure)) {
         operationIds.current.delete(operationKey);
         persist();
       }
@@ -22388,7 +22471,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
     try {
       refreshedState = await refresh();
     } catch (failure) {
-      setPollError(friendly(failure));
+      setPollError(communicationFailure(failure));
     }
     return { ...value, refreshedState };
   };
@@ -22399,7 +22482,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
     try {
       await work();
     } catch (failure) {
-      setError(friendly(failure));
+      setError(communicationFailure(failure));
     } finally {
       setBusy(false);
     }
@@ -22634,7 +22717,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
           pendingAttempt: attempts[key],
           error,
           pollError: pollError || (syncError?.conversationId === selected ? syncError.message : ""),
-          friendly,
+          friendly: communicationFailure,
           labels,
           busy,
           onRefresh: () => {

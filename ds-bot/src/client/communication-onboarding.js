@@ -2,10 +2,11 @@ import { createElement as h, Fragment, useEffect, useRef, useState } from 'react
 import { CommunicationAvatar } from './communication-profile.js'
 import { BotMark } from './mark.js'
 import { t } from './i18n.js'
+import { communicationFailure, knownCommunicationFailure } from './communication-errors.js'
 
 const statuses = new Set(['prepared', 'pending', 'approved', 'rejected', 'cancelled', 'expired', 'accepted'])
 const statusLabel = value => t(statuses.has(value) ? value : 'Status unavailable')
-const failureLabel = () => t('The action could not be confirmed. Refresh status before trying again.')
+const failureLabel = error => t(communicationFailure(error ?? {}))
 const enrollmentErrors = {
   HUB_TLS_UNTRUSTED: 'The Hub certificate authority is not trusted. Verify its public CA fingerprint with the administrator and launch the app with NODE_EXTRA_CA_CERTS. Restart the app; keep TLS verification enabled.',
   HUB_TLS_HOSTNAME_MISMATCH: 'The Hub address does not match the certificate. Ask its administrator for a certificate covering this exact reachable hostname or IP.',
@@ -43,7 +44,8 @@ const enrollmentPhases = {
 export function enrollmentFailure(error) {
   const code = typeof error?.code === 'string' && Object.hasOwn(enrollmentErrors, error.code) ? error.code : ['TimeoutError', 'AbortError'].includes(error?.name) ? 'REQUEST_TIMEOUT' : null
   const phase = typeof error?.phase === 'string' && Object.hasOwn(enrollmentPhases, error.phase) ? error.phase : null
-  const message = code ? enrollmentErrors[code] : phase ? enrollmentPhases[phase] : 'The action could not be confirmed. Refresh status before trying again.'
+  const shared = communicationFailure(error)
+  const message = code ? enrollmentErrors[code] : knownCommunicationFailure(error) ? shared : phase ? enrollmentPhases[phase] : shared
   return t(message) + (code || phase ? ` [${[code, phase].filter(Boolean).join(' · ')}]` : '')
 }
 export function hubManagementAddress(value) {
@@ -137,19 +139,24 @@ export function ContactManager({ request, operation, contacts, managementUrl }) 
   const generation = useRef(0)
   const load = async () => {
     const token = generation.current
-    const [ownCode, requests, relations, available] = await Promise.all([
+    const results = await Promise.allSettled([
       request({ endpoint: 'user-code' }), request({ endpoint: 'contact-requests' }), request({ endpoint: 'contact-relations' }), request({ endpoint: 'available-bots' }),
     ])
     if (token !== generation.current) return
-    setCode(ownCode.userCode); setData({ requests, relations, available }); setPublished(available.publishedBotIds ?? [])
+    const [ownCode, requests, relations, available] = results.map(result => result.status === 'fulfilled' ? result.value : null)
+    if (ownCode) setCode(ownCode.userCode)
+    if (available) setPublished(available.publishedBotIds ?? [])
+    setData(previous => ({ requests: requests ?? [], relations: relations ?? [], available: available ?? previous?.available ?? { bots: [], publishedBotIds: [] } }))
+    const failed = results.find(result => result.status === 'rejected')
+    if (failed) throw failed.reason
   }
-  useEffect(() => { void load().catch(() => setError(failureLabel())); return () => { generation.current += 1 } }, [request])
+  useEffect(() => { void load().catch(failure => setError(failureLabel(failure))); return () => { generation.current += 1 } }, [request])
   const run = async work => {
     if (busy) return
     const token = generation.current
     setBusy(true); setError('')
     try { await work(); if (token === generation.current) await load() }
-    catch { if (token === generation.current) setError(failureLabel()) }
+    catch (failure) { if (token === generation.current) setError(enrollmentFailure(failure)) }
     finally { if (token === generation.current) setBusy(false) }
   }
   const available = data?.available ?? { bots: [], publishedBotIds: [] }
@@ -157,6 +164,7 @@ export function ContactManager({ request, operation, contacts, managementUrl }) 
   const labelFor = id => contacts.find(person => person.principalId === id)?.displayName ?? id
   return h('div', { className: 'bt-comm-contact-manager' },
     adminLink(managementUrl),
+    h('button', { type: 'button', disabled: busy, onClick: () => { void run(async () => {}) } }, t('Refresh status')),
     h('h3', null, t('Your user code')), h('p', { className: 'bt-comm-user-code', tabIndex: 0 }, code || t('Loading…')),
     h('p', { className: 'bt-comm-reference' }, t('Share this code with the person you want to add. Both people choose which local Bots to share; none are selected by default.')),
     h('button', { type: 'button', disabled: busy || !code, onClick: () => { if (confirm !== 'rotate') setConfirm('rotate'); else { setConfirm(''); void run(() => operation('rotate-user-code', {})) } } }, t(confirm === 'rotate' ? 'Confirm code rotation' : 'Rotate user code')),

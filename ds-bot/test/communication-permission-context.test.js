@@ -76,3 +76,27 @@ test('ordinary owner/admin/member and DM operations retain their actual actors a
     assert.ok(!queue.pendingOutbox().some(item => ['member-denied', 'stale-denied'].includes(item.id)))
   } finally { queue.close(); store.close() }
 })
+
+test('group create with a lost Hub ACK reconciles the original ID to exactly one committed group', async()=>{
+  const store=new HubStore(':memory:'),queue=new CommunicationQueue(':memory:',{instanceId:'a'})
+  try{
+    const auth=store.connect('a','A',CAPABILITIES)
+    const human=queue.localPrincipal('human','user','Synthetic person')
+    store.register(auth,{localId:human.localId,kind:'human',displayName:human.displayName})
+    let first=true
+    const runtime=Object.assign(Object.create(CommunicationRuntime.prototype),{queue,conversations:new Map(),refreshConversation:async()=>{},transport:{connected:true,request:async(type,payload)=>{
+      if(type==='memberships.list')return store.memberships(auth)
+      assert.equal(type,'group.create')
+      const result=store.createGroup(auth,payload)
+      if(first){first=false;throw Object.assign(new Error('Synthetic ACK lost'),{code:'REQUEST_TIMEOUT'})}
+      return result
+    }}})
+    const values={title:'Exactly one synthetic group'},id='stable-group-create-intent'
+    await assert.rejects(runtime.operation(human.principalId,'group.create',values,id),{code:'REQUEST_TIMEOUT'})
+    assert.equal(queue.outboxStatus(id).state,'pending')
+    assert.equal(store.db.prepare("SELECT count(*) n FROM conversations WHERE kind='group'").get().n,1)
+    const recovered=await runtime.operation(human.principalId,'group.create',values,id)
+    assert.ok(recovered.conversationId);assert.equal(queue.outboxStatus(id).state,'accepted')
+    assert.equal(store.db.prepare("SELECT count(*) n FROM conversations WHERE kind='group'").get().n,1)
+  }finally{queue.close();store.close()}
+})
