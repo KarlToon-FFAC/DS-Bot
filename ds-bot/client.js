@@ -49,6 +49,50 @@ var ZH = {
   "Earlier message unavailable": "较早消息不可读",
   "The referenced message is outside your authorized history.": "引用的消息不在你的授权历史范围内。",
   "Communication": "通信",
+  "Not configured": "尚未配置",
+  "Connected to Hub": "已连接通信服务",
+  "Reconnecting to Hub": "正在重连通信服务",
+  "Connection needs attention": "连接需要处理",
+  "Connection status": "连接状态",
+  "Connection details": "连接详情",
+  "Refresh status": "刷新状态",
+  "Remote contacts": "远程联系人",
+  "This device": "本机实例",
+  "Your identity": "你的身份",
+  "Error code": "错误码",
+  "Close member settings": "关闭成员设置",
+  "New message": "发起私聊",
+  "New group": "创建群聊",
+  "Unread": "未读",
+  "Back to conversation": "返回会话",
+  "Cross-device conversations": "跨机器对话",
+  "Private conversation": "私聊会话",
+  "Start a conversation across devices": "开始跨机器对话",
+  "Pair this device to get started": "先配对这台设备",
+  "Ask the Hub owner to configure communication and pair this device.": "请通信服务的管理者为本机配置通信并完成配对。",
+  "Message a Human or Bot directly, or bring them together in a group.": "直接与人或 Bot 私聊，也可以邀请他们加入同一个群。",
+  "Local chats stay separate from communication conversations.": "本地对话与跨机器通信会话保持独立。",
+  "Your cross-device conversations will appear here.": "跨机器通信会话会显示在这里。",
+  "Remote contacts appear after the other device connects and publishes its identities.": "对方设备连接并发布身份后，远程联系人会显示在这里。",
+  "You will own this group. Invitees join after accepting.": "你将成为群主，受邀成员接受邀请后加入。",
+  "New members start read-only or reply-only. Change permissions in the member settings.": "新成员默认为只读或被动回复，可在成员设置中调整权限。",
+  "Group created. Some invitations were not sent. Open the member settings to invite them.": "群已创建，部分邀请未发出。请在成员设置中补充邀请。",
+  "Roles control group management. Speaking permissions control who can send.": "角色决定群管理权限，发言权限决定能否发送消息。",
+  "Reply-only Bots respond to admitted messages. Bots allowed to speak may also initiate messages.": "被动回复的 Bot 仅回应获准收取的消息，允许发言的 Bot 也可主动发送。",
+  "Queued messages send automatically when the connection returns.": "已排队的消息会在连接恢复后自动发送。",
+  "Waiting for the Hub": "等待通信服务",
+  "The action could not be confirmed. Refresh status before trying again.": "暂时无法确认操作结果，请刷新状态后再试。",
+  "The Hub rejected this device. Ask the Hub owner to check its pairing.": "通信服务拒绝了本机，请管理者检查配对配置。",
+  "This device was unpaired. Ask the Hub owner to pair it again.": "本机配对已撤销，请管理者重新配对。",
+  "Membership is still syncing. Wait for the connection to recover.": "成员资格仍在同步，请等待连接恢复。",
+  "Some history is missing. Wait for synchronization before sending.": "部分历史尚未同步完整，请等待同步后再发送。",
+  "Another connection replaced this one. Close the duplicate instance and restart this one.": "另一个连接替代了本机连接，请关闭重复实例后重启本机实例。",
+  "This device and the Hub use incompatible versions. Update them to the same revision.": "本机与通信服务的版本不兼容，请更新到同一版本。",
+  "This Hub address requires a secure connection. Ask the Hub owner for its trusted WSS address.": "此通信服务地址需要安全连接，请管理者提供可信的 WSS 地址。",
+  "Send not confirmed. Retry the same message to avoid sending it twice.": "尚未确认发送结果，请重试原消息以避免重复发送。",
+  "Enter to send · Shift+Enter for a new line": "Enter 发送 · Shift+Enter 换行",
+  "About message status": "消息状态说明",
+  "Stored means the destination saved the message. Read means a Human opened it. Bot admitted means processing was accepted, not that a reply is complete.": "落盘表示目标端已保存；已读表示人已打开；Bot 入箱表示已接受处理，不代表已经完成回复。",
   "Human": "人",
   "Local": "本地",
   "Remote": "远程",
@@ -10015,7 +10059,7 @@ function TeamSidebar(props) {
     "div",
     { className: wideContent ? "bt-side" : "bt-side bt-rail", onKeyDown: typeToSearch },
     top,
-    roster.communicationEnabled ? (0, import_react19.createElement)("button", { type: "button", className: "bt-soft", onClick: actions.openCommunication, "aria-label": t("Communication"), title: t("Communication") }, wideContent ? t("Communication") : "↔") : null,
+    (0, import_react19.createElement)("button", { type: "button", className: "bt-soft", onClick: actions.openCommunication, "aria-label": t("Communication"), title: t("Communication") }, wideContent ? t("Communication") : "↔"),
     wideContent && roster.readOnly ? (0, import_react19.createElement)("div", { className: "bt-hint bt-read-only", role: "status" }, hostText(roster.readOnly)) : null,
     (0, import_react19.createElement)(
       "div",
@@ -20667,6 +20711,112 @@ function conversationTitle(member, humanId, labels) {
   return member.kind === "group" ? member.title : member.info?.members.filter((person) => person.principalId !== humanId).map((person) => labels.get(person.principalId) ?? person.displayName).join(", ") || "Private message";
 }
 
+// src/client/communication-styles.js
+var communicationCSS = `
+.bt-comm-frame{position:fixed;inset:0;z-index:60;display:grid;grid-template-columns:288px minmax(0,1fr);background:var(--bt-main);color:var(--bt-ink);font:13px/18px var(--bt-font);pointer-events:auto;opacity:1;transition:opacity .16s ease}
+.bt-comm-frame[data-closing=true]{opacity:0;pointer-events:none}
+.bt-comm-frame *{box-sizing:border-box}
+.bt-comm-frame h2{font-size:15px;line-height:20px;margin:0;font-weight:600}
+.bt-comm-frame h3{font-size:13px;margin:8px 0}
+.bt-comm-frame p{margin:6px 0;overflow-wrap:anywhere}
+.bt-comm-frame button{min-height:32px;border:1px solid var(--bt-line);border-radius:8px;background:var(--bt-card);color:var(--bt-ink);padding:6px 10px;font:inherit;text-align:left;cursor:pointer;transition:background .12s}
+.bt-comm-frame button:hover{background:var(--bt-hover)}
+.bt-comm-frame button:disabled{opacity:.4;cursor:default}
+.bt-comm-frame :is(button,input,textarea,select,summary):focus-visible{outline:2px solid var(--bt-accent);outline-offset:2px}
+.bt-comm-frame :is(input:not([type=checkbox]),textarea,select){width:100%;min-width:0;border:1px solid var(--bt-line);border-radius:8px;padding:8px;background:var(--bt-card);color:var(--bt-ink);font:13px/18px var(--bt-font)}
+.bt-comm-frame textarea{resize:vertical;min-height:72px;max-height:180px;font-size:14px;line-height:22px}
+.bt-comm-frame code{font:12px/16px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;overflow-wrap:anywhere;user-select:text}
+.bt-comm-frame .bt-comm-primary{background:var(--bt-accent);border-color:var(--bt-accent);color:var(--bt-accent-ink)}
+.bt-comm-frame .bt-comm-primary:hover{background:color-mix(in srgb,var(--bt-accent) 88%,var(--bt-main))}
+.bt-comm-nav{background:var(--bt-sidebar);border-right:1px solid var(--bt-line);padding:20px 16px;overflow:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:12px;min-height:0}
+.bt-comm-nav-heading{display:flex;flex-direction:column;align-items:flex-start;gap:10px}
+.bt-comm-frame .bt-comm-back{border-color:transparent;background:transparent;padding:4px 0;font-size:12px;color:var(--bt-ink-2)}
+.bt-comm-connection{padding:12px;border:1px solid var(--bt-line);background:var(--bt-card);border-radius:12px}
+.bt-comm-connection-label{display:flex;align-items:center;gap:8px;font-weight:500}
+.bt-comm-dot{width:7px;height:7px;flex:0 0 7px;border-radius:50%;background:var(--bt-ink-3)}
+.bt-comm-connection-label[data-connected=true] .bt-comm-dot{background:var(--bt-green)}
+.bt-comm-connection>button{margin-top:6px;font-size:12px;min-height:28px}
+.bt-comm-frame .bt-comm-identity summary{font-size:12px;color:var(--bt-ink-2)}
+.bt-comm-start-actions{display:flex;gap:8px;flex-wrap:wrap}
+.bt-comm-nav>.bt-comm-start-actions>button{flex:1;text-align:center}
+.bt-comm-section-title{display:flex;justify-content:space-between;gap:8px;color:var(--bt-ink-2);font-size:12px;font-weight:500;margin-top:4px}
+.bt-comm-nav nav{display:flex;flex-direction:column;gap:4px}
+.bt-comm-nav nav button{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;border-color:transparent;background:transparent;overflow-wrap:anywhere}
+.bt-comm-nav nav button[aria-pressed=true]{background:var(--bt-active);border-color:var(--bt-line);font-weight:500}
+.bt-comm-conversation-name{min-width:0}
+.bt-comm-unread{flex-shrink:0;min-width:18px;text-align:center;padding:1px 5px;border-radius:12px;background:var(--bt-accent);color:var(--bt-accent-ink);font-size:11px;line-height:16px;font-variant-numeric:tabular-nums}
+.bt-comm-frame summary{cursor:pointer;min-height:28px;padding:4px 0;font-weight:500}
+.bt-comm-nav details>button{width:100%;margin:4px 0;overflow-wrap:anywhere}
+.bt-comm-frame .bt-comm-contact{text-align:left;font-size:12px;line-height:18px}
+.bt-comm-main{position:relative;min-width:0;min-height:0;display:flex;flex-direction:column;padding:20px 24px 16px;gap:12px}
+.bt-comm-main header{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0;flex-shrink:0}
+.bt-comm-heading{flex:1;min-width:0;overflow-wrap:anywhere}
+.bt-comm-main header>button{flex-shrink:0;font-size:12px}
+.bt-comm-main header p{margin:4px 0 0}
+.bt-comm-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:12px;padding:24px;max-width:560px;margin:auto;color:var(--bt-ink-2)}
+.bt-comm-empty h2{color:var(--bt-ink)}
+.bt-comm-empty p{max-width:420px;margin:0;line-height:22px}
+.bt-comm-empty-symbol{width:56px;height:56px;display:grid;place-items:center;border-radius:18px;background:var(--bt-bubble);color:var(--bt-ink-2);font-size:22px;line-height:34px}
+.bt-comm-log{flex:1;min-height:80px;overflow:auto;overscroll-behavior:contain;padding:8px 0;scrollbar-gutter:stable}
+.bt-comm-log:empty{display:none}
+.bt-comm-log article{max-width:min(880px,90%);padding:12px 16px;border-radius:18px;background:var(--bt-bubble);margin:12px 0;overflow-wrap:anywhere;font-size:14px;line-height:24px}
+.bt-comm-log article[data-self=true]{margin-left:auto;background:var(--bt-user);color:var(--bt-user-ink)}
+.bt-comm-log article[data-failed=true]{outline:1px solid var(--bt-danger);outline-offset:2px}
+.bt-comm-log article[data-referenced=true]{outline:2px solid var(--bt-accent);outline-offset:2px}
+.bt-comm-log strong{font-size:12px;line-height:16px;font-weight:500}
+.bt-comm-message-actions{display:flex;gap:12px;align-items:center;font-size:11px;line-height:16px;margin-top:8px}
+.bt-comm-message-actions button{min-height:28px;padding:3px 8px;font-size:12px}
+.bt-comm-reference,.bt-comm-event{font-size:12px;line-height:16px;color:var(--bt-ink-2)}
+.bt-comm-field{display:flex;flex-direction:column;gap:6px;margin:8px 0;font-size:12px;line-height:16px}
+.bt-comm-check{display:flex;gap:8px;align-items:flex-start;margin:10px 0;font-size:12px;line-height:18px;overflow-wrap:anywhere}
+.bt-comm-check input{width:16px;height:16px;flex-shrink:0;margin-top:1px}
+.bt-comm-mentions{display:flex;gap:4px;flex-wrap:wrap}
+.bt-comm-pending-text{white-space:pre-wrap}
+.bt-comm-members{flex-shrink:0;max-height:32vh;overflow:auto;overscroll-behavior:contain;border:1px solid var(--bt-line);border-radius:12px;padding:8px 12px}
+.bt-comm-members[open]{position:absolute;inset:0 0 0 auto;width:min(520px,100%);max-height:none;z-index:3;padding:20px 16px;background:var(--bt-card);border-radius:0;border-width:0 0 0 1px;box-shadow:-12px 0 40px color-mix(in srgb,var(--bt-ink) 8%,transparent)}
+.bt-comm-members[open]>summary{padding-right:124px;min-height:36px;color:var(--bt-ink);font-size:14px;line-height:22px}
+.bt-comm-frame .bt-comm-members-close{position:fixed;right:12px;top:16px;z-index:1;font-size:12px;margin:0}
+.bt-comm-members>summary{color:var(--bt-ink-2)}
+.bt-comm-members>.bt-comm-person{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:12px 0;border-bottom:1px solid var(--bt-line)}
+.bt-comm-person>span:first-child{flex:1 1 200px;overflow-wrap:anywhere;font-weight:500}
+.bt-comm-role{font-size:11px;line-height:16px;padding:2px 6px;border-radius:6px;background:var(--bt-tag-bg);color:var(--bt-tag-ink)}
+.bt-comm-person label{display:flex;flex-direction:column;gap:4px;min-width:120px;max-width:100%;flex:1 1 140px;font-size:12px;line-height:16px}
+.bt-comm-person button{flex:0 1 auto;font-size:12px}
+.bt-comm-members>.bt-comm-field{max-width:480px}
+.bt-comm-members>button{margin:4px 8px 4px 0}
+.bt-comm-frame .bt-comm-danger,.bt-comm-error{color:var(--bt-danger)}
+.bt-comm-main>.bt-comm-error{flex-shrink:0;font-size:12px;line-height:18px;margin:0}
+.bt-comm-main footer{flex-shrink:0;border-top:1px solid var(--bt-line);padding-top:8px}
+.bt-comm-main footer>button{background:var(--bt-accent);color:var(--bt-accent-ink);text-align:center;padding-inline:18px}
+.bt-comm-main footer>.bt-comm-reference{margin-left:12px}
+.bt-comm-main footer .bt-comm-field:has(select){max-width:420px}
+.bt-comm-status-help{margin-top:8px;font-size:12px;color:var(--bt-ink-2);max-height:112px;overflow:auto}
+.bt-comm-status-help summary{font-weight:400}
+.bt-comm-body>div{color:inherit!important;font-size:inherit!important;line-height:inherit!important}
+.bt-comm-log article[data-self=true] .bt-comm-reference{color:inherit;opacity:.8}
+.bt-comm-frame .bt-comm-mobile{display:none}
+@media(max-width:760px){
+  .bt-comm-frame{grid-template-columns:minmax(0,1fr)}
+  .bt-comm-nav{border-right:0;padding:16px;gap:12px}
+  .bt-comm-main{padding:12px;gap:10px}
+  .bt-comm-frame[data-browse=true] .bt-comm-main{display:none}
+  .bt-comm-frame[data-browse=false] .bt-comm-nav{display:none}
+  .bt-comm-frame .bt-comm-mobile{display:block}
+  .bt-comm-nav-heading{flex-direction:row;align-items:center;justify-content:space-between}
+  .bt-comm-frame[data-setup=true] .bt-comm-main{display:flex}
+  .bt-comm-frame[data-setup=true] .bt-comm-nav{display:none}
+  .bt-comm-main header{flex-wrap:wrap;gap:8px}
+  .bt-comm-heading{flex-basis:calc(100% - 130px);order:1}
+  .bt-comm-main header>button:last-child{order:2}
+  .bt-comm-main header>.bt-comm-mobile{flex-basis:auto}
+  .bt-comm-log article{max-width:96%;padding:10px 12px}
+  .bt-comm-main footer>.bt-comm-reference{display:block;margin:8px 0 0}
+  .bt-comm-person>span:first-child{flex-basis:70%}
+  .bt-comm-main footer textarea{max-height:120px}
+}
+@media(prefers-reduced-motion:reduce){.bt-comm-frame{transition:none}}
+`;
+
 // src/client/communication.js
 var import_react53 = require("react");
 var import_react_dom10 = require("react-dom");
@@ -20711,13 +20861,20 @@ var friendly = (error) => ({
   OWNER_TRANSFER_REQUIRED: "Transfer ownership before leaving or removing the owner.",
   OWNER_RECLAIM_REQUIRED: "Restore your retained ownership first.",
   CONVERSATION_PENDING: "The conversation is waiting for a connection.",
-  COMMUNICATION_READ_ONLY: "This instance is read-only."
-})[error.code] ?? "Communication is unavailable. Retry the same send when the connection returns.";
+  COMMUNICATION_READ_ONLY: "This instance is read-only.",
+  UNAUTHENTICATED: "The Hub rejected this device. Ask the Hub owner to check its pairing.",
+  PEER_REVOKED: "This device was unpaired. Ask the Hub owner to pair it again.",
+  AUTHORIZATION_PENDING: "Membership is still syncing. Wait for the connection to recover.",
+  HISTORY_GAP: "Some history is missing. Wait for synchronization before sending.",
+  STALE_CONNECTION: "Another connection replaced this one. Close the duplicate instance and restart this one.",
+  UNSUPPORTED_CAPABILITY: "This device and the Hub use incompatible versions. Update them to the same revision.",
+  TLS_REQUIRED: "This Hub address requires a secure connection. Ask the Hub owner for its trusted WSS address."
+})[error.code] ?? "The action could not be confirmed. Refresh status before trying again.";
 function CommunicationSurface({ roster, surface, panel, request = communicationRequest }) {
   const team = (0, import_react53.useSyncExternalStore)(roster.subscribe, roster.getSnapshot);
   const mode = (0, import_react53.useSyncExternalStore)(surface.subscribe, surface.getSnapshot);
   const open = (0, import_react53.useSyncExternalStore)(panel.subscribe, panel.getSnapshot);
-  const [shown, closing] = useLinger(open && mode.mode === "bot" && team.communicationEnabled, 160);
+  const [shown, closing] = useLinger(open && mode.mode === "bot", 160);
   const [state, setState] = (0, import_react53.useState)(null), [error, setError] = (0, import_react53.useState)(""), [busy, setBusy] = (0, import_react53.useState)(false);
   const [pollError, setPollError] = (0, import_react53.useState)("");
   const [selected, setSelected] = (0, import_react53.useState)(() => read(SELECTED, null));
@@ -20728,6 +20885,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
   const [title, setTitle] = (0, import_react53.useState)(""), [invitees, setInvitees] = (0, import_react53.useState)([]), [invite, setInvite] = (0, import_react53.useState)("");
   const [routing, setRouting] = (0, import_react53.useState)("mentionsOnly"), [admin, setAdmin] = (0, import_react53.useState)(""), [confirm, setConfirm] = (0, import_react53.useState)("");
   const [policies, setPolicies] = (0, import_react53.useState)({}), [newOwner, setNewOwner] = (0, import_react53.useState)("");
+  const [browse, setBrowse] = (0, import_react53.useState)(false), [activePanel, setActivePanel] = (0, import_react53.useState)("");
   const input = (0, import_react53.useRef)(null), frame = (0, import_react53.useRef)(null), log = (0, import_react53.useRef)(null), autoScroll = (0, import_react53.useRef)(true), pageOrder = (0, import_react53.useRef)(0), operationIds = (0, import_react53.useRef)(/* @__PURE__ */ new Map());
   const labels = contactLabels(state?.contacts ?? [], state?.instanceId, t);
   const member = state?.conversations?.find((item) => item.conversationId === selected);
@@ -20745,10 +20903,15 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
   const refresh = async () => {
     const value = await request({ endpoint: "state" });
     setState(value);
+    setPollError("");
     return value;
   };
   (0, import_react53.useEffect)(() => {
-    if (!team.communicationEnabled) return void 0;
+    if (!team.communicationEnabled) {
+      setState(null);
+      setPollError("");
+      return void 0;
+    }
     let active = true, timer;
     const poll = async () => {
       try {
@@ -20772,14 +20935,28 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
   }, [team.communicationEnabled, request]);
   (0, import_react53.useEffect)(() => {
     if (!shown) return void 0;
-    input.current?.focus();
+    const visible = (node) => !node.checkVisibility || node.checkVisibility();
+    const controls = () => [...frame.current?.querySelectorAll("button:not(:disabled),input:not(:disabled),textarea:not(:disabled),select:not(:disabled),summary") ?? []].filter((node) => visible(node) && (!node.closest("details:not([open])") || node.tagName === "SUMMARY"));
+    const focusDefault = () => (input.current && !input.current.disabled && visible(input.current) ? input.current : controls()[0])?.focus();
+    focusDefault();
     const retain = (event) => {
-      if (frame.current && !frame.current.contains(event.target)) input.current?.focus();
+      if (frame.current && !frame.current.contains(event.target)) focusDefault();
     };
     const keys = (event) => {
       if (event.key === "Escape") {
         event.stopPropagation();
-        close();
+        const members = frame.current?.querySelector(".bt-comm-members[open]");
+        if (members) {
+          members.open = false;
+          focusDefault();
+        } else close();
+      }
+      if (event.key === "Tab") {
+        const targets = controls(), first = targets[0], last = targets.at(-1);
+        if (event.shiftKey && document.activeElement === first || !event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          (event.shiftKey ? last : first)?.focus();
+        }
       }
     };
     document.addEventListener("focusin", retain, true);
@@ -20788,7 +20965,13 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
       document.removeEventListener("focusin", retain, true);
       document.removeEventListener("keydown", keys, true);
     };
-  }, [shown]);
+  }, [shown, browse, selected, member?.speakingMode]);
+  (0, import_react53.useEffect)(() => {
+    if (!shown || !activePanel) return;
+    const section = frame.current?.querySelector(`details[data-panel="${activePanel}"]`);
+    section?.scrollIntoView?.({ block: "nearest" });
+    section?.querySelector(activePanel === "group" ? "input" : "button")?.focus();
+  }, [shown, activePanel]);
   (0, import_react53.useEffect)(() => {
     save(SELECTED, selected);
     setOlder(null);
@@ -20901,6 +21084,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
     save(HIDDEN, next);
     setHidden(next);
     setSelected(id);
+    setBrowse(false);
     setError("");
   };
   const hide = () => {
@@ -20931,7 +21115,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
       contacts2.map((contact) => (0, import_react53.createElement)("option", { key: contact.principalId, value: contact.principalId }, labels.get(contact.principalId) ?? contact.displayName))
     )
   );
-  if (!shown || !team.communicationEnabled) return null;
+  if (!shown) return null;
   const events = page?.conversationId === selected && page?.membershipEpoch === member?.membershipEpoch ? page.events : [];
   const visibleIds = new Set(events.map((event) => event.message?.messageId));
   const ownOutbox = member ? (state?.outbox ?? []).filter((item) => item.type === "message.publish" && item.conversationId === selected) : [];
@@ -20940,34 +21124,86 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
   const canSpeak = member && (member.kind !== "group" || member.speakingMode === "speak");
   const contacts = state?.contacts ?? [];
   const operations = state?.outbox?.filter((item) => item.type !== "message.publish" && item.state !== "accepted") ?? [];
+  const pendingCount = (state?.outbox ?? []).filter((item) => item.type === "message.publish" && item.state === "pending").length;
+  const remoteCount = contacts.filter((contact) => contact.homeInstanceId !== state?.instanceId).length;
+  const showPanel = (name) => {
+    setActivePanel(name);
+    setBrowse(true);
+  };
+  const connectionBlocked = state?.error && !["CONNECTION_LOST", "REQUEST_TIMEOUT", "STORAGE_UNAVAILABLE", "BACKPRESSURE", "HISTORY_GAP"].includes(state.error);
+  const connectionLabel = !team.communicationEnabled ? "Not configured" : pollError ? "Cannot reach this instance" : !state ? "Connecting…" : state.connected ? "Connected to Hub" : connectionBlocked ? "Connection needs attention" : "Reconnecting to Hub";
+  const roleLabel = (role) => role === "owner" ? "Group owner" : role === "admin" ? "Group admin" : "Group member";
+  const speechLabel = (person) => person.speakingMode === "readOnly" ? "Read only" : person.speakingMode === "passive" ? "Reply only" : "Can speak";
+  const panelToggle = (name) => (event) => {
+    if (event.target === event.currentTarget) setActivePanel(event.currentTarget.open ? name : (current) => current === name ? "" : current);
+  };
   return (0, import_react_dom10.createPortal)((0, import_react53.createElement)(
     "section",
-    { ref: frame, className: "bt-comm-frame", "data-closing": closing, "aria-label": t("Communication") },
+    { ref: frame, className: "bt-comm-frame", role: "dialog", "aria-modal": true, "data-closing": closing, "data-browse": browse || !member, "data-setup": !team.communicationEnabled, "aria-label": t("Communication") },
     (0, import_react53.createElement)(
       "aside",
       { className: "bt-comm-nav" },
-      (0, import_react53.createElement)("h2", null, t("Communication")),
-      btn("Back to local chats", close),
-      (0, import_react53.createElement)("p", { role: "status" }, t(pollError ? "Cannot reach this instance" : state?.connected ? "Connected" : "Offline · sends stay queued")),
-      state?.error ? (0, import_react53.createElement)("p", { className: "bt-comm-error", role: "alert" }, state.error) : null,
+      (0, import_react53.createElement)("div", { className: "bt-comm-nav-heading" }, (0, import_react53.createElement)("h2", null, t("Communication")), btn("Back to local chats", close, { className: "bt-comm-back" })),
+      member ? btn("Back to conversation", () => setBrowse(false), { className: "bt-comm-mobile" }) : null,
+      (0, import_react53.createElement)(
+        "section",
+        { className: "bt-comm-connection", "aria-label": t("Connection status") },
+        (0, import_react53.createElement)("p", { className: "bt-comm-connection-label", role: "status", "data-connected": Boolean(state?.connected && !pollError) }, (0, import_react53.createElement)("span", { className: "bt-comm-dot", "aria-hidden": true }), t(connectionLabel)),
+        state ? (0, import_react53.createElement)("p", { className: "bt-comm-reference" }, `${state.instanceId} · ${t("Remote contacts")}: ${remoteCount}`) : null,
+        team.communicationEnabled && !state?.connected && !connectionBlocked ? (0, import_react53.createElement)("p", { className: "bt-comm-reference" }, t("Queued messages send automatically when the connection returns.")) : null,
+        state?.error ? (0, import_react53.createElement)("p", { className: "bt-comm-error", role: "alert" }, t(friendly({ code: state.error }))) : null,
+        team.communicationEnabled ? btn("Refresh status", () => {
+          void act(refresh);
+        }) : null,
+        state ? (0, import_react53.createElement)(
+          "details",
+          { className: "bt-comm-identity" },
+          (0, import_react53.createElement)("summary", null, t("Connection details")),
+          (0, import_react53.createElement)("p", null, t("This device")),
+          (0, import_react53.createElement)("code", null, state.instanceId),
+          (0, import_react53.createElement)("p", null, t("Your identity")),
+          (0, import_react53.createElement)("code", null, state.humanPrincipalId),
+          state.error ? (0, import_react53.createElement)(import_react53.Fragment, null, (0, import_react53.createElement)("p", null, t("Error code")), (0, import_react53.createElement)("code", null, state.error)) : null
+        ) : null
+      ),
+      (0, import_react53.createElement)(
+        "div",
+        { className: "bt-comm-start-actions" },
+        btn("New message", () => showPanel("contacts"), { disabled: busy || !team.communicationEnabled }),
+        btn("New group", () => showPanel("group"), { className: "bt-comm-primary", disabled: busy || !team.communicationEnabled })
+      ),
+      (0, import_react53.createElement)("div", { className: "bt-comm-section-title" }, t("Conversations"), (0, import_react53.createElement)("span", null, state?.conversations?.length ?? 0)),
       (0, import_react53.createElement)("nav", { "aria-label": t("Communication conversations") }, (state?.conversations ?? []).filter((item) => showHidden || !hidden.includes(`${state.instanceId}:${item.conversationId}`)).map((item) => btn(conversationTitle(item, state.humanPrincipalId, labels), () => choose(item.conversationId), {
         key: item.conversationId,
         "aria-pressed": item.conversationId === selected,
         title: item.conversationId,
-        children: `${conversationTitle(item, state.humanPrincipalId, labels)}${item.unread ? ` (${item.unread})` : ""}`
+        children: (0, import_react53.createElement)(
+          import_react53.Fragment,
+          null,
+          (0, import_react53.createElement)("span", { className: "bt-comm-conversation-name" }, conversationTitle(item, state.humanPrincipalId, labels)),
+          item.unread ? (0, import_react53.createElement)("span", { className: "bt-comm-unread", "aria-label": `${item.unread} ${t("Unread")}` }, item.unread) : null
+        )
       }))),
+      !state?.conversations?.length ? (0, import_react53.createElement)("p", { className: "bt-comm-reference" }, t("Your cross-device conversations will appear here.")) : null,
       btn(showHidden ? "Hide closed conversations" : "Show closed conversations", () => setShowHidden((value) => !value)),
-      (0, import_react53.createElement)("details", null, (0, import_react53.createElement)("summary", null, t("Contacts")), contacts.filter((contact) => contact.principalId !== state?.humanPrincipalId).map((contact) => btn(labels.get(contact.principalId), () => {
-        void act(async () => {
-          const value = await operation("dm", { otherPrincipalId: contact.principalId });
-          if (value.conversationId) choose(value.conversationId);
-        });
-      }, { key: contact.principalId, title: contact.principalId }))),
       (0, import_react53.createElement)(
         "details",
-        null,
+        { "data-panel": "contacts", open: activePanel === "contacts", onToggle: panelToggle("contacts") },
+        (0, import_react53.createElement)("summary", null, t("Contacts")),
+        contacts.filter((contact) => contact.principalId !== state?.humanPrincipalId).map((contact) => btn(labels.get(contact.principalId), () => {
+          void act(async () => {
+            const value = await operation("dm", { otherPrincipalId: contact.principalId });
+            if (value.conversationId) choose(value.conversationId);
+          });
+        }, { key: contact.principalId, title: contact.principalId, className: "bt-comm-contact" })),
+        !contacts.some((contact) => contact.homeInstanceId !== state?.instanceId) ? (0, import_react53.createElement)("p", { className: "bt-comm-reference" }, t("Remote contacts appear after the other device connects and publishes its identities.")) : null
+      ),
+      (0, import_react53.createElement)(
+        "details",
+        { "data-panel": "group", open: activePanel === "group", onToggle: panelToggle("group") },
         (0, import_react53.createElement)("summary", null, t("Create communication group")),
         (0, import_react53.createElement)("label", { className: "bt-comm-field" }, t("Group name"), (0, import_react53.createElement)("input", { value: title, onChange: (event) => setTitle(event.target.value), "aria-label": t("Group name") })),
+        (0, import_react53.createElement)("p", { className: "bt-comm-reference" }, t("You will own this group. Invitees join after accepting.")),
         contacts.filter((contact) => contact.principalId !== state?.humanPrincipalId).map((contact) => (0, import_react53.createElement)(
           "label",
           { key: contact.principalId, className: "bt-comm-check" },
@@ -20979,11 +21215,17 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
             const value = await operation("create-group", { title });
             if (!value.conversationId) return;
             choose(value.conversationId);
-            for (const inviteePrincipalId of invitees) await operation("invite", { conversationId: value.conversationId, inviteePrincipalId });
             setTitle("");
             setInvitees([]);
+            setActivePanel("");
+            try {
+              for (const inviteePrincipalId of invitees) await operation("invite", { conversationId: value.conversationId, inviteePrincipalId });
+            } catch {
+              setError("Group created. Some invitations were not sent. Open the member settings to invite them.");
+            }
           });
-        }, { disabled: busy || !title.trim() })
+        }, { className: "bt-comm-primary", disabled: busy || !team.communicationEnabled || !title.trim() }),
+        (0, import_react53.createElement)("p", { className: "bt-comm-reference" }, t("New members start read-only or reply-only. Change permissions in the member settings."))
       ),
       state?.invites?.length ? (0, import_react53.createElement)("div", null, (0, import_react53.createElement)("h3", null, t("Invitations")), state.invites.map((invitation) => (0, import_react53.createElement)(
         "div",
@@ -21001,7 +21243,13 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
           void act(() => operation("reclaim", { conversationId: item.conversationId, expectedVersion: item.membershipVersion }));
         })
       )),
-      operations.map((item) => (0, import_react53.createElement)("p", { key: item.id, role: "status" }, `${t(item.state === "failed" ? "Operation failed" : "Operation queued")} · ${item.error ?? item.type}`))
+      operations.map((item) => (0, import_react53.createElement)(
+        "p",
+        { key: item.id, role: "status", className: item.state === "failed" ? "bt-comm-error" : "bt-comm-reference" },
+        t(item.state === "failed" ? "Operation failed" : "Operation queued"),
+        " · ",
+        item.error ? t(friendly({ code: item.error })) : t("Waiting for the Hub")
+      ))
     ),
     (0, import_react53.createElement)(
       "main",
@@ -21009,13 +21257,35 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
       (0, import_react53.createElement)(
         "header",
         null,
-        (0, import_react53.createElement)("h2", null, member ? conversationTitle(member, state.humanPrincipalId, labels) : t("Choose a contact or conversation")),
+        member ? btn("Conversations", () => setBrowse(true), { className: "bt-comm-mobile" }) : null,
+        !team.communicationEnabled ? btn("Back to local chats", close, { className: "bt-comm-mobile" }) : null,
+        (0, import_react53.createElement)(
+          "div",
+          { className: "bt-comm-heading" },
+          (0, import_react53.createElement)("h2", null, member ? conversationTitle(member, state.humanPrincipalId, labels) : t("Cross-device conversations")),
+          member ? (0, import_react53.createElement)("p", { className: "bt-comm-reference" }, member.kind === "group" ? `${currentMembers.length} ${t("Members")} · ${t(roleLabel(member.role))} · ${t(speechLabel(member))}` : t("Private conversation")) : null
+        ),
         member ? btn("Close on this device", hide) : null
       ),
+      !member ? (0, import_react53.createElement)(
+        "section",
+        { className: "bt-comm-empty" },
+        (0, import_react53.createElement)("span", { className: "bt-comm-empty-symbol", "aria-hidden": true }, "↔"),
+        (0, import_react53.createElement)("h2", null, t(team.communicationEnabled ? "Start a conversation across devices" : "Pair this device to get started")),
+        (0, import_react53.createElement)("p", null, t(team.communicationEnabled ? "Message a Human or Bot directly, or bring them together in a group." : "Ask the Hub owner to configure communication and pair this device.")),
+        team.communicationEnabled ? (0, import_react53.createElement)("div", { className: "bt-comm-start-actions" }, btn("New message", () => showPanel("contacts")), btn("New group", () => showPanel("group"), { className: "bt-comm-primary" })) : null,
+        (0, import_react53.createElement)("p", { className: "bt-comm-reference" }, t("Local chats stay separate from communication conversations."))
+      ) : null,
       member?.kind === "group" ? (0, import_react53.createElement)(
         "details",
         { className: "bt-comm-members" },
         (0, import_react53.createElement)("summary", null, t("Group members and receiving rules")),
+        btn("Close member settings", (event) => {
+          const details = event.currentTarget.closest("details");
+          details.open = false;
+          details.querySelector("summary")?.focus();
+        }, { className: "bt-comm-members-close" }),
+        (0, import_react53.createElement)("p", { className: "bt-comm-reference" }, t("Roles control group management. Speaking permissions control who can send.")),
         member.ownerPrincipalId && !currentMembers.some((person) => person.principalId === member.ownerPrincipalId) ? (0, import_react53.createElement)("p", { role: "status" }, t("The owner is unavailable. Ownership stays with that identity.")) : null,
         !member.ownerPrincipalId ? (0, import_react53.createElement)("p", { role: "status" }, t("This legacy group has no retained owner. No automatic takeover is allowed.")) : null,
         currentMembers.map((person) => {
@@ -21027,7 +21297,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
             "div",
             { key: person.principalId, className: "bt-comm-person", "data-principal-id": person.principalId },
             (0, import_react53.createElement)("span", { title: person.principalId }, labels.get(person.principalId) ?? person.displayName),
-            (0, import_react53.createElement)("span", null, t(person.role === "owner" ? "Group owner" : person.role === "admin" ? "Group admin" : "Group member")),
+            (0, import_react53.createElement)("span", { className: "bt-comm-role" }, t(roleLabel(person.role))),
             editable ? (0, import_react53.createElement)(
               import_react53.Fragment,
               null,
@@ -21057,6 +21327,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
             }) : null
           );
         }),
+        (0, import_react53.createElement)("p", { className: "bt-comm-reference" }, t("Reply-only Bots respond to admitted messages. Bots allowed to speak may also initiate messages.")),
         canManage ? (0, import_react53.createElement)(
           import_react53.Fragment,
           null,
@@ -21102,7 +21373,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
           const element = event.currentTarget;
           autoScroll.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80;
         } },
-        member && events.length && events[0].conversationSeq > member.joinSeq ? btn("Load earlier messages", () => setOlder(events[0].conversationSeq - 1)) : null,
+        member && events.length > 0 && events[0].conversationSeq > member.joinSeq ? btn("Load earlier messages", () => setOlder(events[0].conversationSeq - 1)) : null,
         older !== null ? btn("Show latest messages", () => setOlder(null)) : null,
         events.map((event) => event.type !== "message" ? (0, import_react53.createElement)("p", { key: event.eventId, className: "bt-comm-event" }, t("Membership or receiving rule changed")) : (0, import_react53.createElement)(
           "article",
@@ -21125,15 +21396,17 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
         )),
         ownOutbox.filter((item) => !visibleIds.has(item.id) && (item.state !== "accepted" || older === null && item.result?.conversationSeq > (page?.watermark ?? 0))).map((item) => (0, import_react53.createElement)(
           "article",
-          { key: item.id, "data-message-id": item.id, "data-self": true },
+          { key: item.id, "data-message-id": item.id, "data-self": true, "data-failed": item.state === "failed" },
           (0, import_react53.createElement)("strong", null, t("You · Human")),
           (0, import_react53.createElement)("p", { className: "bt-comm-pending-text" }, item.text),
-          (0, import_react53.createElement)("p", { role: "status" }, t(item.state === "accepted" ? "Hub accepted" : item.state === "failed" ? "Send failed" : "Queued on this device"), item.error ? ` · ${item.error}` : "")
+          (0, import_react53.createElement)("p", { role: "status" }, t(item.state === "accepted" ? "Hub accepted" : item.state === "failed" ? "Send failed" : "Queued on this device"), item.error ? ` · ${t(friendly({ code: item.error }))}` : "")
         ))
       ),
       member ? (0, import_react53.createElement)(
         "footer",
         null,
+        pendingCount ? (0, import_react53.createElement)("p", { className: "bt-comm-reference", role: "status" }, `${pendingCount} · ${t("Queued messages send automatically when the connection returns.")}`) : null,
+        attempts[key] ? (0, import_react53.createElement)("p", { className: "bt-comm-error", role: "alert" }, t("Send not confirmed. Retry the same message to avoid sending it twice.")) : null,
         reply ? (0, import_react53.createElement)("div", { className: "bt-comm-reference" }, `${t("Reply to")} ${reply.content.text.slice(0, 120)}`, btn("Cancel reply", () => setReply(null))) : null,
         (0, import_react53.createElement)("div", { className: "bt-comm-mentions" }, (draft.mentions ?? []).map((id) => btn(`@${labels.get(id) ?? id} ×`, () => changeDraft({ mentions: draft.mentions.filter((item) => item !== id) }), { key: id }))),
         (0, import_react53.createElement)("details", null, (0, import_react53.createElement)("summary", null, t("Mention participant")), chooseContact("Mention participant", "", (id) => {
@@ -21168,7 +21441,14 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
           void send();
         }, { disabled: busy || !canSpeak || !draft.text.trim() }),
         !canSpeak ? (0, import_react53.createElement)("p", { role: "status" }, t("You have read-only access to this group.")) : null,
-        (0, import_react53.createElement)("span", { className: "bt-comm-reference" }, t("Text and Markdown · attachments unavailable"))
+        (0, import_react53.createElement)("span", { className: "bt-comm-reference" }, t("Enter to send · Shift+Enter for a new line")),
+        (0, import_react53.createElement)(
+          "details",
+          { className: "bt-comm-status-help" },
+          (0, import_react53.createElement)("summary", null, t("About message status")),
+          (0, import_react53.createElement)("p", null, t("Stored means the destination saved the message. Read means a Human opened it. Bot admitted means processing was accepted, not that a reply is complete.")),
+          (0, import_react53.createElement)("p", null, t("Text and Markdown · attachments unavailable"))
+        )
       ) : null,
       error ? (0, import_react53.createElement)("p", { className: "bt-comm-error", role: "alert" }, t(error)) : null,
       pollError ? (0, import_react53.createElement)("p", { className: "bt-comm-error", role: "alert" }, t(pollError)) : null,
@@ -21177,17 +21457,11 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
     )
   ), document.body);
 }
-var CSS2 = `.bt-comm-frame{position:fixed;inset:0;z-index:60;display:grid;grid-template-columns:264px minmax(0,1fr);background:var(--bt-main);color:var(--bt-ink);font:13px/18px var(--bt-font);pointer-events:auto;opacity:1;transition:opacity .16s ease}.bt-comm-frame[data-closing=true]{opacity:0;pointer-events:none}.bt-comm-frame *{box-sizing:border-box}.bt-comm-frame h2{font-size:15px;line-height:20px;margin:0}.bt-comm-frame h3{font-size:13px;margin:8px 0}.bt-comm-frame p{margin:6px 0;overflow-wrap:anywhere}.bt-comm-frame button{min-height:32px;border:1px solid var(--bt-line);border-radius:8px;background:var(--bt-card);color:var(--bt-ink);padding:6px 10px;font:inherit;text-align:left;cursor:pointer;transition:background .12s}.bt-comm-frame button:hover{background:var(--bt-hover)}.bt-comm-frame button[aria-pressed=true]{background:var(--bt-active)}.bt-comm-frame button:disabled{opacity:.35;cursor:default}.bt-comm-frame :is(button,input,textarea,select,summary):focus-visible{outline:2px solid var(--bt-accent);outline-offset:2px}.bt-comm-frame :is(input:not([type=checkbox]),textarea,select){width:100%;border:1px solid var(--bt-line);border-radius:8px;padding:8px;background:var(--bt-card);color:var(--bt-ink);font:13px/18px var(--bt-font)}.bt-comm-frame textarea{resize:vertical;min-height:80px;max-height:220px;font-size:14px;line-height:22px}.bt-comm-nav{background:var(--bt-sidebar);border-right:1px solid var(--bt-line);padding:16px;overflow:auto;display:flex;flex-direction:column;gap:12px}.bt-comm-nav nav,.bt-comm-nav details{display:flex;flex-direction:column;gap:4px}.bt-comm-nav nav button,.bt-comm-nav details>button{width:100%;overflow-wrap:anywhere;margin:2px 0}.bt-comm-frame summary{cursor:pointer;min-height:28px;padding:4px 0}.bt-comm-main{min-width:0;min-height:0;display:flex;flex-direction:column;padding:16px;gap:12px}.bt-comm-main header{display:flex;align-items:center;justify-content:space-between;gap:12px}.bt-comm-log{flex:1;min-height:80px;overflow:auto;overscroll-behavior:contain;padding:8px}.bt-comm-log article{max-width:min(992px,90%);padding:8px 12px;border-radius:18px;background:var(--bt-bubble);margin:8px 0;overflow-wrap:anywhere;font-size:14px;line-height:24px}.bt-comm-log article[data-self=true]{margin-left:auto;background:var(--bt-user);color:var(--bt-user-ink)}.bt-comm-log strong{font-size:12px;line-height:16px;font-weight:500}.bt-comm-message-actions{display:flex;gap:12px;align-items:center;font-size:11px;line-height:16px}.bt-comm-reference,.bt-comm-event{font-size:12px;line-height:16px;color:var(--bt-ink-2)}.bt-comm-message-actions button{min-height:28px}.bt-comm-field{display:flex;flex-direction:column;gap:6px;margin:8px 0;font-size:12px;line-height:16px}.bt-comm-check{display:flex;gap:8px;align-items:center;margin:8px 0}.bt-comm-check input{width:16px;height:16px}.bt-comm-mentions{display:flex;gap:4px;flex-wrap:wrap}.bt-comm-pending-text{white-space:pre-wrap}.bt-comm-members{max-height:30vh;overflow:auto;border:1px solid var(--bt-line);border-radius:12px;padding:8px 12px}.bt-comm-members>div{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:4px 0}.bt-comm-frame .bt-comm-danger,.bt-comm-error{color:var(--bt-danger)}.bt-comm-main footer{border-top:1px solid var(--bt-line);padding-top:8px}.bt-comm-main footer>button{background:var(--bt-accent);color:var(--bt-accent-ink)}.bt-comm-main footer>.bt-comm-reference{margin-left:12px}.bt-comm-main footer .bt-comm-field:has(select){max-width:420px}@media(max-width:700px){.bt-comm-frame{grid-template-columns:176px minmax(0,1fr)}.bt-comm-nav,.bt-comm-main{padding:8px}.bt-comm-log{padding:0}.bt-comm-log article{max-width:100%}.bt-comm-main header{align-items:flex-start;flex-direction:column}}@media(prefers-reduced-motion:reduce){.bt-comm-frame{transition:none}}`;
 function installCommunication(ctx, { roster, surface }) {
   const panel = createSource(read(OPEN, false));
   ctx.effect(() => {
     const style = document.createElement("style");
-    style.textContent = CSS2 + `
-.bt-comm-body>div{color:inherit!important;font-size:inherit!important;line-height:inherit!important}
-.bt-comm-log article[data-self=true] .bt-comm-reference{color:inherit;opacity:.75}
-.bt-comm-log article[data-referenced=true]{outline:2px solid var(--bt-accent);outline-offset:2px}
-.bt-comm-members>.bt-comm-person{flex-wrap:wrap;justify-content:flex-start}.bt-comm-person>span:first-child{flex:1 1 200px}.bt-comm-person label{display:flex;flex-direction:column;gap:4px;min-width:120px;max-width:100%;flex:1 1 140px}.bt-comm-person button{flex:0 1 auto}
-`;
+    style.textContent = communicationCSS;
     document.head.append(style);
     return () => style.remove();
   }, "ds-bot: communication styles");

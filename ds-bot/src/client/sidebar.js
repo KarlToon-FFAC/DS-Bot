@@ -573,7 +573,7 @@ export function TeamSidebar(props) {
         h(AccountLauncher, { seat: false, actions }))
   const content = h('div', { className: wideContent ? 'bt-side' : 'bt-side bt-rail', onKeyDown: typeToSearch },
     top,
-    roster.communicationEnabled ? h('button', { type: 'button', className: 'bt-soft', onClick: actions.openCommunication, 'aria-label': t('Communication'), title: t('Communication') }, wideContent ? t('Communication') : '↔') : null,
+    h('button', { type: 'button', className: 'bt-soft', onClick: actions.openCommunication, 'aria-label': t('Communication'), title: t('Communication') }, wideContent ? t('Communication') : '↔'),
     wideContent && roster.readOnly ? h('div', { className: 'bt-hint bt-read-only', role: 'status' }, hostText(roster.readOnly)) : null,
     h('div', { ref: listRef, className: 'bt-list', role: 'region', 'aria-label': t('Bot list') },
       wideContent ? (main ? h(BotRow, { ...rowProps, bot: main, marked: markedUnread[main.id] === true }) : roster.ready ? null : h('div', { className: 'bt-hint' }, uiNow.bootFailed ? bootHint() : t('Setting up your Main Bot…'))) : null,
