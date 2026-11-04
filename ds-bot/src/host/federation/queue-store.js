@@ -94,8 +94,10 @@ export class CommunicationQueue {
     requireValue(this.owns(principalId), 'AUTHOR_MISMATCH')
     return this.db.prepare("SELECT id,type,payload,state,result,error FROM outbox WHERE json_extract(payload,'$.author.principalId')=? OR json_extract(payload,'$.principalId')=? ORDER BY rowid DESC LIMIT 100").all(principalId, principalId).map(row => {
       const payload = JSON.parse(row.payload)
-      return { id: row.id, type: row.type, conversationId: payload.conversationId, text: payload.content?.text,
-        state: row.state, error: row.error, result: row.result ? JSON.parse(row.result) : null }
+      const result = row.result ? JSON.parse(row.result) : null
+      return { id: row.id, type: row.type, conversationId: payload.conversationId ?? result?.conversationId ?? null,
+        principalId: payload.author?.principalId ?? payload.principalId, membershipEpoch: payload.membershipEpoch ?? null, text: payload.content?.text,
+        state: row.state, error: row.error, result }
     })
   }
   exportFailures() {
@@ -232,6 +234,12 @@ export class CommunicationQueue {
     requireValue(Number.isSafeInteger(after) && after >= 0 && Number.isSafeInteger(limit) && limit > 0 && limit <= 500, 'INVALID_CURSOR')
     const events = this.db.prepare(`SELECT body FROM events WHERE conversation_id=? AND principal_id=? AND epoch=? AND seq>? AND seq<=? ORDER BY seq ${latest ? 'DESC' : 'ASC'} LIMIT ?`).all(conversationId, principalId, epoch, after, upper, limit).map(row => JSON.parse(row.body))
     return latest ? events.reverse() : events
+  }
+  lastMessage(conversationId, principalId, epoch) {
+    const member = this.member(conversationId, principalId, epoch)
+    const row = this.db.prepare("SELECT body FROM events WHERE conversation_id=? AND principal_id=? AND epoch=? AND seq>=? AND seq<=? AND json_extract(body,'$.type')='message' ORDER BY seq DESC LIMIT 1")
+      .get(conversationId, principalId, epoch, member.join_seq, this.cursor(conversationId, principalId, epoch))
+    return row ? JSON.parse(row.body) : null
   }
   reference(conversationId, principalId, epoch, messageId) {
     this.member(conversationId, principalId, epoch)

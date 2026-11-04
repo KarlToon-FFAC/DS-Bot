@@ -9,6 +9,7 @@ import { communicationMentions } from '../../shared/communication-mentions.js'
 import { mentionSpans } from '../../shared/mentions.js'
 import { syncBotAvatars } from './avatars.js'
 import { startedSources } from './work-events.js'
+import { conversationSummary, safeManagementUrl } from './conversation-summary.js'
 import { splitRef } from '../text.js'
 import { communicationPrompt } from './prompt.js'
 import { OUTSIDE_CONVERSATION_TOOLS } from './tool-scope.js'
@@ -63,7 +64,7 @@ export class CommunicationRuntime {
         await this.registerLocalIdentities()
         if (welcome?.capabilities?.includes('principal-publication')) await this.transport.request('principal.publication', { principalIds: [...this.bots.values()].map(bot => bot.principalId) })
         this.lastConnectedAt = new Date().toISOString()
-        this.lastError = null
+        this.transportError = null
       },
       onChange: async () => {
         this.everReconciled = true
@@ -99,16 +100,12 @@ export class CommunicationRuntime {
           catch (error) { if (!['NOT_A_MEMBER', 'MEMBERSHIP_REVOKED', 'FORBIDDEN'].includes(error.code)) throw error; this.deliveryStates.delete(item.id) }
         }
         this.statusOffset += 5
-        if (settings.autoAcceptBotInvites) {
-          const ids = new Set([...this.bots.values()].map(bot => bot.principalId))
-          for (const invite of this.queue.invites().filter(item => ids.has(item.principalId))) {
-            await this.operation(invite.principalId, 'group.accept', { inviteId: invite.inviteId }, operationId(`accept:${invite.inviteId}`))
-          }
-        }
+        if (settings.autoAcceptBotInvites) await this.acceptBotInvites()
         this.processing = this.processing.catch(() => {}).then(() => this.process())
         await this.processing
+        this.transportError = null
       },
-      onError: error => { this.lastError = error.code },
+      onError: error => { this.transportError = error.code },
     })
     this.installHooks()
     this.transport.start({ pollMs: settings.pollMs ?? 500 })
@@ -120,6 +117,15 @@ export class CommunicationRuntime {
       principal.displayName = name
       const registered = await this.transport.request('principal.register', { localId: principal.localId, kind: principal.kind, displayName: name })
       principal.displayName = registered.displayName
+    }
+  }
+  async acceptBotInvites() {
+    const ids = new Set([...this.bots.values()].map(bot => bot.principalId))
+    for (const invite of this.queue.invites().filter(item => ids.has(item.principalId))) {
+      const id = operationId(`accept:${invite.inviteId}`)
+      if (this.queue.outboxStatus(id)?.state === 'failed') continue
+      try { await this.operation(invite.principalId, 'group.accept', { inviteId: invite.inviteId }, id) }
+      catch (error) { if (this.queue.outboxStatus(id)?.state !== 'failed') throw error }
     }
   }
   actorForSession(sessionId) {
@@ -380,18 +386,22 @@ export class CommunicationRuntime {
   }
   snapshot() {
     const memberships = this.everReconciled ? this.queue.memberships().filter(member => member.principalId === this.human.principalId) : []
+    const managementUrl = safeManagementUrl(this.transport.welcome?.managementUrl)
     return { enabled: true, connected: this.transport.connected, reconciled: this.everReconciled, instanceId: this.queue.instanceId, humanPrincipalId: this.human.principalId,
       hubUrl: this.settings.url, hubId: this.settings.hubId ?? this.transport.welcome?.hubId ?? null,
-      lastConnectedAt: this.lastConnectedAt ?? null, error: this.lastError ?? null, avatarError: this.avatarError ?? null, contacts: this.contacts,
+      managementUrl, managementAvailable: managementUrl !== null,
+      lastConnectedAt: this.lastConnectedAt ?? null, error: this.transportError ?? this.lastError ?? null, avatarError: this.avatarError ?? null, contacts: this.contacts,
       limits: this.queue.limits,
       localBots: [...this.bots.values()].map(bot => ({ principalId: bot.principalId, displayName: this.rt.botOf(bot.localRef)?.name ?? bot.displayName })),
       conversations: memberships.map(member => ({ ...member, info: this.conversations.get(member.conversationId) ?? null,
+        lastMessage: conversationSummary(this.queue.lastMessage(member.conversationId, member.principalId, member.membershipEpoch),
+          [...this.contacts, ...(this.conversations.get(member.conversationId)?.members ?? [])]),
         unread: this.queue.unread(member.conversationId, member.principalId, member.membershipEpoch) })),
       recoverableOwnership: this.queue.recoverableOwnership(this.human.principalId),
       invites: this.queue.invites(), outbox: this.queue.outboxFor(this.human.principalId).map(item => ({ ...item, deliveries: this.deliveryStates.get(item.id) ?? [] })),
       errors: [...this.errors].flatMap(([bindingId,code]) => {
         const binding = this.queue.bindings().find(item => item.id === bindingId)
-        return binding && memberships.some(member => member.conversationId === binding.conversationId) ? [{ bindingId, conversationId: binding.conversationId, code }] : []
+        return binding && memberships.some(member => member.conversationId === binding.conversationId) ? [{ bindingId, conversationId: binding.conversationId, principalId: binding.recipientPrincipalId, code }] : []
       }),
       exportFailures: this.queue.exportFailures().filter(item => memberships.some(member => member.conversationId === item.conversationId)) }
   }

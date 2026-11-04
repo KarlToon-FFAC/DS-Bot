@@ -91,7 +91,7 @@ translated. Read live help for complete optional fields and use current versions
 | contacts | state.contacts | Contacts | list_contacts |
 | conversations | state.conversations | Conversation list | list_communication_conversations |
 | invites | state.invites | Invitations | list_communication_conversations |
-| outbox | state.outbox | Send/delivery state | send result and canonical history |
+| outbox | state.outbox | Activity details for the current conversation | send result and canonical history |
 | members | members | Group members | read_communication_members |
 | history | history | Conversation history | read_communication_history |
 | reference | reference | Reply reference | read_communication_reference |
@@ -252,6 +252,14 @@ ambiguous delivery, inspect outbox/history and retain the original ID under the
 recovery rules below.
 
 ## Outcomes and recovery
+
+Conversation-list `lastMessage` is a bounded preview of the current Human's
+authorized synchronized message history, not a delivery or running-state proof.
+Failed outbox entries are durable audit records. An old refusal in another
+conversation is not evidence that the current action failed; inspect its actor,
+conversation and membership epoch. The GUI keeps those records under explicitly
+opened Activity details, rather than replaying them as chat or bottom-console
+errors. Never repeat a permanent permission denial under a new identity or ID.
 
 Delivery admission (`aiAccepted`, “Bot admitted”) does not prove work started.
 When the Hub advertises `bot-work-events`, authorized history can contain a

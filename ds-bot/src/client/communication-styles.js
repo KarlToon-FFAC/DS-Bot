@@ -29,8 +29,23 @@ export const communicationCSS = `
 .bt-comm-nav nav{display:flex;flex-direction:column;gap:4px}
 .bt-comm-nav nav button{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;border-color:transparent;background:transparent;overflow-wrap:anywhere}
 .bt-comm-nav nav button[aria-pressed=true]{background:var(--bt-active);border-color:var(--bt-line);font-weight:500}
-.bt-comm-conversation-name{min-width:0}
-.bt-comm-unread{flex-shrink:0;min-width:18px;text-align:center;padding:1px 5px;border-radius:12px;background:var(--bt-accent);color:var(--bt-accent-ink);font-size:11px;line-height:16px;font-variant-numeric:tabular-nums}
+.bt-comm-conversation-body{display:flex;flex-direction:column;gap:3px;flex:1;min-width:0}
+.bt-comm-conversation-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500;line-height:18px}
+.bt-comm-conversation-preview{min-height:16px;line-height:16px;color:var(--bt-ink-2);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bt-comm-nav nav .bt-comm-conversation-row{padding:8px;border-radius:10px;gap:10px;min-height:56px;justify-content:flex-start}
+.bt-comm-nav nav .bt-comm-conversation-row[aria-pressed=true]{border-color:transparent}
+.bt-comm-conversation-row>.bt-comm-avatar{margin-right:0}
+.bt-comm-room-avatar{position:relative;display:inline-block;flex:none}
+.bt-comm-room-avatar:not(.bt-comm-room-empty)>span{position:absolute;display:flex}
+.bt-comm-room-avatar .bt-comm-avatar{margin:0}
+.bt-comm-room-empty{display:grid;place-items:center;border-radius:12px;background:var(--bt-bubble);color:var(--bt-ink-2)}
+.bt-comm-room-more{display:grid;place-items:center;width:100%;height:100%;border-radius:50%;background:var(--bt-tag-bg);color:var(--bt-tag-ink);font-size:9px}
+.bt-comm-toast{position:fixed;top:16px;right:24px;z-index:9;max-width:min(440px,calc(100vw - 32px));display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--bt-line-2);border-radius:12px;background:var(--bt-card);box-shadow:0 8px 28px color-mix(in srgb,var(--bt-ink) 12%,transparent);font-size:12px;line-height:18px}
+.bt-comm-toast>span{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.bt-comm-toast>button{flex:none;font-size:12px;min-height:28px}
+.bt-comm-activity>section{padding:10px 0;border-bottom:1px solid var(--bt-line)}
+.bt-comm-admin-link small{display:block;font-size:11px;color:var(--bt-ink-2);overflow-wrap:anywhere}
+.bt-comm-unread{flex:none;width:7px;height:7px;border-radius:50%;background:var(--bt-accent);margin-left:auto}
 .bt-comm-frame summary{cursor:pointer;min-height:28px;padding:4px 0;font-weight:500}
 .bt-comm-nav details>button{width:100%;margin:4px 0;overflow-wrap:anywhere}
 .bt-comm-frame .bt-comm-contact{text-align:left;font-size:12px;line-height:18px}
@@ -72,13 +87,10 @@ export const communicationCSS = `
 .bt-comm-members>.bt-comm-field{max-width:480px}
 .bt-comm-members>button{margin:4px 8px 4px 0}
 .bt-comm-frame .bt-comm-danger,.bt-comm-error{color:var(--bt-danger)}
-.bt-comm-main>.bt-comm-error{flex-shrink:0;font-size:12px;line-height:18px;margin:0}
 .bt-comm-main footer{flex-shrink:0;border-top:1px solid var(--bt-line);padding-top:8px}
 .bt-comm-main footer>button{background:var(--bt-accent);color:var(--bt-accent-ink);text-align:center;padding-inline:18px}
 .bt-comm-main footer>.bt-comm-reference{margin-left:12px}
 .bt-comm-main footer .bt-comm-field:has(select){max-width:420px}
-.bt-comm-status-help{margin-top:8px;font-size:12px;color:var(--bt-ink-2);max-height:112px;overflow:auto}
-.bt-comm-status-help summary{font-weight:400}
 .bt-comm-body>div,.bt-comm-body>div>div{color:inherit!important;font-size:inherit!important;line-height:inherit!important}
 .bt-comm-log article[data-self=true] .bt-comm-reference{color:inherit;opacity:.8}
 .bt-comm-frame .bt-comm-mobile{display:none}
@@ -119,8 +131,6 @@ export const communicationCSS = `
 .bt-comm-completion{max-height:220px;overflow:auto;border:.5px solid var(--bt-line-2);border-radius:12px;background:var(--bt-card);padding:6px}
 .bt-comm-completion button{display:block;width:100%;border-color:transparent}
 .bt-comm-completion button[aria-selected=true]{background:var(--bt-active)}
-.bt-comm-feedback{max-height:140px;overflow:auto;border-top:1px solid var(--bt-line);font-size:12px}
-.bt-comm-feedback:empty{display:none}
 .bt-comm-heading>.bt-comm-avatar{float:left;width:36px;height:36px}
 
 .bt-comm-log article .bt-comm-quote{display:flex;flex-direction:column;gap:2px;width:100%;margin:6px 0;padding:6px 10px;border:0;border-left:2px solid var(--bt-line-2);border-radius:6px;background:var(--bt-tag-bg);color:var(--bt-ink-2);font-size:12px;line-height:16px}
@@ -149,10 +159,12 @@ export const communicationCSS = `
 .bt-comm-avatar[data-kind=human][data-avatar="2"]{background:color-mix(in srgb,var(--bt-star) 14%,var(--bt-card));color:var(--bt-ink)}
 .bt-comm-avatar[data-kind=human][data-avatar="3"]{background:var(--bt-tag-bg);color:var(--bt-tag-ink)}
 
-.bt-comm-body .bt-comm-inline-mention{display:inline-flex;align-items:center;vertical-align:-3px;max-width:100%;padding:0 1px;border:0;background:none;color:var(--bt-accent);font-size:0;line-height:inherit;cursor:pointer;border-radius:6px;white-space:nowrap;text-decoration:none}
+.bt-comm-body .bt-comm-inline-mention{display:inline-flex;align-items:baseline;vertical-align:baseline;max-width:100%;min-height:0;padding:0 1px;border:0;background:none;color:var(--bt-accent);font:inherit;line-height:inherit;cursor:pointer;border-radius:6px;white-space:nowrap;text-decoration:none}
 .bt-comm-mention-targets .bt-comm-inline-mention{margin-inline-end:6px}
-.bt-comm-inline-mention-content{display:inline-flex;align-items:center;gap:3px;font-size:13px;font-weight:600;line-height:inherit;font-family:inherit}
-.bt-comm-inline-mention .bt-comm-avatar{flex:none;vertical-align:middle}
+.bt-comm-inline-mention-content{display:inline-flex;align-items:baseline;vertical-align:baseline;gap:3px;font:inherit;line-height:inherit}
+.bt-comm-mention-label{font:inherit;line-height:inherit}
+.bt-comm-inline-mention .bt-comm-avatar{flex:none;align-self:center;margin:0}
+.bt-comm-inline-mention>svg{display:none}
 .bt-comm-body .bt-comm-inline-mention:hover{text-decoration:underline}
 .bt-comm-body .bt-comm-inline-mention:focus-visible{outline:2px solid var(--bt-accent);outline-offset:2px}
 .bt-comm-work-started{display:flex;align-items:center;min-height:24px;margin:2px 0;padding-inline-start:40px;color:var(--bt-ink-2);font-size:12px;line-height:16px}

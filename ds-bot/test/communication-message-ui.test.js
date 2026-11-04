@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { runInNewContext } from 'node:vm'
 import { build } from 'esbuild'
+import { communicationCSS } from '../src/client/communication-styles.js'
 import { messageMentionSpans, communicationLogEvents } from '../src/client/communication-model.js'
 const members = [
   { principalId: 'bot:a:chief', kind: 'bot', displayName: 'Chief', homeInstanceId: 'a', avatar: { color: 'pink', shape: 'star' } },
@@ -106,5 +107,36 @@ test('unmatched canonical current targets remain visible for renames, ambiguous 
     assert.equal(doc.querySelectorAll('.bt-comm-inline-mention').length, 0, 'unstructured text cannot create a target')
     await renderMessage(message('all', ['human:a:all', 'human:a:all']))
     assert.equal(doc.querySelectorAll('.bt-comm-unmatched-mention').length, 1, 'duplicate canonical IDs render once')
+  })
+})
+
+test('inline and unmatched mention labels supply the inherited text baseline while avatars center independently', async () => {
+  await ui(async ({ api, doc, render }) => {
+    const props = { members, request: async () => ({}), onInspect() {} }
+    await render(React.createElement('div', { className: 'bt-comm-body', style: { fontSize: 22, lineHeight: '32px', fontWeight: 700 } },
+      React.createElement('style', null, communicationCSS),
+      React.createElement(api.CommunicationMessage, { ...props, message: message('Before **@Chief @Reviewer** after\n\n- List text\n\n`@Chief`', ['bot:a:chief', 'bot:a:review', 'human:a:all']) })))
+    const labels = doc.querySelectorAll('.bt-comm-mention-label')
+    assert.equal(labels.length, 3)
+    assert.equal(doc.querySelectorAll('a.bt-comm-inline-mention .bt-comm-mention-label').length, 2)
+    assert.equal(doc.querySelectorAll('button.bt-comm-unmatched-mention .bt-comm-mention-label').length, 1)
+    for (const label of labels) {
+      assert.equal(label.children.length, 0, 'the label is an independent text-only range for baseline measurement')
+      assert.ok(label.previousElementSibling.classList.contains('bt-comm-avatar'))
+      assert.equal(label.parentElement.className, 'bt-comm-inline-mention-content')
+      const control = label.closest('.bt-comm-inline-mention')
+      assert.ok(control.getAttribute('aria-label').startsWith('View participant:'))
+    }
+    const rules = [...doc.styleSheets[0].cssRules]
+    const style = selector => rules.find(rule => rule.selectorText === selector).style
+    const control = style('.bt-comm-body .bt-comm-inline-mention')
+    assert.equal(control.getPropertyValue('font'), 'inherit')
+    assert.equal(control.getPropertyValue('vertical-align'), 'baseline')
+    assert.equal(control.getPropertyValue('align-items'), 'baseline')
+    assert.equal(Number.parseFloat(control.getPropertyValue('min-height')), 0)
+    assert.equal(style('.bt-comm-inline-mention-content').getPropertyValue('align-items'), 'baseline')
+    assert.equal(style('.bt-comm-mention-label').getPropertyValue('font'), 'inherit')
+    assert.equal(style('.bt-comm-mention-label').getPropertyValue('line-height'), 'inherit')
+    assert.equal(style('.bt-comm-inline-mention .bt-comm-avatar').getPropertyValue('align-self'), 'center')
   })
 })

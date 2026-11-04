@@ -5,6 +5,14 @@
 export const NAMESPACE = 'ds-bot'
 
 const ZH = {
+  "Activity details": "\u6d3b\u52a8\u8be6\u60c5",
+  "Hub management": "Hub \u7ba1\u7406",
+  "Open setup guide": "\u6253\u5f00\u914d\u7f6e\u6307\u5357",
+  "The Hub administrator has not provided an active management entry. Ask the administrator to start the Hub and enable its management page.": "Hub \u7ba1\u7406\u5458\u5c1a\u672a\u63d0\u4f9b\u5df2\u542f\u7528\u7684\u7ba1\u7406\u5165\u53e3\u3002\u8bf7\u7ba1\u7406\u5458\u542f\u52a8 Hub \u5e76\u542f\u7528\u7ba1\u7406\u9875\u9762\u3002",
+  "Dismiss notification": "\u5173\u95ed\u901a\u77e5",
+  "This record belongs to an earlier membership.": "\u6b64\u8bb0\u5f55\u5c5e\u4e8e\u8f83\u65e9\u7684\u6210\u5458\u5173\u7cfb\u3002",
+  "No activity needs attention.": "\u6682\u65e0\u9700\u8981\u5904\u7406\u7684\u6d3b\u52a8\u3002",
+
   'View participant': '查看成员',
   'Participant information': '成员信息',
 

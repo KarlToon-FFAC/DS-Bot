@@ -40,7 +40,7 @@ test('production pane ignores a late history response and retries an uncertain H
   runInNewContext(outputFiles[0].text, { module: mod, exports: mod.exports,
     require: id => id === 'react' ? React : id === 'react-dom' ? harness('react-dom') : { MarkdownText: ({ text }) => React.createElement('p', null, text) },
     window: dom.window, document: dom.window.document, sessionStorage: dom.window.sessionStorage, localStorage: dom.window.localStorage,
-    setTimeout, clearTimeout, crypto: globalThis.crypto, AbortSignal, requestAnimationFrame: dom.window.requestAnimationFrame, cancelAnimationFrame: dom.window.cancelAnimationFrame })
+    setTimeout, clearTimeout, crypto: globalThis.crypto, URL, AbortSignal, requestAnimationFrame: dom.window.requestAnimationFrame, cancelAnimationFrame: dom.window.cancelAnimationFrame })
   const panel = createSource(true), roster = createSource({ communicationEnabled: true }), surface = createSource({ mode: 'bot' })
   const member = id => ({ conversationId: id, title: id, kind: 'group', role: 'owner', speakingMode: 'speak', membershipEpoch: id, joinSeq: 1, watermark: 1, info: { members: [] } })
   const snapshot = { connected: true, instanceId: 'a', humanPrincipalId: 'human:a:A', contacts: [], conversations: [member('one'), member('two')], invites: [], outbox: [], errors: [] }
@@ -60,7 +60,7 @@ test('production pane ignores a late history response and retries an uncertain H
   const field = () => dom.window.document.querySelector('.bt-comm-frame textarea')
   try {
     await act(async () => root.render(React.createElement(mod.exports.CommunicationSurface, { roster, surface, panel, request })))
-    await act(async () => [...dom.window.document.querySelectorAll('nav button')].find(button => button.textContent === 'two').click())
+    await act(async () => [...dom.window.document.querySelectorAll('nav button')].find(button => button.dataset.conversationId === 'two').click())
     await act(async () => releaseFirst(history('one')))
     assert.equal(dom.window.document.querySelector('.bt-comm-main h2').textContent, 'two')
     assert.equal(dom.window.document.querySelectorAll('.bt-comm-feedback .bt-comm-event').length, 0)

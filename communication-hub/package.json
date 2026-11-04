@@ -10,5 +10,5 @@
     "test": "node --test test/*.test.js"
   },
   "dependencies": { "ws": "8.22.1" },
-  "files": ["src/", "README.md", "config.example.json"]
+  "files": ["src/", "README.md", "config.example.json", "managed.config.example.json"]
 }

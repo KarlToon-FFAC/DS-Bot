@@ -39,7 +39,7 @@ export async function startHub({ databasePath, peers, host='127.0.0.1', port=319
     for(const instance of store.db.prepare('SELECT id FROM instances WHERE trusted=1').all())if(!allowed.has(instance.id)&&!management.peer(instance.id))store.revokeInstance(instance.id)
     if(managementOptions?.enabled)requireThat(typeof managementOptions.password==='string'||store.db.prepare("SELECT 1 FROM hub_management WHERE key='adminVerifier'").get(),'INVALID_CONFIG','Configure a private administrator password before enabling management')
   }catch(error){store.close();throw error}
-  let managementHttp
+  let managementHttp, managementUrl = null
   const server=(tls?createHttpsServer: createHttpServer)(...(tls?[{key:tls.key,cert:tls.cert,minVersion:'TLSv1.2'}]:[]),async(_req,res)=>{
     try{
     if(await managementHttp?.handle(_req,res))return
@@ -109,7 +109,7 @@ export async function startHub({ databasePath, peers, host='127.0.0.1', port=319
           }
         }
         if(beforeResponse?.({type:frame.type,value,socket})===false)return
-        if(auth&&(frame.type==='hello'||frame.type==='enrollment.prove'))value={...value,hubId:management.hubId}
+        if(auth&&(frame.type==='hello'||frame.type==='enrollment.prove'))value={...value,hubId:management.hubId,...(managementUrl?{managementUrl}:{})}
         requireThat(socket.bufferedAmount<store.limits.maxEnvelopeBytes*4,'BACKPRESSURE')
         const response=JSON.stringify({id,ok:true,value})
         requireThat(Buffer.byteLength(response)<=store.limits.maxEnvelopeBytes,'PAYLOAD_TOO_LARGE')
@@ -132,9 +132,10 @@ export async function startHub({ databasePath, peers, host='127.0.0.1', port=319
       management.url??=url
       const origin=managementOptions.origin??new URL(management.url.replace(/^ws/,'http')).origin
       managementHttp=createManagementHttp(management,{password:managementOptions.password,origin,onRevoke:revoke})
+      if(managementHttp.enabled)managementUrl=`${origin}/admin/`
     }catch(error){for(const socket of connections)socket.terminate();await new Promise(resolve=>sockets.close(resolve));await new Promise(resolve=>server.close(resolve));store.close();throw error}
   }
-  return {store,management,host,port:address.port,url,managementUrl:managementHttp?.enabled?`${managementOptions.origin??new URL(management.url.replace(/^ws/,'http')).origin}/admin/`:null,
+  return {store,management,host,port:address.port,url,managementUrl,
     revoke,
     async close(){managementHttp?.close();for(const socket of connections)socket.terminate();await new Promise(resolve=>sockets.close(resolve));await new Promise(resolve=>server.close(resolve));store.close()}}
 }

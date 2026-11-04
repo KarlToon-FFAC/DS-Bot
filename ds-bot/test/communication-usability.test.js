@@ -12,7 +12,7 @@ const { JSDOM } = harness('jsdom'), React = harness('react'), { act } = React
 const { outputFiles } = await build({ entryPoints: [fileURLToPath(new URL('../src/client/communication.js', import.meta.url))],
   bundle: true, platform: 'browser', format: 'cjs', external: ['react', 'react-dom', '@deepseek-ai/dsh-client-ui-primitives'], write: false })
 
-async function pane({ enabled = true, snapshot, history = [], getState, MarkdownText = ({ text }) => React.createElement('p', null, text), handle = async () => ({}) }, check) {
+async function pane({ enabled = true, snapshot, history = [], getState, handleRead = async () => ({}), MarkdownText = ({ text }) => React.createElement('p', null, text), handle = async () => ({}) }, check) {
   const dom = new JSDOM('<!doctype html><body><textarea id="native">private draft</textarea><div id="root"></div></body>', { url: 'http://127.0.0.1:3138/', pretendToBeVisual: true })
   const saved = Object.fromEntries(['window', 'document', 'navigator', 'HTMLElement', 'IS_REACT_ACT_ENVIRONMENT'].map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]))
   for (const [key, value] of Object.entries({ window: dom.window, document: dom.window.document, navigator: dom.window.navigator, HTMLElement: dom.window.HTMLElement, IS_REACT_ACT_ENVIRONMENT: true })) Object.defineProperty(globalThis, key, { configurable: true, value })
@@ -22,18 +22,18 @@ async function pane({ enabled = true, snapshot, history = [], getState, Markdown
   runInNewContext(outputFiles[0].text, { module: mod, exports: mod.exports,
     require: id => id === 'react' ? React : id === 'react-dom' ? harness('react-dom') : { MarkdownText },
     window: dom.window, document: dom.window.document, sessionStorage: dom.window.sessionStorage, localStorage: dom.window.localStorage,
-    setTimeout, clearTimeout, crypto: globalThis.crypto, AbortSignal, requestAnimationFrame: dom.window.requestAnimationFrame, cancelAnimationFrame: dom.window.cancelAnimationFrame })
+    setTimeout, clearTimeout, crypto: globalThis.crypto, URL, AbortSignal, requestAnimationFrame: dom.window.requestAnimationFrame, cancelAnimationFrame: dom.window.cancelAnimationFrame })
   const panel = createSource(true), roster = createSource({ communicationEnabled: enabled }), surface = createSource({ mode: 'bot' }), calls = []
   const request = async body => {
     calls.push(body)
     if (body.endpoint === 'state') return getState ? getState() : { ...snapshot, conversations: snapshot.conversations?.map(item => ({ ...item })) }
     if (body.endpoint === 'history') { const value = typeof history === 'function' ? await history(body) : history; return Array.isArray(value) ? { conversationId: body.conversationId, membershipEpoch: 'epoch', events: value } : value }
-    if (body.endpoint === 'read') return {}
+    if (body.endpoint === 'read') return handleRead(body)
     return handle(body)
   }
   let root = createRoot(dom.window.document.getElementById('root'))
   const doc = dom.window.document
-  const button = label => [...doc.querySelectorAll('button')].find(node => node.textContent === label)
+  const button = label => [...doc.querySelectorAll('button')].find(node => node.textContent === label || node.getAttribute('aria-label') === label)
   const click = async label => { assert.ok(button(label), `button: ${label}`); await act(async () => button(label).click()) }
   const edit = async (node, value) => {
     await act(async () => {
@@ -93,7 +93,7 @@ test('partial invitations preserve the created group and never create another gr
     assert.equal(doc.querySelector('.bt-comm-main h2').textContent, 'Shared group')
     assert.equal(doc.querySelector('.bt-comm-modal'), null)
     assert.equal(doc.querySelector('input[aria-label="Group name"]'), null)
-    assert.match(doc.querySelector('.bt-comm-main').textContent, /Group created\. Some invitations were not sent/)
+    assert.match(doc.querySelector('.bt-comm-toast').textContent, /Group created\. Some invitations were not sent/)
     assert.match(doc.querySelector('.bt-comm-heading').textContent, /Group owner.*Can speak/)
     assert.equal(doc.querySelector('.bt-comm-frame').dataset.browse, 'false')
   })
@@ -107,9 +107,12 @@ test('connection recovery refreshes status without resending failures and naviga
     assert.match(doc.querySelector('.bt-comm-connection').textContent, /Offline/)
     assert.doesNotMatch(doc.querySelector('.bt-comm-connection').textContent, /Reconnecting to Hub/)
     assert.doesNotMatch(doc.querySelector('aside').textContent, /Ask the Hub owner to check its pairing|Operation failed|Error code/)
-    assert.match(doc.querySelector('.bt-comm-main').textContent, /Ask the Hub owner to check its pairing/)
+    assert.doesNotMatch(doc.querySelector('.bt-comm-main').textContent, /Ask the Hub owner to check its pairing/)
+    await click('Activity details')
+    assert.match(doc.querySelector('.bt-comm-activity').textContent, /Ask the Hub owner to check its pairing/)
     assert.equal(doc.querySelector('article[data-failed=true]'), null)
-    assert.match(doc.querySelector('.bt-comm-feedback').textContent, /read-only access/)
+    assert.match(doc.querySelector('.bt-comm-activity').textContent, /read-only access/)
+    await click('Cancel')
     await edit(doc.querySelector('textarea[aria-label="Communication message"]'), 'Preserved draft')
     await click('Conversations'); assert.equal(doc.querySelector('.bt-comm-frame').dataset.browse, 'true')
     await click('Back to conversation'); assert.equal(doc.querySelector('.bt-comm-frame').dataset.browse, 'false')
@@ -125,7 +128,7 @@ test('connection recovery refreshes status without resending failures and naviga
     await click('Refresh status')
     assert.equal(calls.filter(call => call.endpoint === 'send').length, 0)
     assert.equal(doc.querySelector('textarea[aria-label="Communication message"]').value, 'Preserved draft')
-    assert.match(doc.querySelector('.bt-comm-status-help').textContent, /not that a reply is complete/)
+    assert.equal(doc.querySelector('.bt-comm-status-help'), null)
   })
 })
 
@@ -200,8 +203,11 @@ test('Human and group rename send authenticated versioned requests and failed se
     assert.equal(configure.expectedVersion, 1)
     assert.ok(configure.operationId)
     await edit(doc.querySelector('.bt-comm-main textarea'), 'Existing draft')
+    await click('Activity details')
     assert.equal(button('Copy to draft').disabled, true)
+    await click('Cancel')
     await edit(doc.querySelector('.bt-comm-main textarea'), '')
+    await click('Activity details')
     await click('Copy to draft')
     assert.equal(doc.querySelector('.bt-comm-main textarea').value, 'Denied original')
     assert.equal(calls.filter(call => call.endpoint === 'send').length, 0)
@@ -293,7 +299,9 @@ test('an uncertain group creation reuses its persisted operation ID after a full
     let persisted = JSON.parse(dom.window.sessionStorage.getItem('ds-bot:communication:operation-ids'))
     assert.equal(persisted.length, 1)
     assert.equal(persisted[0][1], attempts[0].operationId)
-    assert.match(doc.querySelector('.bt-comm-feedback').textContent, /operation is not confirmed/)
+    await click('Cancel')
+    await click('Activity details')
+    assert.match(doc.querySelector('.bt-comm-activity').textContent, /operation is not confirmed/)
     await remount()
     await click('New group')
     await edit(doc.querySelector('.bt-comm-modal input'), 'One group')
@@ -339,10 +347,12 @@ test('causal-limit stops render once outside chat from canonical history or an a
     snapshot.outbox = [{ id: message.messageId, type: 'message.publish', conversationId: 'group', state: 'accepted', text: message.content.text, deliveries: [], result: { conversationSeq: 2, causality, dispatchSuppressed: 'CAUSAL_LIMIT' } }]
     await pane({ snapshot, history }, async ({ doc, calls, click }) => {
       await click('Shared group')
-      const feedback = doc.querySelector('.bt-comm-feedback')
+      assert.equal(doc.querySelector('.bt-comm-feedback'), null)
+      await click('Activity details')
+      const feedback = doc.querySelector('.bt-comm-activity')
       assert.equal(feedback.querySelectorAll('[data-causal-stop]').length, 1)
       assert.match(feedback.textContent, /Bot collaboration stopped at the safety limit. Send a new Human message to continue/)
-      assert.equal(feedback.querySelector('button'), null)
+      assert.equal([...feedback.querySelectorAll('button')].some(node => /Retry|Send message/.test(node.textContent)), false)
       assert.doesNotMatch(doc.querySelector('.bt-comm-log').textContent, /safety limit/)
       assert.equal(doc.querySelector('article[data-failed=true]'), null)
       if (history.length) assert.match(doc.querySelector('.bt-comm-log').textContent, /Original final reply remains visible/)
@@ -571,5 +581,135 @@ test('canonical started history deduplicates beneath messages and member chips o
     assert.equal(inspector.querySelector('input,select,textarea'), null)
     assert.equal(inspector.querySelectorAll('button').length, 1)
     assert.ok(calls.every(body => ['state', 'history', 'read'].includes(body.endpoint)), 'inspection performs no writes or local Bot navigation')
+  })
+})
+
+test('group and private rows use authorized member avatars, two-line summaries, selected state and accessible unread counts', async () => {
+  const bots = ['Chief', 'Reviewer'].map((displayName, index) => ({ principalId: `bot:a:${index}`, displayName, kind: 'bot', homeInstanceId: 'a' }))
+  const other = { principalId: 'human:b:peer', displayName: 'Peer', kind: 'human', homeInstanceId: 'b' }
+  const group = { ...membership, unread: 4, info: { members: [...membership.info.members, ...bots, other] }, lastMessage: { summary: 'Ready for review', author: bots[0] } }
+  const dm = { ...membership, kind: 'dm', title: 'ignored private title', conversationId: 'private', info: { members: [...membership.info.members, other] }, lastMessage: { summary: 'Hello across devices', author: other } }
+  const snapshot = { ...state(), contacts: [...bots, other, { principalId: 'bot:private:secret', displayName: 'Private secret', kind: 'bot' }], conversations: [group, dm] }
+  await pane({ snapshot }, async ({ doc }) => {
+    const rows = doc.querySelectorAll('nav .bt-comm-conversation-row')
+    assert.equal(rows.length, 2)
+    assert.equal(rows[0].querySelector('.bt-comm-conversation-name').textContent, 'Shared group')
+    assert.equal(rows[0].querySelector('.bt-comm-conversation-preview').textContent, 'Chief: Ready for review')
+    assert.deepEqual([...rows[0].querySelectorAll('[data-avatar-id]')].map(node => node.dataset.avatarId), group.info.members.map(person => person.principalId))
+    assert.equal(rows[0].getAttribute('aria-label'), 'Shared group, Chief: Ready for review, 4 Unread', 'the button accessible name includes summary and exact unread count')
+    assert.equal(rows[0].querySelector('.bt-comm-unread').textContent, '', 'the visible unread indicator is a dot')
+    assert.equal(rows[1].querySelector('.bt-comm-conversation-name').textContent, 'Peer')
+    assert.equal(rows[1].querySelector('.bt-comm-conversation-preview').textContent, 'Hello across devices')
+    assert.deepEqual([...rows[1].querySelectorAll('[data-avatar-id]')].map(node => node.dataset.avatarId), [other.principalId])
+    assert.equal(rows[1].querySelector('.bt-comm-unread'), null)
+    await act(async () => rows[0].click())
+    assert.equal(rows[0].getAttribute('aria-current'), 'page')
+    assert.equal(rows[1].getAttribute('aria-current'), null)
+    await act(async () => rows[1].click())
+    assert.equal(rows[1].getAttribute('aria-current'), 'page')
+    assert.doesNotMatch(doc.querySelector('nav').textContent, /Private secret/)
+  })
+})
+
+test('unknown summary authors remain concise and cannot borrow names or avatars from another conversation', async () => {
+  const removed = { principalId: 'bot:removed:long-principal-id', kind: 'bot', displayName: 'bot:removed:long-principal-id' }
+  const snapshot = { ...state(), contacts: [{ ...removed, displayName: 'Private contact name' }], conversations: [{ ...membership, lastMessage: { summary: 'Authorized summary', author: removed } }] }
+  await pane({ snapshot }, async ({ doc }) => {
+    assert.equal(doc.querySelector('.bt-comm-conversation-preview').textContent, 'Authorized summary')
+    assert.doesNotMatch(doc.querySelector('nav').textContent, /long-principal|Private contact name/)
+    assert.equal(doc.querySelector('nav [data-avatar-id="bot:removed:long-principal-id"]'), null)
+  })
+})
+
+test('routine failures, queues and reconciliation have no bottom console and activity stays scoped without automatic retries', async () => {
+  const snapshot = { ...state(), error: 'FORBIDDEN', conversations: [membership, { ...membership, conversationId: 'other', title: 'Other group' }],
+    outbox: [
+      { id: 'failed-here', type: 'message.publish', state: 'failed', conversationId: 'group', principalId: 'human:a:owner', text: 'Preserved failed text', error: 'SPEAKING_FORBIDDEN' },
+      { id: 'pending-here', type: 'message.publish', state: 'pending', conversationId: 'group', text: 'Pending text' },
+      { id: 'old-foreign', type: 'invite', state: 'failed', conversationId: 'other', error: 'FORBIDDEN' },
+      { id: 'bot-owned', type: 'invite', state: 'failed', conversationId: 'group', principalId: 'bot:a:private', error: 'SECRET_BOT_FAILURE' }],
+    errors: [{ bindingId: 'here', conversationId: 'group', code: 'CURRENT_RECONCILE' }, { bindingId: 'elsewhere', conversationId: 'other', code: 'OTHER_RECONCILE' }],
+    exportFailures: [{ messageId: 'export', conversationId: 'group', code: 'CURRENT_EXPORT' }] }
+  await pane({ snapshot, handle: async body => { if (body.endpoint === 'send') throw Object.assign(new Error('denied'), { code: 'SPEAKING_FORBIDDEN' }); return {} } }, async ({ doc, click, edit, calls }) => {
+    await click('Shared group')
+    assert.equal(doc.querySelector('.bt-comm-feedback,.bt-comm-status-help,.bt-comm-activity,.bt-comm-toast'), null)
+    assert.doesNotMatch(doc.querySelector('.bt-comm-main footer').textContent, /Send failed|Operation|not confirmed|CURRENT_RECONCILE|CURRENT_EXPORT|Queued messages|About message status/)
+    assert.doesNotMatch(doc.querySelector('.bt-comm-main').textContent, /FORBIDDEN|CURRENT_RECONCILE|CURRENT_EXPORT|OTHER_RECONCILE/)
+    await click('Activity details')
+    const activity = doc.querySelector('.bt-comm-activity')
+    assert.match(activity.textContent, /Preserved failed text|Pending text/)
+    assert.match(activity.textContent, /CURRENT_RECONCILE/); assert.match(activity.textContent, /CURRENT_EXPORT/)
+    assert.doesNotMatch(activity.textContent, /OTHER_RECONCILE|SECRET_BOT_FAILURE|Operation failed/)
+    assert.equal(calls.some(body => !['state', 'history', 'read'].includes(body.endpoint)), false)
+    await click('Cancel')
+    await edit(doc.querySelector('.bt-comm-main textarea'), 'Retained original intent')
+    await click('Send message')
+    assert.match(doc.querySelector('.bt-comm-toast').textContent, /read-only access/)
+    assert.equal(doc.querySelector('.bt-comm-main textarea').value, 'Retained original intent')
+    assert.ok([...doc.querySelectorAll('footer>button')].some(button => button.textContent === 'Retry same send'))
+    await click('Dismiss notification')
+    assert.equal(doc.querySelector('.bt-comm-toast'), null)
+    assert.equal(calls.filter(body => body.endpoint === 'send').length, 1, 'dismiss and view never resend a rejected action')
+  })
+})
+
+test('Hub management uses only the advertised enabled URL and explains unavailable or unsafe entries', async () => {
+  const snapshot = { ...state(), hubUrl: 'wss://hub.example.test:3190/communication', managementAvailable: true, managementUrl: 'https://manage.example.test:9443/admin/' }
+  await pane({ snapshot }, async ({ doc, calls }) => {
+    const link = doc.querySelector('aside.bt-comm-nav a.bt-comm-admin-link')
+    assert.equal(link.href, snapshot.managementUrl)
+    assert.match(link.textContent, /https:\/\/manage.example.test:9443/)
+    assert.equal(link.target, '_blank'); assert.match(link.rel, /noopener/); assert.match(link.rel, /noreferrer/)
+    assert.equal(calls.some(body => /management|admin/.test(body.endpoint)), false)
+  })
+  for (const options of [{ managementAvailable: false, managementUrl: null }, { managementAvailable: true, managementUrl: 'https://user:password@hub.example.test/admin/' }, { managementAvailable: true, managementUrl: 'http://remote.example.test/admin/' }]) {
+    await pane({ snapshot: { ...snapshot, ...options } }, async ({ doc, click }) => {
+      assert.equal(doc.querySelector('a.bt-comm-admin-link'), null)
+      await click('Hub management')
+      assert.match(doc.querySelector('.bt-comm-modal').textContent, /has not provided an active management entry/)
+      await click('Open setup guide')
+      assert.ok(doc.querySelector('[role=dialog][aria-label="Pairing guide"]'))
+      assert.equal(doc.querySelector('a.bt-comm-admin-link'), null, 'no WSS-derived guessed management link in the guide')
+    })
+  }
+})
+
+test('background authorization failures stay quiet and revoked membership clears the visible authorized history', async () => {
+  const snapshot = { ...state(), conversations: [{ ...membership, speakingMode: 'readOnly' }] }
+  let deny = false
+  const event = { type: 'message', conversationSeq: 1, serverAcceptedAt: '2026-11-04T00:00:00.000Z', message: { messageId: 'private-history', author: membership.info.members[0], content: { text: 'Previously authorized history' }, mentions: [] } }
+  await pane({ snapshot, history: async () => { if (deny) throw Object.assign(new Error('persistent background denial'), { code: 'FORBIDDEN' }); return [event] } }, async ({ doc, click, calls }) => {
+    await click('Shared group')
+    assert.match(doc.querySelector('.bt-comm-log').textContent, /Previously authorized history/)
+    assert.equal(doc.querySelector('.bt-comm-toast'), null, 'ordinary read-only membership has no error toast')
+    deny = true
+    for (let index = 0; index < 3; index++) {
+      snapshot.conversations[0].watermark += 1
+      await click('Refresh status')
+      assert.equal(doc.querySelector('.bt-comm-toast'), null, 'persistent history rejection never replays a user notification')
+      assert.doesNotMatch(doc.querySelector('.bt-comm-log').textContent, /Previously authorized history/)
+    }
+    await click('Activity details')
+    assert.match(doc.querySelector('.bt-comm-activity').textContent, /permission for this group operation/)
+    await click('Cancel')
+    snapshot.conversations = []
+    await click('Refresh status')
+    assert.equal(doc.querySelector('.bt-comm-main textarea'), null)
+    assert.equal(doc.querySelector('.bt-comm-log article'), null)
+    assert.doesNotMatch(doc.querySelector('.bt-comm-main').textContent, /Previously authorized history/)
+    assert.equal(doc.querySelector('.bt-comm-toast'), null)
+    assert.equal(calls.some(body => ['send', 'retry', 'accept'].includes(body.endpoint)), false)
+  })
+})
+
+test('background read acknowledgement denial clears stale history without a toast or automatic send', async () => {
+  const snapshot = { ...state(), conversations: [membership] }
+  const event = { type: 'message', conversationSeq: 1, serverAcceptedAt: '2026-11-04T00:00:00.000Z', message: { messageId: 'read-denied', author: membership.info.members[0], content: { text: 'Read no longer authorized' }, mentions: [] } }
+  await pane({ snapshot, history: [event], handleRead: async () => { throw Object.assign(new Error('read revoked'), { code: 'FORBIDDEN' }) } }, async ({ doc, calls, click }) => {
+    await click('Shared group')
+    assert.ok(calls.some(body => body.endpoint === 'read'))
+    assert.equal(doc.querySelector('.bt-comm-toast'), null)
+    assert.equal(doc.querySelector('.bt-comm-log article'), null)
+    assert.equal(calls.some(body => body.endpoint === 'send'), false)
   })
 })

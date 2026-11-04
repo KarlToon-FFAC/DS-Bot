@@ -33,6 +33,30 @@ installed. Database paths resolve relative to the config file.
 
 ## Hub page, device requests and user codes
 
+For a new local Hub with its management page enabled, use
+`managed.config.example.json`. Keep your working configuration and database in
+the ignored local data folder:
+
+```powershell
+cd D:/git/DS-Bot-federated/communication-hub
+npm.cmd ci --no-fund --no-audit
+New-Item -ItemType Directory -Force ../.ds-bot-local/hub | Out-Null
+# Copy only for a new setup; preserve an existing operator configuration.
+if (Test-Path ../.ds-bot-local/hub/config.json) { throw 'Hub configuration already exists; edit it instead.' }
+Copy-Item ./managed.config.example.json ../.ds-bot-local/hub/config.json -ErrorAction Stop
+# Supply DSBOT_HUB_ADMIN_PASSWORD privately in this process (at least 16 characters).
+npm.cmd start -- ../.ds-bot-local/hub/config.json
+```
+
+The default local page is `http://127.0.0.1:3190/admin/`; the startup log is
+authoritative if you change the port or public origin. This starter is loopback
+only. For other machines, configure reachable trusted WSS/TLS as described below.
+The existing `config.example.json` keeps management disabled for static-peer
+compatibility; starting that file alone does not enable an administrator page.
+The client exposes a **Hub management** entry and uses only an actual management
+URL advertised by an enabled Hub. Old or disabled Hubs show setup guidance rather
+than inventing a working page. Opening a link does not start the Hub or sign in.
+
 Enable `management.enabled` and supply an administrator password of at least
 16 characters through `management.adminPasswordEnv`, using your existing local
 secret mechanism. Do not put its value in config or command arguments. The Hub

@@ -53,11 +53,11 @@ export function CommunicationMessage({ message, members, request, onInspect }) {
   return h('div', { ref: wrapper, onClickCapture: activate, onAuxClickCapture: activate, onContextMenuCapture: activate, onKeyDownCapture: event => { if (['Enter', ' '].includes(event.key)) activate(event) } },
     h(MarkdownText, { text: projection.text, labels: mdLabels(), variant: 'compact' }),
     slots.map(slot => createPortal(h('span', { className: 'bt-comm-inline-mention-content', 'aria-hidden': true },
-      slot.all ? null : h(CommunicationAvatar, { person: slot.people[0], request, size: 16 }), slot.label), slot.node, slot.url)),
+      slot.all ? null : h(CommunicationAvatar, { person: slot.people[0], request, size: 16 }), h('span', { className: 'bt-comm-mention-label' }, slot.label)), slot.node, slot.url)),
     unmatched.length ? h('span', { className: 'bt-comm-mention-targets' }, unmatched.map(person => h('button', { type: 'button', key: person.principalId,
       className: 'bt-comm-inline-mention bt-comm-unmatched-mention', 'data-mention-principal-id': person.principalId,
       title: `${person.displayName} (${person.principalId})`, 'aria-label': `${t('View participant')}: ${labels.get(person.principalId)}`, onClick: () => onInspect([person.principalId]) },
-      h('span', { className: 'bt-comm-inline-mention-content', 'aria-hidden': true }, h(CommunicationAvatar, { person, request, size: 16 }), labels.get(person.principalId))))) : null)
+      h('span', { className: 'bt-comm-inline-mention-content', 'aria-hidden': true }, h(CommunicationAvatar, { person, request, size: 16 }), h('span', { className: 'bt-comm-mention-label' }, labels.get(person.principalId)))))) : null)
 }
 
 export function BotWorkStarted({ event, members, request, onInspect }) {

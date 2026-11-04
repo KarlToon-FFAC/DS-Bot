@@ -251,6 +251,27 @@ test('base-capability legacy clients still connect while the Hub advertises boun
   }finally{socket.terminate();await hub.close()}
 })
 
+test('authenticated welcome advertises only an enabled configured management address and ignores caller claims',async()=>{
+  for(const enabled of [false,true]){
+    const hub=await startHub({databasePath:':memory:',port:0,peers,management:enabled?{enabled:true,password:"mock-only-management-test-password",origin:'https://management.example.test'}:undefined})
+    const socket=new WebSocket(hub.url)
+    try{
+      await once(socket,'open')
+      const response=once(socket,'message')
+      socket.send(JSON.stringify({protocol:PROTOCOL,id:randomUUID(),type:'hello',payload:{instanceId:'a',credential:credentials.a,capabilities:CAPABILITIES,managementUrl:'https://caller.example.test/admin/'}}))
+      const welcome=JSON.parse((await response)[0].toString())
+      assert.equal(welcome.ok,true)
+      if(enabled){
+        assert.equal(welcome.value.managementUrl,'https://management.example.test/admin/')
+        assert.equal(welcome.value.managementUrl,hub.managementUrl)
+      }else{
+        assert.equal(Object.hasOwn(welcome.value,'managementUrl'),false)
+        assert.equal(hub.managementUrl,null)
+      }
+    }finally{socket.terminate();await hub.close()}
+  }
+})
+
 test('revoked trust stays rejected after ordinary Hub restart until the owner increases the pairing revision',async()=>{
   const root=mkdtempSync(join(tmpdir(),'dsbot-hub-network-')),databasePath=join(root,'hub.sqlite')
   let hub,a,b

@@ -18,7 +18,7 @@ async function ui(check) {
   dom.window.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} })
   const mod = { exports: {} }
   runInNewContext(outputFiles[0].text, { module: mod, exports: mod.exports, require: id => id === 'react' ? React : id === 'react-dom' ? harness('react-dom') : {},
-    window: dom.window, document: dom.window.document, sessionStorage: dom.window.sessionStorage, localStorage: dom.window.localStorage, setTimeout, clearTimeout, crypto: globalThis.crypto,
+    window: dom.window, document: dom.window.document, sessionStorage: dom.window.sessionStorage, localStorage: dom.window.localStorage, setTimeout, clearTimeout, crypto: globalThis.crypto, URL,
     requestAnimationFrame: dom.window.requestAnimationFrame, cancelAnimationFrame: dom.window.cancelAnimationFrame })
   const { createRoot } = harness('react-dom/client'), root = createRoot(dom.window.document.getElementById('root')), doc = dom.window.document
   const render = async node => act(async () => root.render(node))
@@ -116,9 +116,7 @@ test('Hub code review reveals the actual address and storage before a Human expl
     await edit('Hub code', 'owner-provided-code')
     await click('Review Hub')
     assert.match(doc.body.textContent, /wss:\/\/hub.example.test:3190\/communication/)
-    const link = doc.querySelector('a')
-    assert.equal(link.getAttribute('href'), 'https://hub.example.test:3190/admin/')
-    assert.match(link.rel, /noopener/)
+    assert.equal(doc.querySelector('a'), null, 'a Hub code does not prove a management server is enabled')
     assert.equal(calls.some(call => call.endpoint === 'join-hub'), false)
     await edit('Device display name', 'New machine')
     await click('Confirm and request access')
@@ -131,7 +129,7 @@ test('Hub code review reveals the actual address and storage before a Human expl
     await click('Cancel request')
     assert.equal(calls.at(-1).endpoint, 'cancel-hub-join')
     assert.equal(calls.at(-1).hubId, hub.hubId)
-    assert.equal(api.hubAdminAddress('https://untrusted.example/'), null)
+    assert.equal(api.hubManagementAddress('http://untrusted.example/'), null)
   })
 })
 
