@@ -125,3 +125,35 @@ lease while transient network loss does not. All publication evidence remains
 local/ignored; the staged tree is scanned before commit. External incident
 confirmation still requires the deployed version, actual Hub URL and public
 request/status/error metadata from that environment.
+
+## Clean-CI dependency boundary correction
+
+Commit `e82c7da` imported the sibling Hub server from the plugin TLS socket test.
+The four Node jobs install only ds-bot plus the DSH harness; they do not install
+communication-hub dependencies. Node resolves that server's ws import relative to
+the Hub, so a fully installed developer checkout hid ERR_MODULE_NOT_FOUND. This
+is the same boundary error corrected by `961ef43` for the earlier fairness tests.
+
+The enrollment case uses no Hub protocol operation: it opens a TLS/WebSocket and
+closes it. Its fixture now uses real node:https plus the plugin's already-declared
+ws dependency. It retains TLS1.2 minimum, all three original real-handshake
+assertions, isolated child-process CA startup, refusal of untrusted CA, acceptance
+of the supplied CA and refusal of a trusted hostname mismatch. No production,
+workflow, resolver, package-manifest, dependency version or skip condition changes.
+Real Hub authentication/delivery/TLS coverage remains in communication-hub's
+independent WSS suite, including a canonical DM.
+
+Verification starts from git archive with no node_modules. The unchanged original
+case first reproduces exit1 / ERR_MODULE_NOT_FOUND for ws. Only ds-bot npm ci and
+the CI-pinned DSH harness are installed. After applying the fixture correction,
+Windows Node24.13.0 and Node22.23.4 each pass all 1632 tests with the same two
+existing skips; the enrollment TLS test actually executes. The plugin tree still
+has no communication-hub/node_modules. Freshness and lint also pass. A separate
+fresh export installs only the Hub package and passes 88/88, including real Hub
+WSS/CA/SAN/auth/message checks. Linux results must be confirmed by remote CI;
+this Windows host is not described as an Ubuntu runner.
+
+A separately installed DSH0.2.0-rc.2 harness also passes the full clean plugin
+suite on Windows Node24: 1632 passed, two existing skips, zero failures.
+The managed sandbox initially denied child-process spawn (EPERM); the same
+authorized test command then completed through the normal approved execution path.

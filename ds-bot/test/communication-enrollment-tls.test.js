@@ -6,7 +6,24 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname, delimiter, resolve, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { startHub } from '../../communication-hub/src/server.js'
+import { createServer } from 'node:https'
+import { WebSocketServer } from 'ws'
+
+// This package tests enrollment's TLS socket, not Hub protocol behavior. Use its
+// declared ws dependency; real Hub auth/delivery/WSS live in the Hub test job.
+async function tlsServer(tls) {
+  const server = createServer({ ...tls, minVersion: 'TLSv1.2' })
+  const sockets = new WebSocketServer({ server, path: '/communication' })
+  try { await new Promise((done, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', done) }) }
+  catch (error) { sockets.close(); throw error }
+  return {
+    url: `wss://127.0.0.1:${server.address().port}/communication`,
+    async close() {
+      for (const socket of sockets.clients) socket.terminate()
+      await new Promise(done => sockets.close(done)); await new Promise(done => server.close(done))
+    },
+  }
+}
 
 const openssl = (process.env.PATH ?? '').split(delimiter).flatMap(path => [join(path, process.platform === 'win32' ? 'openssl.exe' : 'openssl'), join(dirname(path), 'usr/bin/openssl.exe')]).find(path => existsSync(path))
 async function client(url, ca) {
@@ -34,14 +51,13 @@ test('actual enrollment WSS reports untrusted CA, accepts process-start extra CA
     return { certificate, tls: { cert: readFileSync(certificate), key: readFileSync(key) } }
   }
   try {
-    const peers = [{ instanceId: 'synthetic-test-instance', credential: 'synthetic-test-pairing-credential-only' }]
     const valid = cert('valid', 'IP:127.0.0.1')
-    hub = await startHub({ databasePath: ':memory:', port: 0, peers, tls: valid.tls })
+    hub = await tlsServer(valid.tls)
     assert.deepEqual(await client(hub.url), { connected: false, code: 'HUB_TLS_UNTRUSTED' })
     assert.deepEqual(await client(hub.url, valid.certificate), { connected: true })
     await hub.close(); hub = null
     const mismatch = cert('wrong-host', 'DNS:localhost')
-    hub = await startHub({ databasePath: ':memory:', port: 0, peers, tls: mismatch.tls })
+    hub = await tlsServer(mismatch.tls)
     assert.deepEqual(await client(hub.url, mismatch.certificate), { connected: false, code: 'HUB_TLS_HOSTNAME_MISMATCH' })
   } finally {
     await hub?.close()
