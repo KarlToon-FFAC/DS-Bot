@@ -6,6 +6,7 @@ const CAPABILITIES = ['text', 'markdown', 'mentions', 'group', 'dm', 'reply', 'h
 const BOUNDED_COLLABORATION = 'bounded-bot-collaboration'
 export const communicationCapabilities = () => [...CAPABILITIES, BOUNDED_COLLABORATION, ATTACHMENT_CAPABILITY]
 const outboxCapacity = Symbol('outbox-capacity')
+const membershipChanged = Symbol('membership-changed')
 const transient = new Set(['CONNECTION_LOST', 'REQUEST_TIMEOUT', 'HUB_CONNECTION_REFUSED', 'HUB_CONNECTION_TIMEOUT', 'HUB_UNREACHABLE', 'STORAGE_UNAVAILABLE', 'BACKPRESSURE', 'HISTORY_GAP'])
 const errorWith = (code, message = code) => Object.assign(new Error(message), { code })
 
@@ -132,12 +133,24 @@ export class CommunicationTransport {
         this.queue.rejected(item.id, error.code ?? 'INVALID_RESPONSE')
       }
     }
+    const requestMembership = async (type, payload) => {
+      try { return await this.request(type, payload) }
+      catch (error) {
+        // A contact or group can change after the membership snapshot was read.
+        // Refresh authorization next poll without treating that scope as device trust.
+        if (['NOT_A_MEMBER', 'MEMBERSHIP_REVOKED', 'CONTACT_REQUIRED'].includes(error.code)) {
+          this.queue.disconnected()
+          error[membershipChanged] = true
+        }
+        throw error
+      }
+    }
     this.queue.applyMemberships(await this.request('memberships.list'))
     for (const member of this.queue.memberships()) {
       let after = this.queue.cursor(member.conversationId, member.principalId, member.membershipEpoch)
       if (after > member.watermark) throw errorWith('HISTORY_GAP')
       while (after < member.watermark) {
-        const page = await this.request('conversation.sync', { conversationId: member.conversationId, principalId: member.principalId,
+        const page = await requestMembership('conversation.sync', { conversationId: member.conversationId, principalId: member.principalId,
           membershipEpoch: member.membershipEpoch, after, limit: 100 })
         const next = this.queue.applySync(page)
         if (next <= after) throw errorWith('HISTORY_GAP')
@@ -152,7 +165,7 @@ export class CommunicationTransport {
       }
     }
     for (const member of this.queue.memberships()) {
-      await this.request('conversation.ack', { conversationId: member.conversationId, principalId: member.principalId,
+      await requestMembership('conversation.ack', { conversationId: member.conversationId, principalId: member.principalId,
         membershipEpoch: member.membershipEpoch, seq: this.queue.cursor(member.conversationId, member.principalId, member.membershipEpoch) })
     }
     for (const receipt of this.queue.pendingReceipts()) {
@@ -176,7 +189,7 @@ export class CommunicationTransport {
       try { await this.connect(); await this.pump(); failures = 0 }
       catch (error) {
         failures += 1
-        if (error[outboxCapacity] && this.connected && this.socket?.readyState === WebSocket.OPEN) {
+        if ((error[outboxCapacity] || error[membershipChanged]) && this.connected && this.socket?.readyState === WebSocket.OPEN) {
           this.onError?.({ code: error.code })
           delay = Math.min(5000, Math.max(250, pollMs) * 2 ** Math.min(failures - 1, 5))
         } else {
