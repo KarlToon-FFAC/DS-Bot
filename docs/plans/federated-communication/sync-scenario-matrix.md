@@ -159,6 +159,21 @@ that the earlier failure prevented from running.
 
 ## Remaining gaps and stopping criteria
 
+The later focused recovery-RPC run is recorded separately in
+[`recovery-prompt-rpc-evidence.json`](recovery-prompt-rpc-evidence.json), against
+head `233a01f8` and tree `c1610bad`. Its five cases passed: two consecutive exact
+pre-model prompt RPC losses followed by one final response, plus revocation,
+new-epoch isolation with a positive control, explicit user cancellation and a
+real local Mock provider error. Each safety case included two network reconnects
+and a normal host restart. The original failed single-loss baseline remains in
+[`recovery-prompt-rpc-baseline-evidence.json`](recovery-prompt-rpc-baseline-evidence.json).
+This later focused result does not change the historical `69264f6` behavior
+failure above or certify every other row against that newer integration.
+
+The new RPC retry proof remains process-local: another host loss after a failed
+pre-model guard but before successful continuation is conservatively not retried.
+That combined liveness window was not asserted as passing.
+
 - **NOT RUN:** admin revoke → signed leave-status reconciliation → forget Hub
   with `deleteLocalHistory:false` → join the same Hub with a new approval/key.
   Must prove a new instance, principal and queue namespace, no inherited group

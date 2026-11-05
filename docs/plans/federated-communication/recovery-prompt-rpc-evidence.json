@@ -1,0 +1,352 @@
+{
+  "schemaVersion": 1,
+  "status": "PASS",
+  "testDateUtc": "2026-11-05",
+  "testedRevision": {
+    "head": "233a01f8e17fe44a38b7b0110869e6ce3743a0b1",
+    "tree": "c1610bad85c3d3f906d0aff00f48a457733f8bfc",
+    "productionFixSourceCommit": "55f134c35e55e078c727e908117cff1dd5b4e800",
+    "fixtureSourceHead": "3bc8d917ad6baeb4044342ae90f0193da954e477",
+    "trackedSourceUnchangedDuringRun": true
+  },
+  "execution": {
+    "runId": "rpc-final-1793875813",
+    "script": "ds-bot/dev/communication/recovery-prompt-rpc-acceptance.mjs",
+    "command": "DSBOT_TEST_RUN_ID=rpc-final-1793875813 DSBOT_COMMUNICATION_OWNER_PID=$$ node ds-bot/dev/communication/recovery-prompt-rpc-acceptance.mjs",
+    "exitCode": 0,
+    "environment": {
+      "platform": "linux",
+      "network": "independent DSH A/B and persistent Hub on loopback",
+      "model": "local deterministic Mock only"
+    },
+    "verifiedAt": "2026-11-05T10:53:41.592Z"
+  },
+  "provenance": {
+    "rawAcceptance": {
+      "relativePath": ".dsh-test-tools/recovery-rpc-6a26017f-rpc-final-1793875813-acceptance.json",
+      "sha256": "a077bf29829e4e4ee37abff0240791e01c948529d889c6555a2e73ee940a0e47"
+    },
+    "independentVerification": {
+      "relativePath": ".dsh-test-tools/recovery-rpc-6a26017f-rpc-final-1793875813-verified.json",
+      "sha256": "156dd65f12313ad760348469a6f74833ae19a618734647e1b1ad9cc9c144afc3"
+    },
+    "rawBaselineLabelExplanation": "The raw fixture baseline field describes the historical fixture base da47b17, not the tested production revision. The independently verified head/tree above identify the actual executed integration, including the narrow core repair."
+  },
+  "cases": [
+    {
+      "id": "reconnect",
+      "status": "PASS",
+      "normalHostRestartVerified": true,
+      "conversationId": "4e5cc044-1f68-46a6-b859-ca3bdf6c59eb",
+      "originalMessageId": "4cd72f19-364e-47e5-af23-b8a971233bdf",
+      "deliveryId": "6f788284-c272-40ef-a3b5-1021dc597de4",
+      "membershipEpoch": "c97243d9-cc02-4ca8-bb46-201e9b08f504",
+      "finalMessageId": "ce59f25b-daaa-423f-b255-a591d6c42a6b",
+      "logicalInputs": 1,
+      "finalMessages": 1,
+      "modelRequests": 2,
+      "faults": [
+        {
+          "point": "recovery-prompt-rpc",
+          "sessionId": "session-e9328255-a3f4-466b-808e-0198f4ea9e1a",
+          "noticeId": "22e39f46-d182-48e6-ac5c-70e508ed7ab1",
+          "seq": 16,
+          "conversationId": "4e5cc044-1f68-46a6-b859-ca3bdf6c59eb",
+          "deliveryId": "6f788284-c272-40ef-a3b5-1021dc597de4",
+          "messageId": "4cd72f19-364e-47e5-af23-b8a971233bdf",
+          "phase": "assembling",
+          "faultIndex": 1,
+          "rpcType": "conversation.members",
+          "socketOpen": true,
+          "responseSent": false
+        },
+        {
+          "point": "recovery-prompt-rpc",
+          "sessionId": "session-e9328255-a3f4-466b-808e-0198f4ea9e1a",
+          "noticeId": "0b15f937-5d46-4302-b0ed-9799d4bb415d",
+          "seq": 21,
+          "conversationId": "4e5cc044-1f68-46a6-b859-ca3bdf6c59eb",
+          "deliveryId": "6f788284-c272-40ef-a3b5-1021dc597de4",
+          "messageId": "4cd72f19-364e-47e5-af23-b8a971233bdf",
+          "phase": "assembling",
+          "faultIndex": 2,
+          "rpcType": "conversation.members",
+          "socketOpen": true,
+          "responseSent": false
+        }
+      ],
+      "terminalKinds": [
+        {
+          "turn": 1,
+          "kind": "interrupted"
+        },
+        {
+          "turn": 2,
+          "kind": "error"
+        },
+        {
+          "turn": 3,
+          "kind": "error"
+        },
+        {
+          "turn": 4,
+          "kind": "completed"
+        }
+      ]
+    },
+    {
+      "id": "revoked",
+      "status": "PASS",
+      "normalHostRestartVerified": true,
+      "conversationId": "5c5b755c-350a-4264-98ff-b3fd49fca033",
+      "originalMessageId": "bc20c3a6-7586-41f6-af98-559ae3ae8e34",
+      "deliveryId": "96ee2841-b878-4ce4-9c8c-057a28ce2e37",
+      "originalMembershipEpoch": "c1eba596-8424-4230-bf72-6ef1731cd86d",
+      "logicalInputs": 1,
+      "finalMessages": 0,
+      "modelRequests": 1,
+      "faults": [
+        {
+          "point": "recovery-prompt-rpc",
+          "sessionId": "session-c1d4af07-cda7-4ad1-82b7-06e9b8fd07b8",
+          "noticeId": "a005555e-d235-4627-b4fa-4bca2816f2db",
+          "seq": 16,
+          "conversationId": "5c5b755c-350a-4264-98ff-b3fd49fca033",
+          "deliveryId": "96ee2841-b878-4ce4-9c8c-057a28ce2e37",
+          "messageId": "bc20c3a6-7586-41f6-af98-559ae3ae8e34",
+          "phase": "assembling",
+          "faultIndex": 1,
+          "rpcType": "conversation.members",
+          "socketOpen": true,
+          "responseSent": false
+        }
+      ],
+      "terminalKinds": [
+        {
+          "turn": 1,
+          "kind": "interrupted"
+        },
+        {
+          "turn": 2,
+          "kind": "error"
+        }
+      ]
+    },
+    {
+      "id": "new-epoch",
+      "status": "PASS",
+      "normalHostRestartVerified": true,
+      "freshScopeControl": {
+        "messageId": "c09c9d77-4d39-496c-a52f-e3988f23ff4a",
+        "replyCount": 1
+      },
+      "conversationId": "755694e6-425f-4d52-b6ab-1cc13ea00e17",
+      "originalMessageId": "7aff0b42-3c93-4e9e-a6c5-2cb6abb8f145",
+      "deliveryId": "58bf1f89-a942-45f7-8f02-8afd5bbd7b6d",
+      "originalMembershipEpoch": "ae06b6d9-0d8f-4cf4-a20c-9cbb103b334c",
+      "logicalInputs": 1,
+      "finalMessages": 0,
+      "modelRequests": 1,
+      "faults": [
+        {
+          "point": "recovery-prompt-rpc",
+          "sessionId": "session-39fed281-ebae-4953-93ea-724e6cf8d5fa",
+          "noticeId": "19ea13e3-71c3-4089-973e-bb9fa151bfaa",
+          "seq": 16,
+          "conversationId": "755694e6-425f-4d52-b6ab-1cc13ea00e17",
+          "deliveryId": "58bf1f89-a942-45f7-8f02-8afd5bbd7b6d",
+          "messageId": "7aff0b42-3c93-4e9e-a6c5-2cb6abb8f145",
+          "phase": "assembling",
+          "faultIndex": 1,
+          "rpcType": "conversation.members",
+          "socketOpen": true,
+          "responseSent": false
+        }
+      ],
+      "terminalKinds": [
+        {
+          "turn": 1,
+          "kind": "interrupted"
+        },
+        {
+          "turn": 2,
+          "kind": "error"
+        }
+      ]
+    },
+    {
+      "id": "user-cancel",
+      "status": "PASS",
+      "normalHostRestartVerified": true,
+      "conversationId": "5e204123-f0b2-46d4-bee5-1ce63e15d3e7",
+      "originalMessageId": "61fdb08c-659a-4641-ae2c-289c16ca4a79",
+      "deliveryId": "f443c72b-478f-45a5-bd2a-7005b84138ff",
+      "originalMembershipEpoch": "980901fb-e990-4fa4-9f8a-ec9dc147b226",
+      "logicalInputs": 1,
+      "finalMessages": 0,
+      "modelRequests": 1,
+      "faults": [
+        {
+          "point": "recovery-prompt-rpc",
+          "sessionId": "session-03ba00ce-9fd3-4d86-a87e-1cde19f4840b",
+          "noticeId": "598b7390-8523-45ac-96a6-c23541c14de0",
+          "seq": 16,
+          "conversationId": "5e204123-f0b2-46d4-bee5-1ce63e15d3e7",
+          "deliveryId": "f443c72b-478f-45a5-bd2a-7005b84138ff",
+          "messageId": "61fdb08c-659a-4641-ae2c-289c16ca4a79",
+          "phase": "assembling",
+          "faultIndex": 1,
+          "rpcType": "conversation.members",
+          "socketOpen": true,
+          "responseSent": false
+        }
+      ],
+      "terminalKinds": [
+        {
+          "turn": 1,
+          "kind": "interrupted"
+        },
+        {
+          "turn": 2,
+          "kind": "aborted"
+        }
+      ]
+    },
+    {
+      "id": "model-error",
+      "status": "PASS",
+      "normalHostRestartVerified": true,
+      "originalMessageId": "c7e3a220-1708-43a9-8297-9184742e812a",
+      "conversationId": "f5d9d351-1d06-4973-b6eb-de4513309ff6",
+      "requestHeaders": [
+        11
+      ],
+      "providerErrorRequests": 1,
+      "modelRequests": 1,
+      "retryRequests": 0,
+      "terminalKinds": [
+        {
+          "turn": 1,
+          "kind": "error"
+        }
+      ]
+    }
+  ],
+  "postRunReadOnlyVerification": {
+    "checkedAt": "2026-11-05T11:03:31.098Z",
+    "instanceId": "bf559bf0-5bdc-47f7-8e53-cfe04477c3cc",
+    "queuePrincipalIds": [
+      "bot:bf559bf0-5bdc-47f7-8e53-cfe04477c3cc:e188a3e6-8c23-423c-81d1-16bf48d8291d",
+      "human:bf559bf0-5bdc-47f7-8e53-cfe04477c3cc:45712d90-aaa2-48f5-aba4-d57e4baf873f"
+    ],
+    "hubPrincipalIds": [
+      "bot:bf559bf0-5bdc-47f7-8e53-cfe04477c3cc:e188a3e6-8c23-423c-81d1-16bf48d8291d",
+      "human:bf559bf0-5bdc-47f7-8e53-cfe04477c3cc:45712d90-aaa2-48f5-aba4-d57e4baf873f"
+    ],
+    "identityMappingMatches": true,
+    "cases": [
+      {
+        "id": "reconnect",
+        "originalDeliveryId": "6f788284-c272-40ef-a3b5-1021dc597de4",
+        "originalMessageId": "4cd72f19-364e-47e5-af23-b8a971233bdf",
+        "originalLogicalInputsAfterColdRestart": 1,
+        "originalCanonicalMessages": 1,
+        "originalEpoch": "c97243d9-cc02-4ca8-bb46-201e9b08f504",
+        "oldScopeLocalRevoked": false,
+        "oldScopeAiState": "accepted",
+        "oldScopeExportsAfterColdRestart": 1,
+        "currentEpoch": "c97243d9-cc02-4ca8-bb46-201e9b08f504",
+        "currentMembershipActive": true,
+        "canonicalFinalIdCount": 1
+      },
+      {
+        "id": "revoked",
+        "originalDeliveryId": "96ee2841-b878-4ce4-9c8c-057a28ce2e37",
+        "originalMessageId": "bc20c3a6-7586-41f6-af98-559ae3ae8e34",
+        "originalLogicalInputsAfterColdRestart": 1,
+        "originalCanonicalMessages": 1,
+        "originalEpoch": "c1eba596-8424-4230-bf72-6ef1731cd86d",
+        "oldScopeLocalRevoked": true,
+        "oldScopeAiState": "accepted",
+        "oldScopeExportsAfterColdRestart": 0,
+        "currentEpoch": "c1eba596-8424-4230-bf72-6ef1731cd86d",
+        "currentMembershipActive": false
+      },
+      {
+        "id": "new-epoch",
+        "originalDeliveryId": "58bf1f89-a942-45f7-8f02-8afd5bbd7b6d",
+        "originalMessageId": "7aff0b42-3c93-4e9e-a6c5-2cb6abb8f145",
+        "originalLogicalInputsAfterColdRestart": 1,
+        "originalCanonicalMessages": 1,
+        "originalEpoch": "ae06b6d9-0d8f-4cf4-a20c-9cbb103b334c",
+        "oldScopeLocalRevoked": true,
+        "oldScopeAiState": "accepted",
+        "oldScopeExportsAfterColdRestart": 0,
+        "currentEpoch": "6cd29986-8f6a-4001-bf4a-8889331c23c4",
+        "currentMembershipActive": true
+      },
+      {
+        "id": "user-cancel",
+        "originalDeliveryId": "f443c72b-478f-45a5-bd2a-7005b84138ff",
+        "originalMessageId": "61fdb08c-659a-4641-ae2c-289c16ca4a79",
+        "originalLogicalInputsAfterColdRestart": 1,
+        "originalCanonicalMessages": 1,
+        "originalEpoch": "980901fb-e990-4fa4-9f8a-ec9dc147b226",
+        "oldScopeLocalRevoked": false,
+        "oldScopeAiState": "accepted",
+        "oldScopeExportsAfterColdRestart": 0,
+        "currentEpoch": "980901fb-e990-4fa4-9f8a-ec9dc147b226",
+        "currentMembershipActive": true
+      },
+      {
+        "id": "model-error",
+        "originalDeliveryId": "585d7e55-1fef-4085-b476-1025c818d4d9",
+        "originalMessageId": "c7e3a220-1708-43a9-8297-9184742e812a",
+        "originalLogicalInputsAfterColdRestart": 1,
+        "originalCanonicalMessages": 1,
+        "originalEpoch": "58ef997b-d15d-4f3b-a75b-42bf422d5879",
+        "oldScopeLocalRevoked": false,
+        "oldScopeAiState": "accepted",
+        "oldScopeExportsAfterColdRestart": 0,
+        "currentEpoch": "58ef997b-d15d-4f3b-a75b-42bf422d5879",
+        "currentMembershipActive": true,
+        "requestHeadersAfterColdRestart": [
+          11
+        ],
+        "providerHttpStatus": 400,
+        "providerErrorRequestsByActualSessionHeader": 1,
+        "canonicalBotMessages": 0
+      }
+    ]
+  },
+  "cleanup": {
+    "ownedProcessesStopped": true,
+    "portsVerifiedReleased": [
+      3271,
+      3272,
+      3273,
+      8971,
+      8972
+    ],
+    "scriptExitCode": 0
+  },
+  "preservedFailedBaseline": {
+    "commit": "ba4e9561ca0da92371e1f7e01bbe8b8df9cfa346",
+    "file": "docs/plans/federated-communication/recovery-prompt-rpc-baseline-evidence.json",
+    "sha256": "cd067f85a7dc6e3b04ca65789bcf472bc569b843a2a4b1e843358c1ee231c237",
+    "status": "FAIL",
+    "originalInputCount": 1,
+    "modelRequests": 1,
+    "exportCount": 0,
+    "originalReason": "interrupted",
+    "recoveryReason": "error CONNECTION_LOST",
+    "note": "This original failure artifact was not edited or replaced by the passing fresh run."
+  },
+  "coverageLimits": [
+    "Only same-machine independent DSH/Hub processes with the deterministic local Mock were tested.",
+    "No production Hub, real model/provider account, physical cross-machine network, native packaged Electron UI, deployment, push or GitHub Actions was exercised.",
+    "The provider-error case is a real HTTP 400 from the local Mock endpoint after a DSH request/header, not a real model service error.",
+    "Retry proof is process-local. Another host loss after a failed pre-model authorization but before successful continuation deliberately loses that proof and remains conservatively non-retryable; that combination is not claimed as recovered.",
+    "Safety cases verify non-revival across two explicit network reconnects and one normal host restart, followed by completed canonical reconciliation. They are not an unbounded-time or all-combinations claim."
+  ]
+}
