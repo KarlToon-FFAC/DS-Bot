@@ -42,7 +42,7 @@ async function run(name) {
   if (name === 'model-error') {
     await topology.bench(b, 'stop')
     await topology.startPeer(b, { MOCK_REJECT_IMAGES: '1' })
-    const bytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==', 'base64')
+    const bytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVQImWMQSTnxHwAEEAJACI4/1wAAAABJRU5ErkJggg==', 'base64')
     const sent = await topology.send(a, conversationId, `COMM-ECHO model-error-${nonce}`, [b.bot], { attachments: [{ name: 'synthetic.png', mime: 'image/png', size: bytes.length, data: bytes.toString('base64'), sha256: createHash('sha256').update(bytes).digest('hex') }] })
     const settled = await until(async () => { const state = await inspect(b, conversationId); return ends(state).some(end => end.kind === 'error' || end.kind === 'failed') && state }, 'real Mock provider rejection ends the turn')
     const sessionId = settled.sessions[0].sessionId, calls = callCount(b, sessionId)
