@@ -70,3 +70,45 @@ the existing explicit revoked-status and original-device repair or new-enrollmen
 workflow. Never delete a profile, replace its key, or rejoin blindly as a generic
 connection workaround. The incident's disconnect/resume error and stale page
 status require their own deployment evidence and lifecycle checks.
+
+## Follow-on administrator removal, disconnect and repair
+
+The extended `node ds-bot/dev/communication/hub-lifecycle-acceptance.mjs` passes
+seven checks against two independent real WSS Hubs, two fresh normal DSH profiles,
+SDK-stored synthetic signing identities and local Mock. Its added final sequence
+removes an actively connected device through the actual administrator CLI route.
+The existing host observes `connected=false` and `UNAUTHENTICATED`, while the other
+device remains online. Local `disconnect-hub` still succeeds without authenticating
+against the revoked device. Explicit `resume-hub` is rejected and stays paused.
+
+The original key can then prove `hub-leave-status` even while revoked. It records
+`departed=true`, so blindly repeating Join is rejected as `HUB_LEFT`. The fixture
+administrator deliberately repairs the exact original device revision. A fresh
+signed status check clears only the departed fence, keeps the device paused and
+never resumes pending work automatically. Explicit Resume reconnects the original
+instance/Human identity; removed group memberships are not restored. A separate
+plugin regression verifies the same sequence and that local Disconnect makes no
+network request after revocation.
+
+This confirms the backend lifecycle in the supported editable profile, including
+a real administrator revocation, not browser repaint timing. The reported failure
+of local Disconnect itself did not reproduce in this fixture. The runtime state
+and a locally saved enrollment's historical `approved` status are distinct:
+onboarding storage is not proof that the device is online or still trusted.
+Page refresh/subscription improvements are handled separately. No production
+administrator repair or profile/key deletion was attempted.
+
+The first supplementary fixture run passed the revoke/disconnect/reject sequence
+but failed its own final Join assertion because it incorrectly took a trust
+fingerprint from `management.info()`. The corrected fixture obtains it through
+`decode-hub-code`, exactly like the production client; the full rerun passes.
+This fixture setup mistake is not counted as an application failure or hidden.
+
+Final local gates on this branch: plugin 1,768 passed, four existing skips, zero
+failures (1,772 total); Hub 119/119; client/office generated-file freshness and
+lint passed, with existing lint warnings only. The initial full plugin run's
+freshness failure was caused solely by a test dependency symlink changing esbuild
+source-region comments; using a real local dependency copy restored the unchanged
+committed bundle's normal freshness check. No generated application artifact was
+changed to hide that environment issue. All owned acceptance ports were verified
+free after shutdown.

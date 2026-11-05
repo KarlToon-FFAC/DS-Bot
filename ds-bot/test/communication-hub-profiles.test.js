@@ -298,3 +298,28 @@ test('legacy static pairing can pause/resume its exact address but cannot be gue
  assert.equal(f.rt.config.communication.credentialEnv,'PRIVATE_LAUNCH_ONLY')
  assert.equal(f.network.length,0,'no identity guessed or new key generated')
 })
+
+test('local disconnect works after device revocation; verified repair alone never resumes retained work',async t=>{
+ const f=fixture(t),a=hubs[0]
+ const enrolled=await f.api.handle('join',joinInput(a),human);f.activate()
+ const key=communicationCredentialKey(a.hubId),originalKey=f.records.get(key).payload.publicKey
+ f.revoked=true
+ const before=f.network.length
+ const paused=await f.api.handle('disconnect-hub',{hubId:a.hubId},human)
+ assert.equal(paused.paused,true);assert.equal(paused.localOnly,true)
+ assert.equal(f.network.length,before,'local pause does not authenticate against a revoked Hub device')
+ assert.equal(f.rt.config.communication.enabled,false)
+ await assert.rejects(f.api.handle('resume-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmResume:true},human),{code:'UNAUTHENTICATED'})
+ const status=await f.api.handle('hub-leave-status',{hubId:a.hubId,confirmedUrl:a.url},human)
+ assert.equal(status.left,true);assert.equal(f.records.get(key).payload.departed,true)
+ await assert.rejects(f.api.handle('join',joinInput(a),human),{code:'HUB_LEFT'})
+ f.revoked=false
+ const repaired=await f.api.handle('hub-leave-status',{hubId:a.hubId,confirmedUrl:a.url},human)
+ assert.equal(repaired.left,false);assert.equal(f.records.get(key).payload.departed,false)
+ assert.equal(f.records.get(key).payload.paused,true)
+ assert.equal(f.rt.config.communication.enabled,false,'repair observation is not permission to resume pending work')
+ await f.api.handle('resume-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmResume:true},human)
+ assert.equal(f.rt.config.communication.instanceId,enrolled.instanceId)
+ assert.equal(f.records.get(key).payload.publicKey,originalKey)
+ assert.equal(f.rt.config.communication.enabled,true)
+})
