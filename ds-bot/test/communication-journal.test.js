@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { completedOutputs, inspectBinding, interruptedInputs, reconcileInput, recoverBinding, resumePendingInput, resumeInterruptedInput, RECOVERY_SOURCE_KIND, SOURCE_KIND } from '../src/host/federation/session-journal.js'
+import { completedOutputs, inspectBinding, interruptedInputs, reconcileInput, recoverBinding, resumePendingInput, resumeInterruptedInput, retryablePromptAttempt, RECOVERY_SOURCE_KIND, SOURCE_KIND } from '../src/host/federation/session-journal.js'
 
 const source = { kind: SOURCE_KIND, deliveryId: 'delivery-1', messageId: 'message-1', conversationId: 'dm-a-k', recipientPrincipalId: 'bot:b:k' }
 const message = { id: 'input-1', source, role: 'user', content: [{ type: 'text', text: 'same text' }] }
@@ -177,3 +177,36 @@ test('pending recovery refuses a factory that disguises a lifecycle notice as a 
     value => ({ ...value, id: 'forged', source: { kind: 'user' } })), /host origin/)
   assert.equal(steered, false)
 })
+
+for (const reason of ['aborted', 'error', 'completed', 'interrupted']) {
+  test(`claimed recovery notice without admission retains ${reason} ownership after restart`, () => {
+    const binding = { conversationId: source.conversationId, recipientPrincipalId: source.recipientPrincipalId }
+    const notice = { id: 'notice', source: { kind: RECOVERY_SOURCE_KIND, form: 'notice', conversationId: source.conversationId, forDeliveryId: source.deliveryId, forMessageId: source.messageId } }
+    const events = [{ seq: 1, type: 'turn/start', data: { turn: 1 } }, { seq: 2, type: 'user/message', data: message },
+      { seq: 3, type: 'turn/end', data: { turn: 1, reason: { kind: 'interrupted' } } }, splice(4, 0, 0, [notice]),
+      { seq: 5, type: 'turn/start', data: { turn: 2 } }, splice(6, 0, 1, []),
+      { seq: 7, type: 'turn/end', data: { turn: 2, reason: { kind: reason } } }]
+    const candidates = interruptedInputs([{ sessionId: 'session-1', events }], binding)
+    assert.equal(candidates.length, reason === 'interrupted' ? 1 : 0)
+    if (candidates.length) assert.equal(candidates[0].turn, 2)
+  })
+}
+
+for (const mutation of ['none', 'no-owned-proof', 'wrong-notice', 'wrong-delivery', 'canceled-signal', 'no-claim', 'canceled-claim', 'request/header', 'step/start', 'tool/result', 'user/message', 'unknown/event', 'second-turn']) {
+  test(`prompt retry journal gate rejects ${mutation} unless exact owned pre-model failure`, () => {
+    const control = new AbortController(), binding = { conversationId: source.conversationId }
+    const notice = { id: 'notice', source: { kind: RECOVERY_SOURCE_KIND, form: 'notice', conversationId: source.conversationId, forDeliveryId: source.deliveryId, forMessageId: source.messageId } }
+    const attempt = { guardFailed: true, signal: control.signal, sessionId: 'session-1', noticeId: 'notice', source, binding, afterSeq: 3 }
+    const events = [splice(4, 0, 0, [notice]), { seq: 5, type: 'turn/start', data: { turn: 2 } }, splice(6, 0, 1, []),
+      { seq: 7, type: 'model/selection', data: {} }, { seq: 8, type: 'turn/end', data: { turn: 2, reason: { kind: 'error' } } }]
+    if (mutation === 'no-owned-proof') attempt.guardFailed = false
+    if (mutation === 'wrong-notice') attempt.noticeId = 'other'
+    if (mutation === 'wrong-delivery') notice.source.forDeliveryId = 'other'
+    if (mutation === 'canceled-signal') control.abort()
+    if (mutation === 'no-claim') events.splice(2, 1)
+    if (mutation === 'canceled-claim') events[2].data.outcome = 'canceled'
+    if (mutation === 'second-turn') events.push({ seq: 9, type: 'turn/start', data: { turn: 3 } })
+    if (mutation.includes('/')) events.splice(3, 0, { seq: 6.5, type: mutation, data: {} })
+    assert.equal(retryablePromptAttempt(attempt, [{ sessionId: 'session-1', events }]), mutation === 'none')
+  })
+}

@@ -77,35 +77,54 @@ export async function resumePendingInput(services, binding, source, makeMessage,
 
 // A repaired interrupted turn proves a host loss, unlike a user abort or model
 // failure. Resume its existing input with host metadata; never re-admit it.
-export async function resumeInterruptedInput(services, binding, source, makeMessage, attempted, signal) {
+export async function resumeInterruptedInput(services, binding, source, makeMessage, attempted, signal, { onAttempt, retryNoticeIds, retryTurnKey, retryProof } = {}) {
   const recovered = await recoverBinding(services, binding, source, signal)
   if (recovered.input.status !== 'admitted') return { resumed: false }
-  const candidate = interruptedInputs(recovered.sessions, binding).find(item => item.source.deliveryId === source.deliveryId)
+  if (retryProof && !retryablePromptAttempt(retryProof, recovered.sessions)) return { resumed: false }
+  const candidate = interruptedInputs(recovered.sessions, binding, { retryNoticeIds }).find(item => item.source.deliveryId === source.deliveryId)
   if (!candidate) return { resumed: false }
   const turnKey = JSON.stringify([candidate.sessionId, candidate.turn])
-  if (attempted.has(turnKey)) return { resumed: false }
+  if (attempted.has(turnKey) && retryTurnKey !== turnKey) return { resumed: false }
   const result = await services.sessionController.resolveAgent(candidate.sessionId)
   if ('error' in result || result.agent.status !== 'idle') return { resumed: false }
+  if (retryProof) {
+    await services.sessions.flush(result.agent.session)
+    if (!retryablePromptAttempt(retryProof, await inspectBinding(services.sessionController, binding, signal)) || result.agent.status !== 'idle') return { resumed: false }
+  }
   const notice = makeMessage({ source: { kind: RECOVERY_SOURCE_KIND, form: 'notice', summary: 'Resuming interrupted communication response after a host restart',
     conversationId: binding.conversationId, forDeliveryId: source.deliveryId, forMessageId: source.messageId },
     content: [{ type: 'text', text: `[Local transport recovery notice]\nThe host restarted during a response. Continue only the already admitted communication input ${source.messageId}. Its original sender and delivery identity are unchanged. This is host metadata, not a new Human or Bot message. Earlier inputs are context, not new requests. Check evidence before repeating any tool side effects that may already have happened. Do not answer this notice separately.` }] })
   if (!notice?.id || notice.source?.kind !== RECOVERY_SOURCE_KIND || notice.source.form !== 'notice' || notice.source.forDeliveryId !== source.deliveryId
     || notice.source.forMessageId !== source.messageId || notice.source.conversationId !== binding.conversationId) throw new Error('Invalid interrupted recovery notice')
   signal?.throwIfAborted()
+  onAttempt?.({ turnKey, noticeId: notice.id, sessionId: candidate.sessionId, source, binding, afterSeq: recovered.sessions.find(item => item.sessionId === candidate.sessionId).events.reduce((max, event) => Math.max(max, event.seq), 0) })
   attempted.add(turnKey)
   result.agent.steer(notice)
   await services.sessions.flush(result.agent.session)
   return { resumed: true, turnKey, noticeId: notice.id }
 }
 
-export function interruptedInputs(sessions, binding) {
+export function interruptedInputs(sessions, binding, { retryNoticeIds = [] } = {}) {
   const candidates = []
   for (const session of sessions) {
-    const turns = new Map(), inputs = new Map()
+    const turns = new Map(), inputs = new Map(), inbox = { 'next-turn': [], 'next-step': [] }
     let turn
     for (const event of session.events) {
       if (event.type === 'turn/start') { turn = event.data.turn; turns.set(turn, { start: event.seq }) }
       if (event.type === 'turn/end' && turns.has(event.data.turn)) Object.assign(turns.get(event.data.turn), { end: event.seq, reason: event.data.reason.kind })
+      // A pre-step failure can consume the notice without admitting user/message.
+      // Its cancelled/error terminal still owns that input across host restarts.
+      if (event.type === 'agent/inbox/spliced') {
+        const { target, start, removedCount = 0, inserted, outcome } = event.data
+        const queue = inbox[target]
+        if (!queue || !Array.isArray(inserted) || !Number.isSafeInteger(start) || start < 0 || start > queue.length
+          || !Number.isSafeInteger(removedCount) || removedCount < 0 || start + removedCount > queue.length) throw new Error('Invalid durable inbox history')
+        for (const notice of queue.splice(start, removedCount, ...inserted)) {
+          const source = notice.source, input = inputs.get(source?.forDeliveryId)
+          if (!retryNoticeIds.includes(notice.id) && source?.kind === RECOVERY_SOURCE_KIND && source.conversationId === binding.conversationId
+            && input?.source.messageId === source.forMessageId) input.turn = outcome === 'canceled' ? undefined : turn
+        }
+      }
       if (event.type !== 'user/message' || event.data.source?.conversationId !== binding.conversationId) continue
       const source = event.data.source
       if ([SOURCE_KIND,'ds-bot-communication-update'].includes(source.kind) && source.recipientPrincipalId === binding.recipientPrincipalId) inputs.set(source.deliveryId, { source, turn })
@@ -220,4 +239,35 @@ export function completedOutputs(sessions, binding, { recoverSettled = false } =
     }
   }
   return outputs
+}
+
+// A runtime-owned failed guard is necessary; journal text alone never grants a retry.
+export function retryablePromptAttempt(attempt, sessions) {
+  if (!attempt?.guardFailed || !attempt.signal || attempt.signal.aborted) return false
+  const events = sessions.find(item => item.sessionId === attempt.sessionId)?.events.filter(event => event.seq > attempt.afterSeq)
+  if (!events?.length) return false
+  const allowed = new Set(['agent/inbox/spliced', 'turn/start', 'turn/end', 'model/selection'])
+  if (events.some(event => !allowed.has(event.type))) return false
+  const starts = events.filter(event => event.type === 'turn/start'), ends = events.filter(event => event.type === 'turn/end')
+  if (starts.length !== 1 || ends.length !== 1 || ends[0].data.turn !== starts[0].data.turn || ends[0].data.reason?.kind !== 'error') return false
+  const inserted = events.filter(event => event.type === 'agent/inbox/spliced').flatMap(event => event.data.inserted ?? [])
+  if (inserted.length !== 1) return false
+  const notice = inserted[0], source = notice.source
+  const inbox = { 'next-turn': [], 'next-step': [] }
+  let claimed = false
+  for (const event of events) {
+    if (event.type !== 'agent/inbox/spliced') continue
+    const { target, start, removedCount = 0, inserted, outcome } = event.data, queue = inbox[target]
+    if (!queue || !Array.isArray(inserted) || !Number.isSafeInteger(start) || start < 0 || start > queue.length
+      || !Number.isSafeInteger(removedCount) || removedCount < 0 || start + removedCount > queue.length) return false
+    const removed = queue.splice(start, removedCount, ...inserted)
+    if (removed.some(item => item.id === attempt.noticeId)) {
+      if (outcome === 'canceled' || event.seq <= starts[0].seq || event.seq >= ends[0].seq) return false
+      claimed = true
+    }
+  }
+  return claimed && notice.id === attempt.noticeId && source?.kind === RECOVERY_SOURCE_KIND && source.form === 'notice'
+    && source.conversationId === attempt.binding.conversationId && source.forDeliveryId === attempt.source.deliveryId
+    && source.forMessageId === attempt.source.messageId
+    && events.at(-1) === ends[0]
 }

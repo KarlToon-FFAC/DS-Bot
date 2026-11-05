@@ -10,7 +10,10 @@ export const communicationCapabilities = () => [...CAPABILITIES, BOUNDED_COLLABO
 const outboxCapacity = Symbol('outbox-capacity')
 const membershipChanged = Symbol('membership-changed')
 const transient = new Set(['CONNECTION_LOST', 'REQUEST_TIMEOUT', 'HUB_CONNECTION_REFUSED', 'HUB_CONNECTION_TIMEOUT', 'HUB_UNREACHABLE', 'STORAGE_UNAVAILABLE', 'BACKPRESSURE', 'HISTORY_GAP'])
+const localConnectionFailures = new WeakSet()
+export const isLocalConnectionFailure = error => localConnectionFailures.has(error)
 const errorWith = (code, message = code) => Object.assign(new Error(message), { code })
+const connectionLost = () => { const error = errorWith('CONNECTION_LOST'); localConnectionFailures.add(error); return error }
 
 export function communicationUrl(url) {
   const target = new URL(url)
@@ -69,7 +72,7 @@ export class CommunicationTransport {
     this.record(state)
   }
   assertCurrent(generation, socket = this.socket) {
-    if (generation !== this.generation || socket !== this.socket) throw errorWith('CONNECTION_LOST')
+    if (generation !== this.generation || socket !== this.socket) throw connectionLost()
   }
   disconnect(socket = this.socket, close = true) {
     if (socket === this.socket) {
@@ -80,7 +83,7 @@ export class CommunicationTransport {
     for (const [id, pending] of this.requests) {
       if (pending.socket !== socket) continue
       clearTimeout(pending.timeout)
-      pending.reject(errorWith('CONNECTION_LOST'))
+      pending.reject(connectionLost())
       this.requests.delete(id)
     }
     if (close) socket?.close()
@@ -94,7 +97,7 @@ export class CommunicationTransport {
       const credential = typeof this.credential === 'function' ? await this.credential() : this.credential
       this.assertCurrent(generation)
       socket = credential?.socketFactory ? await credential.socketFactory() : new WebSocket(this.url)
-      if (generation !== this.generation) { socket.close(); throw errorWith('CONNECTION_LOST') }
+      if (generation !== this.generation) { socket.close(); throw connectionLost() }
       this.socket = socket
       socket.addEventListener('message', event => {
         if (generation !== this.generation || this.socket !== socket) return
@@ -127,7 +130,7 @@ export class CommunicationTransport {
       if (socket.readyState !== WebSocket.OPEN) await new Promise((resolve, reject) => {
         const deadline = setTimeout(() => { cleanup(); socket.close(); reject(errorWith('REQUEST_TIMEOUT')) }, this.requestTimeout)
         const opened = () => { cleanup(); resolve() }
-        const failed = () => { cleanup(); reject(errorWith('CONNECTION_LOST')) }
+        const failed = () => { cleanup(); reject(connectionLost()) }
         const cleanup = () => {
           clearTimeout(deadline)
           socket.removeEventListener('open', opened)
@@ -164,20 +167,20 @@ export class CommunicationTransport {
     }
   }
   send(type, payload, socket = this.socket, generation = this.generation) {
-    if (generation !== this.generation || socket !== this.socket) return Promise.reject(errorWith('CONNECTION_LOST'))
-    if (!socket || socket.readyState !== WebSocket.OPEN) return Promise.reject(errorWith('CONNECTION_LOST'))
+    if (generation !== this.generation || socket !== this.socket) return Promise.reject(connectionLost())
+    if (!socket || socket.readyState !== WebSocket.OPEN) return Promise.reject(connectionLost())
     const id = randomUUID(), frame = JSON.stringify({ protocol: PROTOCOL, id, type, payload })
     if (this.welcome && Buffer.byteLength(frame) > this.welcome.limits.maxEnvelopeBytes) return Promise.reject(errorWith('PAYLOAD_TOO_LARGE'))
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => { this.requests.delete(id); reject(errorWith('REQUEST_TIMEOUT')) }, this.requestTimeout)
       this.requests.set(id, { socket, resolve, reject, timeout })
-      try { socket.send(frame) } catch { clearTimeout(timeout); this.requests.delete(id); reject(errorWith('CONNECTION_LOST')) }
+      try { socket.send(frame) } catch { clearTimeout(timeout); this.requests.delete(id); reject(connectionLost()) }
     })
   }
   request(type, payload = {}) {
     const owner = this.context.getStore()
-    if (owner !== undefined && owner !== this.generation) return Promise.reject(errorWith('CONNECTION_LOST'))
-    if (!this.connected) return Promise.reject(errorWith('CONNECTION_LOST'))
+    if (owner !== undefined && owner !== this.generation) return Promise.reject(connectionLost())
+    if (!this.connected) return Promise.reject(connectionLost())
     const generation = this.generation, socket = this.socket
     return this.send(type, payload, socket, generation).then(value => { this.assertCurrent(generation, socket); return value })
   }
@@ -188,9 +191,9 @@ export class CommunicationTransport {
     return pumping
   }
   async synchronize() {
-    if (!this.connected) throw errorWith('CONNECTION_LOST')
+    if (!this.connected) throw connectionLost()
     const generation = this.generation
-    const current = () => { if (generation !== this.generation || !this.connected) throw errorWith('CONNECTION_LOST') }
+    const current = () => { if (generation !== this.generation || !this.connected) throw connectionLost() }
     if (this.state !== 'ready') this.transition?.('synchronizing')
     // Recovery may retain both receipts. Hub storage must precede proof of model read,
     // and both must precede publication of a final covering that supplement.

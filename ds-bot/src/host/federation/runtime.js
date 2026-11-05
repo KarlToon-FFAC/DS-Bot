@@ -4,8 +4,8 @@ import { createHash, randomUUID } from 'node:crypto'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { normalizeAttachments, attachmentMetadata, ATTACHMENT_CAPABILITY } from '../../shared/communication-attachments.js'
 import { CommunicationQueue } from './queue-store.js'
-import { CommunicationTransport, communicationUrl } from './transport.js'
-import { completedOutputs, inspectBinding, interruptedInputs, reconcileInput, recoverBinding, resumePendingInput, resumeInterruptedInput, SOURCE_KIND } from './session-journal.js'
+import { CommunicationTransport, communicationUrl, isLocalConnectionFailure } from './transport.js'
+import { completedOutputs, inspectBinding, interruptedInputs, reconcileInput, recoverBinding, resumePendingInput, resumeInterruptedInput, retryablePromptAttempt, SOURCE_KIND } from './session-journal.js'
 import { communicationMentions } from '../../shared/communication-mentions.js'
 import { mentionSpans } from '../../shared/mentions.js'
 import { syncBotAvatars } from './avatars.js'
@@ -58,6 +58,7 @@ export class CommunicationRuntime {
     this.errors = new Map()
     this.attempted = new Set()
     this.resumedTurns = new Set()
+    this.recoveryAttempts = new Map()
     this.everReconciled = false
     this.closed = false
     this.processing = Promise.resolve()
@@ -323,15 +324,31 @@ export class CommunicationRuntime {
   }
   scope(agent) {
     if (this.scoped.has(agent)) return
+    this.recoveryAttempts ??= new Map()
     const tools = this.tools.filter(tool => !OUTSIDE_CONVERSATION_TOOLS.has(tool.name) && !LOCAL_MANAGEMENT_TOOLS.has(tool.name))
     const communicationNames = new Set(tools.map(tool => tool.name))
     for (const tool of tools) this.disposers.push(agent.ctx.tools.register(tool))
-    this.disposers.push(agent.ctx.on('system-prompt/assemble', async (_assembly, _context, next) => {
+    this.disposers.push(agent.ctx.on('system-prompt/assemble', async (_assembly, context, next) => {
       await this.isolateWorkspace(agent)
       let freshPrompt
       if (this.relationships) {
         const binding = this.owners.get(agent.id)
-        const { info } = await this.relationshipContext(binding.recipientPrincipalId, { conversationId: binding.conversationId, membershipEpoch: binding.membershipEpoch })
+        const attempt = this.recoveryAttempts.get(agent.id)
+        const guardGeneration = this.transport.generation, guardSocket = this.transport.socket
+        let info
+        try {
+          ;({ info } = await this.relationshipContext(binding.recipientPrincipalId, { conversationId: binding.conversationId, membershipEpoch: binding.membershipEpoch }))
+        } catch (error) {
+          // Only this owned, pre-step authorization read may release its exact
+          // recovery claim. Hub/provider error strings cannot forge this proof.
+          if (attempt && attempt.binding.id === binding.id && attempt.generation === guardGeneration && attempt.socket === guardSocket && context?.signal && !context.signal.aborted
+            && isLocalConnectionFailure(error) && !this.closed) {
+            attempt.guardFailed = true
+            attempt.signal = context.signal
+          }
+          throw error
+        }
+        this.recoveryAttempts.delete(agent.id) // Never retry failures after this guard.
         this.relationshipContexts.set(binding.id, info)
         freshPrompt = this.promptFor(binding)
       }
@@ -744,6 +761,7 @@ export class CommunicationRuntime {
       conversationId: delivery.conversationId, bindingId: binding.id, sessionId: agent.id })
   }
   async recoverInterrupted(binding) {
+    this.recoveryAttempts ??= new Map()
     try { this.queue.member(binding.conversationId, binding.recipientPrincipalId, binding.membershipEpoch) } catch { return }
     const inspected = await inspectBinding(this.ctx.sessionController, binding, AbortSignal.timeout(15000)), sessions = []
     for (const session of inspected) {
@@ -752,7 +770,9 @@ export class CommunicationRuntime {
       if (hasCommunicationPreset(this.ctx.get('agentPresets'), resolved.agent)) sessions.push(session)
       else if (!legacySessionSettled(this.queue, binding, resolved.agent, session.events)) fail('COMMUNICATION_SESSION_MIGRATION_REQUIRED')
     }
-    for (const { source, sessionId } of interruptedInputs(sessions, binding)) {
+    const retry = [...this.recoveryAttempts.values()].find(attempt => attempt.binding.id === binding.id
+      && attempt.binding.membershipEpoch === binding.membershipEpoch && retryablePromptAttempt(attempt, sessions))
+    for (const { source, sessionId } of interruptedInputs(sessions, binding, { retryNoticeIds: retry ? [...(retry.priorNotices ?? []), retry.noticeId] : [] })) {
         const original=sourceDelivery(this.queue,binding,source)
         const reply=this.queue.completedToolReply(binding.id,original.deliveryId)
         // A published answer can precede the model's closing text and host shutdown.
@@ -761,13 +781,28 @@ export class CommunicationRuntime {
         if (!row || row.revoked) continue
         const delivery = JSON.parse(row.body)
         if (delivery.messageId !== source.messageId || delivery.membershipEpoch !== binding.membershipEpoch) continue
+        const generation = this.transport.generation, socket = this.transport.socket
         await this.authorize(binding)
         const resolved = await this.ctx.sessionController.resolveAgent(sessionId)
         if ('error' in resolved) fail('SESSION_UNAVAILABLE')
         if (!hasCommunicationPreset(this.ctx.get('agentPresets'), resolved.agent)) fail('COMMUNICATION_SESSION_MIGRATION_REQUIRED')
         this.scope(resolved.agent)
         await this.isolateWorkspace(resolved.agent)
-        const result = await resumeInterruptedInput(this.ctx, { ...binding, sessionIds: sessions.map(session => session.sessionId) }, source, createUserMessage, this.resumedTurns, AbortSignal.timeout(15000))
+        // Fresh exact-scope authorization above precedes releasing only this
+        // attempt. A cancelled signal or changed journal invalidates the proof.
+        const retryAttempt = retry?.sessionId === sessionId && retry.source.deliveryId === source.deliveryId ? retry : null
+        if (retryAttempt) {
+          if (!retryablePromptAttempt(retryAttempt, await inspectBinding(this.ctx.sessionController, binding, AbortSignal.timeout(15000)))) continue
+        }
+        const result = await resumeInterruptedInput(this.ctx, { ...binding, sessionIds: sessions.map(session => session.sessionId) }, source, createUserMessage, this.resumedTurns, AbortSignal.timeout(15000), {
+          retryNoticeIds: retryAttempt ? [...(retryAttempt.priorNotices ?? []), retryAttempt.noticeId] : [], retryTurnKey: retryAttempt?.turnKey, retryProof: retryAttempt,
+          onAttempt: attempt => {
+            retryAttempt?.signal.throwIfAborted()
+            if (this.closed || !this.transport.connected || generation !== this.transport.generation || socket !== this.transport.socket) fail('CONNECTION_LOST')
+            this.queue.member(binding.conversationId, binding.recipientPrincipalId, binding.membershipEpoch)
+            this.recoveryAttempts.set(sessionId, { ...attempt, generation, socket, priorNotices: retryAttempt ? [...(retryAttempt.priorNotices ?? []), retryAttempt.noticeId] : [] })
+          },
+        })
         if (result.resumed) return
     }
   }

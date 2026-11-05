@@ -126,6 +126,7 @@ test('migrated legacy instructions never re-enter a new isolated segment interru
     modules: [{ moduleName: '@deepseek-ai/dsh-persona' }], leakedServices: [] }] }), sessions: { flush: async () => {} },
     sessionController: { resolveAgent: async id => ({ agent: id === 'old' ? old : safe }), inspect: async id => { inspections.push(id); return { events: id === 'old' ? oldEvents : safeEvents } } } },
     queue: { member: () => {}, completedToolReply: () => null, db: { prepare: sql => ({ get: () => sql.includes('FROM exports') ? { found: 1 } : { body: JSON.stringify(delivery), revoked: 0 } }) } },
+    transport: { connected: true, generation: 1, socket: {} },
     authorize: async () => {}, scope: () => {}, isolateWorkspace: async () => {}, resumedTurns: new Set() }
   await CommunicationRuntime.prototype.recoverInterrupted.call(runtime, { ...binding, sessionIds: ['old','safe'] })
   assert.equal(resumed, 1)

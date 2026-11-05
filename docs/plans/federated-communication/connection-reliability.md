@@ -161,3 +161,11 @@ gate, initial RPC failures, repeated recovery deduplication, explicit cancelled
 or errored turns, and both queued and in-flight connection invalidation. It does
 not change the interrupted-turn classifier, re-admit the original input, retry
 error turns, or clear the durable/once-only recovery safeguards.
+
+### Recovery prompt authorization interrupted before model entry
+
+A recovery notice can be claimed before `user/message` admission. The durable journal now associates that claim with its actual turn, so a cancelled/error recovery cannot silently fall back to an older interrupted turn after another restart.
+
+The runtime may retry only its own failed prompt authorization read: a private process-local transport error identity proves a local connection loss, the exact recovery attempt retains its original delivery/message/member epoch and connection generation, and the turn control signal must remain uncancelled. Complete journal inspection must show exactly that notice, one claimed turn ending in error, and no step, request, admitted input, tool or other unknown event. Provider error text is never evidence. Current original-actor authorization is checked again before steering another host notice. The original input is not copied and its persistent message/delivery IDs are unchanged. The consumed-turn set is not cleared; a narrowly scoped retry grant can override only the proven original turn. Multiple consecutive qualifying failures preserve their exact notice chain.
+
+A successful guard discards the retry proof before calling later prompt middleware. Consequently model errors, later middleware errors, tool failures, explicit cancellation, changed membership epochs and revocation never acquire this retry grant. The proof deliberately stays process-local: another host restart after an error without a durable interrupted terminal fails closed rather than inferring permission from an error message. This is an explicit availability boundary, not an exactly-once promise.

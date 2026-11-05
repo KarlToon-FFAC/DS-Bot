@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { CommunicationTransport, communicationCapabilities } from '../src/host/federation/transport.js'
+import { CommunicationTransport, communicationCapabilities, isLocalConnectionFailure } from '../src/host/federation/transport.js'
 
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done }); return { promise, resolve } }
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms))
@@ -140,5 +140,19 @@ test('a delivery paused before storage cannot cross stop into a new pump or clea
   assert.equal(client.pumping, fresh)
   newGate.resolve(); await fresh
   assert.equal(client.state, 'ready')
+  client.stop()
+})
+
+
+test('only locally observed connection loss is branded, never a Hub error with identical code and message', async () => {
+  const { socket, client } = fixture()
+  await client.connect()
+  const remote = client.request('conversation.members')
+  const id = socket.sent.at(-1).id
+  socket.dispatchEvent(new MessageEvent('message', { data: JSON.stringify({ id, ok: false, error: { code: 'CONNECTION_LOST', message: 'CONNECTION_LOST' } }) }))
+  await assert.rejects(remote, error => error.code === 'CONNECTION_LOST' && !isLocalConnectionFailure(error))
+  const local = client.request('conversation.members')
+  socket.close()
+  await assert.rejects(local, error => error.code === 'CONNECTION_LOST' && isLocalConnectionFailure(error))
   client.stop()
 })
