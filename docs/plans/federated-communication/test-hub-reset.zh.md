@@ -31,7 +31,7 @@
 2. **插件 home**：实际 `id: bot` 配置的 `home`；未覆盖时为 `<DSH_HOME>/bot`。它不是整个 DSH_HOME。
 3. **生效 profile/覆盖层**：app 普通 profile 为 `<DSH_HOME>/profiles/ds-bot/cordis.patch.yml`。自建启动器还可能通过 `patchFiles` 加载覆盖文件，例如测试启动器的 `<DSH_HOME>/bench.patch.yml`。逐一核对实际启动代码，所有会重新注入 `id: bot/config/communication` 的文件都传入 `--profile`，该参数可重复。
 4. **凭据及 Session provider 路径**：默认本地凭据文件为 `<DSH_HOME>/.credentials.yaml`，可由 `@deepseek-ai/dsh-credentials-local` 的 `path` 覆盖。Session 路径取 `@deepseek-ai/dsh-session-persistence-jsonl` 的实际 `root`，不能只凭 `sessions` 名字猜。自定义 provider 不适用本地文件清理命令，需先确认其专用删除办法；不能绕过检查并声称清零。
-5. **附件 provider home**：`@deepseek-ai/dsh-attachment-local` 实际生效的 `dshHome`，默认跟随 DSH_HOME，但可以被独立覆盖。将这个 home 传给 `--attachments-home`，不是传 `attachments/v1` 子目录。还要核实该附件库的所有 Session 引用均在传入的 Session root 内；若其他 profile/root 共用附件库，不能在漏扫它们时判定对象独占。
+5. **附件 provider home**：`@deepseek-ai/dsh-attachment-local` 实际生效的 `dshHome`，默认跟随 DSH_HOME，但可以被独立覆盖。将这个 home 传给 `--attachments-home`，不是传 `<附件 home>/attachments/v1` 子目录。还要核实该附件库的所有 Session 引用均在传入的 Session root 内；若其他 profile/root 共用附件库，不能在漏扫它们时判定对象独占。
 
 仅列出 profile 文件路径的只读命令，不会打印内容：
 
@@ -67,7 +67,7 @@ node -e 'const f=require("node:fs"),p=require("node:path"),c=p.resolve(process.a
 
 ## 2. 先停止全部写入
 
-- 客户端正常退出，包含托盘和同一数据根的其他 Host。关闭旧通信页面，避免内存中的旧草稿或回调继续提交。仅关窗口、断网或禁用通信都不够。
+- 客户端正常退出，包含托盘和同一数据根的其他 Host。关闭旧通信页面，避免内存中的旧的未发送内容或回调继续提交。仅关窗口、断网或禁用通信都不够。
 - Hub 前台终端按 Ctrl+C 等正常关闭。Linux 对已核对的 Hub PID 可发 `kill -TERM <PID>` 并等退出。自建 systemd/Windows 服务用原服务管理器停止准确服务并防止自动拉起，仓库不提供固定服务名。
 - 核实相关进程已结束、原端口不再被该 Hub 监听；`/health` 超时不能证明已停止。不要 `killall node`、`taskkill /IM node.exe` 或删除锁文件绕过活跃检查。
 - 本次默认**不创建备份、不移动到旧数据目录**。如果操作者另有回滚要求，必须在执行前明确选择停机一致快照，单独安全保存所有相关库及 sidecar、配置、provider、Session 和浏览器数据；备份仍含旧身份和消息，不属于已清除。没有完整快照不能保证恢复。
@@ -115,7 +115,7 @@ node ds-bot/bin/dsbot-reset.mjs --home "$PLUGIN_HOME" --profile "$PROFILE" --cre
 - `<插件 home>/communication.sqlite` 及其 sidecar；`communication-hubs/` 中通过验证的所有通信作用域。包括所有 Hub，而不是只清当前选中项。其联系人投影、群成员、消息/事件、收发箱、游标、回执、去重、Session 绑定、关系记忆和待恢复工作全部丢失。
 - 通信绑定对应的专用 `communication-workspaces/<binding.id>`，以及由 Session ID、cwd 和通信绑定共同验证的远程 Session 日志目录。需删该 Session 的**所有历史格式世代**，不只是当前 `session.vN`，否则旧日志仍可被重新发现。普通本地 Bot/群 Session 不在此范围。
 - 默认本地附件 provider 中，经全部 Session 历史世代引用分析确认的联邦独占图片/文件对象和文件别名，以及可再生的图片请求缓存。普通本地聊天仍引用的相同字节作为普通聊天数据保留，不再保留其联邦 Session 引用。路径、引用范围或对象归属无法证明时拒绝清理并报告未完成，不能默认留着联邦独占对象后报成功。
-- 新的空通信重置标记使新版客户端清除当前 origin 的 `ds-bot:communication:*` 浏览器项，包括草稿、未决发送、操作 ID、thread intent、选择/隐藏状态。每个用过的浏览器 profile、origin、标签页都要重新打开/刷新同一新 Host 才能处理其存储；关闭不用的旧标签页。其他站点、登录和非通信存储保持不变。旧浏览器副本没有自动远程擦除保证。
+- 新的空通信重置标记使新版客户端清除当前 origin 的 `ds-bot:communication:*` 浏览器项，包括未发送内容、未决发送、操作 ID、thread intent、选择/隐藏状态。每个用过的浏览器 profile、origin、标签页都要重新打开/刷新同一新 Host 才能处理其存储；关闭不用的旧标签页。其他站点、登录和非通信存储保持不变。旧浏览器副本没有自动远程擦除保证。
 
 另外从**实际启动来源**移除旧通信共享密钥注入：读取旧配置引用的精确 `credentialEnv` 名称，旧默认名为 `DSBOT_COMMUNICATION_CREDENTIAL`；检查原服务环境、启动脚本、项目/数据根 `.env`，只删除该项，不输出其值。退出旧 Host 会清掉其内存中的 legacy credential lease，不存在一个需要手删的通用 lease 文件。不要删除整个 `.env`、模型 API key 或所有 `DSBOT_*`。
 

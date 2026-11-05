@@ -171,7 +171,7 @@ test('deleted identity stays absent after reopen and closed shared groups have n
 })
 
 test('actual administrator CLI/HTTP deletion requires admin and closes live signed sockets, with no static-config resurrection', async t => {
-  const password = 'synthetic-delete-device-admin-password', hub = await startHub({ databasePath: ':memory:', port: 0, management: { enabled: true, password } })
+  const password = 'synthetic-test-delete-device-admin-password', hub = await startHub({ databasePath: ':memory:', port: 0, management: { enabled: true, password } })
   t.after(() => hub.close())
   const a = enroll(hub.management), input = deletion(hub.management, a), origin = `http://127.0.0.1:${hub.port}`
   const socket = new WebSocket(hub.url); t.after(() => socket.terminate())

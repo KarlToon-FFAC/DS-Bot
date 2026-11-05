@@ -110,7 +110,7 @@ test('a listening Hub refuses reset, then resets after normal shutdown', async t
   try { assert.throws(() => f.reset(), { code: 'HUB_ACTIVE_STOP_REQUIRED' }) }
   finally { await hub.close() }
   f.reset()
-  const fresh = await startHub({ databasePath: f.databasePath, port: 0, management: { enabled: true, password: 'synthetic-password-32-characters-long' } })
+  const fresh = await startHub({ databasePath: f.databasePath, port: 0, management: { enabled: true, password: 'synthetic-test-password-32-characters-long' } })
   try {
     assert.equal(fresh.store.db.prepare('SELECT count(*) n FROM instances').get().n, 0)
     assert.equal(fresh.store.db.prepare('SELECT count(*) n FROM hub_enrolled_peers').get().n, 0)
