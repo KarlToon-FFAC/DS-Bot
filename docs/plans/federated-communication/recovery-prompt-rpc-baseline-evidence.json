@@ -1,0 +1,96 @@
+{
+  "status": "FAIL",
+  "testedCode": "6f4412a7f1dfee298f93d0b2d140ac4b898a698b",
+  "productionBase": "da47b17dd340c099c83c1e65d69bd4d2d2884312",
+  "runId": "rpc-baseline-1793874773",
+  "environment": {
+    "platform": "linux",
+    "node": "v24.22.1",
+    "network": "real independent DSH A/B and loopback Hub",
+    "model": "deterministic local Mock only"
+  },
+  "fault": {
+    "point": "recovery-prompt-rpc",
+    "sessionId": "session-38c725b4-5d77-493e-81b2-0f76adef31de",
+    "noticeId": "647e3f8c-3b97-4149-ab18-98a4a69b9226",
+    "seq": 16,
+    "conversationId": "b7d05930-7eb8-4845-8fa5-f7abd7450acb",
+    "deliveryId": "5d150999-0fc6-4c96-a5e8-f8cb75d9e7dd",
+    "messageId": "36a98f83-749d-40ba-90e1-15a9ef23a244",
+    "phase": "assembling",
+    "rpcType": "conversation.members",
+    "socketOpen": true,
+    "responseSent": false
+  },
+  "terminalError": "Timeout after 60000ms: authorization-only recovery failure leaves a future legitimate resume available",
+  "journal": {
+    "originalInputs": 1,
+    "recoveryNotices": 1,
+    "turns": [
+      {
+        "seq": 14,
+        "turn": 1,
+        "reason": {
+          "kind": "interrupted"
+        }
+      },
+      {
+        "seq": 20,
+        "turn": 2,
+        "reason": {
+          "kind": "error",
+          "error": {
+            "message": "CONNECTION_LOST",
+            "code": "UNKNOWN"
+          }
+        }
+      }
+    ],
+    "modelRequests": 1
+  },
+  "delivery": {
+    "id": "5d150999-0fc6-4c96-a5e8-f8cb75d9e7dd",
+    "message_id": "36a98f83-749d-40ba-90e1-15a9ef23a244",
+    "recipient_id": "bot:e019cbf3-be09-4a70-8682-caefb2d66c65:36e44401-443c-498f-9e2d-32382bef0293",
+    "membership_epoch": "569e4c86-1e91-4cc3-a7bc-a4c1287abc6e",
+    "ai": 1,
+    "stored": 1,
+    "ai_accepted": 1,
+    "revoked": 0
+  },
+  "hubMessages": [
+    {
+      "id": "36a98f83-749d-40ba-90e1-15a9ef23a244",
+      "seq": 4,
+      "author_id": "human:cee447dd-1cee-4900-887d-83f30c1537fb:f5d677e5-95c8-46a7-8661-09b9f795a953"
+    }
+  ],
+  "local": {
+    "inbox": {
+      "delivery_id": "5d150999-0fc6-4c96-a5e8-f8cb75d9e7dd",
+      "message_id": "36a98f83-749d-40ba-90e1-15a9ef23a244",
+      "ai_state": "accepted",
+      "revoked": 0,
+      "epoch": "569e4c86-1e91-4cc3-a7bc-a4c1287abc6e"
+    },
+    "exports": 0,
+    "outbox": 0
+  },
+  "notRun": [
+    "revoked",
+    "new-epoch",
+    "user-cancel",
+    "model-error"
+  ],
+  "cleanup": {
+    "scriptExited": 1,
+    "ownedProcessesStopped": true,
+    "portsVerifiedReleased": [
+      3271,
+      3272,
+      3273,
+      8971,
+      8972
+    ]
+  }
+}

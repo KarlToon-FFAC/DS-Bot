@@ -13,7 +13,7 @@ const names = selected ? [selected] : ['reconnect', 'revoked', 'new-epoch', 'use
 for (const name of names) assert.ok(['reconnect', 'revoked', 'new-epoch', 'user-cancel', 'model-error'].includes(name))
 const evidence = { status: 'RUNNING', baseline: 'da47b17 plus test-only fixture changes', platform: process.platform,
   network: 'independent DSH A/B and persistent Hub on loopback', model: 'local deterministic Mock only', cases: [] }
-const output = join(topology.root, `${topology.prefix}-acceptance.json`)
+const output = join(topology.root, `${topology.prefix}-acceptance.json`), proofs = new Map()
 const save = () => writeFileSync(output, JSON.stringify(evidence, null, 2))
 const callCount = (peer, sessionId) => readFileSync(join(peer.home, 'mock.jsonl'), 'utf8').split('\n').filter(Boolean).map(JSON.parse).filter(call => call.session === sessionId).length
 const inspect = (peer, conversationId) => peer.client.api({ operation: 'production-state', conversationId })
@@ -38,7 +38,7 @@ async function reconnectAndReconcile(peer) {
 async function run(name) {
   const [a, b] = topology.peers, beforeIdentity = identity(b)
   const conversationId = await topology.group(`Prompt RPC ${name} ${nonce}`, [b.bot])
-  const membershipEpoch = epoch(b, conversationId)
+  const membershipEpoch = await until(() => epoch(b, conversationId), 'recipient projects the current membership epoch')
   if (name === 'model-error') {
     await topology.bench(b, 'stop')
     await topology.startPeer(b, { MOCK_REJECT_IMAGES: '1' })
@@ -74,6 +74,7 @@ async function run(name) {
   assert.equal(fault.deliveryId, deliveryId); assert.equal(fault.sessionId, sessionId)
   assert.equal(fault.rpcType, 'conversation.members'); assert.equal(fault.socketOpen, true); assert.equal(fault.responseSent, false)
   assert.equal(fault.phase, 'assembling', 'the exact recovered Session is still inside the public prompt assembly waterfall')
+  proofs.set(name, { conversationId, originalMessageId: sent.messageId, deliveryId, membershipEpoch, sessionId, fault })
   const held = await inspect(b, conversationId)
   assert.ok(ends(held).some(end => end.kind === 'interrupted'), 'the original loss is interrupted, never a user cancellation')
   assert.ok(held.sessions.flatMap(session => session.events).some(event => event.seq === fault.seq && event.type === 'agent/inbox/spliced'
@@ -132,7 +133,7 @@ try {
   await topology.initialize()
   for (const name of names) {
     try { const detail = await run(name); evidence.cases.push({ id: name, status: 'PASS', ...detail }); console.log(`PASS ${name}`) }
-    catch (error) { evidence.cases.push({ id: name, status: 'FAIL', error: error.code ?? error.message }); console.error(`FAIL ${name}: ${error.code ?? error.message}`); process.exitCode = 1 }
+    catch (error) { evidence.cases.push({ id: name, status: 'FAIL', ...proofs.get(name), error: error.code ?? error.message }); console.error(`FAIL ${name}: ${error.code ?? error.message}`); process.exitCode = 1 }
     save()
   }
   evidence.status = evidence.cases.every(row => row.status === 'PASS') ? 'PASS' : 'FAIL'
