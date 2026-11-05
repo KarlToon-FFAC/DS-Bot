@@ -1,4 +1,7 @@
 export const communicationDescriptions = {
+  INVALID_IP_ADDRESS: 'Enter a valid IPv4 or IPv6 address. Ports are optional; use brackets around IPv6 with a port.',
+  INVALID_IP_NOTE: 'Use an IP note of at most 160 characters without line breaks or hidden control characters.',
+  IP_NOTE_LIMIT: 'Up to 256 IP notes can be saved for this Hub. Clear an old note before adding another.',
   SECURE_RANDOM_UNAVAILABLE:"This browser cannot create secure request identifiers. Nothing was sent. Use a supported browser and refresh.",
   UNKNOWN_OPERATION:"The API does not recognise this action. Update the plugin and restart its host process.",
   OPERATION_ID_REQUIRED:"The request was incomplete. Refresh before trying again.",

@@ -8,7 +8,7 @@ import { build } from 'esbuild'
 
 const harness = createRequire(join(process.env.DSH_HARNESS, 'package.json'))
 const { JSDOM } = harness('jsdom'), React = harness('react'), { act } = React
-const { outputFiles } = await build({ stdin: { contents: "export * from './communication-contacts.js'; export * from './communication-profile.js'; export * from './communication-onboarding.js'; export * from './communication-list.js'; export { BotMark } from './mark.js'", resolveDir: fileURLToPath(new URL('../src/client/', import.meta.url)), loader: 'js' },
+const { outputFiles } = await build({ stdin: { contents: "export * from './communication-contacts.js'; export * from './communication-address-notes.js'; export * from './communication-profile.js'; export * from './communication-onboarding.js'; export * from './communication-list.js'; export { BotMark } from './mark.js'", resolveDir: fileURLToPath(new URL('../src/client/', import.meta.url)), loader: 'js' },
   bundle: true, platform: 'browser', format: 'cjs', external: ['react', 'react-dom', '@deepseek-ai/dsh-client-ui-primitives'], write: false })
 
 async function ui(check) {
@@ -340,5 +340,59 @@ test('legacy multi-Human devices follow binary principal ordering and never assi
     assert.equal(result.people[0].bots[0].principalId, 'bot:legacy:one')
     assert.equal(result.people[1].bots.length, 0)
     assert.equal(result.otherBots[0].principalId, 'bot:unknown:one')
+  })
+})
+
+
+test('IP notes can be added, edited, cancelled and cleared locally, with duplicate saves blocked and failures preserving the draft', async () => {
+  await ui(async ({ exports: api, doc, dom, render, click, edit }) => {
+    const calls = []; let release, fail = false
+    function Notes() {
+      const [notes, setNotes] = React.useState({})
+      return React.createElement(api.AddressNotes, { contacts: [{ ipAddress: '::ffff:c000:201' }, { ipAddress: '192.0.2.1:443' }], notes,
+        onSave: async (address, note) => {
+          calls.push({ address, note })
+          if (fail) throw Object.assign(new Error('PRIVATE'), { code: 'INVALID_IP_ADDRESS' })
+          await new Promise(resolve => { release = resolve })
+          setNotes(note.trim() ? { '192.0.2.1': note.trim() } : {})
+        } })
+    }
+    await render(React.createElement(Notes))
+    assert.equal(doc.querySelectorAll('.bt-comm-ip-note-row').length, 1, 'mapped IPv4 and ports share one IP label')
+    await click('Add IP note'); await edit('IP address', '192.0.2.1'); await edit('IP note', 'Not saved')
+    await click('Cancel'); assert.equal(calls.length, 0)
+    await click('Add note'); await edit('IP note', '<b>Office NAT</b>')
+    await act(async () => {
+      const form = doc.querySelector('form')
+      form.dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true }))
+      form.dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true }))
+    })
+    assert.equal(calls.length, 1); assert.equal(doc.querySelector('[aria-label="IP note"]').disabled, true)
+    await act(async () => release())
+    assert.equal(doc.querySelector('form'), null); assert.equal(doc.querySelector('.bt-comm-ip-note').textContent, '<b>Office NAT</b>')
+    assert.equal(doc.querySelector('.bt-comm-ip-note b'), null, 'notes are text, never HTML')
+    await click('Edit note'); await edit('IP note', 'Updated'); await click('Save note'); await act(async () => release())
+    assert.equal(doc.querySelector('.bt-comm-ip-note').textContent, 'Updated')
+    await click('Edit note'); await edit('IP address', 'bad host'); fail = true; await click('Save note')
+    assert.equal(doc.querySelector('[aria-label="IP note"]').value, 'Updated'); assert.ok(doc.querySelector('[role="alert"]'))
+    assert.doesNotMatch(doc.querySelector('[role="alert"]').textContent, /PRIVATE/)
+    await click('Cancel'); fail = false; await click('Edit note'); await click('Clear note'); await act(async () => release())
+    assert.equal(doc.querySelector('.bt-comm-ip-note'), null); assert.equal(calls.at(-1).note, '')
+  })
+})
+
+test('IP note search and display leave same-address Human and Bot identity and message recipients separate', async () => {
+  await ui(async ({ exports: api, doc, render, edit }) => {
+    const contacts = [
+      { principalId: 'human:a:one', homeInstanceId: 'a', kind: 'human', displayName: 'Same', ipAddress: '192.0.2.1' },
+      { principalId: 'human:b:two', homeInstanceId: 'b', kind: 'human', displayName: 'Same', ipAddress: '::ffff:c000:201' },
+      { principalId: 'bot:b:helper', homeInstanceId: 'b', kind: 'bot', displayName: 'Helper', ipAddress: '192.0.2.1:443' },
+    ], recipients = []
+    await render(React.createElement(api.ContactDirectory, { contacts, addressNotes: { '192.0.2.1': 'Office network' }, request: async () => ({}), onMessage: id => recipients.push(id) }))
+    await edit('Find a contact or Bot', 'Office network')
+    assert.equal(doc.querySelectorAll('[data-contact-id]').length, 2)
+    assert.equal(doc.querySelectorAll('[data-principal-id="bot:b:helper"]').length, 1)
+    for (const button of doc.querySelectorAll('button')) if (button.textContent === 'Message') await act(async () => button.click())
+    assert.deepEqual(recipients, ['human:a:one', 'human:b:two', 'bot:b:helper'])
   })
 })

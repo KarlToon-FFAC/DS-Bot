@@ -20,6 +20,7 @@ import { COMMUNICATION_PRESET, hasCommunicationPreset, communicationInputs, sour
 
 const PROTOCOL = 'dsbot-communication/1'
 const fail = code => { throw Object.assign(new Error(code), { code }) }
+const addressNotesScope = comm => JSON.stringify([comm.settings.hubId ?? comm.settings.url, comm.queue.instanceId, comm.settings.queueScope ?? 'legacy'])
 const operationId = source => `communication-${createHash('sha256').update(source).digest('hex')}`
 const humanSendIntent = input => JSON.stringify([input.conversationId, input.text, input.clientCreatedAt, input.mentions ?? [], input.replyToMessageId ?? null, input.membershipEpoch ?? null, ...(input.attachments?.length ? [input.attachments] : [])])
 
@@ -525,7 +526,7 @@ export class CommunicationRuntime {
       attachmentsAvailable: this.transport.welcome?.capabilities?.includes(ATTACHMENT_CAPABILITY) === true,
       managementUrl, managementAvailable: managementUrl !== null,
       lastConnectedAt: this.lastConnectedAt ?? null, error: this.transportError ?? this.lastError ?? null, avatarError: this.avatarError ?? null, contacts: this.contacts,
-      limits: this.queue.limits,
+      limits: this.queue.limits, addressNotes: this.queue.addressNotes(), addressNotesScope: addressNotesScope(this),
       localBots: [...this.bots.values()].map(bot => ({ principalId: bot.principalId, displayName: this.rt.botOf(bot.localRef)?.name ?? bot.displayName })),
       conversations: memberships.map(member => ({ ...member, info: this.conversations.get(member.conversationId) ?? null,
         lastMessage: conversationSummary(this.queue.lastMessage(member.conversationId, member.principalId, member.membershipEpoch),
@@ -538,6 +539,13 @@ export class CommunicationRuntime {
         return binding && memberships.some(member => member.conversationId === binding.conversationId) ? [{ bindingId, conversationId: binding.conversationId, principalId: binding.recipientPrincipalId, code }] : []
       }),
       exportFailures: this.queue.exportFailures().filter(item => memberships.some(member => member.conversationId === item.conversationId)) }
+  }
+  addressNotesScope() { return addressNotesScope(this) }
+  setAddressNote(input) {
+    if (this.rt.readOnly?.() !== undefined) fail('COMMUNICATION_READ_ONLY')
+    if (input.expectedScope !== this.addressNotesScope()) fail('HUB_SELECTION_CHANGED')
+    // This local UI operation must never enter the outbox or a Bot's context.
+    return this.queue.setAddressNote({ address: input.address, note: input.note })
   }
   async ensureSession(binding, bot, { fresh = false } = {}) {
     const ref = await this.rt.desiredModel(bot)

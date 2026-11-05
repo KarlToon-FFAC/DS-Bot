@@ -1,4 +1,5 @@
 import { mentionSpans } from '../shared/mentions.js'
+import { normalizeIpAddress } from '../shared/ip-address.js'
 
 export function contactLabels(contacts) {
   const name = contact => contact.displayName ?? contact.principalId
@@ -27,18 +28,18 @@ export function deliveryPhase(delivery) {
 
 // IP is a directory heading, never a recipient or authorization key. In particular,
 // multiple paired devices behind one NAT keep their own principals and Humans.
-export function contactsByAddress(contacts) {
+export function contactsByAddress(contacts, addressNotes = {}) {
   const groups=new Map(), seen=new Set()
   for(const contact of contacts){
     if(seen.has(contact.principalId))continue
     seen.add(contact.principalId)
-    const address=contact.ipAddress||'Address unavailable'
+    const address=normalizeIpAddress(contact.ipAddress)||contact.ipAddress||'Address unavailable'
     if(!groups.has(address))groups.set(address,new Map())
     const instances=groups.get(address)
     if(!instances.has(contact.homeInstanceId))instances.set(contact.homeInstanceId,{instanceId:contact.homeInstanceId,label:contact.instanceLabel??contact.homeInstanceId,contacts:[]})
     instances.get(contact.homeInstanceId).contacts.push(contact)
   }
-  return [...groups].sort(([a],[b])=>a.localeCompare(b)).map(([address,instances])=>({address,instances:[...instances.values()].sort((a,b)=>a.instanceId.localeCompare(b.instanceId))}))
+  return [...groups].sort(([a],[b])=>a.localeCompare(b)).map(([address,instances])=>({address,...(addressNotes[address] ? { note: addressNotes[address] } : {}),instances:[...instances.values()].sort((a,b)=>a.instanceId.localeCompare(b.instanceId))}))
 }
 
 export function conversationTitle(member, humanId, labels) {

@@ -230,6 +230,7 @@ export function install(rt) {
         let value
         switch (body.endpoint) {
           case 'state': value = { ...comm.snapshot(), reloadRequired: communicationReloadRequired(rt, appliedSettings) }; break
+          case 'set-address-note': value = comm.setAddressNote(body); break
           case 'relationship-memory':
           case 'save-relationship-memory':
           case 'forget-relationship-memory': value = await comm.manageRelationships(body.endpoint, body); break

@@ -1,4 +1,11 @@
 export const communicationCSS = `
+.bt-comm-ip-notes{margin-top:16px;padding-top:12px;border-top:1px solid var(--bt-line);min-width:0}
+.bt-comm-ip-note-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:8px 0;min-width:0}
+.bt-comm-ip-note-row>span{min-width:0;overflow-wrap:anywhere}
+.bt-comm-ip-note-row button{flex:none}
+.bt-comm-ip-note{display:block;font-size:12px;line-height:16px;font-weight:400;color:var(--bt-ink-2);overflow-wrap:anywhere;white-space:pre-wrap}
+.bt-comm-ip-note-editor{margin-top:12px}
+
 .bt-comm-attachments{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;max-width:100%}
 .bt-comm-attachment{display:flex;flex-direction:column;gap:4px;max-width:240px;min-width:0}
 .bt-comm-attachment img{max-width:100%;max-height:220px;object-fit:contain;border-radius:12px}

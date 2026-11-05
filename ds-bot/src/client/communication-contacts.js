@@ -2,6 +2,7 @@ import { createElement as h, Fragment, useState } from 'react'
 import { CommunicationAvatar } from './communication-profile.js'
 import { contactLabels } from './communication-model.js'
 import { t } from './i18n.js'
+import { normalizeIpAddress } from '../shared/ip-address.js'
 
 export function contactDirectory(contacts, relations = [], humanPrincipalId) {
   const people = [...new Map(contacts.map(person => [person.principalId, person])).values()]
@@ -22,11 +23,11 @@ export function contactDirectory(contacts, relations = [], humanPrincipalId) {
   return { people: [...directory.values()], otherBots }
 }
 
-export function ContactDirectory({ contacts, relations, humanPrincipalId, instanceId, request, busy, onMessage, onRemove, confirm }) {
+export function ContactDirectory({ contacts, relations, humanPrincipalId, instanceId, request, busy, onMessage, onRemove, confirm, addressNotes = {} }) {
   const [query, setQuery] = useState('')
   const labels = contactLabels(contacts), { people, otherBots } = contactDirectory(contacts, relations, humanPrincipalId)
   const needle = query.trim().toLocaleLowerCase()
-  const matches = person => [labels.get(person.principalId), person.displayName, person.principalId, person.instanceLabel, person.homeInstanceId, person.ipAddress].some(value => value?.toLocaleLowerCase().includes(needle))
+  const matches = person => [labels.get(person.principalId), person.displayName, person.principalId, person.instanceLabel, person.homeInstanceId, person.ipAddress, addressNotes[normalizeIpAddress(person.ipAddress)]].some(value => value?.toLocaleLowerCase().includes(needle))
   const shown = people.filter(item => matches(item.person) || item.bots.some(matches)), bots = otherBots.filter(matches)
   const identity = (person, allowed = true) => h('span', { className: 'bt-comm-directory-person' }, h(CommunicationAvatar, { person, request, allowed }),
     h('span', null, h('strong', null, labels.get(person.principalId) ?? person.displayName ?? person.principalId), h('small', null, t(person.kind === 'bot' ? 'Bot' : 'Human'), person.homeInstanceId && instanceId ? ` · ${t(person.homeInstanceId === instanceId ? 'Local' : 'Remote')}` : '', person.kind === 'bot' && person.homeInstanceId ? ` · ${person.instanceLabel ?? person.homeInstanceId}` : '')))
@@ -38,6 +39,7 @@ export function ContactDirectory({ contacts, relations, humanPrincipalId, instan
     shown.map(({ person, available, bots, relation }) => h('article', { key: person.principalId, className: 'bt-comm-contact-card', 'data-contact-id': person.principalId },
       h('div', { className: 'bt-comm-contact-card-head' }, identity(person, available), available ? message(person) : null),
       person.homeInstanceId ? h('p', { className: 'bt-comm-reference' }, person.instanceLabel ?? person.homeInstanceId, ' · ', t(person.ipAddress || 'Address unavailable')) : null,
+      addressNotes[normalizeIpAddress(person.ipAddress)] ? h('p', { className: 'bt-comm-ip-note' }, t('IP note'), ': ', addressNotes[normalizeIpAddress(person.ipAddress)]) : null,
       !available ? h('p', { className: 'bt-comm-reference', role: 'status' }, t('Contact details are not available in the current directory.')) : null,
       h('h4', null, t('Their Bots')),
       bots.length ? h('ul', { className: 'bt-comm-contact-bots' }, bots.map(botRow)) : h('p', { className: 'bt-comm-reference' }, t('No Bots shared with you')),

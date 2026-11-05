@@ -5,6 +5,20 @@
 export const NAMESPACE = 'ds-bot'
 
 const ZH = {
+  "IP notes": "IP 备注",
+  "IP note": "IP 备注",
+  "IP address": "IP 地址",
+  "Add IP note": "添加 IP 备注",
+  "Edit IP note": "编辑 IP 备注",
+  "Edit note": "编辑备注",
+  "Add note": "添加备注",
+  "Save note": "保存备注",
+  "Clear note": "清除备注",
+  "Saved only on this device for this Hub. IP notes label addresses, not people or trusted identities. Shared IPs use the same note.": "备注仅保存在本机当前 Hub 下，用来标记地址，不代表人员身份或可信关系。共用 IP 的设备使用同一备注。",
+  "Enter a valid IPv4 or IPv6 address. Ports are optional; use brackets around IPv6 with a port.": "请输入有效的 IPv4 或 IPv6 地址。端口可省略；IPv6 带端口时请用方括号括起地址。",
+  "Use an IP note of at most 160 characters without line breaks or hidden control characters.": "IP 备注最多 160 个字符，不能包含换行或隐藏控制字符。",
+  "Up to 256 IP notes can be saved for this Hub. Clear an old note before adding another.": "当前 Hub 最多保存 256 条 IP 备注，请先清除旧备注再添加。",
+
   "This browser cannot create secure request identifiers. Nothing was sent. Use a supported browser and refresh.":"浏览器无法生成安全请求标识，未发送任何内容。请使用受支持的浏览器并刷新。",
   "The API does not recognise this action. Update the plugin and restart its host process.":"接口不支持此操作。请更新插件并重启宿主进程。",
   "The request was incomplete. Refresh before trying again.":"请求不完整，请刷新后再试。",

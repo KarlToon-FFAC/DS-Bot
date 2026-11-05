@@ -1,6 +1,7 @@
 import { createElement as h, Fragment, useEffect, useRef, useState } from 'react'
 import { CommunicationAvatar } from './communication-profile.js'
 import { ContactDirectory } from './communication-contacts.js'
+import { AddressNotes } from './communication-address-notes.js'
 import { BotMark } from './mark.js'
 import { t } from './i18n.js'
 import { communicationFailure, knownCommunicationFailure } from './communication-errors.js'
@@ -176,7 +177,7 @@ function BotChoices({ bots, selected, onChange, label }) {
     h(BotMark, { bot, size: 24 }), bot.name, h('span', { className: 'bt-comm-reference' }, bot.id))) : h('p', { className: 'bt-comm-reference' }, t('No published Bots')))
 }
 
-export function ContactManager({ request, operation, contacts, humanPrincipalId, instanceId, onMessage, messageBusy }) {
+export function ContactManager({ request, operation, contacts, humanPrincipalId, instanceId, onMessage, messageBusy, addressNotes, onSaveAddressNote }) {
   const [data, setData] = useState(null), [code, setCode] = useState(''), [userCode, setUserCode] = useState('')
   const [published, setPublished] = useState([]), [share, setShare] = useState([]), [incomingShares, setIncomingShares] = useState({})
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [confirm, setConfirm] = useState('')
@@ -216,11 +217,12 @@ export function ContactManager({ request, operation, contacts, humanPrincipalId,
   return h('div', { className: 'bt-comm-contact-manager' },
     h('button', { type: 'button', disabled: busy, onClick: () => { void run(async () => {}) } }, t('Refresh status')),
     error ? h('p', { className: 'bt-comm-error', role: 'alert' }, error) : null,
-    h(ContactDirectory, { contacts, relations: data?.relations ?? [], humanPrincipalId, instanceId, request, busy: busy || messageBusy, onMessage, confirm, onRemove: item => {
+    h(ContactDirectory, { contacts, relations: data?.relations ?? [], humanPrincipalId, instanceId, request, addressNotes, busy: busy || messageBusy, onMessage, confirm, onRemove: item => {
       const id = item.otherHumanPrincipalId
       if (confirm !== id) setConfirm(id)
       else { setConfirm(''); void run(() => operation('revoke-contact', { otherHumanPrincipalId: id, expectedVersion: item.version })) }
     } }),
+    h(AddressNotes, { contacts, notes: addressNotes, onSave: onSaveAddressNote, busy: busy || messageBusy }),
     h('details', { className: 'bt-comm-contact-section' }, h('summary', null, t('Add a contact')),
     h('h3', null, t('Your user code')), h('p', { className: 'bt-comm-user-code', tabIndex: 0 }, code || t('Loading…')),
     h('p', { className: 'bt-comm-reference' }, t('Share this code with the person you want to add. Both people choose which local Bots to share; none are selected by default.')),
