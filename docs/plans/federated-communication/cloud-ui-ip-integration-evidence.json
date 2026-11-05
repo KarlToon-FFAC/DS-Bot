@@ -1,0 +1,63 @@
+{
+  "status": "UI_IP_UNIT_AND_ACCEPTANCE_PASS_WITH_NATIVE_SMOKE_FAILURE",
+  "recordedAt": "2026-11-05T09:25:00.165815+00:00",
+  "testedUiIpCommit": "d997d9c",
+  "nativeSmokeCommit": "9f3365e",
+  "pluginTests": {
+    "total": 1791,
+    "passed": 1787,
+    "skipped": 4,
+    "failed": 0
+  },
+  "focusedUiStorageTests": {
+    "passed": 78,
+    "failed": 0
+  },
+  "ipNotesTwoDshMock": {
+    "passed": 3,
+    "failed": 0
+  },
+  "nativeMockSmoke": {
+    "passed": 47,
+    "failed": 5,
+    "earlierSourceBeforeUiIpPassed": 52,
+    "firstFailure": "Writer writes long reply 3: Writer did not switch to a new part",
+    "hostEvidence": "handoff note for Writer failed (1 in a row); part 1 goes on, next try in 60s: DeepSeek Messages transport failed",
+    "subsequentFailures": [
+      "Own-chat search across parts",
+      "Earlier part pages",
+      "Earlier view blueprint",
+      "Expected compact checkpoint"
+    ],
+    "diagnosis": "The context steward returned switch, but its following handoff-note call failed through the loopback Mock transport. The existing production logic retained the old Session and used its 60-second cooldown. This establishes the immediate failure and cascading assertions, not the lower-level network cause.",
+    "productionChangedForTest": false,
+    "ownedBenchCleanup": "The same exec lifecycle EXIT trap invoked owned stop after the smoke exited with failure."
+  },
+  "staticChecks": {
+    "lint": "PASS_WITH_EXISTING_WARNINGS",
+    "generatedClient": "PASS",
+    "probeClient": "PASS",
+    "diffCheck": "PASS"
+  },
+  "artifactSha256": {
+    "dsbot-followup-ui-ip-full.log": "1dde44e8ecd0bcc3ff9a5307e09e4cb91066da3ff0858e9f724bd78407d4d45e",
+    "dsbot-followup-ip-notes-final.log": "95801e477a3ebb1042090e45296cf2b0dd6d40cbf381b30fac1a82e4f5ff6b6e",
+    "dsbot-followup-ui-ip-native.log": "c30cd875f7c2dcee58b180de3cfcfc179f671922c528c1178b50a75a77f61aff",
+    "dsbot-followup-ui-ip-native-transcript.json": "ec61ac191cc13cb28316e2027045f789e0e6d491c016af18da7d011954914e36"
+  },
+  "laterIntegration": "Transport lifecycle, live management UI, publication conflict fencing and synchronization test matrix are later commits, not covered by the UI/IP results above. Their final combined regression remains pending.",
+  "limits": [
+    "Skipped tests are not passes.",
+    "The failing smoke is retained and must not be described as green.",
+    "No real-model, paid, native Windows or physical cross-machine tests were run."
+  ],
+  "scope": {
+    "onlyMock": true,
+    "realModelCalls": false,
+    "credentialsRequested": false,
+    "credentialsReadOrTransferred": false,
+    "push": false,
+    "actionsTriggered": false,
+    "otherWorktreesModified": false
+  }
+}
