@@ -9,7 +9,8 @@ else{
     const path=resolve(configPath), config=JSON.parse(readFileSync(path,'utf8'))
     const peers=config.peers?.map(peer=>({instanceId:peer.instanceId,instanceLabel:peer.instanceLabel,pairingRevision:peer.pairingRevision??1,credential:process.env[peer.credentialEnv]}))
     const tls=config.tls?{cert:process.env[config.tls.certificateEnv],key:process.env[config.tls.privateKeyEnv]}:undefined
-    const management=config.management?.enabled?{...config.management,password:config.management.adminPasswordEnv?process.env[config.management.adminPasswordEnv]:undefined}:undefined
+    const management=config.management?.enabled?{...config.management,password:config.management.adminPasswordEnv?process.env[config.management.adminPasswordEnv]:undefined,
+      ...(config.management.pairingCaFile?{pairingCa:readFileSync(resolve(dirname(path),config.management.pairingCaFile),'utf8')}:{})}:undefined
     const hub=await startHub({...config,databasePath:resolve(dirname(path),config.databasePath),peers,tls,management})
     console.log(`DS-Bot communication Hub listening on ${hub.host}:${hub.port}; health /health`)
     if(hub.managementUrl)console.log(`Hub management: ${hub.managementUrl}`)

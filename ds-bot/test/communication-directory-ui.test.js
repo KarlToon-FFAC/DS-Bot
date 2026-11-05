@@ -8,7 +8,7 @@ import { build } from 'esbuild'
 
 const harness = createRequire(join(process.env.DSH_HARNESS, 'package.json'))
 const { JSDOM } = harness('jsdom'), React = harness('react'), { act } = React
-const { outputFiles } = await build({ stdin: { contents: "export * from './communication-profile.js'; export * from './communication-onboarding.js'; export { BotMark } from './mark.js'", resolveDir: fileURLToPath(new URL('../src/client/', import.meta.url)), loader: 'js' },
+const { outputFiles } = await build({ stdin: { contents: "export * from './communication-profile.js'; export * from './communication-onboarding.js'; export * from './communication-list.js'; export { BotMark } from './mark.js'", resolveDir: fileURLToPath(new URL('../src/client/', import.meta.url)), loader: 'js' },
   bundle: true, platform: 'browser', format: 'cjs', external: ['react', 'react-dom', '@deepseek-ai/dsh-client-ui-primitives'], write: false })
 
 async function ui(check) {
@@ -33,6 +33,32 @@ async function ui(check) {
   finally { await act(async () => root.unmount()); mod.exports.syncAvatarDirectory([]); dom.window.close(); for (const [key, descriptor] of Object.entries(saved)) { if (descriptor) Object.defineProperty(globalThis, key, descriptor); else delete globalThis[key] } }
 }
 const imageA = 'data:image/png;base64,aA==', imageB = 'data:image/webp;base64,Yg=='
+
+test('small single/group Chinese avatars remain one character with bounded glyphs, while Bot shapes remain local',async()=>{
+  await ui(async({exports:api,doc,render})=>{
+    const members=[{principalId:'human:a:one',kind:'human',displayName:'张三'},{principalId:'human:b:two',kind:'human',displayName:'𠮷田'}]
+    for(const size of [12,16,24,36]){
+      await render(React.createElement(api.ConversationAvatar,{conversation:{kind:'group',info:{members}},humanId:'none',request:async()=>({}),size}))
+      assert.deepEqual([...doc.querySelectorAll('.bt-comm-avatar')].map(node=>node.dataset.initials),['张','𠮷'])
+      for(const avatar of doc.querySelectorAll('.bt-comm-avatar')){assert.equal(avatar.style.overflow,'hidden');assert.ok(parseFloat(avatar.style.fontSize)<=12)}
+    }
+    await render(React.createElement(api.CommunicationAvatar,{person:{principalId:'human:a:english',kind:'human',displayName:'Alice'},request:async()=>({}),size:16}))
+    assert.equal(doc.querySelector('.bt-comm-avatar').dataset.initials,'AL')
+  })
+})
+
+test('different Hubs cannot share avatar cache or pending results even for identical claimed principal and revision',async()=>{
+  await ui(async({exports:api,doc,render})=>{
+    const person={principalId:'human:same:one',kind:'human',displayName:'张三',avatar:{imageRevision:'same-revision'}}
+    let finishA,finishB,calls=0
+    const request=()=>new Promise(resolve=>{if(++calls===1)finishA=resolve;else finishB=resolve})
+    api.syncAvatarDirectory([person],'hub-A');await render(React.createElement(api.CommunicationAvatar,{person,request}))
+    api.syncAvatarDirectory([person],'hub-B');await render(React.createElement(api.CommunicationAvatar,{person,request}))
+    await act(async()=>finishA({image:imageA}));assert.equal(doc.querySelector('img'),null)
+    await act(async()=>finishB({image:imageB}));assert.equal(doc.querySelector('img').getAttribute('src'),imageB)
+    assert.equal(calls,2);api.syncAvatarDirectory([])
+  })
+})
 
 test('avatars use local Bot shapes, name-derived Human defaults and only safe raster data', async () => {
   await ui(async ({ exports: api, doc, render }) => {

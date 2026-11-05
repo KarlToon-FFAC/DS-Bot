@@ -1,7 +1,11 @@
 import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, sign, randomUUID } from 'node:crypto'
 import { lookup } from 'node:dns/promises'
 import { BlockList, isIP } from 'node:net'
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import { credentialKey, parseCredentialKey } from '@deepseek-ai/dsh-credentials'
+import { scopedTrust, verifyHubCode } from './hub-trust.js'
+import { communicationCapabilities } from './transport.js'
 
 const PROTOCOL = 'dsbot-communication/1'
 const RECORD_TYPE = 'dsbot-communication-signing-key'
@@ -55,7 +59,8 @@ function permittedAddress(address, allowLoopback) {
 }
 
 export function decodeHubCode(code, options) {
-  if (typeof code !== 'string' || code.length > 4096 || !code.startsWith(PREFIX)) fail('INVALID_HUB_CODE')
+  const v2 = typeof code === 'string' && code.startsWith('dsbot-hub:2:')
+  if (typeof code !== 'string' || code.length > (v2 ? 65536 : 4096) || !v2 && !code.startsWith(PREFIX)) fail('INVALID_HUB_CODE')
   const encoded = code.slice(PREFIX.length)
   if (!/^[A-Za-z0-9_-]+$/.test(encoded)) fail('INVALID_HUB_CODE')
   let body
@@ -64,7 +69,14 @@ export function decodeHubCode(code, options) {
     if (bytes.toString('base64url') !== encoded) fail('INVALID_HUB_CODE')
     body = JSON.parse(bytes.toString('utf8'))
   } catch { fail('INVALID_HUB_CODE') }
-  if (!body || Array.isArray(body) || Object.keys(body).sort().join(',') !== 'hubId,url' || !identifier(body.hubId)) fail('INVALID_HUB_CODE')
+  if (!body || Array.isArray(body) || !identifier(body.hubId)) fail('INVALID_HUB_CODE')
+  if (v2) {
+    const url = validateHubUrl(body.url, options)
+    if (url !== body.url || !url.startsWith('wss:')) fail('INVALID_HUB_CODE')
+    const trust = verifyHubCode(body)
+    return { version: 2, hubId: body.hubId, url, trust, trustFingerprint: trust.fingerprint, expiresAt: body.expiresAt }
+  }
+  if (Object.keys(body).sort().join(',') !== 'hubId,url') fail('INVALID_HUB_CODE')
   return { version: 1, hubId: body.hubId, url: validateHubUrl(body.url, options) }
 }
 
@@ -88,11 +100,19 @@ const credentialsOf = ctx => {
 const contextOf = value => value.ctx ?? value
 function checkedRecord(record, hub, { instanceId } = {}) {
   const value = record?.kind === 'grant' && record.payload
-  if (!value || value.type !== RECORD_TYPE || value.version !== 1 || value.hubId !== hub.hubId || value.url !== hub.url
+  if (!value || value.type !== RECORD_TYPE || ![1, 2, 3].includes(value.version) || value.version === 2 && !value.trust || value.hubId !== hub.hubId || value.url !== hub.url
     || typeof value.publicKey !== 'string' || typeof value.privateKey !== 'string'
     || instanceId !== undefined && value.instanceId !== instanceId) fail('COMMUNICATION_CREDENTIAL_MISMATCH')
   return value
 }
+const namespace = hubId => 'hub-' + createHash('sha256').update(hubId).digest('hex').slice(0,32)
+const checkedScope = record => {
+  const scope = record.queueScope ?? 'legacy'
+  if (scope !== 'legacy' && scope !== namespace(record.hubId)) fail('COMMUNICATION_CREDENTIAL_MISMATCH')
+  return scope
+}
+const publicConfiguration = value => Object.fromEntries(['enabled','hubId','url','instanceId','credentialKey','credentialEnv','humanDisplayName','publishedBotIds','autoAcceptBotInvites','pollMs','contextHistoryBytes','rotateTokens','maxPending'].filter(key=>value?.[key]!==undefined).map(key=>[key,value[key]]))
+const selection = value => JSON.stringify([value?.hubId??null,value?.url??null,value?.instanceId??null,value?.credentialKey??null])
 function checkChallenge(challenge, expected, now = Date.now()) {
   if (!challenge || challenge.hubId !== expected.hubId || challenge.purpose !== expected.purpose
     || !identifier(challenge.challengeId) || typeof challenge.nonce !== 'string' || !/^[A-Za-z0-9_-]{16,256}$/.test(challenge.nonce)
@@ -118,6 +138,7 @@ export function communicationAuthentication(rtOrCtx, key, hub) {
   if (key !== communicationCredentialKey(hub.hubId)) fail('COMMUNICATION_CREDENTIAL_MISMATCH')
   return async (send, capabilities) => {
     const record = checkedRecord(await credentialsOf(ctx).readRecord(parseCredentialKey(key)), hub, { instanceId: hub.instanceId })
+    if (record.paused) fail('HUB_PAUSED')
     if (record.status !== 'approved' || !identifier(hub.instanceId)) fail('COMMUNICATION_NOT_APPROVED')
     const challenge = checkChallenge(await send('enrollment.challenge', { purpose: 'login', instanceId: hub.instanceId, publicKey: record.publicKey }),
       { hubId: hub.hubId, purpose: 'login', instanceId: hub.instanceId })
@@ -125,10 +146,24 @@ export function communicationAuthentication(rtOrCtx, key, hub) {
   }
 }
 
+export async function communicationSocket(rtOrCtx, key, hub, options = {}) {
+  if (key !== communicationCredentialKey(hub.hubId)) fail('COMMUNICATION_CREDENTIAL_MISMATCH')
+  const record = checkedRecord(await credentialsOf(contextOf(rtOrCtx)).readRecord(parseCredentialKey(key)), hub, { instanceId: hub.instanceId })
+  if (record.paused) fail('HUB_PAUSED')
+  return connectHubSocket(hub.url, { ...options, hubId: hub.hubId, trust: record.trust })
+}
+export async function communicationQueueSettings(rt, key, hub) {
+  if(typeof rt.home!=='string')fail('COMMUNICATION_STORAGE_UNAVAILABLE')
+  const record = checkedRecord(await credentialsOf(contextOf(rt)).readRecord(parseCredentialKey(key)),hub,{instanceId:hub.instanceId})
+  const queueScope = checkedScope(record)
+  return { queueScope, dataPath: queueScope === 'legacy' ? join(rt.home,'communication.sqlite') : join(rt.home,'communication-hubs',queueScope,'communication.sqlite') }
+}
+
 // The DNS result used for the handshake is checked once and pinned. TLS still
 // verifies the original hostname; redirects and proxy environment discovery are disabled.
-export async function connectHubSocket(url, { allowLoopback = false, resolve = lookup, timeoutMs = 15000, socketClass } = {}) {
+export async function connectHubSocket(url, { allowLoopback = false, resolve = lookup, timeoutMs = 15000, socketClass, trust, hubId } = {}) {
   url = validateHubUrl(url, { allowLoopback })
+  const ca = trust ? scopedTrust(trust, { hubId, url }).caPem : undefined
   const host = new URL(url).hostname.replace(/^\[|\]$/g, '')
   let addresses
   let dnsTimer
@@ -141,7 +176,7 @@ export async function connectHubSocket(url, { allowLoopback = false, resolve = l
   if (!Array.isArray(addresses) || !addresses.length || addresses.some(item => !permittedAddress(item.address, allowLoopback) || item.family !== isIP(item.address))) fail('HUB_ADDRESS_FORBIDDEN')
   addresses = addresses.map(item => ({ address: item.address, family: item.family }))
   const WebSocket = socketClass ?? (await import('ws')).default
-  const socket = new WebSocket(url, { followRedirects: false, rejectUnauthorized: true, minVersion: 'TLSv1.2', perMessageDeflate: false,
+  const socket = new WebSocket(url, { followRedirects: false, rejectUnauthorized: true, ...(ca ? { ca } : {}), minVersion: 'TLSv1.2', perMessageDeflate: false,
     maxPayload: 131072, handshakeTimeout: timeoutMs,
     lookup: (_hostname, options, callback) => {
       const chosen = options.family ? addresses.filter(item => item.family === options.family) : addresses
@@ -198,7 +233,7 @@ export async function openEnrollmentSocket(url, options = {}) {
 
 export const communicationStorageStatus = Object.freeze({ kind: 'dsh-credential-record', defaultProvider: 'owner-acl-plaintext',
   encryptedByDefault: false, agentIsolation: false, explanation: 'The default DSH provider stores plaintext protected by your OS account permissions. Tools running as the same OS user can read it. Other providers may offer different protection.' })
-const safeStatus = record => ({ hubId: record.hubId, url: record.url, requestId: record.requestId ?? null,
+const safeStatus = record => ({ hubId: record.hubId, url: record.url, paused: record.paused === true || record.requiresResume === true, ...(record.trust ? { trustFingerprint: record.trust.fingerprint } : {}), requestId: record.requestId ?? null,
   instanceId: record.instanceId ?? null, status: record.status, displayName: record.displayName, credentialKey: communicationCredentialKey(record.hubId), storage: communicationStorageStatus })
 const operation = value => { if (!identifier(value)) fail('OPERATION_ID_REQUIRED'); return value }
 const version = value => { if (!Number.isSafeInteger(value) || value < 1) fail('INVALID_REQUEST'); return value }
@@ -221,6 +256,10 @@ export class CommunicationOnboarding {
   async dispatch(action, input) {
     if (action === 'decode-hub-code') return decodeHubCode(input.hubCode, { allowLoopback: this.allowLoopback })
     if (action === 'join') return this.join(input)
+    if (action === 'disconnect-hub') return this.disconnect(input)
+    if (action === 'switch-hub') return this.selectHub(input)
+    if (action === 'resume-hub') return this.resumeHub(input)
+    if (action === 'update-hub-trust') return this.updateTrust(input)
     if (action === 'status' || action === 'cancel') return this.enrollment(action, input)
     if (action === 'storage') return this.storage(input)
     if (action === 'available-bots') return this.availableBots()
@@ -271,7 +310,9 @@ export class CommunicationOnboarding {
         if (record?.kind !== 'grant' || value?.type !== RECORD_TYPE || !identifier(value.hubId) || communicationCredentialKey(value.hubId) !== entry.key) continue
         enrollments.push(safeStatus(value))
       }
-      return { configured: enrollments.length > 0, storage: communicationStorageStatus, enrollments }
+      const active=this.rt.config.communication??{}
+      return { configured: enrollments.length > 0, storage: communicationStorageStatus, selectedHubId:active.hubId??null,
+        selectedHub:active.url?{hubId:active.hubId??null,url:active.url,enabled:active.enabled===true,legacy:!active.credentialKey}:null,enrollments }
     }
     const key = communicationCredentialKey(hubId), credentials = credentialsOf(this.ctx)
     const info = await credentials.describeRecord(key)
@@ -284,14 +325,122 @@ export class CommunicationOnboarding {
     const old = current.communication ?? {}
     if (old.url && old.url !== hub.url || old.hubId && old.hubId !== hub.hubId || old.instanceId && old.instanceId !== instanceId) fail('COMMUNICATION_PAIRING_CONFLICT')
   }
+  editor() {
+    const editor=serviceOf(this.ctx,'configEditor','CONFIG_EDITOR_UNAVAILABLE')
+    if(!editor?.entries||!editor?.edit)fail('CONFIG_EDITOR_UNAVAILABLE')
+    const entries=editor.entries().filter(entry=>entry.options?.name==='ds-bot')
+    if(entries.length!==1)fail('CONFIG_ENTRY_UNAVAILABLE')
+    return {editor,entry:entries[0]}
+  }
+  async pauseCurrent(expected) {
+    const old=publicConfiguration(this.rt.config.communication??{}),selected=selection(old),{editor,entry}=this.editor()
+    if(expected!==undefined&&old.hubId!==expected)fail('HUB_SELECTION_CHANGED')
+    if(old.credentialKey){
+      const credentials=credentialsOf(this.ctx),hub={hubId:old.hubId,url:old.url}
+      await credentials.modifyRecord(communicationCredentialKey(old.hubId),current=>{
+        const record=checkedRecord(current,hub,{instanceId:old.instanceId})
+        return {kind:'grant',payload:{...record,version:3,queueScope:checkedScope(record),paused:true,requiresResume:true,
+          savedConfiguration:old.enabled||!record.savedConfiguration?old:record.savedConfiguration}}
+      })
+    }
+    this.rt.communication?.transport?.stop()
+    await phase('COMMUNICATION_CONFIG_WRITE_FAILED',()=>editor.edit(entry,current=>{
+      if(selection(current.communication)!==selected)fail('HUB_SELECTION_CHANGED')
+      return {...current,communication:{...current.communication,enabled:false}}
+    }))
+    return old
+  }
+  async disconnect(input) {
+    const current=this.rt.config.communication??{}
+    if(!current.url)fail('COMMUNICATION_NOT_CONFIGURED')
+    if(current.hubId?input.hubId!==current.hubId:input.confirmedUrl!==current.url)fail('HUB_CONFIRMATION_REQUIRED')
+    const old=await this.pauseCurrent(current.hubId)
+    return {hubId:old.hubId??null,url:old.url,paused:true,localOnly:true,retained:true}
+  }
+  async selectHub(input) {
+    const credentials=credentialsOf(this.ctx),old=publicConfiguration(this.rt.config.communication??{}),expected=selection(old)
+    if((input.expectedCurrentHubId??null)!==(old.hubId??null))fail('HUB_SELECTION_CHANGED')
+    if(old.url&&!old.credentialKey)fail('LEGACY_HUB_SWITCH_REQUIRES_REENROLLMENT')
+    const decoded=input.hubCode?decodeHubCode(input.hubCode,{allowLoopback:this.allowLoopback}):null
+    const hubId=decoded?.hubId??input.hubId,key=communicationCredentialKey(hubId)
+    let stored=await credentials.readRecord(key)
+    const hub=decoded??{hubId,url:stored?.payload?.url}
+    validateHubUrl(hub.url,{allowLoopback:this.allowLoopback})
+    const previous=stored?checkedRecord(stored,hub):null,trust=decoded?.trust??previous?.trust
+    if(input.confirmedHubId!==hubId||input.confirmedUrl!==hub.url||trust&&input.confirmedTrustFingerprint!==trust.fingerprint)fail('HUB_CONFIRMATION_REQUIRED')
+    if(previous&&decoded?.trust&&previous.trust?.fingerprint!==decoded.trust.fingerprint)fail('HUB_TRUST_UPDATE_REQUIRED')
+    if(old.hubId===hubId&&old.url===hub.url)return {...safeStatus(previous),selected:true}
+    if(previous&&!previous.queueScope&&this.rt.home&&existsSync(join(this.rt.home,'communication.sqlite')))fail('LEGACY_HUB_PROFILE_UNBOUND')
+    const {editor,entry}=this.editor()
+    if(!stored){
+      if(!decoded)fail('JOIN_NOT_SUBMITTED')
+      if(typeof input.displayName!=='string'||!input.displayName.trim()||input.displayName.length>100)fail('INVALID_REQUEST')
+      await credentials.modifyRecord(key,current=>{
+        if(current){checkedRecord(current,hub);return undefined}
+        const pair=generateKeyPairSync('ed25519',{publicKeyEncoding:{type:'spki',format:'pem'},privateKeyEncoding:{type:'pkcs8',format:'pem'}})
+        return {kind:'grant',payload:{type:RECORD_TYPE,version:3,hubId,url:hub.url,...pair,queueScope:namespace(hubId),paused:true,requiresResume:true,
+          ...(trust?{trust}:{}),displayName:input.displayName.trim(),status:'prepared',createdAt:Date.now()}}
+      })
+    }
+    stored=await credentials.readRecord(key)
+    const record=checkedRecord(stored,hub),scope=checkedScope(record)
+    if(old.url)await this.pauseCurrent(old.hubId)
+    await credentials.modifyRecord(key,current=>{
+      const latest=checkedRecord(current,hub)
+      if(latest.publicKey!==record.publicKey)fail('COMMUNICATION_PAIRING_CONFLICT')
+      return {kind:'grant',payload:{...latest,version:3,queueScope:scope,paused:true,requiresResume:true}}
+    })
+    const saved=record.savedConfiguration?publicConfiguration(record.savedConfiguration):{}
+    if(saved.url&&saved.url!==hub.url||saved.hubId&&saved.hubId!==hubId||saved.credentialKey&&saved.credentialKey!==key)fail('COMMUNICATION_CREDENTIAL_MISMATCH')
+    delete saved.credentialEnv
+    await phase('COMMUNICATION_CONFIG_WRITE_FAILED',()=>editor.edit(entry,current=>{
+      if(selection(current.communication)!==expected)fail('HUB_SELECTION_CHANGED')
+      return {...current,communication:{...saved,enabled:false,hubId,url:hub.url,credentialKey:key,
+        ...(record.instanceId?{instanceId:record.instanceId}:{}),humanDisplayName:saved.humanDisplayName??record.displayName,
+        publishedBotIds:(saved.publishedBotIds??[]).filter(id=>!this.rt.botOf||this.rt.botOf(id))}}
+    }))
+    return {...safeStatus(record),paused:true,selected:true,queueScope:scope}
+  }
+  async resumeHub(input) {
+    if(input.confirmResume!==true)fail('HUB_RESUME_CONFIRMATION_REQUIRED')
+    const configured=this.rt.config.communication??{}
+    if(input.hubId!==configured.hubId||input.confirmedUrl!==configured.url)fail('HUB_CONFIRMATION_REQUIRED')
+    if(!configured.credentialKey){
+      const {editor,entry}=this.editor(),expected=selection(configured)
+      await phase('COMMUNICATION_CONFIG_WRITE_FAILED',()=>editor.edit(entry,current=>{
+        if(selection(current.communication)!==expected)fail('HUB_SELECTION_CHANGED')
+        return {...current,communication:{...current.communication,enabled:true}}
+      }))
+      return {hubId:configured.hubId??null,url:configured.url,paused:false,localOnly:true,legacy:true}
+    }
+    const credentials=credentialsOf(this.ctx),key=communicationCredentialKey(input.hubId),hub={hubId:input.hubId,url:configured.url}
+    const status=await this.enrollment('status',{hubId:hub.hubId})
+    if(status.status!=='approved')fail('COMMUNICATION_NOT_APPROVED')
+    const record=checkedRecord(await credentials.readRecord(key),hub)
+    const socket=await phase('ENROLLMENT_CONNECT_FAILED',()=>this.connect(hub.url,{allowLoopback:this.allowLoopback,hubId:hub.hubId,trust:record.trust}))
+    try{
+      const challenge=checkChallenge(await socket.request('enrollment.challenge',{purpose:'login',instanceId:record.instanceId,publicKey:record.publicKey}),{hubId:hub.hubId,purpose:'login',instanceId:record.instanceId})
+      const welcome=await socket.request('enrollment.prove',{challengeId:challenge.challengeId,signature:signature(record,challenge),capabilities:communicationCapabilities()})
+      if(welcome.instanceId!==record.instanceId||welcome.hubId!==hub.hubId)fail('INVALID_ENROLLMENT_RESPONSE')
+    }finally{socket.close()}
+    await credentials.modifyRecord(key,current=>({kind:'grant',payload:{...checkedRecord(current,hub),paused:false,requiresResume:true,version:3}}))
+    await this.configure(hub,status.instanceId,key,status.displayName)
+    await credentials.modifyRecord(key,current=>({kind:'grant',payload:{...checkedRecord(current,hub),paused:false,requiresResume:false,version:3}}))
+    const comm=this.rt.communication
+    if(comm&&!comm.closed&&comm.settings?.hubId===hub.hubId&&!comm.transport.running)comm.transport.start({pollMs:comm.settings.pollMs??500})
+    return {...status,paused:false}
+  }
   async join(input) {
     const hub = decodeHubCode(input.hubCode, { allowLoopback: this.allowLoopback })
     if (input.confirmedHubId !== hub.hubId || input.confirmedUrl !== hub.url) fail('HUB_CONFIRMATION_REQUIRED')
+    if (hub.trust && input.confirmedTrustFingerprint !== hub.trust.fingerprint) fail('HUB_CONFIRMATION_REQUIRED')
     if (typeof input.displayName !== 'string' || !input.displayName.trim() || input.displayName.length > 100) fail('INVALID_REQUEST')
     const key = communicationCredentialKey(hub.hubId), credentials = credentialsOf(this.ctx)
     const existing = await credentials.readRecord(key)
     const previous = existing ? checkedRecord(existing, hub) : null
+    if (hub.trust && previous && previous.trust?.fingerprint !== hub.trust.fingerprint) fail('HUB_TRUST_UPDATE_REQUIRED')
     this.conflict(hub, previous?.instanceId)
+    if(previous?.paused&&previous.status!=='approved')await this.update(key,hub,value=>({...value,paused:false,requiresResume:false}))
     if (previous?.requestId && !['rejected', 'cancelled', 'expired'].includes(previous.status)) {
       try { return await this.enrollment('status', { hubId: hub.hubId }) }
       catch (error) { if (error.code !== 'JOIN_NOT_FOUND') throw error }
@@ -301,11 +450,12 @@ export class CommunicationOnboarding {
     await credentials.modifyRecord(key, current => {
       if (current) { checkedRecord(current, hub); return undefined }
       const pair = generateKeyPairSync('ed25519', { publicKeyEncoding: { type: 'spki', format: 'pem' }, privateKeyEncoding: { type: 'pkcs8', format: 'pem' } })
-      return { kind: 'grant', payload: { type: RECORD_TYPE, version: 1, hubId: hub.hubId, url: hub.url,
-        publicKey: pair.publicKey, privateKey: pair.privateKey, displayName: input.displayName.trim(), status: 'prepared', createdAt: Date.now() } }
+      const queueScope = this.rt.home && existsSync(join(this.rt.home,'communication.sqlite')) ? namespace(hub.hubId) : 'legacy'
+      return { kind: 'grant', payload: { type: RECORD_TYPE, version: 3, queueScope, paused:false, hubId: hub.hubId, url: hub.url,
+        publicKey: pair.publicKey, privateKey: pair.privateKey, ...(hub.trust ? { trust: hub.trust } : {}), displayName: input.displayName.trim(), status: 'prepared', createdAt: Date.now() } }
     })
     const record = checkedRecord(await credentials.readRecord(key), hub)
-    const socket = await phase('ENROLLMENT_CONNECT_FAILED', () => this.connect(hub.url, { allowLoopback: this.allowLoopback }))
+    const socket = await phase('ENROLLMENT_CONNECT_FAILED', () => this.connect(hub.url, { allowLoopback: this.allowLoopback, hubId: hub.hubId, trust: record.trust }))
     try {
       const challenge = checkChallenge(await phase('ENROLLMENT_CHALLENGE_FAILED', () => socket.request('enrollment.challenge', { purpose: 'join', publicKey: record.publicKey })), { hubId: hub.hubId, purpose: 'join' })
       await this.update(key, hub, value => ({ ...value, requestId: challenge.requestId, status: 'prepared' }))
@@ -313,15 +463,39 @@ export class CommunicationOnboarding {
       return this.result(key, hub, challenge.requestId, result)
     } finally { socket.close() }
   }
+  async updateTrust(input) {
+    const hub = decodeHubCode(input.hubCode, { allowLoopback: this.allowLoopback })
+    if (!hub.trust || input.confirmedHubId !== hub.hubId || input.confirmedUrl !== hub.url
+      || input.confirmedTrustFingerprint !== hub.trust.fingerprint) fail('HUB_CONFIRMATION_REQUIRED')
+    const key = communicationCredentialKey(hub.hubId), credentials = credentialsOf(this.ctx)
+    const record = checkedRecord(await credentials.readRecord(key), hub)
+    this.conflict(hub, record.instanceId)
+    const socket = await phase('ENROLLMENT_CONNECT_FAILED', () => this.connect(hub.url, { allowLoopback: this.allowLoopback, hubId: hub.hubId, trust: hub.trust }))
+    try {
+      const purpose = record.instanceId ? 'login' : record.requestId ? 'status' : 'join'
+      checkChallenge(await socket.request('enrollment.challenge', { purpose, publicKey: record.publicKey,
+        ...(record.instanceId ? { instanceId: record.instanceId } : record.requestId ? { requestId: record.requestId } : {}) }),
+      { hubId: hub.hubId, purpose, ...(record.instanceId ? { instanceId: record.instanceId } : record.requestId ? { requestId: record.requestId } : {}) })
+    } finally { socket.close() }
+    await credentials.modifyRecord(key, current => {
+      const latest = checkedRecord(current, hub)
+      if (latest.publicKey !== record.publicKey || latest.requestId !== record.requestId || latest.instanceId !== record.instanceId
+        || latest.trust?.fingerprint !== record.trust?.fingerprint) fail('COMMUNICATION_PAIRING_CONFLICT')
+      return { kind: 'grant', payload: { ...latest, version: latest.version === 3 ? 3 : 2, trust: hub.trust } }
+    })
+    this.rt.communication?.transport?.socket?.close()
+    return safeStatus(checkedRecord(await credentials.readRecord(key), hub))
+  }
   async enrollment(purpose, input) {
     const hubId = input.hubId ?? this.rt.config.communication?.hubId
+    if(this.rt.config.communication?.hubId&&this.rt.config.communication.hubId!==hubId)fail('HUB_NOT_SELECTED')
     const key = communicationCredentialKey(hubId), credentials = credentialsOf(this.ctx)
     const stored = await credentials.readRecord(key)
     const hub = { hubId, url: stored?.payload?.url }
     validateHubUrl(hub.url, { allowLoopback: this.allowLoopback })
     const record = checkedRecord(stored, hub)
     if (!identifier(record.requestId)) fail('JOIN_NOT_SUBMITTED')
-    const socket = await phase('ENROLLMENT_CONNECT_FAILED', () => this.connect(hub.url, { allowLoopback: this.allowLoopback }))
+    const socket = await phase('ENROLLMENT_CONNECT_FAILED', () => this.connect(hub.url, { allowLoopback: this.allowLoopback, hubId: hub.hubId, trust: record.trust }))
     try {
       const challenge = checkChallenge(await phase('ENROLLMENT_CHALLENGE_FAILED', () => socket.request('enrollment.challenge', { purpose, requestId: record.requestId, publicKey: record.publicKey })), { hubId, purpose, requestId: record.requestId })
       const result = await phase('ENROLLMENT_PROOF_FAILED', () => socket.request('enrollment.prove', { challengeId: challenge.challengeId, signature: signature(record, challenge) }))
@@ -340,7 +514,7 @@ export class CommunicationOnboarding {
       return { ...value, status: result.status, ...(result.instanceId ? { instanceId: result.instanceId } : {}) }
     })
     const record = checkedRecord(await credentialsOf(this.ctx).readRecord(key), hub)
-    if (result.status === 'approved') await this.configure(hub, result.instanceId, key, record.displayName)
+    if (result.status === 'approved' && !record.paused && !record.requiresResume) await this.configure(hub, result.instanceId, key, record.displayName)
     return safeStatus(record)
   }
   async configure(hub, instanceId, key, displayName) {

@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { randomUUID, createHash } from 'node:crypto'
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
+import { normalizeAttachments } from '../../shared/communication-attachments.js'
 
 const canonical = value => Array.isArray(value) ? `[${value.map(canonical).join(',')}]`
   : value && typeof value === 'object' ? `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonical(value[key])}`).join(',')}}` : JSON.stringify(value)
@@ -117,9 +118,10 @@ export class CommunicationQueue {
     requireValue(this.owns(payload.author?.principalId) && payload.author.homeInstanceId === this.instanceId
       && payload.author.principalId.startsWith(`${payload.author.kind}:`), 'AUTHOR_MISMATCH')
     requireValue(['text', 'markdown'].includes(payload.content?.format) && typeof payload.content?.text === 'string'
-      && Object.keys(payload.content).every(key => ['format', 'text'].includes(key)) && !payload.attachments && !payload.files, 'UNSUPPORTED_CONTENT')
+      && Object.keys(payload.content).every(key => ['format', 'text'].includes(key)) && !payload.files, 'UNSUPPORTED_CONTENT')
+    const attachments = normalizeAttachments(payload.attachments)
     const bytes = Buffer.byteLength(payload.content.text, 'utf8')
-    requireValue(bytes > 0 && bytes <= this.limits.maxTextBytes && Buffer.byteLength(JSON.stringify(payload)) <= this.limits.maxEnvelopeBytes, 'PAYLOAD_TOO_LARGE')
+    requireValue((bytes > 0 || attachments.length > 0) && bytes <= this.limits.maxTextBytes && Buffer.byteLength(JSON.stringify(payload)) <= this.limits.maxEnvelopeBytes, 'PAYLOAD_TOO_LARGE')
   }
   enqueueInside(type, payload, id) {
     requireValue(typeof id === 'string' && id.length > 0, 'INVALID_REQUEST')
@@ -183,6 +185,7 @@ export class CommunicationQueue {
     return member
   }
   insertEvent(member, event) {
+    if(event.message?.attachments!==undefined)normalizeAttachments(event.message.attachments)
     requireValue(event.conversationId === member.conversation_id && Number.isSafeInteger(event.conversationSeq)
       && event.conversationSeq >= member.join_seq && typeof event.eventId === 'string', 'INVALID_EVENT')
     const hash = digest(event), old = this.db.prepare('SELECT hash,event_id FROM events WHERE conversation_id=? AND principal_id=? AND epoch=? AND seq=?').get(member.conversation_id, member.principal_id, member.epoch, event.conversationSeq)

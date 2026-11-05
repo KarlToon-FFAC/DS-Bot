@@ -42,6 +42,43 @@ module.exports = __toCommonJS(index_exports);
 // src/client/i18n.js
 var NAMESPACE = "ds-bot";
 var ZH = {
+  "Wait for the current attachment to finish.": "请等待当前附件处理完成。",
+  "Attach images or files (64 KiB total)": "添加图片或文件（合计最多 64 KiB）",
+  "Attachments require a compatible Hub and clients.": "附件需要兼容此功能的 Hub 和客户端。",
+  "Attachment could not be verified.": "无法验证此附件。",
+  "Download {name}": "下载 {name}",
+  "Choose up to four files, at most 64 KiB total.": "请选择最多四个文件，合计不超过 64 KiB。",
+  "The attachment is invalid or unsafe. Choose a regular file or raster image.": "附件无效或不安全。请选择普通文件或位图图片。",
+  "The attachment bytes do not match their digest.": "附件内容与摘要不一致。",
+  "Switching pauses the current Hub and retains its data. A new Hub starts with a separate identity and no published Bots.": "切换会暂停当前 Hub 并保留数据。新 Hub 使用独立身份，默认不发布任何 Bot。",
+  "Select this Hub": "选择此 Hub",
+  "Current Hub": "当前 Hub",
+  "Disconnect this Hub": "断开此 Hub",
+  "Resume this Hub": "恢复连接此 Hub",
+  "Paused. Identity, trust and Hub history are retained separately.": "已暂停。该 Hub 的身份、信任和历史独立保留。",
+  "Local disconnect preserves server membership and queued work.": "本地断开会保留服务端成员身份和待处理工作。",
+  "Resume retained pending messages and work after the Hub checks authorization.": "经 Hub 重新核验权限后，恢复保留的待发消息和工作。",
+  "Confirming a new Hub selection or join creates its own device key. Disconnecting retains that key and Hub data; it does not revoke membership on the server. The default credential store is plaintext protected by your OS account permissions, not encrypted against the same user.": "确认选择或加入新 Hub 时会创建独立设备密钥。断开会保留密钥和该 Hub 的数据，不撤销服务端成员身份。默认凭据存储由系统账户权限保护，不能隔离同一用户下的程序。",
+  "Legacy shared-secret pairing cannot be safely assigned to another Hub. Keep this data and enroll through a separate profile first.": "旧式共享密钥配对无法安全归入另一个 Hub。请保留数据，先使用独立配置重新加入。",
+  "This Hub is paused locally. Its identity and queued work are retained; explicitly resume it in pairing settings.": "此 Hub 已在本地暂停，身份和待处理工作仍保留。请在配对设置中明确恢复。",
+  "The selected Hub changed. Refresh saved Hubs before continuing; no identity should be reused blindly.": "所选 Hub 已变化，请刷新已保存的 Hub 后继续，不要盲目复用身份。",
+  "Confirm that retained pending messages and work may resume before reconnecting this Hub.": "重新连接前，请确认恢复该 Hub 保留的待发消息和工作。",
+  "Select this saved Hub first. Only one Hub can be active at a time.": "请先选择此已保存的 Hub，同时只能启用一个 Hub。",
+  "This old enrollment has no proven queue binding. Its history was preserved; use a separate profile rather than guessing ownership.": "此旧配对没有可证明的队列归属。历史已保留，请使用独立配置，避免猜测数据归属。",
+  "Search conversations and contacts": "搜索会话与联系人",
+  "Search current conversations, contacts and recent message summaries.": "搜索当前可见会话、联系人及最近消息摘要。",
+  "No matching conversations or contacts.": "没有匹配的会话或联系人。",
+  "The Hub certificate authority is not trusted. Obtain a fresh signed Hub code through a trusted channel and explicitly update this Hub CA trust. Keep TLS verification enabled.": "尚未信任此 Hub 的证书机构。请通过可信渠道取得新版签名 Hub 码，明确更新此 Hub 的 CA 信任，并保持 TLS 验证开启。",
+  "The Hub code contains invalid CA trust. Obtain a fresh code from the owner through a trusted channel.": "Hub 码中的 CA 信任材料无效，请通过可信渠道向管理员取得新码。",
+  "This Hub CA or certificate has expired. Obtain a renewed code from the owner.": "此 Hub 的 CA 或证书已过期，请向管理员取得更新的 Hub 码。",
+  "This Hub code has expired or has an invalid lifetime. Obtain a fresh code from the owner.": "此 Hub 码已过期或有效期无效，请向管理员取得新码。",
+  "Saved CA trust belongs to a different Hub or address. Do not reuse it.": "保存的 CA 信任属于其他 Hub 或地址，请勿复用。",
+  "This Hub code signature is invalid. Obtain the code again through a trusted channel.": "Hub 码签名无效，请通过可信渠道重新取得。",
+  "This device already has a Hub identity. Explicitly update this Hub CA trust using the reviewed new code, then check the saved request.": "本设备已有 Hub 身份。请核对新码并明确更新此 Hub 的 CA 信任，再检查已有申请。",
+  "Accept this code only from a trusted channel. Its own certificate cannot authenticate an untrusted source.": "请只接受可信渠道提供的 Hub 码，码内证书不能证明不可信来源的身份。",
+  "Hub CA fingerprint": "Hub CA 指纹",
+  "Legacy code: ask the Hub owner for a v2 code to pair a private CA without environment settings.": "此为旧版 Hub 码。请向 Hub 管理者索取新版码，以免手动配置私有 CA。",
+  "Update this Hub CA trust": "更新此 Hub 的 CA 信任",
   "This DSH runtime lacks the required isolated communication preset API. Check the supported DSH version.": "此 DSH 运行时缺少远程通信所需的隔离预设 API，请核对受支持的 DSH 版本。",
   "An isolated communication preset is already registered. Check for duplicate DS Bot plugin instances; do not remove isolation.": "远程通信隔离预设已被注册，请检查是否重复加载 DS Bot 插件，勿移除隔离限制。",
   "The stored communication database requires a different application version. Preserve the data and check the matching Hub/client versions.": "通信数据库与当前程序版本不匹配，请保留数据并核对 Hub 与客户端版本。",
@@ -1779,8 +1816,8 @@ function bodyOf(def, paint, flat = false) {
     return "";
   }
 }
-var eyeMarkup = ([cx, cy, w, h57, tilt]) => `<g transform="translate(${cx} ${cy}) rotate(${tilt})"><rect class="bt-eye" x="${-w / 2}" y="${-h57 / 2}" width="${w}" height="${h57}" rx="${w / 2}"/></g>`;
-var happyEyeMarkup = ([cx, cy, w, h57, tilt]) => `<g transform="translate(${cx} ${cy}) rotate(${tilt})"><path class="bt-eye-happy" opacity="0" d="M${-w * 0.62} ${h57 * 0.14}Q0 ${-h57 * 0.42} ${w * 0.62} ${h57 * 0.14}" fill="none" stroke="#000" stroke-width="${w * 0.5}" stroke-linecap="round"/></g>`;
+var eyeMarkup = ([cx, cy, w, h58, tilt]) => `<g transform="translate(${cx} ${cy}) rotate(${tilt})"><rect class="bt-eye" x="${-w / 2}" y="${-h58 / 2}" width="${w}" height="${h58}" rx="${w / 2}"/></g>`;
+var happyEyeMarkup = ([cx, cy, w, h58, tilt]) => `<g transform="translate(${cx} ${cy}) rotate(${tilt})"><path class="bt-eye-happy" opacity="0" d="M${-w * 0.62} ${h58 * 0.14}Q0 ${-h58 * 0.42} ${w * 0.62} ${h58 * 0.14}" fill="none" stroke="#000" stroke-width="${w * 0.5}" stroke-linecap="round"/></g>`;
 var maskBox = (size) => `maskUnits="userSpaceOnUse" x="${-size}" y="${-size}" width="${size * 3}" height="${size * 3}"`;
 var holes = (def, eyes) => `<rect x="${-def.size}" y="${-def.size}" width="${def.size * 3}" height="${def.size * 3}" fill="#fff"/>${eyes}`;
 var MASK_ID = "%MASK%";
@@ -2539,12 +2576,12 @@ function liveSprings(apply2) {
     const dt = Math.min(0.5, Math.max(1e-3, (now - last) / 1e3));
     last = now;
     const steps = Math.ceil(dt * 240);
-    const h57 = dt / steps;
+    const h58 = dt / steps;
     let moving = false;
     for (const value of values.values()) {
       for (let index = 0; index < steps; index += 1) {
-        value.v += (-value.k * (value.x - value.to) - value.c * value.v) * h57;
-        value.x += value.v * h57;
+        value.v += (-value.k * (value.x - value.to) - value.c * value.v) * h58;
+        value.x += value.v * h58;
       }
       if (Math.abs(value.x - value.to) < 0.05 && Math.abs(value.v) < 1) {
         value.x = value.to;
@@ -11391,7 +11428,7 @@ function SideEntry({ chatId, entry, actions }) {
 function SideChatView({ subject, chat, actions }) {
   const scroll = (0, import_react22.useRef)(null);
   const [draft, setDraft] = (0, import_react22.useState)("");
-  const [fail2, setFail] = (0, import_react22.useState)(null);
+  const [fail3, setFail] = (0, import_react22.useState)(null);
   const entries2 = Array.isArray(chat?.entries) ? chat.entries : [];
   const busy = entries2.some((entry) => entry?.status === "answering");
   const last = entries2.at(-1);
@@ -11431,7 +11468,7 @@ function SideChatView({ subject, chat, actions }) {
         "aria-label": t("Ask about the work so far"),
         onChange: (event) => {
           setDraft(event.target.value);
-          if (fail2 !== null) setFail(null);
+          if (fail3 !== null) setFail(null);
         },
         onKeyDown: (event) => {
           if (event.key !== "Enter" || event.shiftKey || event.nativeEvent?.isComposing) return;
@@ -11439,7 +11476,7 @@ function SideChatView({ subject, chat, actions }) {
           ask();
         }
       }),
-      fail2 !== null ? (0, import_react22.createElement)("p", { className: "bt-side-fail" }, fail2) : null
+      fail3 !== null ? (0, import_react22.createElement)("p", { className: "bt-side-fail" }, fail3) : null
     )
   );
 }
@@ -20895,10 +20932,12 @@ function conversationTitle(member, humanId, labels) {
   return member.kind === "group" ? member.title : member.info?.members.filter((person) => person.principalId !== humanId).map((person) => labels.get(person.principalId) ?? person.displayName).join(", ") || "Private message";
 }
 function principalAvatar(principalId, displayName = "") {
-  let hash = 0;
-  for (const char of String(principalId)) hash = hash * 31 + char.codePointAt(0) >>> 0;
-  return { initials: [...displayName.trim() || "?"].slice(0, 2).join("").toUpperCase(), variant: hash % 4 };
+  let hash2 = 0;
+  for (const char of String(principalId)) hash2 = hash2 * 31 + char.codePointAt(0) >>> 0;
+  const chars = [...displayName.trim() || "?"];
+  return { initials: /\p{Script=Han}/u.test(chars[0]) ? chars[0] : chars.slice(0, 2).join("").toUpperCase(), variant: hash2 % 4 };
 }
+var communicationScope = (state) => state?.queueScope && state.queueScope !== "legacy" ? `${state.hubId ?? state.hubUrl}:${state.instanceId}` : state?.instanceId;
 function mentionQuery(text, caret) {
   const before = text.slice(0, caret);
   if (/^\s*>/.test(before.split("\n").at(-1)) || (before.match(/```/g)?.length ?? 0) % 2 || (before.replace(/```[\s\S]*?```/g, "").match(/`/g)?.length ?? 0) % 2) return null;
@@ -21009,20 +21048,26 @@ function communicationLogEvents(events) {
 // src/client/communication-profile.js
 var import_react53 = require("react");
 var images = /* @__PURE__ */ new Map(), requests = /* @__PURE__ */ new Map(), authorized = /* @__PURE__ */ new Map();
+var avatarScope = "legacy";
 function safeAvatarImage(value) {
   return typeof value === "string" && value.length <= 16e4 && /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/]+={0,2}$/.test(value) ? value : null;
 }
-function syncAvatarDirectory(contacts) {
+function syncAvatarDirectory(contacts, scope = "legacy") {
+  if (scope !== avatarScope) {
+    avatarScope = scope;
+    images.clear();
+    requests.clear();
+  }
   authorized.clear();
   for (const person of contacts) if (person.avatar?.imageRevision) authorized.set(person.principalId, person.avatar.imageRevision);
   for (const key of images.keys()) {
-    const [principalId, revision] = JSON.parse(key);
+    const [, principalId, revision] = JSON.parse(key);
     if (authorized.get(principalId) !== revision) images.delete(key);
   }
 }
 function CommunicationAvatar({ person, request, allowed: allowed2 = true, size = 28 }) {
   const revision = allowed2 ? person.avatar?.imageRevision : null;
-  const key = JSON.stringify([person.principalId, revision]);
+  const scope = avatarScope, key = JSON.stringify([scope, person.principalId, revision]);
   const [loaded, setLoaded] = (0, import_react53.useState)(null);
   (0, import_react53.useEffect)(() => {
     let active = true;
@@ -21036,7 +21081,7 @@ function CommunicationAvatar({ person, request, allowed: allowed2 = true, size =
     if (!requests.has(key)) {
       const promise = request({ endpoint: "avatar", principalId: person.principalId, revision }).then((value2) => {
         const image2 = value2.principalId && value2.principalId !== person.principalId || value2.revision && value2.revision !== revision ? null : safeAvatarImage(value2.image);
-        if (image2 && authorized.get(person.principalId) === revision) images.set(key, image2);
+        if (image2 && scope === avatarScope && authorized.get(person.principalId) === revision) images.set(key, image2);
         return image2;
       }).catch(() => null).finally(() => requests.delete(key));
       requests.set(key, promise);
@@ -21061,7 +21106,7 @@ function CommunicationAvatar({ person, request, allowed: allowed2 = true, size =
       "data-initials": !bot && !image ? value.initials : void 0,
       "data-has-image": Boolean(image),
       "aria-hidden": true,
-      style: { width: size, height: size, flexBasis: size }
+      style: { width: size, height: size, flexBasis: size, fontSize: Math.min(11, size * 0.45), lineHeight: 1, overflow: "hidden" }
     },
     bot ? (0, import_react53.createElement)(BotMark, { bot: { id: person.avatar?.seed ?? person.principalId, color: person.avatar?.color, avatar: { shape: person.avatar?.shape, ...image ? { image } : {} } }, size }) : image ? (0, import_react53.createElement)("img", { src: image, alt: "", width: size, height: size, draggable: false }) : null
   );
@@ -21139,7 +21184,24 @@ function HumanProfile({ human, request, operation, onSaved, convertImage = avata
 
 // src/client/communication-errors.js
 var descriptions = {
-  HUB_TLS_UNTRUSTED: "The Hub certificate authority is not trusted. Verify its public CA fingerprint with the administrator and launch the app with NODE_EXTRA_CA_CERTS. Restart the app; keep TLS verification enabled.",
+  ATTACHMENT_CAPABILITY_REQUIRED: "Attachments require a compatible Hub and clients.",
+  ATTACHMENT_TOO_LARGE: "Choose up to four files, at most 64 KiB total.",
+  INVALID_ATTACHMENT: "The attachment is invalid or unsafe. Choose a regular file or raster image.",
+  INVALID_ATTACHMENT_IMAGE: "The attachment is invalid or unsafe. Choose a regular file or raster image.",
+  ATTACHMENT_INTEGRITY_FAILED: "The attachment bytes do not match their digest.",
+  HUB_PAUSED: "This Hub is paused locally. Its identity and queued work are retained; explicitly resume it in pairing settings.",
+  HUB_SELECTION_CHANGED: "The selected Hub changed. Refresh saved Hubs before continuing; no identity should be reused blindly.",
+  HUB_RESUME_CONFIRMATION_REQUIRED: "Confirm that retained pending messages and work may resume before reconnecting this Hub.",
+  HUB_NOT_SELECTED: "Select this saved Hub first. Only one Hub can be active at a time.",
+  LEGACY_HUB_SWITCH_REQUIRES_REENROLLMENT: "Legacy shared-secret pairing cannot be safely assigned to another Hub. Keep this data and enroll through a separate profile first.",
+  LEGACY_HUB_PROFILE_UNBOUND: "This old enrollment has no proven queue binding. Its history was preserved; use a separate profile rather than guessing ownership.",
+  INVALID_HUB_TRUST: "The Hub code contains invalid CA trust. Obtain a fresh code from the owner through a trusted channel.",
+  HUB_TRUST_EXPIRED: "This Hub CA or certificate has expired. Obtain a renewed code from the owner.",
+  HUB_CODE_EXPIRED: "This Hub code has expired or has an invalid lifetime. Obtain a fresh code from the owner.",
+  HUB_TRUST_BINDING_MISMATCH: "Saved CA trust belongs to a different Hub or address. Do not reuse it.",
+  INVALID_HUB_CODE_SIGNATURE: "This Hub code signature is invalid. Obtain the code again through a trusted channel.",
+  HUB_TRUST_UPDATE_REQUIRED: "This device already has a Hub identity. Explicitly update this Hub CA trust using the reviewed new code, then check the saved request.",
+  HUB_TLS_UNTRUSTED: "The Hub certificate authority is not trusted. Obtain a fresh signed Hub code through a trusted channel and explicitly update this Hub CA trust. Keep TLS verification enabled.",
   HUB_TLS_HOSTNAME_MISMATCH: "The Hub address does not match the certificate. Ask its administrator for a certificate covering this exact reachable hostname or IP.",
   HUB_TLS_CERT_EXPIRED: "The Hub certificate has expired. Ask its administrator to renew it.",
   HUB_TLS_CERT_TIME_INVALID: "The Hub certificate is not valid yet. Check both clocks and the certificate dates.",
@@ -21229,7 +21291,7 @@ var statuses = /* @__PURE__ */ new Set(["prepared", "pending", "approved", "reje
 var statusLabel = (value) => t(statuses.has(value) ? value : "Status unavailable");
 var failureLabel2 = (error) => t(communicationFailure(error ?? {}));
 var enrollmentErrors = {
-  HUB_TLS_UNTRUSTED: "The Hub certificate authority is not trusted. Verify its public CA fingerprint with the administrator and launch the app with NODE_EXTRA_CA_CERTS. Restart the app; keep TLS verification enabled.",
+  HUB_TLS_UNTRUSTED: "The Hub certificate authority is not trusted. Obtain a fresh signed Hub code through a trusted channel and explicitly update this Hub CA trust. Keep TLS verification enabled.",
   HUB_TLS_HOSTNAME_MISMATCH: "The Hub address does not match the certificate. Ask its administrator for a certificate covering this exact reachable hostname or IP.",
   HUB_TLS_CERT_EXPIRED: "The Hub certificate has expired. Ask its administrator to renew it.",
   HUB_TLS_CERT_TIME_INVALID: "The Hub certificate is not valid yet. Check both clocks and the certificate dates.",
@@ -21280,12 +21342,12 @@ function hubManagementAddress(value) {
     return null;
   }
 }
-var adminLink = (url) => hubManagementAddress(url) ? (0, import_react54.createElement)("a", { href: hubManagementAddress(url), target: "_blank", rel: "noopener noreferrer", className: "bt-comm-admin-link" }, t("Open Hub management"), " · ", new URL(url).origin) : null;
 function AddDevice({ request, manualGuide, displayName = "Human" }) {
   const [code, setCode] = (0, import_react54.useState)(""), [name, setName] = (0, import_react54.useState)(displayName), [hub, setHub] = (0, import_react54.useState)(null);
   const [storage, setStorage] = (0, import_react54.useState)(null), [enrollments, setEnrollments] = (0, import_react54.useState)([]), [busy, setBusy] = (0, import_react54.useState)(false), [error, setError] = (0, import_react54.useState)("");
   const [absentHub, setAbsentHub] = (0, import_react54.useState)(null);
   const [uncertainHub, setUncertainHub] = (0, import_react54.useState)(null);
+  const [selectedHub, setSelectedHub] = (0, import_react54.useState)(null), [resumeConfirmed, setResumeConfirmed] = (0, import_react54.useState)({});
   const generation = (0, import_react54.useRef)(0);
   (0, import_react54.useEffect)(() => {
     let active = true;
@@ -21293,6 +21355,7 @@ function AddDevice({ request, manualGuide, displayName = "Human" }) {
       if (!active) return;
       setStorage(value.storage ?? value.enrollments?.[0]?.storage ?? null);
       setEnrollments(value.enrollments ?? (value.hubId ? [value] : []));
+      setSelectedHub(value.selectedHub ?? null);
     }).catch(() => {
       if (active) setError(t("Unable to read pairing status"));
     });
@@ -21322,20 +21385,36 @@ function AddDevice({ request, manualGuide, displayName = "Human" }) {
   };
   const update = (value) => setEnrollments((current) => [...current.filter((item) => item.hubId !== value.hubId), value]);
   const refreshStorage = async (token) => {
-    const value = await request({ endpoint: "onboarding-storage", ...hub ? { hubId: hub.hubId } : {} });
+    const value = await request({ endpoint: "onboarding-storage" });
     if (token !== generation.current) return;
     setStorage(value.storage ?? storage);
+    setSelectedHub(value.selectedHub ?? selectedHub);
     if (hub) setUncertainHub((current) => current === hub.hubId ? null : current);
     if (value.enrollments) setEnrollments(value.enrollments);
     else if (value.hubId) update(value);
   };
   const existingRequest = hub && enrollments.some((item) => item.hubId === hub.hubId && item.requestId && ["prepared", "pending", "approved"].includes(item.status)) && absentHub !== hub.hubId;
+  const differentHub = Boolean(hub && selectedHub?.url && (selectedHub.hubId !== hub.hubId || selectedHub.url !== hub.url));
+  const select = async (value, token, hubCode) => {
+    await request({
+      endpoint: "switch-hub",
+      ...hubCode ? { hubCode, displayName: name } : { hubId: value.hubId },
+      ...selectedHub?.hubId ? { expectedCurrentHubId: selectedHub.hubId } : {},
+      confirmedHubId: value.hubId,
+      confirmedUrl: value.url,
+      ...value.trustFingerprint ? { confirmedTrustFingerprint: value.trustFingerprint } : {}
+    });
+    if (token === generation.current) {
+      setResumeConfirmed({});
+      await refreshStorage(token);
+    }
+  };
   return (0, import_react54.createElement)(
     "div",
     { className: "bt-comm-onboarding" },
     (0, import_react54.createElement)("p", null, t("Paste a Hub code from its owner. Review the actual address before requesting access. Devices are not discovered automatically.")),
     (0, import_react54.createElement)("p", { className: "bt-comm-reference" }, t("Review only decodes the Hub code locally. It does not test network access or submit a request.")),
-    (0, import_react54.createElement)("label", { className: "bt-comm-field" }, t("Hub code"), (0, import_react54.createElement)("textarea", { value: code, rows: 2, maxLength: 4096, "aria-label": t("Hub code"), onChange: (event) => {
+    (0, import_react54.createElement)("label", { className: "bt-comm-field" }, t("Hub code"), (0, import_react54.createElement)("textarea", { value: code, rows: 2, maxLength: 65536, "aria-label": t("Hub code"), onChange: (event) => {
       generation.current += 1;
       setBusy(false);
       setCode(event.target.value);
@@ -21354,32 +21433,93 @@ function AddDevice({ request, manualGuide, displayName = "Human" }) {
       (0, import_react54.createElement)("h3", null, t("Confirm the Hub")),
       (0, import_react54.createElement)("p", null, t("Hub address"), ": ", (0, import_react54.createElement)("code", null, hub.url)),
       (0, import_react54.createElement)("p", null, "Hub ID: ", (0, import_react54.createElement)("code", null, hub.hubId)),
+      (0, import_react54.createElement)("p", { className: "bt-comm-reference" }, t("Accept this code only from a trusted channel. Its own certificate cannot authenticate an untrusted source.")),
+      hub.trustFingerprint ? (0, import_react54.createElement)("p", null, t("Hub CA fingerprint"), ": ", (0, import_react54.createElement)("code", null, hub.trustFingerprint)) : (0, import_react54.createElement)("p", null, t("Legacy code: ask the Hub owner for a v2 code to pair a private CA without environment settings.")),
       (0, import_react54.createElement)("label", { className: "bt-comm-field" }, t("Device display name"), (0, import_react54.createElement)("input", { value: name, maxLength: 100, "aria-label": t("Device display name"), onChange: (event) => setName(event.target.value) })),
-      (0, import_react54.createElement)("button", { type: "button", disabled: busy || !name.trim() || !storage || existingRequest || uncertainHub === hub.hubId, onClick: () => {
+      differentHub ? (0, import_react54.createElement)("p", { className: "bt-comm-reference" }, t("Switching pauses the current Hub and retains its data. A new Hub starts with a separate identity and no published Bots.")) : null,
+      differentHub && selectedHub?.legacy ? (0, import_react54.createElement)("p", { role: "status" }, t("Legacy shared-secret pairing cannot be safely assigned to another Hub. Keep this data and enroll through a separate profile first.")) : null,
+      differentHub ? (0, import_react54.createElement)("button", { type: "button", disabled: busy || !name.trim() || selectedHub?.legacy, onClick: () => {
+        void run2((token) => select(hub, token, code));
+      } }, t("Select this Hub")) : null,
+      (0, import_react54.createElement)("button", { type: "button", disabled: busy || differentHub || !name.trim() || !storage || existingRequest || uncertainHub === hub.hubId, onClick: () => {
         void run2(async (token) => {
           setAbsentHub(null);
           setUncertainHub(hub.hubId);
-          const value = await request({ endpoint: "join-hub", hubCode: code, displayName: name, confirmedHubId: hub.hubId, confirmedUrl: hub.url });
+          const value = await request({ endpoint: "join-hub", hubCode: code, displayName: name, confirmedHubId: hub.hubId, confirmedUrl: hub.url, ...hub.trustFingerprint ? { confirmedTrustFingerprint: hub.trustFingerprint } : {} });
           if (token === generation.current) {
             update(value);
             setUncertainHub(null);
           }
         });
-      } }, t("Confirm and request access"))
+      } }, t("Confirm and request access")),
+      hub.trustFingerprint && enrollments.some((item) => item.hubId === hub.hubId && item.url === hub.url) ? (0, import_react54.createElement)("button", { type: "button", disabled: busy, onClick: () => {
+        void run2(async (token) => {
+          const value = await request({ endpoint: "update-hub-trust", hubCode: code, confirmedHubId: hub.hubId, confirmedUrl: hub.url, confirmedTrustFingerprint: hub.trustFingerprint });
+          if (token === generation.current) update(value);
+        });
+      } }, t("Update this Hub CA trust")) : null
     ) : null,
     (0, import_react54.createElement)("button", { type: "button", disabled: busy, onClick: () => {
       void run2((token) => refreshStorage(token));
     } }, t("Refresh saved request")),
-    (0, import_react54.createElement)("p", { className: "bt-comm-storage-note" }, t("Pairing keys are created only when you confirm a request. The default local credential store is plaintext protected by your OS account permissions, not encryption or isolation from tools running as the same user.")),
+    (0, import_react54.createElement)("p", { className: "bt-comm-storage-note" }, t("Confirming a new Hub selection or join creates its own device key. Disconnecting retains that key and Hub data; it does not revoke membership on the server. The default credential store is plaintext protected by your OS account permissions, not encrypted against the same user.")),
     storage ? (0, import_react54.createElement)("p", { className: "bt-comm-reference" }, t("Credential storage"), ": ", storage.defaultProvider, " · ", t(storage.encryptedByDefault ? "Encrypted by provider" : "Not encrypted by default")) : null,
+    selectedHub?.legacy ? (0, import_react54.createElement)(
+      "section",
+      { className: "bt-comm-address" },
+      (0, import_react54.createElement)("h3", null, t("Current Hub")),
+      (0, import_react54.createElement)("code", null, selectedHub.url),
+      (0, import_react54.createElement)("p", { className: "bt-comm-reference" }, t("Local disconnect preserves server membership and queued work.")),
+      selectedHub.enabled ? (0, import_react54.createElement)("button", { type: "button", disabled: busy, onClick: () => {
+        void run2(async (token) => {
+          await request({ endpoint: "disconnect-hub", confirmedUrl: selectedHub.url, ...selectedHub.hubId ? { hubId: selectedHub.hubId } : {} });
+          await refreshStorage(token);
+        });
+      } }, t("Disconnect this Hub")) : (0, import_react54.createElement)(
+        import_react54.Fragment,
+        null,
+        (0, import_react54.createElement)("label", { className: "bt-comm-check" }, (0, import_react54.createElement)("input", { type: "checkbox", checked: Boolean(resumeConfirmed.legacy), onChange: (event) => setResumeConfirmed({ legacy: event.target.checked }) }), t("Resume retained pending messages and work after the Hub checks authorization.")),
+        (0, import_react54.createElement)("button", { type: "button", disabled: busy || !resumeConfirmed.legacy, onClick: () => {
+          void run2(async (token) => {
+            await request({ endpoint: "resume-hub", confirmedUrl: selectedHub.url, confirmResume: true, ...selectedHub.hubId ? { hubId: selectedHub.hubId } : {} });
+            setResumeConfirmed({});
+            await refreshStorage(token);
+          });
+        } }, t("Resume this Hub"))
+      )
+    ) : null,
     enrollments.map((item) => (0, import_react54.createElement)(
       "section",
       { key: item.hubId, className: "bt-comm-address" },
       (0, import_react54.createElement)("p", null, (0, import_react54.createElement)("code", null, item.hubId), " · ", statusLabel(item.status)),
       (0, import_react54.createElement)("p", { className: "bt-comm-reference" }, item.url),
       item.requestId ? (0, import_react54.createElement)("p", { className: "bt-comm-reference" }, t("Request ID"), ": ", (0, import_react54.createElement)("code", null, item.requestId)) : null,
-      item.status === "approved" ? (0, import_react54.createElement)("p", { role: "status" }, t("Approved. The device configuration is saved through the app and will reload. Existing settings are preserved.")) : null,
-      item.requestId ? (0, import_react54.createElement)("button", { type: "button", disabled: busy, onClick: () => {
+      item.paused ? (0, import_react54.createElement)("p", { role: "status" }, t("Paused. Identity, trust and Hub history are retained separately.")) : item.status === "approved" ? (0, import_react54.createElement)("p", { role: "status" }, t("Approved. The device configuration is saved through the app and will reload. Existing settings are preserved.")) : null,
+      selectedHub?.hubId !== item.hubId ? (0, import_react54.createElement)("button", { type: "button", disabled: busy, onClick: () => {
+        void run2((token) => select(item, token));
+      } }, t("Select this Hub")) : null,
+      selectedHub?.hubId === item.hubId && selectedHub.enabled ? (0, import_react54.createElement)("button", { type: "button", disabled: busy, onClick: () => {
+        void run2(async (token) => {
+          await request({ endpoint: "disconnect-hub", hubId: item.hubId });
+          if (token === generation.current) await refreshStorage(token);
+        });
+      } }, t("Disconnect this Hub")) : null,
+      selectedHub?.hubId === item.hubId && item.paused && item.status === "approved" ? (0, import_react54.createElement)(
+        import_react54.Fragment,
+        null,
+        (0, import_react54.createElement)("label", { className: "bt-comm-check" }, (0, import_react54.createElement)("input", { type: "checkbox", checked: Boolean(resumeConfirmed[item.hubId]), onChange: (event) => setResumeConfirmed((current) => ({ ...current, [item.hubId]: event.target.checked })) }), t("Resume retained pending messages and work after the Hub checks authorization.")),
+        (0, import_react54.createElement)("button", { type: "button", disabled: busy || !resumeConfirmed[item.hubId], onClick: () => {
+          void run2(async (token) => {
+            const value = await request({ endpoint: "resume-hub", hubId: item.hubId, confirmedUrl: item.url, confirmResume: true });
+            if (token === generation.current) {
+              update(value);
+              setResumeConfirmed({});
+              await refreshStorage(token);
+            }
+          });
+        } }, t("Resume this Hub"))
+      ) : null,
+      item.requestId ? (0, import_react54.createElement)("button", { type: "button", disabled: busy || Boolean(selectedHub?.hubId && selectedHub.hubId !== item.hubId), onClick: () => {
         void run2(async (token) => {
           try {
             const value = await request({ endpoint: "hub-join-status", hubId: item.hubId });
@@ -21411,7 +21551,7 @@ function BotChoices({ bots, selected, onChange, label }) {
     (0, import_react54.createElement)("span", { className: "bt-comm-reference" }, bot.id)
   )) : (0, import_react54.createElement)("p", { className: "bt-comm-reference" }, t("No published Bots")));
 }
-function ContactManager({ request, operation, contacts, managementUrl }) {
+function ContactManager({ request, operation, contacts }) {
   const [data, setData] = (0, import_react54.useState)(null), [code, setCode] = (0, import_react54.useState)(""), [userCode, setUserCode] = (0, import_react54.useState)("");
   const [published, setPublished] = (0, import_react54.useState)([]), [share, setShare] = (0, import_react54.useState)([]), [incomingShares, setIncomingShares] = (0, import_react54.useState)({});
   const [busy, setBusy] = (0, import_react54.useState)(false), [error, setError] = (0, import_react54.useState)(""), [confirm, setConfirm] = (0, import_react54.useState)("");
@@ -21458,7 +21598,6 @@ function ContactManager({ request, operation, contacts, managementUrl }) {
   return (0, import_react54.createElement)(
     "div",
     { className: "bt-comm-contact-manager" },
-    adminLink(managementUrl),
     (0, import_react54.createElement)("button", { type: "button", disabled: busy, onClick: () => {
       void run2(async () => {
       });
@@ -21533,14 +21672,88 @@ function ContactManager({ request, operation, contacts, managementUrl }) {
   );
 }
 
-// src/client/communication-message.js
+// src/client/communication-attachments.js
 var import_react55 = require("react");
+var MAX_BYTES = 65536, MAX_FILES = 4;
+var EMPTY2 = [];
+var raster = /^(image\/(png|jpeg|gif|webp))$/;
+var fail2 = (code) => {
+  throw Object.assign(new Error(code), { code });
+};
+var hash = async (bytes) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map((b) => b.toString(16).padStart(2, "0")).join("");
+async function selectedAttachments(files, existing = []) {
+  if (existing.length + files.length > MAX_FILES) fail2("INVALID_ATTACHMENT");
+  let total = existing.reduce((sum, file) => sum + file.size, 0);
+  const added = [];
+  for (const file of files) {
+    total += file.size;
+    if (file.size < 1 || total > MAX_BYTES) fail2("ATTACHMENT_TOO_LARGE");
+    if (!file.name || file.name.length > 180 || /[\u0000-\u001f\u007f/\\\u202a-\u202e\u2066-\u2069]/u.test(file.name)) fail2("INVALID_ATTACHMENT");
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    let raw = "";
+    for (const byte of bytes) raw += String.fromCharCode(byte);
+    added.push({ name: file.name, mime: raster.test(file.type) ? file.type : "application/octet-stream", size: bytes.length, sha256: await hash(bytes), data: window.btoa(raw) });
+  }
+  return [...existing, ...added];
+}
+function CommunicationAttachments({ files = EMPTY2 }) {
+  const [verified, setVerified] = (0, import_react55.useState)([]), [error, setError] = (0, import_react55.useState)(false);
+  (0, import_react55.useEffect)(() => {
+    let active = true;
+    setVerified([]);
+    setError(false);
+    void (async () => {
+      if (!Array.isArray(files) || files.length > MAX_FILES) throw Error();
+      let total = 0;
+      const result = [];
+      for (const file of files) {
+        if (typeof file.data !== "string" || file.data.length > 87384 || typeof file.name !== "string" || file.name.length > 180 || !Number.isInteger(file.size) || file.size < 1) throw Error();
+        total += file.size;
+        if (total > MAX_BYTES) throw Error();
+        const bytes = Uint8Array.from(window.atob(file.data), (char) => char.charCodeAt(0));
+        if (bytes.length !== file.size || await hash(bytes) !== file.sha256) throw Error();
+        result.push({ ...file, bytes });
+      }
+      if (active) setVerified(result);
+    })().catch(() => {
+      if (active) setError(true);
+    });
+    return () => {
+      active = false;
+    };
+  }, [files]);
+  const download2 = (file) => {
+    const url = URL.createObjectURL(new window.Blob([file.bytes], { type: "application/octet-stream" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = file.name;
+    link.rel = "noopener";
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1e3);
+  };
+  return (0, import_react55.createElement)(
+    "div",
+    { className: "bt-comm-attachments" },
+    error ? (0, import_react55.createElement)("span", { role: "status" }, t("Attachment could not be verified.")) : null,
+    verified.map((file, index) => (0, import_react55.createElement)(
+      "div",
+      { className: "bt-comm-attachment", key: index },
+      raster.test(file.mime) ? (0, import_react55.createElement)("img", { src: `data:${file.mime};base64,${file.data}`, alt: file.name, loading: "lazy", onLoad: (event) => {
+        if (event.target.naturalWidth * event.target.naturalHeight > 2e7) event.target.hidden = true;
+      } }) : null,
+      (0, import_react55.createElement)("button", { type: "button", onClick: () => download2(file), "aria-label": t("Download {name}", { name: file.name }) }, (0, import_react55.createElement)("span", null, file.name), (0, import_react55.createElement)("small", null, `${file.size} B`))
+    ))
+  );
+}
+
+// src/client/communication-message.js
+var import_react56 = require("react");
 var import_react_dom10 = require("react-dom");
 function CommunicationMessage({ message, members, request, onInspect }) {
-  const namespace = (0, import_react55.useRef)(crypto.randomUUID()), wrapper = (0, import_react55.useRef)(null);
-  const [slots, setSlots] = (0, import_react55.useState)([]);
+  const namespace = (0, import_react56.useRef)(crypto.randomUUID()), wrapper = (0, import_react56.useRef)(null);
+  const [slots, setSlots] = (0, import_react56.useState)([]);
   const labels = contactLabels(members);
-  const projection = (0, import_react55.useMemo)(() => {
+  const projection = (0, import_react56.useMemo)(() => {
     const spans = messageMentionSpans(message, members);
     let text = "", start = 0;
     const entries2 = spans.map((span, index) => {
@@ -21551,7 +21764,7 @@ function CommunicationMessage({ message, members, request, onInspect }) {
     });
     return { text: text + message.content.text.slice(start), entries: entries2 };
   }, [message, members]);
-  (0, import_react55.useLayoutEffect)(() => {
+  (0, import_react56.useLayoutEffect)(() => {
     const entries2 = projection.entries.flatMap((entry) => {
       const node = [...wrapper.current.querySelectorAll("a")].find((anchor) => anchor.getAttribute("href") === entry.url || anchor.dataset.remoteMention === entry.url);
       if (!node) return [];
@@ -21577,19 +21790,20 @@ function CommunicationMessage({ message, members, request, onInspect }) {
     event.stopPropagation();
     if (event.type === "click" || event.type === "keydown" && ["Enter", " "].includes(event.key)) onInspect(slot.people.map((person) => person.principalId));
   };
-  return (0, import_react55.createElement)(
+  return (0, import_react56.createElement)(
     "div",
     { ref: wrapper, onClickCapture: activate, onAuxClickCapture: activate, onContextMenuCapture: activate, onKeyDownCapture: (event) => {
       if (["Enter", " "].includes(event.key)) activate(event);
     } },
-    (0, import_react55.createElement)(import_dsh_client_ui_primitives.MarkdownText, { text: projection.text, labels: mdLabels2(), variant: "compact" }),
-    slots.map((slot) => (0, import_react_dom10.createPortal)((0, import_react55.createElement)(
+    (0, import_react56.createElement)(import_dsh_client_ui_primitives.MarkdownText, { text: projection.text, labels: mdLabels2(), variant: "compact" }),
+    message.attachments?.length ? (0, import_react56.createElement)(CommunicationAttachments, { files: message.attachments }) : null,
+    slots.map((slot) => (0, import_react_dom10.createPortal)((0, import_react56.createElement)(
       "span",
       { className: "bt-comm-inline-mention-content", "aria-hidden": true },
-      slot.all ? null : (0, import_react55.createElement)(CommunicationAvatar, { person: slot.people[0], request, size: 16 }),
-      (0, import_react55.createElement)("span", { className: "bt-comm-mention-label" }, slot.label)
+      slot.all ? null : (0, import_react56.createElement)(CommunicationAvatar, { person: slot.people[0], request, size: 16 }),
+      (0, import_react56.createElement)("span", { className: "bt-comm-mention-label" }, slot.label)
     ), slot.node, slot.url)),
-    unmatched.length ? (0, import_react55.createElement)("span", { className: "bt-comm-mention-targets" }, unmatched.map((person) => (0, import_react55.createElement)(
+    unmatched.length ? (0, import_react56.createElement)("span", { className: "bt-comm-mention-targets" }, unmatched.map((person) => (0, import_react56.createElement)(
       "button",
       {
         type: "button",
@@ -21600,31 +21814,31 @@ function CommunicationMessage({ message, members, request, onInspect }) {
         "aria-label": `${t("View participant")}: ${labels.get(person.principalId)}`,
         onClick: () => onInspect([person.principalId])
       },
-      (0, import_react55.createElement)("span", { className: "bt-comm-inline-mention-content", "aria-hidden": true }, (0, import_react55.createElement)(CommunicationAvatar, { person, request, size: 16 }), (0, import_react55.createElement)("span", { className: "bt-comm-mention-label" }, labels.get(person.principalId)))
+      (0, import_react56.createElement)("span", { className: "bt-comm-inline-mention-content", "aria-hidden": true }, (0, import_react56.createElement)(CommunicationAvatar, { person, request, size: 16 }), (0, import_react56.createElement)("span", { className: "bt-comm-mention-label" }, labels.get(person.principalId)))
     ))) : null
   );
 }
 function BotWorkStarted({ event, members, request, onInspect }) {
   const person = members.find((member) => member.principalId === event.principalId && member.kind === "bot");
   const name = person ? contactLabels(members).get(person.principalId) : t("Bot");
-  const content = [(0, import_react55.createElement)(CommunicationAvatar, { key: "avatar", person: person ?? { principalId: "bot:unknown", kind: "bot", displayName: t("Bot") }, request, size: 16 }), (0, import_react55.createElement)("span", { key: "label" }, t("{name} started on it", { name }))];
-  return (0, import_react55.createElement)("div", { className: "bt-comm-work-started", "data-work-event-id": event.eventId }, person ? (0, import_react55.createElement)("button", { type: "button", title: person.principalId, "aria-label": `${t("{name} started on it", { name })} · ${t("View participant")}`, onClick: () => onInspect([person.principalId]) }, ...content) : (0, import_react55.createElement)("span", null, ...content));
+  const content = [(0, import_react56.createElement)(CommunicationAvatar, { key: "avatar", person: person ?? { principalId: "bot:unknown", kind: "bot", displayName: t("Bot") }, request, size: 16 }), (0, import_react56.createElement)("span", { key: "label" }, t("{name} started on it", { name }))];
+  return (0, import_react56.createElement)("div", { className: "bt-comm-work-started", "data-work-event-id": event.eventId }, person ? (0, import_react56.createElement)("button", { type: "button", title: person.principalId, "aria-label": `${t("{name} started on it", { name })} · ${t("View participant")}`, onClick: () => onInspect([person.principalId]) }, ...content) : (0, import_react56.createElement)("span", null, ...content));
 }
 
 // src/client/communication-list.js
-var import_react56 = require("react");
+var import_react57 = require("react");
 var seats = (count, size) => count < 2 ? [[0, 0, size]] : count === 2 ? [[0, 0, size * 2 / 3], [size / 3, size / 3, size * 2 / 3]] : count === 3 ? [[size * 2 / 9, 0, size * 5 / 9], [0, size * 4 / 9, size * 5 / 9], [size * 4 / 9, size * 4 / 9, size * 5 / 9]] : [[0, 0, size / 2], [size / 2, 0, size / 2], [0, size / 2, size / 2], [size / 2, size / 2, size / 2]];
 function ConversationAvatar({ conversation, humanId, request, size = 36 }) {
   const members = conversation.info?.members ?? [];
   const people = conversation.kind === "group" ? members : members.filter((person) => person.principalId !== humanId).slice(0, 1);
-  if (conversation.kind !== "group" && people.length) return (0, import_react56.createElement)(CommunicationAvatar, { person: people[0], request, size });
-  if (!people.length) return (0, import_react56.createElement)("span", { className: "bt-comm-room-avatar bt-comm-room-empty", style: { width: size, height: size }, "aria-hidden": true }, (0, import_react56.createElement)("span", null, "◇"));
+  if (conversation.kind !== "group" && people.length) return (0, import_react57.createElement)(CommunicationAvatar, { person: people[0], request, size });
+  if (!people.length) return (0, import_react57.createElement)("span", { className: "bt-comm-room-avatar bt-comm-room-empty", style: { width: size, height: size }, "aria-hidden": true }, (0, import_react57.createElement)("span", null, "◇"));
   const positions = seats(Math.min(people.length, 4), size), gap = size / 14;
   const rings = positions.map(([x, y, width]) => ({ x: x + width / 2, y: y + width / 2, r: width * 0.48 + gap }));
-  return (0, import_react56.createElement)("span", { className: "bt-cluster bt-comm-room-avatar", style: { width: size, height: size }, "aria-hidden": true }, positions.map(([x, y, width], index) => {
+  return (0, import_react57.createElement)("span", { className: "bt-cluster bt-comm-room-avatar", style: { width: size, height: size }, "aria-hidden": true }, positions.map(([x, y, width], index) => {
     const holes2 = rings.slice(index + 1).filter((ring) => Math.hypot(ring.x - x - width / 2, ring.y - y - width / 2) < ring.r + width * 0.46).map((ring) => `radial-gradient(circle at ${ring.x - x}px ${ring.y - y}px,transparent ${ring.r}px,#000 ${ring.r + 0.5}px)`);
     const style = { left: x, top: y, width, height: width, ...holes2.length ? { WebkitMaskImage: holes2.join(","), maskImage: holes2.join(","), WebkitMaskComposite: "source-in", maskComposite: "intersect" } : {} };
-    return (0, import_react56.createElement)("span", { key: people[index].principalId, style }, people.length > 4 && index === 3 ? (0, import_react56.createElement)("span", { className: "bt-comm-room-more" }, `+${people.length - 3}`) : (0, import_react56.createElement)(CommunicationAvatar, { person: people[index], request, size: width }));
+    return (0, import_react57.createElement)("span", { key: people[index].principalId, style }, people.length > 4 && index === 3 ? (0, import_react57.createElement)("span", { className: "bt-comm-room-more" }, `+${people.length - 3}`) : (0, import_react57.createElement)(CommunicationAvatar, { person: people[index], request, size: width }));
   }));
 }
 function ConversationRow({ conversation, humanId, labels, selected, request, onChoose, disabled }) {
@@ -21635,7 +21849,7 @@ function ConversationRow({ conversation, humanId, labels, selected, request, onC
   const sender = current ? contactLabels(conversation.info.members).get(current.principalId) : null;
   const summary = preview && conversation.kind === "group" && sender ? `${sender}: ${preview}` : preview;
   const accessibleName = [name, summary, conversation.unread > 0 ? `${conversation.unread} ${t("Unread")}` : ""].filter(Boolean).join(", ");
-  return (0, import_react56.createElement)(
+  return (0, import_react57.createElement)(
     "button",
     {
       type: "button",
@@ -21649,57 +21863,57 @@ ${conversation.conversationId}`,
       "data-conversation-id": conversation.conversationId,
       onClick: () => onChoose(conversation.conversationId)
     },
-    (0, import_react56.createElement)(ConversationAvatar, { conversation, humanId, request }),
-    (0, import_react56.createElement)("span", { className: "bt-row-body bt-comm-conversation-body" }, (0, import_react56.createElement)("span", { className: "bt-row-name bt-comm-conversation-name" }, name), (0, import_react56.createElement)("span", { className: "bt-row-preview bt-comm-conversation-preview", title: summary }, summary)),
-    conversation.unread > 0 ? (0, import_react56.createElement)("span", { className: "bt-comm-unread", "aria-hidden": true }) : null
+    (0, import_react57.createElement)(ConversationAvatar, { conversation, humanId, request }),
+    (0, import_react57.createElement)("span", { className: "bt-row-body bt-comm-conversation-body" }, (0, import_react57.createElement)("span", { className: "bt-row-name bt-comm-conversation-name" }, name), (0, import_react57.createElement)("span", { className: "bt-row-preview bt-comm-conversation-preview", title: summary }, summary)),
+    conversation.unread > 0 ? (0, import_react57.createElement)("span", { className: "bt-comm-unread", "aria-hidden": true }) : null
   );
 }
 
 // src/client/communication-activity.js
-var import_react57 = require("react");
+var import_react58 = require("react");
 function CommunicationActivity({ state, member, events, outbox, operations, operationPending, pendingAttempt, error, pollError, friendly, labels, onRefresh, onRetry, onCopy, copyDisabled, busy }) {
   const failures = (state?.errors ?? []).filter((item) => !member || item.conversationId === member.conversationId);
   const exports = (state?.exportFailures ?? []).filter((item) => !member || item.conversationId === member.conversationId);
   const stops = collaborationStops(events, outbox);
-  const notice = (value) => (0, import_react57.createElement)("p", { role: "status" }, t(value));
-  return (0, import_react57.createElement)(
+  const notice = (value) => (0, import_react58.createElement)("p", { role: "status" }, t(value));
+  return (0, import_react58.createElement)(
     "div",
     { className: "bt-comm-activity" },
-    member ? (0, import_react57.createElement)("p", { className: "bt-comm-reference" }, member.title ?? t("Private conversation")) : null,
-    (0, import_react57.createElement)("button", { type: "button", disabled: busy, onClick: onRefresh }, t("Refresh status")),
+    member ? (0, import_react58.createElement)("p", { className: "bt-comm-reference" }, member.title ?? t("Private conversation")) : null,
+    (0, import_react58.createElement)("button", { type: "button", disabled: busy, onClick: onRefresh }, t("Refresh status")),
     error ? notice(error) : null,
     state?.error ? notice(friendly({ code: state.error })) : null,
     pollError ? notice(pollError) : null,
-    pendingAttempt ? (0, import_react57.createElement)("section", null, notice("Send not confirmed. Retry the same message to avoid sending it twice."), (0, import_react57.createElement)("button", { type: "button", onClick: onRetry, disabled: busy }, t("Retry same send"))) : null,
+    pendingAttempt ? (0, import_react58.createElement)("section", null, notice("Send not confirmed. Retry the same message to avoid sending it twice."), (0, import_react58.createElement)("button", { type: "button", onClick: onRetry, disabled: busy }, t("Retry same send"))) : null,
     operationPending ? notice("An operation is not confirmed. Check status, then retry the same action.") : null,
-    operations.map((item) => (0, import_react57.createElement)("section", { key: item.id }, !member && item.conversationId ? (0, import_react57.createElement)("p", { className: "bt-comm-reference" }, item.conversationId) : null, notice(item.state === "failed" ? "Operation failed" : "Operation queued"), item.error ? notice(friendly({ code: item.error })) : notice("Waiting for the Hub"))),
-    outbox.filter((item) => item.state !== "accepted").map((item) => (0, import_react57.createElement)(
+    operations.map((item) => (0, import_react58.createElement)("section", { key: item.id }, !member && item.conversationId ? (0, import_react58.createElement)("p", { className: "bt-comm-reference" }, item.conversationId) : null, notice(item.state === "failed" ? "Operation failed" : "Operation queued"), item.error ? notice(friendly({ code: item.error })) : notice("Waiting for the Hub"))),
+    outbox.filter((item) => item.state !== "accepted").map((item) => (0, import_react58.createElement)(
       "section",
       { key: item.id, "data-activity-message-id": item.id },
-      !member && item.conversationId ? (0, import_react57.createElement)("p", { className: "bt-comm-reference" }, item.conversationId) : null,
+      !member && item.conversationId ? (0, import_react58.createElement)("p", { className: "bt-comm-reference" }, item.conversationId) : null,
       notice(item.state === "failed" ? "Send failed" : item.state === "accepted" ? "Hub accepted" : "Queued on this device"),
-      (0, import_react57.createElement)("p", { className: "bt-comm-pending-text" }, item.text),
+      (0, import_react58.createElement)("p", { className: "bt-comm-pending-text" }, item.text),
       item.error ? notice(friendly({ code: item.error })) : null,
       item.membershipEpoch && item.membershipEpoch !== member?.membershipEpoch ? notice("This record belongs to an earlier membership.") : null,
-      (item.deliveries ?? []).filter((delivery) => delivery.recipientPrincipalId !== state?.humanPrincipalId).map((delivery) => (0, import_react57.createElement)("p", { key: delivery.deliveryId, className: "bt-comm-reference" }, `${labels.get(delivery.recipientPrincipalId) ?? t("Participant")}: ${t(deliveryPhase(delivery))}`)),
-      item.state === "failed" ? (0, import_react57.createElement)("button", { type: "button", disabled: copyDisabled || busy, onClick: () => onCopy(item) }, t("Copy to draft")) : null
+      (item.deliveries ?? []).filter((delivery) => delivery.recipientPrincipalId !== state?.humanPrincipalId).map((delivery) => (0, import_react58.createElement)("p", { key: delivery.deliveryId, className: "bt-comm-reference" }, `${labels.get(delivery.recipientPrincipalId) ?? t("Participant")}: ${t(deliveryPhase(delivery))}`)),
+      item.state === "failed" ? (0, import_react58.createElement)("button", { type: "button", disabled: copyDisabled || busy, onClick: () => onCopy(item) }, t("Copy to draft")) : null
     )),
-    stops.map((item) => (0, import_react57.createElement)("p", { key: item.messageId, role: "status", "data-causal-stop": item.messageId }, t("Bot collaboration stopped at the safety limit. Send a new Human message to continue."))),
-    failures.map((item) => (0, import_react57.createElement)("p", { key: item.bindingId, role: "status" }, t("Bot delivery needs reconciliation"), ": ", item.code)),
-    exports.map((item) => (0, import_react57.createElement)("p", { key: item.messageId, role: "status" }, t("Send failed"), ": ", item.code)),
+    stops.map((item) => (0, import_react58.createElement)("p", { key: item.messageId, role: "status", "data-causal-stop": item.messageId }, t("Bot collaboration stopped at the safety limit. Send a new Human message to continue."))),
+    failures.map((item) => (0, import_react58.createElement)("p", { key: item.bindingId, role: "status" }, t("Bot delivery needs reconciliation"), ": ", item.code)),
+    exports.map((item) => (0, import_react58.createElement)("p", { key: item.messageId, role: "status" }, t("Send failed"), ": ", item.code)),
     !error && !state?.error && !pollError && !pendingAttempt && !operationPending && !operations.length && !outbox.some((item) => item.state !== "accepted") && !stops.length && !failures.length && !exports.length ? notice("No activity needs attention.") : null
   );
 }
 
 // src/client/communication-thread.js
-var import_react58 = require("react");
+var import_react59 = require("react");
 function CommunicationThread({ member, messageId, request, canSpeak, onReply, onInspect }) {
-  const [page, setPage] = (0, import_react58.useState)(null), [error, setError] = (0, import_react58.useState)(false), [loading, setLoading] = (0, import_react58.useState)(false);
-  const [collapsed, setCollapsed] = (0, import_react58.useState)(/* @__PURE__ */ new Set());
-  const order = (0, import_react58.useRef)(0), current = (0, import_react58.useRef)(null);
+  const [page, setPage] = (0, import_react59.useState)(null), [error, setError] = (0, import_react59.useState)(false), [loading, setLoading] = (0, import_react59.useState)(false);
+  const [collapsed, setCollapsed] = (0, import_react59.useState)(/* @__PURE__ */ new Set());
+  const order = (0, import_react59.useRef)(0), current = (0, import_react59.useRef)(null);
   current.current = page;
   const members = member.info?.members ?? [], labels = contactLabels(members);
-  (0, import_react58.useEffect)(() => {
+  (0, import_react59.useEffect)(() => {
     const token = ++order.current;
     setPage(null);
     setCollapsed(/* @__PURE__ */ new Set());
@@ -21754,21 +21968,21 @@ function CommunicationThread({ member, messageId, request, canSpeak, onReply, on
     const parent = messages.get(message.replyToMessageId);
     const replies = (children.get(message.messageId) ?? []).filter((child) => !rendered.has(child.message.messageId));
     const hidden = collapsed.has(message.messageId);
-    return (0, import_react58.createElement)(
+    return (0, import_react59.createElement)(
       "li",
       { key: message.messageId, "data-thread-depth": level, "data-thread-deep": level > 4 || void 0 },
-      (0, import_react58.createElement)(
+      (0, import_react59.createElement)(
         "article",
         { "data-thread-message-id": message.messageId, "data-thread-selected": message.messageId === messageId, style: { "--reply-depth": Math.min(level, 4) } },
-        (0, import_react58.createElement)("div", { className: "bt-comm-person-label" }, (0, import_react58.createElement)(CommunicationAvatar, { person, request, allowed: members.includes(person), size: 24 }), (0, import_react58.createElement)("strong", { title: person.principalId }, labels.get(person.principalId) ?? t("Participant"))),
-        parent ? (0, import_react58.createElement)("p", { className: "bt-comm-thread-parent" }, t("Reply to"), " ", labels.get(parent.author.principalId) ?? t("Participant"), ": ", referenceExcerpt(parent.content.text)) : null,
-        (0, import_react58.createElement)("div", { className: "bt-comm-body" }, (0, import_react58.createElement)(CommunicationMessage, { message, members, request, onInspect })),
-        (0, import_react58.createElement)(
+        (0, import_react59.createElement)("div", { className: "bt-comm-person-label" }, (0, import_react59.createElement)(CommunicationAvatar, { person, request, allowed: members.includes(person), size: 24 }), (0, import_react59.createElement)("strong", { title: person.principalId }, labels.get(person.principalId) ?? t("Participant"))),
+        parent ? (0, import_react59.createElement)("p", { className: "bt-comm-thread-parent" }, t("Reply to"), " ", labels.get(parent.author.principalId) ?? t("Participant"), ": ", referenceExcerpt(parent.content.text)) : null,
+        (0, import_react59.createElement)("div", { className: "bt-comm-body" }, (0, import_react59.createElement)(CommunicationMessage, { message, members, request, onInspect })),
+        (0, import_react59.createElement)(
           "div",
           { className: "bt-comm-message-actions" },
-          (0, import_react58.createElement)("time", null, new Date(event.serverAcceptedAt).toLocaleString()),
-          canSpeak ? (0, import_react58.createElement)("button", { type: "button", onClick: () => onReply(message) }, t("Reply")) : null,
-          replies.length ? (0, import_react58.createElement)("button", { type: "button", "aria-expanded": !hidden, onClick: () => setCollapsed((old) => {
+          (0, import_react59.createElement)("time", null, new Date(event.serverAcceptedAt).toLocaleString()),
+          canSpeak ? (0, import_react59.createElement)("button", { type: "button", onClick: () => onReply(message) }, t("Reply")) : null,
+          replies.length ? (0, import_react59.createElement)("button", { type: "button", "aria-expanded": !hidden, onClick: () => setCollapsed((old) => {
             const next = new Set(old);
             if (hidden) next.delete(message.messageId);
             else next.add(message.messageId);
@@ -21776,23 +21990,23 @@ function CommunicationThread({ member, messageId, request, canSpeak, onReply, on
           }) }, t(hidden ? "Show {count} replies" : "Hide replies", { count: replies.length })) : null
         )
       ),
-      replies.length && !hidden ? (0, import_react58.createElement)("ol", { className: "bt-comm-thread-branches" }, replies.map((child) => renderBranch(child, level + 1))) : null
+      replies.length && !hidden ? (0, import_react59.createElement)("ol", { className: "bt-comm-thread-branches" }, replies.map((child) => renderBranch(child, level + 1))) : null
     );
   };
   const roots = (page?.events ?? []).filter((event) => !messages.has(event.message.replyToMessageId) || event.message.replyToMessageId === event.message.messageId);
-  return (0, import_react58.createElement)(
+  return (0, import_react59.createElement)(
     "div",
     { className: "bt-comm-thread" },
-    (0, import_react58.createElement)("p", { className: "bt-comm-reference" }, t(canSpeak ? "Replies stay in this conversation. Select Reply to continue an exact message." : "Replies stay in this conversation.")),
-    page?.earlierUnavailable ? (0, import_react58.createElement)("p", { role: "status" }, t("Earlier context is outside your authorized history.")) : null,
-    loading ? (0, import_react58.createElement)("p", { role: "status" }, t("Loading replies…")) : null,
-    error ? (0, import_react58.createElement)("p", { role: "status" }, t("This reply chain is unavailable. Reopen it after synchronization.")) : null,
-    (0, import_react58.createElement)(
+    (0, import_react59.createElement)("p", { className: "bt-comm-reference" }, t(canSpeak ? "Replies stay in this conversation. Select Reply to continue an exact message." : "Replies stay in this conversation.")),
+    page?.earlierUnavailable ? (0, import_react59.createElement)("p", { role: "status" }, t("Earlier context is outside your authorized history.")) : null,
+    loading ? (0, import_react59.createElement)("p", { role: "status" }, t("Loading replies…")) : null,
+    error ? (0, import_react59.createElement)("p", { role: "status" }, t("This reply chain is unavailable. Reopen it after synchronization.")) : null,
+    (0, import_react59.createElement)(
       "div",
       { className: "bt-comm-thread-log", role: "log", "aria-label": t("Message replies") },
-      (0, import_react58.createElement)("ol", { className: "bt-comm-thread-roots" }, roots.map((event) => renderBranch(event)))
+      (0, import_react59.createElement)("ol", { className: "bt-comm-thread-roots" }, roots.map((event) => renderBranch(event)))
     ),
-    page?.hasMore ? (0, import_react58.createElement)("button", { type: "button", disabled: loading, onClick: () => {
+    page?.hasMore ? (0, import_react59.createElement)("button", { type: "button", disabled: loading, onClick: () => {
       void more();
     } }, t("Load more replies")) : null
   );
@@ -21800,6 +22014,19 @@ function CommunicationThread({ member, messageId, request, canSpeak, onReply, on
 
 // src/client/communication-styles.js
 var communicationCSS = `
+.bt-comm-attachments{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;max-width:100%}
+.bt-comm-attachment{display:flex;flex-direction:column;gap:4px;max-width:240px;min-width:0}
+.bt-comm-attachment img{max-width:100%;max-height:220px;object-fit:contain;border-radius:12px}
+.bt-comm-attachment button{display:flex;align-items:center;gap:8px;max-width:100%;border:1px solid var(--bt-line-2);border-radius:12px;padding:8px;background:var(--bt-card);color:var(--bt-ink)}
+.bt-comm-attachment button span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bt-comm-attachment button small{flex:none;color:var(--bt-ink-3)}
+.bt-comm-attach-picker{display:grid;place-items:center;cursor:pointer;width:30px;height:30px;flex:none;position:relative}
+.bt-comm-attach-picker svg{width:18px;height:18px}
+.bt-comm-attach-picker input{position:absolute;width:100%;height:100%;opacity:0;cursor:pointer}
+.bt-comm-attachment-drafts{display:flex;flex-wrap:wrap;gap:6px;max-width:100%;font-size:12px}
+.bt-comm-attachment-drafts>span{display:inline-flex;align-items:center;gap:4px;max-width:220px;overflow:hidden;word-break:break-all}
+.bt-comm-attachment-drafts button{padding:2px;border:0;background:none;color:inherit}
+.bt-comm-attachment-drafts svg{width:14px;height:14px}
 .bt-comm-nav-heading .bt-comm-settings-icon{width:32px;height:32px;padding:6px;display:grid;place-items:center;flex:none;background:none;border-color:transparent}
 .bt-comm-personal-settings>section{margin-top:16px;padding-top:12px;border-top:1px solid var(--bt-line)}
 .bt-comm-personal-settings>section>button{margin:6px 8px 6px 0}
@@ -21988,12 +22215,90 @@ var communicationCSS = `
 .bt-comm-work-started>button,.bt-comm-work-started>span{display:inline-flex;align-items:center;gap:4px;padding:4px 6px;border:0;border-radius:6px;background:none;color:inherit;font:inherit}
 .bt-comm-work-started>button{cursor:pointer}
 .bt-comm-work-started>button:hover{background:var(--bt-hover)}
+
+/* Match the local sidebar, centered HeaderPill, transcript and compact composer.
+   Remote identities and the independent receiving-policy panel stay explicit. */
+.bt-comm-frame{grid-template-columns:280px minmax(0,1fr)}
+.bt-comm-nav{padding:12px;gap:8px;border-right:.5px solid var(--bt-line-2)}
+.bt-comm-nav-heading{height:36px;padding-inline:4px}
+.bt-comm-nav-heading>h2{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}
+.bt-comm-nav-actions{display:flex;align-items:center;gap:2px;flex:none}
+.bt-comm-new-menu{position:relative}
+.bt-comm-create-menu{position:absolute;top:calc(100% + 6px);right:0;width:200px;z-index:7;padding:5px;border:.5px solid var(--bt-line-2);border-radius:12px;background:var(--bt-card);box-shadow:0 6px 24px color-mix(in srgb,var(--bt-ink) 12%,transparent)}
+.bt-comm-frame .bt-comm-create-menu>button{display:flex;align-items:center;gap:10px;width:100%;min-height:38px;padding:8px 10px;border:0;background:none;border-radius:8px}
+.bt-comm-frame .bt-comm-create-menu>button:hover{background:var(--bt-hover)}
+.bt-comm-frame[data-collapsed=true]{grid-template-columns:minmax(0,1fr)}
+.bt-comm-frame[data-collapsed=true]>.bt-comm-nav{display:none}
+.bt-comm-frame[data-collapsed=true]>.bt-comm-main{display:flex}
+.bt-comm-search input{font-size:14px}
+.bt-comm-search [role=listbox]{max-height:min(480px,55dvh);overflow:auto;padding:4px 0}
+.bt-comm-frame .bt-comm-search [role=option]{display:flex;align-items:center;gap:10px;width:100%;min-height:49px;padding:8px;border:0;background:none}
+.bt-comm-frame .bt-comm-search [role=option][aria-selected=true]{background:var(--bt-active)}
+.bt-comm-search [role=option]>span:last-child{display:flex;flex-direction:column;gap:3px;min-width:0}
+.bt-comm-search [role=option] :is(strong,small){white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bt-comm-search [role=option] strong{font-size:13px;font-weight:500}
+.bt-comm-search [role=option] small{font-size:12px;color:var(--bt-ink-2)}
+.bt-comm-frame .bt-comm-back{padding:6px 8px;border-radius:10px;background:var(--bt-hover);text-align:center}
+.bt-comm-connection{border:0;background:none;padding:0 4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.bt-comm-connection-label{flex:1;font-size:11px;color:var(--bt-ink-2);font-weight:400}
+.bt-comm-connection-details{display:none}
+.bt-comm-connection>button{padding:2px 6px;min-height:24px;margin:0;border:0;background:none;color:var(--bt-ink-2);font-size:11px}
+.bt-comm-start-actions>button{display:inline-flex;justify-content:center;align-items:center;gap:5px}
+.bt-comm-nav>.bt-comm-start-actions>button{border:0;background:none;font-size:12px;min-height:36px;padding:6px}
+.bt-comm-nav>.bt-comm-start-actions>button:hover{background:var(--bt-hover)}
+.bt-comm-section-title{padding:4px 8px;font-size:11px}
+.bt-comm-nav nav .bt-comm-conversation-row{min-height:54px;gap:8px;border:0}
+.bt-comm-nav nav .bt-comm-conversation-row[aria-pressed=true]{background:var(--bt-active)}
+.bt-comm-main{padding:10px 0 16px;gap:0}
+.bt-comm-main>header{position:relative;min-height:42px;padding:0 16px;gap:6px}
+.bt-comm-heading.bt-head{height:42px;flex:1;min-width:0;justify-content:center;padding-left:70px}
+.bt-comm-frame .bt-comm-title-pill{display:inline-flex;align-items:center;gap:8px;height:40px;min-height:40px;max-width:100%;padding:7px 12px 7px 7px;border-radius:999px;border:.5px solid var(--bt-line-2);background:var(--bt-main);box-shadow:0 2px 8px -1px color-mix(in srgb,var(--bt-ink) 6%,transparent);pointer-events:auto}
+.bt-comm-title-pill h2{font-size:14px;line-height:20px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bt-comm-title-pill>span:last-child{color:var(--bt-ink-3)}
+.bt-comm-main>header>.bt-comm-icon-button{width:32px;height:32px;min-height:32px;padding:7px;border:0;background:none;display:grid;place-items:center;color:var(--bt-ink-2)}
+.bt-comm-members:not([open]){position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);padding:0;border:0}
+.bt-comm-members[open]{z-index:4;width:min(400px,100%)}
+@media(min-width:1200px){.bt-comm-main:has(.bt-comm-members[open]){padding-right:400px}}
+.bt-comm-log{padding:32px max(24px,calc((100% - 960px)/2));scrollbar-gutter:stable;scroll-padding:24px}
+.bt-comm-log article{display:grid;grid-template-columns:28px minmax(0,1fr);column-gap:8px;row-gap:4px;max-width:100%;width:fit-content;min-width:100px;padding:0;margin:18px 0;background:none;border-radius:12px}
+.bt-comm-log article>.bt-comm-avatar{grid-column:1;grid-row:2;align-self:end;margin:0}
+.bt-comm-log article>strong{grid-column:2;grid-row:1;display:flex;align-items:center;gap:3px;padding:0 10px;color:var(--bt-ink-2);font-size:12px;line-height:18px}
+.bt-comm-log article>.bt-comm-message-bubble{grid-column:2;grid-row:2;min-width:0;padding:7px 12px;border-radius:18px;background:var(--bt-bubble);overflow-wrap:anywhere}
+.bt-comm-body p{margin:0}
+.bt-comm-log article[data-self=true]{display:flex;flex-direction:column;align-items:flex-end;margin-left:auto;max-width:85%;background:none;color:var(--bt-ink)}
+.bt-comm-log article[data-self=true]>.bt-comm-avatar,.bt-comm-log article[data-self=true]>strong{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+.bt-comm-log article[data-self=true]>.bt-comm-message-bubble,.bt-comm-log article[data-self=true]>.bt-comm-pending-text{background:var(--bt-user);color:var(--bt-user-ink);border-radius:18px;padding:7px 12px;min-width:0;max-width:100%}
+.bt-comm-log article[data-self=true]>.bt-comm-reference{color:var(--bt-ink-2)}
+.bt-comm-message-actions{grid-column:2;grid-row:3;justify-content:flex-start;gap:6px;min-height:24px;margin:0;padding-inline:6px;color:var(--bt-ink-3)}
+.bt-comm-message-actions button{border:0;background:none;min-height:24px;padding:2px 5px;color:var(--bt-ink-2);opacity:0;transition:opacity .12s}
+.bt-comm-log article:is(:hover,:focus-within) .bt-comm-message-actions button{opacity:1}
+.bt-comm-main>footer{position:relative;flex-shrink:0;width:calc(100% - 48px);max-width:960px;align-self:center;padding:10px 48px 10px 14px;border:.5px solid var(--bt-line-2);border-radius:22px;background:var(--bt-main);box-shadow:0 1px 4px color-mix(in srgb,var(--bt-ink) 4%,transparent)}
+.bt-comm-main footer .bt-comm-compose-field{margin:0;display:block}
+.bt-comm-frame .bt-comm-main footer textarea{border:0;background:none;min-height:46px;max-height:180px;padding:0;font-size:14px;line-height:23px;resize:vertical;border-radius:0}
+.bt-comm-frame footer textarea:focus-visible{outline:0}
+.bt-comm-frame footer:focus-within{border-color:var(--bt-ink-3)}
+.bt-comm-main footer>.bt-comm-send{position:absolute;right:8px;bottom:8px;width:32px;height:32px;min-height:32px;border:0;border-radius:50%;padding:8px;display:grid;place-items:center;background:var(--bt-accent);color:var(--bt-accent-ink)}
+.bt-comm-completion{position:absolute;bottom:calc(100% + 8px);left:0;width:min(420px,100%);box-shadow:0 4px 20px color-mix(in srgb,var(--bt-ink) 10%,transparent)}
+@media(hover:none){.bt-comm-message-actions button{opacity:1}}
+@media(max-width:760px){
+ .bt-comm-frame{grid-template-columns:minmax(0,1fr)}
+ .bt-comm-nav{padding:12px}
+ .bt-comm-main{padding:8px 0 12px}
+ .bt-comm-main>header{padding:0 8px;flex-wrap:nowrap}
+ .bt-comm-heading.bt-head{padding-left:0;flex-basis:auto;order:0}
+ .bt-comm-title-pill h2{font-size:13px}
+ .bt-comm-log{padding:20px 12px}
+ .bt-comm-main>footer{width:calc(100% - 24px)}
+ .bt-comm-message-actions button{opacity:1}
+ .bt-comm-log article[data-self=true]{max-width:94%}
+}
 `;
 
 // src/client/communication.js
-var import_react59 = require("react");
+var import_react60 = require("react");
 var import_react_dom11 = require("react-dom");
 var OPEN = "ds-bot:communication:open", SELECTED = "ds-bot:communication:selected";
+var SIDEBAR_HIDDEN = "ds-bot:communication:sidebar-hidden";
 var OPERATION_IDS = "ds-bot:communication:operation-ids";
 var DRAFTS = "ds-bot:communication:drafts", HIDDEN = "ds-bot:communication:hidden", ATTEMPTS = "ds-bot:communication:attempts";
 var read = (key, fallback) => {
@@ -22025,37 +22330,37 @@ var clientPairingExample = `communication:
   humanDisplayName: New device Human
   publishedBotIds: [REPLACE_WITH_LOCAL_BOT_ID]`;
 function PairingGuide({ connectionLabel }) {
-  return (0, import_react59.createElement)(
+  return (0, import_react60.createElement)(
     "div",
     { className: "bt-comm-pairing-guide" },
-    (0, import_react59.createElement)("p", null, t("The Hub owner must authorize each device in the Hub configuration and restart the Hub. This guide does not pair a device or change permissions.")),
-    (0, import_react59.createElement)("h3", null, t("1. Hub owner")),
-    (0, import_react59.createElement)(
+    (0, import_react60.createElement)("p", null, t("The Hub owner must authorize each device in the Hub configuration and restart the Hub. This guide does not pair a device or change permissions.")),
+    (0, import_react60.createElement)("h3", null, t("1. Hub owner")),
+    (0, import_react60.createElement)(
       "ol",
       null,
-      (0, import_react59.createElement)("li", null, t("Agree on a unique, stable instanceId for the new device. Keep existing peer entries and add the new peer to the Hub configuration.")),
-      (0, import_react59.createElement)("li", null, t("Use credentialEnv to name a private environment variable. The Hub and this device need the same dedicated pairing credential value, supplied privately through each local secret mechanism. The environment variable names may differ.")),
-      (0, import_react59.createElement)("li", null, t("Provide a reachable trusted WSS address whose certificate matches its hostname. Restart the Hub with the updated peer configuration and its private launch environment."))
+      (0, import_react60.createElement)("li", null, t("Agree on a unique, stable instanceId for the new device. Keep existing peer entries and add the new peer to the Hub configuration.")),
+      (0, import_react60.createElement)("li", null, t("Use credentialEnv to name a private environment variable. The Hub and this device need the same dedicated pairing credential value, supplied privately through each local secret mechanism. The environment variable names may differ.")),
+      (0, import_react60.createElement)("li", null, t("Provide a reachable trusted WSS address whose certificate matches its hostname. Restart the Hub with the updated peer configuration and its private launch environment."))
     ),
-    (0, import_react59.createElement)("pre", { "aria-label": t("Hub configuration example") }, (0, import_react59.createElement)("code", null, hubPairingExample)),
-    (0, import_react59.createElement)("h3", null, t("2. New device")),
-    (0, import_react59.createElement)(
+    (0, import_react60.createElement)("pre", { "aria-label": t("Hub configuration example") }, (0, import_react60.createElement)("code", null, hubPairingExample)),
+    (0, import_react60.createElement)("h3", null, t("2. New device")),
+    (0, import_react60.createElement)(
       "ol",
       null,
-      (0, import_react59.createElement)("li", null, t("Quit the app, including its tray process. Merge the communication settings into the existing bot configuration in your own profile cordis.patch.yml. Use the exact instanceId approved by the Hub owner.")),
-      (0, import_react59.createElement)("li", null, t("Set the trusted WSS url, credentialEnv, humanDisplayName and publishedBotIds. Publish only Bot IDs from this device that you intend to make available. Each instance has one person identity; rename it under Personal settings.")),
-      (0, import_react59.createElement)("li", null, t("Supply the pairing credential to the app launch environment through your local secret mechanism, then restart the app. Never put the value in configuration, command arguments, URLs, screenshots or chat."))
+      (0, import_react60.createElement)("li", null, t("Quit the app, including its tray process. Merge the communication settings into the existing bot configuration in your own profile cordis.patch.yml. Use the exact instanceId approved by the Hub owner.")),
+      (0, import_react60.createElement)("li", null, t("Set the trusted WSS url, credentialEnv, humanDisplayName and publishedBotIds. Publish only Bot IDs from this device that you intend to make available. Each instance has one person identity; rename it under Personal settings.")),
+      (0, import_react60.createElement)("li", null, t("Supply the pairing credential to the app launch environment through your local secret mechanism, then restart the app. Never put the value in configuration, command arguments, URLs, screenshots or chat."))
     ),
-    (0, import_react59.createElement)("pre", { "aria-label": t("Device configuration example") }, (0, import_react59.createElement)("code", null, clientPairingExample)),
-    (0, import_react59.createElement)("h3", null, t("3. Verify the connection")),
-    (0, import_react59.createElement)("p", { role: "status" }, t("This device"), ": ", t(connectionLabel)),
-    (0, import_react59.createElement)("p", null, t("Open Remote communication on both devices. Check Connected to Hub, then New message: verify the other device’s Human and published Bots under its observed IP and exact instance identity. A shared IP does not merge devices.")),
-    (0, import_react59.createElement)("p", null, t("If disconnected, check the exact instanceId, matching privately supplied credential, trusted certificate and hostname, and Hub restart. Readiness alone does not prove pairing. Revoked devices need the Hub owner to increase pairingRevision before re-pairing."))
+    (0, import_react60.createElement)("pre", { "aria-label": t("Device configuration example") }, (0, import_react60.createElement)("code", null, clientPairingExample)),
+    (0, import_react60.createElement)("h3", null, t("3. Verify the connection")),
+    (0, import_react60.createElement)("p", { role: "status" }, t("This device"), ": ", t(connectionLabel)),
+    (0, import_react60.createElement)("p", null, t("Open Remote communication on both devices. Check Connected to Hub, then New message: verify the other device’s Human and published Bots under its observed IP and exact instance identity. A shared IP does not merge devices.")),
+    (0, import_react60.createElement)("p", null, t("If disconnected, check the exact instanceId, matching privately supplied credential, trusted certificate and hostname, and Hub restart. Readiness alone does not prove pairing. Revoked devices need the Hub owner to increase pairingRevision before re-pairing."))
   );
 }
 function ReferenceQuote({ conversationId, membershipEpoch, messageId, request, labels, onJump }) {
-  const [source, setSource] = (0, import_react59.useState)(null), [unavailable, setUnavailable] = (0, import_react59.useState)(false);
-  (0, import_react59.useEffect)(() => {
+  const [source, setSource] = (0, import_react60.useState)(null), [unavailable, setUnavailable] = (0, import_react60.useState)(false);
+  (0, import_react60.useEffect)(() => {
     let active = true;
     setSource(null);
     setUnavailable(false);
@@ -22069,7 +22374,7 @@ function ReferenceQuote({ conversationId, membershipEpoch, messageId, request, l
       active = false;
     };
   }, [conversationId, membershipEpoch, messageId, request]);
-  return (0, import_react59.createElement)(
+  return (0, import_react60.createElement)(
     "button",
     {
       type: "button",
@@ -22081,23 +22386,23 @@ function ReferenceQuote({ conversationId, membershipEpoch, messageId, request, l
         void onJump(messageId);
       }
     },
-    source ? (0, import_react59.createElement)(
-      import_react59.Fragment,
+    source ? (0, import_react60.createElement)(
+      import_react60.Fragment,
       null,
-      (0, import_react59.createElement)("span", { className: "bt-comm-quote-author" }, labels.get(source.author.principalId) ?? source.author.displayName ?? t("Participant")),
-      (0, import_react59.createElement)("span", { className: "bt-comm-quote-text" }, referenceExcerpt(source.content.text))
+      (0, import_react60.createElement)("span", { className: "bt-comm-quote-author" }, labels.get(source.author.principalId) ?? source.author.displayName ?? t("Participant")),
+      (0, import_react60.createElement)("span", { className: "bt-comm-quote-text" }, referenceExcerpt(source.content.text))
     ) : t(unavailable ? "Earlier message unavailable" : "Loading reference…")
   );
 }
 function GroupSettings({ member, contacts, operation, pendingSettings, operationPending, act, busy, humanId, btn, personLabel, chooseContact }) {
-  const [open, setOpen] = (0, import_react59.useState)(false), [base, setBase] = (0, import_react59.useState)(null), [draft, setDraft] = (0, import_react59.useState)(null);
-  const [saving, setSaving] = (0, import_react59.useState)(false), [failure, setFailure] = (0, import_react59.useState)(""), [pending, setPending] = (0, import_react59.useState)(null);
-  const [invite, setInvite] = (0, import_react59.useState)(""), [newOwner, setNewOwner] = (0, import_react59.useState)(""), [confirm, setConfirm] = (0, import_react59.useState)("");
-  const generation = (0, import_react59.useRef)(0), revision = (0, import_react59.useRef)(0), summary = (0, import_react59.useRef)(null);
-  (0, import_react59.useEffect)(() => () => {
+  const [open, setOpen] = (0, import_react60.useState)(false), [base, setBase] = (0, import_react60.useState)(null), [draft, setDraft] = (0, import_react60.useState)(null);
+  const [saving, setSaving] = (0, import_react60.useState)(false), [failure, setFailure] = (0, import_react60.useState)(""), [pending, setPending] = (0, import_react60.useState)(null);
+  const [invite, setInvite] = (0, import_react60.useState)(""), [newOwner, setNewOwner] = (0, import_react60.useState)(""), [confirm, setConfirm] = (0, import_react60.useState)("");
+  const generation = (0, import_react60.useRef)(0), revision = (0, import_react60.useRef)(0), summary = (0, import_react60.useRef)(null);
+  (0, import_react60.useEffect)(() => () => {
     generation.current += 1;
   }, []);
-  (0, import_react59.useEffect)(() => {
+  (0, import_react60.useEffect)(() => {
     if (pending && !pendingSettings(member.conversationId)) setPending(null);
   }, [operationPending, member.membershipVersion]);
   const isOwner = member.role === "owner", canManage = ["owner", "admin"].includes(member.role);
@@ -22110,7 +22415,7 @@ function GroupSettings({ member, contacts, operation, pendingSettings, operation
     setFailure("");
     setSaving(false);
     setPending(null);
-    summary.current?.focus();
+    summary.current?.closest("main")?.querySelector(".bt-comm-title-pill")?.focus();
   };
   const begin = () => {
     generation.current += 1;
@@ -22163,74 +22468,79 @@ function GroupSettings({ member, contacts, operation, pendingSettings, operation
   };
   const values = draft ?? groupSettingsValues(member);
   const roleLabel = (role) => role === "owner" ? "Group owner" : role === "admin" ? "Group admin" : "Group member";
-  return (0, import_react59.createElement)(
+  return (0, import_react60.createElement)(
     "details",
-    { className: "bt-comm-members", open },
-    (0, import_react59.createElement)("summary", { ref: summary, onClick: (event) => {
+    { id: "bt-comm-members", className: "bt-comm-members", open, onKeyDown: (event) => {
+      if (open && event.key === "Escape") {
+        event.stopPropagation();
+        close();
+      }
+    } },
+    (0, import_react60.createElement)("summary", { ref: summary, tabIndex: open ? 0 : -1, onClick: (event) => {
       event.preventDefault();
       if (open) close();
       else begin();
     } }, t("Group members and receiving rules")),
-    open ? (0, import_react59.createElement)(
-      import_react59.Fragment,
+    open ? (0, import_react60.createElement)(
+      import_react60.Fragment,
       null,
-      (0, import_react59.createElement)(
+      (0, import_react60.createElement)(
         "div",
         { className: "bt-comm-settings-actions" },
-        canManage ? (0, import_react59.createElement)("button", { type: "button", onClick: () => {
+        canManage ? (0, import_react60.createElement)("button", { type: "button", onClick: () => {
           void saveSettings();
         }, disabled: saving || !dirty && !pending, "data-dirty": dirty, "aria-label": t("Save group settings") }, t("Save")) : null,
-        (0, import_react59.createElement)("button", { type: "button", onClick: close, "aria-label": t("Close member settings") }, t("Close member settings"))
+        (0, import_react60.createElement)("button", { type: "button", onClick: close, "aria-label": t("Close member settings") }, t("Close member settings"))
       ),
-      failure ? (0, import_react59.createElement)("p", { className: "bt-comm-error", role: "alert" }, t(failure)) : null,
-      pending ? (0, import_react59.createElement)("p", { role: "status" }, t("An operation is not confirmed. Check status, then retry the same action.")) : null,
-      base && member.membershipVersion > base.expectedVersion ? (0, import_react59.createElement)("p", { role: "status" }, t("Group settings changed elsewhere. Your edits are retained. Close and reopen to review the current settings.")) : null,
-      (0, import_react59.createElement)("p", { className: "bt-comm-reference" }, t("Roles control group management. Speaking permissions control who can send.")),
-      member.ownerPrincipalId && !members.some((person) => person.principalId === member.ownerPrincipalId) ? (0, import_react59.createElement)("p", { role: "status" }, t("The owner is unavailable. Ownership stays with that identity.")) : null,
-      !member.ownerPrincipalId ? (0, import_react59.createElement)("p", { role: "status" }, t("This legacy group has no retained owner. No automatic takeover is allowed.")) : null,
-      canManage ? (0, import_react59.createElement)("label", { className: "bt-comm-field" }, t("Group name"), (0, import_react59.createElement)("input", { value: values.title, onChange: (event) => edit({ title: event.target.value }), "aria-label": t("Group name") })) : null,
+      failure ? (0, import_react60.createElement)("p", { className: "bt-comm-error", role: "alert" }, t(failure)) : null,
+      pending ? (0, import_react60.createElement)("p", { role: "status" }, t("An operation is not confirmed. Check status, then retry the same action.")) : null,
+      base && member.membershipVersion > base.expectedVersion ? (0, import_react60.createElement)("p", { role: "status" }, t("Group settings changed elsewhere. Your edits are retained. Close and reopen to review the current settings.")) : null,
+      (0, import_react60.createElement)("p", { className: "bt-comm-reference" }, t("Roles control group management. Speaking permissions control who can send.")),
+      member.ownerPrincipalId && !members.some((person) => person.principalId === member.ownerPrincipalId) ? (0, import_react60.createElement)("p", { role: "status" }, t("The owner is unavailable. Ownership stays with that identity.")) : null,
+      !member.ownerPrincipalId ? (0, import_react60.createElement)("p", { role: "status" }, t("This legacy group has no retained owner. No automatic takeover is allowed.")) : null,
+      canManage ? (0, import_react60.createElement)("label", { className: "bt-comm-field" }, t("Group name"), (0, import_react60.createElement)("input", { value: values.title, onChange: (event) => edit({ title: event.target.value }), "aria-label": t("Group name") })) : null,
       members.map((person) => {
         const editable = isOwner || member.role === "admin" && person.role === "member";
         const policy = values.policies[person.principalId] ?? { role: person.role, speakingMode: person.speakingMode };
         const changePolicy = (change) => edit({ policies: { ...values.policies, [person.principalId]: { ...policy, ...change } } });
-        return (0, import_react59.createElement)(
+        return (0, import_react60.createElement)(
           "div",
           { key: person.principalId, className: "bt-comm-person", "data-principal-id": person.principalId },
-          (0, import_react59.createElement)("span", { title: person.principalId }, personLabel(person)),
-          (0, import_react59.createElement)("span", { className: "bt-comm-role" }, t(roleLabel(person.role))),
-          editable ? (0, import_react59.createElement)(
-            import_react59.Fragment,
+          (0, import_react60.createElement)("span", { title: person.principalId }, personLabel(person)),
+          (0, import_react60.createElement)("span", { className: "bt-comm-role" }, t(roleLabel(person.role))),
+          editable ? (0, import_react60.createElement)(
+            import_react60.Fragment,
             null,
-            isOwner && person.role !== "owner" ? (0, import_react59.createElement)("label", null, t("Group role"), (0, import_react59.createElement)("select", { value: policy.role, "aria-label": t("Group role"), onChange: (event) => changePolicy({ role: event.target.value }) }, (0, import_react59.createElement)("option", { value: "member" }, t("Group member")), (0, import_react59.createElement)("option", { value: "admin" }, t("Group admin")))) : null,
-            (0, import_react59.createElement)("label", null, t("Speaking permission"), (0, import_react59.createElement)(
+            isOwner && person.role !== "owner" ? (0, import_react60.createElement)("label", null, t("Group role"), (0, import_react60.createElement)("select", { value: policy.role, "aria-label": t("Group role"), onChange: (event) => changePolicy({ role: event.target.value }) }, (0, import_react60.createElement)("option", { value: "member" }, t("Group member")), (0, import_react60.createElement)("option", { value: "admin" }, t("Group admin")))) : null,
+            (0, import_react60.createElement)("label", null, t("Speaking permission"), (0, import_react60.createElement)(
               "select",
               { value: policy.speakingMode, "aria-label": t("Speaking permission"), onChange: (event) => changePolicy({ speakingMode: event.target.value }) },
-              (person.kind === "human" ? [["readOnly", "Read only"], ["speak", "Can speak"]] : [["passive", "Reply only"], ["active", "Can speak"]]).map(([value, label]) => (0, import_react59.createElement)("option", { key: value, value }, t(label)))
+              (person.kind === "human" ? [["readOnly", "Read only"], ["speak", "Can speak"]] : [["passive", "Reply only"], ["active", "Can speak"]]).map(([value, label]) => (0, import_react60.createElement)("option", { key: value, value }, t(label)))
             ))
-          ) : (0, import_react59.createElement)("span", null, t(["readOnly", "passive"].includes(person.speakingMode) ? person.kind === "human" ? "Read only" : "Reply only" : "Can speak")),
+          ) : (0, import_react60.createElement)("span", null, t(["readOnly", "passive"].includes(person.speakingMode) ? person.kind === "human" ? "Read only" : "Reply only" : "Can speak")),
           canManage && person.role !== "owner" && (isOwner || person.role === "member") && person.principalId !== humanId ? btn("Remove from group", () => {
             void act(() => operation("remove", { conversationId: member.conversationId, targetPrincipalId: person.principalId }));
           }) : null
         );
       }),
-      (0, import_react59.createElement)("p", { className: "bt-comm-reference" }, t("Both Bot modes may @mention current group Bots in an authorized final reply. Reply-only Bots cannot initiate messages or send proactively with tools. Active Bots may also initiate with tools. Bot delegation chains stop at the server’s finite limit.")),
-      canManage ? (0, import_react59.createElement)(
-        import_react59.Fragment,
+      (0, import_react60.createElement)("p", { className: "bt-comm-reference" }, t("Both Bot modes may @mention current group Bots in an authorized final reply. Reply-only Bots cannot initiate messages or send proactively with tools. Active Bots may also initiate with tools. Bot delegation chains stop at the server’s finite limit.")),
+      canManage ? (0, import_react60.createElement)(
+        import_react60.Fragment,
         null,
         chooseContact("Invite participant", invite, setInvite, contacts.filter((contact) => !members.some((person) => person.principalId === contact.principalId))),
         btn("Invite", () => {
           void act(() => operation("invite", { conversationId: member.conversationId, inviteePrincipalId: invite }));
         }, { disabled: busy || !invite }),
-        (0, import_react59.createElement)("label", { className: "bt-comm-field" }, t("Receiving rule"), (0, import_react59.createElement)(
+        (0, import_react60.createElement)("label", { className: "bt-comm-field" }, t("Receiving rule"), (0, import_react60.createElement)(
           "select",
           { value: values.routing.mode, onChange: (event) => edit({ routing: { mode: event.target.value, adminBotPrincipalId: event.target.value === "admin" ? values.routing.adminBotPrincipalId : null } }), "aria-label": t("Receiving rule") },
-          (0, import_react59.createElement)("option", { value: "mentionsOnly" }, t("Mentions only")),
-          (0, import_react59.createElement)("option", { value: "admin" }, t("Plain messages go to one Bot"))
+          (0, import_react60.createElement)("option", { value: "mentionsOnly" }, t("Mentions only")),
+          (0, import_react60.createElement)("option", { value: "admin" }, t("Plain messages go to one Bot"))
         )),
         values.routing.mode === "admin" ? chooseContact("Default reply Bot", values.routing.adminBotPrincipalId ?? "", (id) => edit({ routing: { mode: "admin", adminBotPrincipalId: id } }), members.filter((person) => person.kind === "bot")) : null
-      ) : (0, import_react59.createElement)("p", null, t(member.routingMode === "admin" ? "Plain messages go to one Bot" : "Mentions only")),
-      isOwner ? (0, import_react59.createElement)(
-        import_react59.Fragment,
+      ) : (0, import_react60.createElement)("p", null, t(member.routingMode === "admin" ? "Plain messages go to one Bot" : "Mentions only")),
+      isOwner ? (0, import_react60.createElement)(
+        import_react60.Fragment,
         null,
         chooseContact("Transfer ownership to", newOwner, (value) => {
           setNewOwner(value);
@@ -22253,36 +22563,45 @@ function GroupSettings({ member, contacts, operation, pendingSettings, operation
   );
 }
 function CommunicationSurface({ roster, surface, panel, request = communicationRequest }) {
-  const team = (0, import_react59.useSyncExternalStore)(roster.subscribe, roster.getSnapshot);
-  const mode = (0, import_react59.useSyncExternalStore)(surface.subscribe, surface.getSnapshot);
-  const open = (0, import_react59.useSyncExternalStore)(panel.subscribe, panel.getSnapshot);
+  const team = (0, import_react60.useSyncExternalStore)(roster.subscribe, roster.getSnapshot);
+  const mode = (0, import_react60.useSyncExternalStore)(surface.subscribe, surface.getSnapshot);
+  const open = (0, import_react60.useSyncExternalStore)(panel.subscribe, panel.getSnapshot);
   const [shown, closing] = useLinger(open && mode.mode === "bot", 160);
-  const [state, setState] = (0, import_react59.useState)(null), [error, setError] = (0, import_react59.useState)(""), [busy, setBusy] = (0, import_react59.useState)(false);
-  const [pollError, setPollError] = (0, import_react59.useState)(""), [syncError, setSyncError] = (0, import_react59.useState)(null);
-  const [operationPending, setOperationPending] = (0, import_react59.useState)(() => read(OPERATION_IDS, []).length > 0);
-  const [selected, setSelected] = (0, import_react59.useState)(() => read(SELECTED, null));
-  const [drafts, setDrafts] = (0, import_react59.useState)(() => read(DRAFTS, {})), [attempts, setAttempts] = (0, import_react59.useState)(() => read(ATTEMPTS, {}));
-  const [hidden, setHidden] = (0, import_react59.useState)(() => read(HIDDEN, [])), [showHidden, setShowHidden] = (0, import_react59.useState)(false);
-  const [page, setPage] = (0, import_react59.useState)(null), [older, setOlder] = (0, import_react59.useState)(null), [reply, setReply] = (0, import_react59.useState)(null);
-  const [referenced, setReferenced] = (0, import_react59.useState)(null), [jumpRevision, setJumpRevision] = (0, import_react59.useState)(0);
-  const pendingJump = (0, import_react59.useRef)(null), referenceOrder = (0, import_react59.useRef)(0), contextKey = (0, import_react59.useRef)("");
-  const [title, setTitle] = (0, import_react59.useState)(""), [invitees, setInvitees] = (0, import_react59.useState)([]);
-  const [completion, setCompletion] = (0, import_react59.useState)(null), [completionIndex, setCompletionIndex] = (0, import_react59.useState)(0), [composing, setComposing] = (0, import_react59.useState)(false);
-  const chooser = (0, import_react59.useRef)(null), chooserTrigger = (0, import_react59.useRef)(null);
-  const [browse, setBrowse] = (0, import_react59.useState)(false), [activePanel, setActivePanel] = (0, import_react59.useState)(""), [inspectedIds, setInspectedIds] = (0, import_react59.useState)([]);
-  const [threadMessageId, setThreadMessageId] = (0, import_react59.useState)(null);
-  const input = (0, import_react59.useRef)(null), frame = (0, import_react59.useRef)(null), log = (0, import_react59.useRef)(null), autoScroll = (0, import_react59.useRef)(true), pageOrder = (0, import_react59.useRef)(0), operationIds = (0, import_react59.useRef)(new Map(read(OPERATION_IDS, [])));
+  const [receivedState, setState] = (0, import_react60.useState)(null), [error, setError] = (0, import_react60.useState)(""), [busy, setBusy] = (0, import_react60.useState)(false);
+  const state = !team.communicationEnabled || team.communicationHubId && receivedState?.hubId !== team.communicationHubId ? null : receivedState;
+  const [pollError, setPollError] = (0, import_react60.useState)(""), [syncError, setSyncError] = (0, import_react60.useState)(null);
+  const [operationPending, setOperationPending] = (0, import_react60.useState)(() => read(OPERATION_IDS, []).length > 0);
+  const [attaching, setAttaching] = (0, import_react60.useState)(false), attachmentFlight = (0, import_react60.useRef)(false);
+  const [selected, setSelected] = (0, import_react60.useState)(() => read(SELECTED, null));
+  const [drafts, setDrafts] = (0, import_react60.useState)(() => read(DRAFTS, {})), [attempts, setAttempts] = (0, import_react60.useState)(() => read(ATTEMPTS, {}));
+  const [hidden, setHidden] = (0, import_react60.useState)(() => read(HIDDEN, [])), [showHidden, setShowHidden] = (0, import_react60.useState)(false);
+  const [page, setPage] = (0, import_react60.useState)(null), [older, setOlder] = (0, import_react60.useState)(null), [reply, setReply] = (0, import_react60.useState)(null);
+  const [referenced, setReferenced] = (0, import_react60.useState)(null), [jumpRevision, setJumpRevision] = (0, import_react60.useState)(0);
+  const pendingJump = (0, import_react60.useRef)(null), referenceOrder = (0, import_react60.useRef)(0), contextKey = (0, import_react60.useRef)("");
+  const [title, setTitle] = (0, import_react60.useState)(""), [invitees, setInvitees] = (0, import_react60.useState)([]);
+  const [completion, setCompletion] = (0, import_react60.useState)(null), [completionIndex, setCompletionIndex] = (0, import_react60.useState)(0), [composing, setComposing] = (0, import_react60.useState)(false);
+  const chooser = (0, import_react60.useRef)(null), chooserTrigger = (0, import_react60.useRef)(null);
+  const [browse, setBrowse] = (0, import_react60.useState)(false), [activePanel, setActivePanel] = (0, import_react60.useState)(""), [inspectedIds, setInspectedIds] = (0, import_react60.useState)([]);
+  const [sidebarHidden, setSidebarHidden] = (0, import_react60.useState)(() => read(SIDEBAR_HIDDEN, false)), [newMenuOpen, setNewMenuOpen] = (0, import_react60.useState)(false);
+  const [searchQuery, setSearchQuery] = (0, import_react60.useState)(""), [searchCursor, setSearchCursor] = (0, import_react60.useState)(0);
+  const newMenu = (0, import_react60.useRef)(null), newTrigger = (0, import_react60.useRef)(null);
+  const newMenuShown = (0, import_react60.useRef)(newMenuOpen), previousSidebar = (0, import_react60.useRef)(sidebarHidden);
+  newMenuShown.current = newMenuOpen;
+  const [threadMessageId, setThreadMessageId] = (0, import_react60.useState)(null);
+  const input = (0, import_react60.useRef)(null), frame = (0, import_react60.useRef)(null), log = (0, import_react60.useRef)(null), autoScroll = (0, import_react60.useRef)(true), pageOrder = (0, import_react60.useRef)(0), operationIds = (0, import_react60.useRef)(new Map(read(OPERATION_IDS, [])));
   const labels = contactLabels(state?.contacts ?? [], state?.instanceId, t);
+  const scope = communicationScope(state);
+  syncAvatarDirectory(state?.contacts ?? [], state?.hubId ?? state?.hubUrl ?? "legacy");
   const member = state?.conversations?.find((item) => item.conversationId === selected);
-  const key = `${state?.instanceId}:${selected}`;
+  const key = `${scope}:${selected}`;
   contextKey.current = `${key}:${member?.membershipEpoch}`;
-  (0, import_react59.useEffect)(() => {
+  (0, import_react60.useEffect)(() => {
     setThreadMessageId(null);
     setActivePanel((current) => ["thread", "participant"].includes(current) ? "" : current);
-  }, [selected, member?.membershipEpoch]);
+  }, [scope, selected, member?.membershipEpoch]);
   const draft = drafts[key] ?? { text: "", mentions: [] };
   const changeDraft = (value) => setDrafts((current) => {
-    const next = { ...current, [key]: { ...draft, ...value } };
+    const next = { ...current, [key]: { ...current[key] ?? { text: "", mentions: [] }, ...value } };
     save(DRAFTS, next);
     return next;
   });
@@ -22296,10 +22615,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
     setPollError("");
     return value;
   };
-  (0, import_react59.useEffect)(() => {
-    syncAvatarDirectory(state?.contacts ?? []);
-  }, [state?.contacts]);
-  (0, import_react59.useEffect)(() => {
+  (0, import_react60.useEffect)(() => {
     if (!team.communicationEnabled) {
       setState(null);
       setPollError("");
@@ -22325,19 +22641,41 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
       active = false;
       clearTimeout(timer);
     };
-  }, [team.communicationEnabled, request]);
-  (0, import_react59.useEffect)(() => {
+  }, [team.communicationEnabled, team.communicationHubId, request]);
+  (0, import_react60.useEffect)(() => {
     if (!shown) return void 0;
     const visible = (node) => !node.checkVisibility || node.checkVisibility();
     const controls = () => [...(activePanel ? chooser.current : frame.current)?.querySelectorAll("button:not(:disabled),input:not(:disabled),textarea:not(:disabled),select:not(:disabled),summary") ?? []].filter((node) => visible(node) && (!node.closest("details:not([open])") || node.tagName === "SUMMARY"));
     const focusDefault = () => (activePanel ? controls()[0] : input.current && !input.current.disabled && visible(input.current) ? input.current : controls()[0])?.focus();
     focusDefault();
+    const foreignDialog = (node) => !frame.current?.contains(node) && node?.closest?.('dialog,[role="dialog"],[role="alertdialog"]');
     const retain = (event) => {
-      if (!(activePanel ? chooser.current : frame.current)?.contains(event.target)) focusDefault();
+      if (!foreignDialog(event.target) && !(activePanel ? chooser.current : frame.current)?.contains(event.target)) focusDefault();
     };
     const keys = (event) => {
+      if (foreignDialog(event.target)) return;
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        setNewMenuOpen(false);
+        setSearchQuery("");
+        setSearchCursor(0);
+        chooserTrigger.current = document.activeElement;
+        setActivePanel("search");
+        return;
+      }
+      if (newMenuShown.current && event.key === "Tab") {
+        setNewMenuOpen(false);
+        return;
+      }
       if (event.key === "Escape") {
+        event.preventDefault();
         event.stopPropagation();
+        if (newMenuShown.current) {
+          setNewMenuOpen(false);
+          newTrigger.current?.focus();
+          return;
+        }
         if (completion) {
           setCompletion(null);
           return;
@@ -22368,11 +22706,25 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
       document.removeEventListener("keydown", keys, true);
     };
   }, [shown, browse, selected, member?.speakingMode, activePanel, Boolean(completion)]);
-  (0, import_react59.useEffect)(() => {
+  (0, import_react60.useEffect)(() => {
     if (!shown || !activePanel) return;
-    chooser.current?.querySelector(activePanel === "group" ? "input" : "button")?.focus();
+    chooser.current?.querySelector(["group", "search"].includes(activePanel) ? "input" : "button")?.focus();
   }, [shown, activePanel]);
-  (0, import_react59.useEffect)(() => {
+  (0, import_react60.useEffect)(() => {
+    if (!shown || !newMenuOpen) return void 0;
+    (newMenu.current?.querySelector('[role="menuitem"]:not(:disabled)') ?? newTrigger.current)?.focus();
+    const outside = (event) => {
+      if (!newMenu.current?.contains(event.target)) setNewMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", outside, true);
+    return () => document.removeEventListener("pointerdown", outside, true);
+  }, [shown, newMenuOpen]);
+  (0, import_react60.useEffect)(() => {
+    if (!shown || previousSidebar.current === sidebarHidden) return;
+    previousSidebar.current = sidebarHidden;
+    frame.current?.querySelector(sidebarHidden ? ".bt-comm-expand" : ".bt-comm-collapse")?.focus();
+  }, [shown, sidebarHidden]);
+  (0, import_react60.useEffect)(() => {
     save(SELECTED, selected);
     setOlder(null);
     setReply(null);
@@ -22382,8 +22734,8 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
     setCompletion(null);
     autoScroll.current = true;
     input.current?.focus();
-  }, [selected]);
-  (0, import_react59.useEffect)(() => {
+  }, [scope, selected]);
+  (0, import_react60.useEffect)(() => {
     if (!shown) return void 0;
     const clear = () => {
       pendingJump.current = null;
@@ -22393,7 +22745,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
     document.addEventListener("pointerdown", clear, true);
     return () => document.removeEventListener("pointerdown", clear, true);
   }, [shown]);
-  (0, import_react59.useLayoutEffect)(() => {
+  (0, import_react60.useLayoutEffect)(() => {
     const jump = pendingJump.current;
     const target = jump && [...log.current?.querySelectorAll("article") ?? []].find((node) => node.dataset.messageId === jump.messageId);
     if (target && jump.context === contextKey.current) {
@@ -22402,7 +22754,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
       target.scrollIntoView?.({ block: "center" });
     } else if (!jump && log.current && older === null && autoScroll.current) log.current.scrollTop = log.current.scrollHeight;
   }, [page, older, referenced, jumpRevision, state?.outbox]);
-  (0, import_react59.useEffect)(() => {
+  (0, import_react60.useEffect)(() => {
     if (!shown || !member) {
       setPage(null);
       return void 0;
@@ -22411,7 +22763,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
     const order = ++pageOrder.current;
     void request({ endpoint: "history", conversationId: selected, limit: 50, ...older === null ? {} : { before: older } }).then((value) => {
       if (active && pageOrder.current === order) {
-        setPage(value);
+        setPage({ ...value, scope });
         setSyncError(null);
       }
     }).catch((failure) => {
@@ -22423,9 +22775,9 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
     return () => {
       active = false;
     };
-  }, [shown, selected, member?.membershipEpoch, older, older === null ? member?.watermark : null, request]);
-  (0, import_react59.useEffect)(() => {
-    if (!shown || page?.conversationId !== selected || !page.events.length) return void 0;
+  }, [scope, shown, selected, member?.membershipEpoch, older, older === null ? member?.watermark : null, request]);
+  (0, import_react60.useEffect)(() => {
+    if (!shown || page?.scope !== scope || page?.conversationId !== selected || !page.events.length) return void 0;
     let active = true;
     const mark = () => {
       if (document.visibilityState === "visible" && document.hasFocus()) void request({ endpoint: "read", conversationId: selected, seq: page.events.at(-1).conversationSeq }).catch((failure) => {
@@ -22442,11 +22794,11 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
       window.removeEventListener("focus", mark);
       document.removeEventListener("visibilitychange", mark);
     };
-  }, [shown, selected, page, request]);
+  }, [scope, shown, selected, page, request]);
   const operation = async (endpoint, values) => {
     const current = state?.conversations?.find((item) => item.conversationId === values.conversationId);
     if (current && !["reclaim", "dm", "create-group", "accept"].includes(endpoint)) values = { membershipEpoch: current.membershipEpoch, expectedVersion: current.membershipVersion, ...values };
-    const operationKey = JSON.stringify([state?.instanceId, endpoint, values]);
+    const operationKey = JSON.stringify([scope, endpoint, values]);
     if (!operationIds.current.has(operationKey)) operationIds.current.set(operationKey, crypto.randomUUID());
     const persist = () => {
       save(OPERATION_IDS, [...operationIds.current]);
@@ -22488,7 +22840,8 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
     }
   };
   const send = () => act(async () => {
-    if (!member || member.kind === "group" && member.speakingMode !== "speak" || !draft.text.trim()) return;
+    if (attachmentFlight.current) return;
+    if (!member || member.kind === "group" && member.speakingMode !== "speak" || !draft.text.trim() && !draft.attachments?.length) return;
     const intent = attempts[key] ?? {
       endpoint: "send",
       conversationId: selected,
@@ -22497,6 +22850,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
       clientCreatedAt: (/* @__PURE__ */ new Date()).toISOString(),
       text: draft.text,
       mentions: draft.mentions,
+      ...draft.attachments?.length ? { attachments: draft.attachments } : {},
       replyToMessageId: reply?.messageId ?? null
     };
     const next = { ...attempts, [key]: intent };
@@ -22506,13 +22860,13 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
     delete next[key];
     save(ATTEMPTS, next);
     setAttempts({ ...next });
-    changeDraft({ text: "", mentions: [], manualMentions: [] });
+    changeDraft({ text: "", mentions: [], manualMentions: [], attachments: [] });
     setReply(null);
     await refresh();
     input.current?.focus();
   });
   const choose = (id) => {
-    const next = hidden.filter((item) => item !== `${state?.instanceId}:${id}`);
+    const next = hidden.filter((item) => item !== `${scope}:${id}`);
     save(HIDDEN, next);
     setHidden(next);
     setSelected(id);
@@ -22539,12 +22893,12 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
       if (context === contextKey.current && order === referenceOrder.current) setError("Earlier message unavailable");
     }
   };
-  const btn = (label, onClick, props = {}) => (0, import_react59.createElement)("button", { type: "button", disabled: busy, onClick, ...props }, props.children ?? t(label));
-  const chooseContact = (label, value, onChange, people) => (0, import_react59.createElement)(
+  const btn = (label, onClick, props = {}) => (0, import_react60.createElement)("button", { type: "button", disabled: busy, onClick, ...props }, props.children ?? t(label));
+  const chooseContact = (label, value, onChange, people) => (0, import_react60.createElement)(
     "details",
     { className: "bt-comm-participant-picker" },
-    (0, import_react59.createElement)("summary", null, t(label), value ? ": " : "", value ? personLabel(people.find((person) => person.principalId === value) ?? { principalId: value }) : ""),
-    contactsByAddress(people).map((group) => (0, import_react59.createElement)("section", { key: group.address, className: "bt-comm-address" }, (0, import_react59.createElement)("h3", null, t(group.address)), group.instances.map((instance) => (0, import_react59.createElement)("section", { key: instance.instanceId ?? "unknown" }, (0, import_react59.createElement)("p", { className: "bt-comm-reference", title: instance.instanceId }, instance.label), instance.contacts.map((person) => btn(labels.get(person.principalId) ?? person.displayName, (event) => {
+    (0, import_react60.createElement)("summary", null, t(label), value ? ": " : "", value ? personLabel(people.find((person) => person.principalId === value) ?? { principalId: value }) : ""),
+    contactsByAddress(people).map((group) => (0, import_react60.createElement)("section", { key: group.address, className: "bt-comm-address" }, (0, import_react60.createElement)("h3", null, t(group.address)), group.instances.map((instance) => (0, import_react60.createElement)("section", { key: instance.instanceId ?? "unknown" }, (0, import_react60.createElement)("p", { className: "bt-comm-reference", title: instance.instanceId }, instance.label), instance.contacts.map((person) => btn(labels.get(person.principalId) ?? person.displayName, (event) => {
       onChange(person.principalId);
       const details = event.currentTarget.closest("details");
       details.open = false;
@@ -22552,19 +22906,37 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
     }, { key: person.principalId, "aria-pressed": person.principalId === value, children: personLabel(person) }))))))
   );
   if (!shown) return null;
-  const events = page?.conversationId === selected && page?.membershipEpoch === member?.membershipEpoch ? page.events : [];
+  const events = page?.scope === scope && page?.conversationId === selected && page?.membershipEpoch === member?.membershipEpoch ? page.events : [];
   const visibleIds = new Set(events.map((event) => event.message?.messageId));
   const ownOutbox = member ? (state?.outbox ?? []).filter((item) => (!item.principalId || item.principalId === state.humanPrincipalId) && item.type === "message.publish" && item.conversationId === selected) : [];
   const activityOutbox = (state?.outbox ?? []).filter((item) => (!item.principalId || item.principalId === state.humanPrincipalId) && item.type === "message.publish" && (!member || item.conversationId === selected));
   const currentMembers = member?.info?.members ?? [];
   const canSpeak = member && (member.kind !== "group" || member.speakingMode === "speak");
   const contacts = state?.contacts ?? [];
+  const attach = async (files) => {
+    const context = contextKey.current;
+    if (!canSpeak || !state.attachmentsAvailable || attempts[key] || busy) return;
+    if (attachmentFlight.current) {
+      setError("Wait for the current attachment to finish.");
+      return;
+    }
+    attachmentFlight.current = true;
+    setAttaching(true);
+    try {
+      const attachments = await selectedAttachments([...files], draft.attachments ?? []);
+      if (context === contextKey.current) changeDraft({ attachments });
+    } catch (failure) {
+      if (context === contextKey.current) setError(communicationFailure(failure));
+    } finally {
+      attachmentFlight.current = false;
+      setAttaching(false);
+    }
+  };
   const operations = state?.outbox?.filter((item) => (!item.principalId || item.principalId === state.humanPrincipalId) && item.type !== "message.publish" && item.state !== "accepted" && (!member || item.conversationId === selected)) ?? [];
   const pendingForConversation = [...operationIds.current.keys()].some((item) => {
-    const values = JSON.parse(item)[2];
-    return member ? values.conversationId === selected : !values.conversationId;
+    const [operationScope, , values] = JSON.parse(item);
+    return operationScope === scope && (member ? values.conversationId === selected : !values.conversationId);
   });
-  const adminUrl = state?.managementAvailable ? hubManagementAddress(state.managementUrl) : null;
   const remoteCount = contacts.filter((contact) => contact.homeInstanceId !== state?.instanceId).length;
   const inspect = (ids) => {
     const authorized2 = ids.filter((id) => currentMembers.some((person) => person.principalId === id));
@@ -22574,33 +22946,47 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
     }
   };
   const showPanel = (name) => {
-    chooserTrigger.current = document.activeElement;
+    setNewMenuOpen(false);
+    chooserTrigger.current = newMenuOpen ? newTrigger.current : document.activeElement;
+    if (name === "search") {
+      setSearchQuery("");
+      setSearchCursor(0);
+    }
+    ;
     setActivePanel(name);
+  };
+  const collapseSidebar = (value) => {
+    setSidebarHidden(value);
+    save(SIDEBAR_HIDDEN, value);
+  };
+  const startMenu = () => {
+    collapseSidebar(false);
+    setBrowse(true);
+    setNewMenuOpen(true);
   };
   const connectionBlocked = state?.error && !["CONNECTION_LOST", "REQUEST_TIMEOUT", "STORAGE_UNAVAILABLE", "BACKPRESSURE", "HISTORY_GAP"].includes(state.error);
   const connectionLabel = !team.communicationEnabled ? "Not configured" : pollError ? "Offline" : !state ? "Connecting…" : state.connected ? "Connected to Hub" : connectionBlocked ? "Offline" : "Reconnecting to Hub";
   const roleLabel = (role) => role === "owner" ? "Group owner" : role === "admin" ? "Group admin" : "Group member";
-  const speechLabel = (person) => person.speakingMode === "readOnly" ? "Read only" : person.speakingMode === "passive" ? "Reply only" : "Can speak";
   const avatar = (id, name) => {
     const contact = contacts.find((person) => person.principalId === id);
-    return (0, import_react59.createElement)(CommunicationAvatar, { person: contact ?? { principalId: id, displayName: name ?? id, kind: id?.startsWith("bot:") ? "bot" : id?.startsWith("human:") ? "human" : "group" }, request, allowed: Boolean(contact) });
+    return (0, import_react60.createElement)(CommunicationAvatar, { person: contact ?? { principalId: id, displayName: name ?? id, kind: id?.startsWith("bot:") ? "bot" : id?.startsWith("human:") ? "human" : "group" }, request, allowed: Boolean(contact) });
   };
   const identityIcons = (person) => {
     const kind = person.kind ?? (person.principalId?.startsWith("bot:") ? "bot" : "human");
     const instanceId = person.homeInstanceId ?? person.principalId?.split(":")[1];
-    return (0, import_react59.createElement)(
-      import_react59.Fragment,
+    return (0, import_react60.createElement)(
+      import_react60.Fragment,
       null,
-      (0, import_react59.createElement)("span", { className: "bt-comm-kind-icon", "aria-label": t(kind === "bot" ? "Bot" : "Human"), title: t(kind === "bot" ? "Bot" : "Human"), "data-symbol": kind === "bot" ? "◇" : "○" }),
-      instanceId && instanceId !== state?.instanceId ? (0, import_react59.createElement)("span", { className: "bt-comm-kind-icon", "aria-label": t("Remote"), title: t("Remote"), "data-symbol": "↗" }) : null
+      (0, import_react60.createElement)("span", { className: "bt-comm-kind-icon", "aria-label": t(kind === "bot" ? "Bot" : "Human"), title: t(kind === "bot" ? "Bot" : "Human"), "data-symbol": kind === "bot" ? "◇" : "○" }),
+      instanceId && instanceId !== state?.instanceId ? (0, import_react60.createElement)("span", { className: "bt-comm-kind-icon", "aria-label": t("Remote"), title: t("Remote"), "data-symbol": "↗" }) : null
     );
   };
-  const personLabel = (person) => (0, import_react59.createElement)("span", { className: "bt-comm-person-label", title: `${person.displayName ?? ""} · ${person.instanceLabel ?? person.homeInstanceId ?? ""} · ${person.principalId}` }, avatar(person.principalId, person.displayName), labels.get(person.principalId) ?? person.displayName ?? person.principalId, identityIcons(person));
-  const groupedContacts = (render) => contactsByAddress(contacts.filter((person) => person.principalId !== state?.humanPrincipalId)).map((group) => (0, import_react59.createElement)(
+  const personLabel = (person) => (0, import_react60.createElement)("span", { className: "bt-comm-person-label", title: `${person.displayName ?? ""} · ${person.instanceLabel ?? person.homeInstanceId ?? ""} · ${person.principalId}` }, avatar(person.principalId, person.displayName), labels.get(person.principalId) ?? person.displayName ?? person.principalId, identityIcons(person));
+  const groupedContacts = (render) => contactsByAddress(contacts.filter((person) => person.principalId !== state?.humanPrincipalId)).map((group) => (0, import_react60.createElement)(
     "section",
     { key: group.address, className: "bt-comm-address" },
-    (0, import_react59.createElement)("h3", null, t(group.address)),
-    group.instances.map((instance) => (0, import_react59.createElement)("section", { key: instance.instanceId ?? "unknown" }, (0, import_react59.createElement)("p", { className: "bt-comm-reference", title: instance.instanceId }, instance.label, " · ", instance.instanceId), instance.contacts.map(render)))
+    (0, import_react60.createElement)("h3", null, t(group.address)),
+    group.instances.map((instance) => (0, import_react60.createElement)("section", { key: instance.instanceId ?? "unknown" }, (0, import_react60.createElement)("p", { className: "bt-comm-reference", title: instance.instanceId }, instance.label, " · ", instance.instanceId), instance.contacts.map(render)))
   ));
   const suggestions = completion ? mentionChoices(currentMembers, completion.query, t("All Bots")) : [];
   const complete = (person) => {
@@ -22616,55 +23002,101 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
     setCompletion(mentionQuery(node.value, node.selectionStart));
     setCompletionIndex(0);
   };
-  return (0, import_react_dom11.createPortal)((0, import_react59.createElement)(
+  const wanted = searchQuery.trim().toLocaleLowerCase();
+  const searchable = (value) => String(value ?? "").toLocaleLowerCase().includes(wanted);
+  const searchResults = [
+    ...(state?.conversations ?? []).filter((item) => (showHidden || !hidden.includes(`${scope}:${item.conversationId}`)) && [conversationTitle(item, state.humanPrincipalId, labels), item.lastMessage?.summary, ...(item.info?.members ?? []).map((person) => person.displayName)].some(searchable)).map((item) => ({ id: item.conversationId, title: conversationTitle(item, state.humanPrincipalId, labels), preview: item.lastMessage?.summary ?? "", avatar: (0, import_react60.createElement)(ConversationAvatar, { conversation: item, humanId: state.humanPrincipalId, request, size: 24 }), run: () => {
+      setActivePanel("");
+      choose(item.conversationId);
+    } })),
+    ...contacts.filter((person) => person.principalId !== state?.humanPrincipalId && [labels.get(person.principalId), person.displayName, person.instanceLabel].some(searchable)).map((person) => ({ id: person.principalId, title: labels.get(person.principalId) ?? person.displayName, preview: t("New message"), avatar: (0, import_react60.createElement)(CommunicationAvatar, { person, request, size: 24 }), run: () => {
+      void act(async () => {
+        const value = await operation("dm", { otherPrincipalId: person.principalId });
+        setActivePanel("");
+        choose(value.conversationId);
+      });
+    } }))
+  ].slice(0, 50);
+  const searchIndex = Math.max(0, Math.min(searchCursor, searchResults.length - 1));
+  return (0, import_react_dom11.createPortal)((0, import_react60.createElement)(
     "section",
-    { ref: frame, className: "bt-comm-frame", role: "dialog", "aria-modal": true, "data-closing": closing, "data-browse": browse || !member, "data-setup": !team.communicationEnabled, "aria-label": t("Remote communication") },
-    (0, import_react59.createElement)(
+    { ref: frame, className: "bt-comm-frame", role: "dialog", "aria-modal": true, "data-closing": closing, "data-collapsed": sidebarHidden, "data-browse": browse || !member, "data-setup": !team.communicationEnabled, "aria-label": t("Remote communication") },
+    (0, import_react60.createElement)(
       "aside",
-      { className: "bt-comm-nav" },
-      (0, import_react59.createElement)("div", { className: "bt-comm-nav-heading" }, (0, import_react59.createElement)("h2", null, t("Remote communication")), btn("Personal settings", () => showPanel("settings"), { className: "bt-comm-settings-icon", "aria-label": t("Personal settings"), title: t("Personal settings"), children: (0, import_react59.createElement)(GearIcon) })),
+      { id: "bt-comm-nav", className: "bt-comm-nav" },
+      (0, import_react60.createElement)(
+        "div",
+        { className: "bt-comm-nav-heading" },
+        (0, import_react60.createElement)("h2", { title: t("Remote communication") }, t("Remote communication")),
+        (0, import_react60.createElement)(
+          "div",
+          { className: "bt-comm-nav-actions" },
+          btn("Personal settings", () => showPanel("settings"), { className: "bt-comm-settings-icon", "aria-label": t("Personal settings"), title: t("Personal settings"), children: (0, import_react60.createElement)(GearIcon) }),
+          btn("Search", () => showPanel("search"), { className: "bt-comm-settings-icon", "aria-label": t("Search"), title: t("Search"), children: (0, import_react60.createElement)(SearchIcon) }),
+          (0, import_react60.createElement)(
+            "div",
+            { ref: newMenu, className: "bt-comm-new-menu", onKeyDown: (event) => {
+              if (!newMenuOpen || !["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+              event.preventDefault();
+              const items = [...newMenu.current.querySelectorAll('[role="menuitem"]:not(:disabled)')], index = items.indexOf(document.activeElement);
+              const next = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : event.key === "ArrowDown" ? (index + 1) % items.length : (index - 1 + items.length) % items.length;
+              items[next]?.focus();
+            } },
+            btn("New…", () => setNewMenuOpen((value) => !value), { ref: newTrigger, className: "bt-comm-settings-icon", "aria-label": t("New…"), title: t("New…"), "aria-haspopup": "menu", "aria-expanded": newMenuOpen, "aria-controls": newMenuOpen ? "bt-comm-create-menu" : void 0, children: (0, import_react60.createElement)(PlusIcon), onKeyDown: (event) => {
+              if (["ArrowDown", "ArrowUp"].includes(event.key)) {
+                event.preventDefault();
+                setNewMenuOpen(true);
+              }
+            } }),
+            newMenuOpen ? (0, import_react60.createElement)(
+              "div",
+              { className: "bt-comm-create-menu", id: "bt-comm-create-menu", role: "menu", "aria-label": t("New chat") },
+              btn("New message", () => showPanel("contacts"), { role: "menuitem", disabled: busy || !team.communicationEnabled, children: (0, import_react60.createElement)(import_react60.Fragment, null, (0, import_react60.createElement)(ChatsIcon), t("New message")) }),
+              btn("New group", () => showPanel("group"), { role: "menuitem", disabled: busy || !team.communicationEnabled, children: (0, import_react60.createElement)(import_react60.Fragment, null, (0, import_react60.createElement)(PeopleIcon), t("New group")) })
+            ) : null
+          ),
+          btn("Collapse sidebar", () => {
+            setNewMenuOpen(false);
+            collapseSidebar(true);
+          }, { className: "bt-comm-settings-icon bt-comm-collapse", "aria-label": t("Collapse sidebar"), "aria-controls": "bt-comm-nav", "aria-expanded": true, title: t("Collapse sidebar"), children: (0, import_react60.createElement)(SidebarIcon) })
+        )
+      ),
       btn("Back to local chats", close, { className: "bt-comm-back" }),
       member ? btn("Back to conversation", () => setBrowse(false), { className: "bt-comm-mobile" }) : null,
-      (0, import_react59.createElement)(
+      (0, import_react60.createElement)(
         "section",
         { className: "bt-comm-connection", "aria-label": t("Connection status") },
-        (0, import_react59.createElement)("p", { className: "bt-comm-connection-label", role: "status", "data-connected": Boolean(state?.connected && !pollError) }, (0, import_react59.createElement)("span", { className: "bt-comm-dot", "aria-hidden": true }), t(connectionLabel)),
-        state ? (0, import_react59.createElement)("p", { className: "bt-comm-reference" }, `${state.instanceId} · ${t("Remote contacts")}: ${remoteCount}`) : null,
-        team.communicationEnabled && !state?.connected && !connectionBlocked ? (0, import_react59.createElement)("p", { className: "bt-comm-reference" }, t("Queued messages send automatically when the connection returns.")) : null,
+        (0, import_react60.createElement)("p", { className: "bt-comm-connection-label", role: "status", "data-connected": Boolean(state?.connected && !pollError) }, (0, import_react60.createElement)("span", { className: "bt-comm-dot", "aria-hidden": true }), t(connectionLabel)),
+        state ? (0, import_react60.createElement)("p", { className: "bt-comm-reference bt-comm-connection-details" }, `${state.instanceId} · ${t("Remote contacts")}: ${remoteCount}`) : null,
+        team.communicationEnabled && !state?.connected && !connectionBlocked ? (0, import_react60.createElement)("p", { className: "bt-comm-reference" }, t("Queued messages send automatically when the connection returns.")) : null,
         team.communicationEnabled ? btn("Refresh status", () => {
           void act(refresh);
         }) : null,
         null
       ),
-      (0, import_react59.createElement)(
-        "div",
-        { className: "bt-comm-start-actions" },
-        btn("New message", () => showPanel("contacts"), { disabled: busy || !team.communicationEnabled }),
-        btn("New group", () => showPanel("group"), { className: "bt-comm-primary", disabled: busy || !team.communicationEnabled })
-      ),
-      (0, import_react59.createElement)("div", { className: "bt-comm-section-title" }, t("Conversations"), (0, import_react59.createElement)("span", null, state?.conversations?.length ?? 0)),
-      (0, import_react59.createElement)("nav", { "aria-label": t("Communication conversations") }, (state?.conversations ?? []).filter((item) => showHidden || !hidden.includes(`${state.instanceId}:${item.conversationId}`)).map((item) => (0, import_react59.createElement)(ConversationRow, { key: item.conversationId, conversation: item, humanId: state.humanPrincipalId, labels, request, selected: item.conversationId === selected, onChoose: choose, disabled: busy }))),
-      !state?.conversations?.length ? (0, import_react59.createElement)("p", { className: "bt-comm-reference" }, t("Your cross-device conversations will appear here.")) : null,
-      state?.invites?.length ? (0, import_react59.createElement)("div", null, (0, import_react59.createElement)("h3", null, t("Invitations")), state.invites.map((invitation) => (0, import_react59.createElement)(
+      (0, import_react60.createElement)("div", { className: "bt-comm-section-title" }, t("Conversations"), (0, import_react60.createElement)("span", null, state?.conversations?.length ?? 0)),
+      (0, import_react60.createElement)("nav", { "aria-label": t("Communication conversations") }, (state?.conversations ?? []).filter((item) => showHidden || !hidden.includes(`${scope}:${item.conversationId}`)).map((item) => (0, import_react60.createElement)(ConversationRow, { key: item.conversationId, conversation: item, humanId: state.humanPrincipalId, labels, request, selected: item.conversationId === selected, onChoose: choose, disabled: busy }))),
+      !state?.conversations?.length ? (0, import_react60.createElement)("p", { className: "bt-comm-reference" }, t("Your cross-device conversations will appear here.")) : null,
+      state?.invites?.length ? (0, import_react60.createElement)("div", null, (0, import_react60.createElement)("h3", null, t("Invitations")), state.invites.map((invitation) => (0, import_react60.createElement)(
         "div",
         { key: invitation.inviteId },
         avatar(invitation.principalId),
-        (0, import_react59.createElement)("p", null, `${invitation.title} · ${labels.get(invitation.principalId) ?? invitation.principalId}`),
+        (0, import_react60.createElement)("p", null, `${invitation.title} · ${labels.get(invitation.principalId) ?? invitation.principalId}`),
         btn("Accept invitation", () => {
           void act(() => operation("accept", { inviteId: invitation.inviteId, recipientPrincipalId: invitation.principalId }));
         })
       ))) : null,
-      (state?.recoverableOwnership ?? []).map((item) => (0, import_react59.createElement)(
+      (state?.recoverableOwnership ?? []).map((item) => (0, import_react60.createElement)(
         "div",
         { key: item.conversationId },
-        (0, import_react59.createElement)("p", null, item.title),
+        (0, import_react60.createElement)("p", null, item.title),
         btn("Restore retained ownership", () => {
           void act(() => operation("reclaim", { conversationId: item.conversationId, expectedVersion: item.membershipVersion }));
         })
       )),
       null
     ),
-    activePanel ? (0, import_react59.createElement)(
+    activePanel ? (0, import_react60.createElement)(
       "div",
       { className: "bt-comm-modal-backdrop", onMouseDown: (event) => {
         if (event.target === event.currentTarget) {
@@ -22672,30 +23104,49 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
           chooserTrigger.current?.focus();
         }
       } },
-      (0, import_react59.createElement)(
+      (0, import_react60.createElement)(
         "section",
-        { ref: chooser, className: "bt-comm-modal", role: "dialog", "aria-modal": true, "aria-label": t(activePanel === "settings" ? "Personal settings" : activePanel === "thread" ? "Message replies" : activePanel === "hub-management" ? "Hub management" : activePanel === "activity" ? "Activity details" : activePanel === "participant" ? "Participant information" : activePanel === "manage-contacts" ? "Manage contacts" : activePanel === "profile" ? "Human profile" : activePanel === "pairing" ? "Pairing guide" : activePanel === "group" ? "New group" : "New message") },
-        (0, import_react59.createElement)("h2", null, t(activePanel === "settings" ? "Personal settings" : activePanel === "thread" ? "Message replies" : activePanel === "hub-management" ? "Hub management" : activePanel === "activity" ? "Activity details" : activePanel === "participant" ? "Participant information" : activePanel === "manage-contacts" ? "Manage contacts" : activePanel === "profile" ? "Human profile" : activePanel === "pairing" ? "Pairing guide" : activePanel === "group" ? "New group" : "New message")),
-        activePanel === "settings" ? (0, import_react59.createElement)(
+        { ref: chooser, className: "bt-comm-modal", role: "dialog", "aria-modal": true, "aria-label": t(activePanel === "search" ? "Search" : activePanel === "settings" ? "Personal settings" : activePanel === "thread" ? "Message replies" : activePanel === "activity" ? "Activity details" : activePanel === "participant" ? "Participant information" : activePanel === "manage-contacts" ? "Manage contacts" : activePanel === "profile" ? "Human profile" : activePanel === "pairing" ? "Pairing guide" : activePanel === "group" ? "New group" : "New message") },
+        (0, import_react60.createElement)("h2", null, t(activePanel === "search" ? "Search" : activePanel === "settings" ? "Personal settings" : activePanel === "thread" ? "Message replies" : activePanel === "activity" ? "Activity details" : activePanel === "participant" ? "Participant information" : activePanel === "manage-contacts" ? "Manage contacts" : activePanel === "profile" ? "Human profile" : activePanel === "pairing" ? "Pairing guide" : activePanel === "group" ? "New group" : "New message")),
+        activePanel === "search" ? (0, import_react60.createElement)(
+          "div",
+          { className: "bt-comm-search" },
+          (0, import_react60.createElement)("label", { className: "bt-comm-field" }, t("Search conversations and contacts"), (0, import_react60.createElement)("input", { value: searchQuery, role: "combobox", "aria-label": t("Search conversations and contacts"), "aria-autocomplete": "list", "aria-expanded": true, "aria-controls": "bt-comm-search-results", "aria-activedescendant": searchResults.length ? `bt-comm-search-${searchIndex}` : void 0, onChange: (event) => {
+            setSearchQuery(event.target.value);
+            setSearchCursor(0);
+          }, onKeyDown: (event) => {
+            if (event.nativeEvent.isComposing) return;
+            if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+              event.preventDefault();
+              setSearchCursor((index) => !searchResults.length ? 0 : event.key === "Home" ? 0 : event.key === "End" ? searchResults.length - 1 : (index + (event.key === "ArrowDown" ? 1 : -1) + searchResults.length) % searchResults.length);
+            }
+            if (event.key === "Enter" && searchResults.length) {
+              event.preventDefault();
+              searchResults[searchIndex].run();
+            }
+          } })),
+          (0, import_react60.createElement)("p", { className: "bt-comm-reference" }, t("Search current conversations, contacts and recent message summaries.")),
+          (0, import_react60.createElement)("div", { id: "bt-comm-search-results", role: "listbox", "aria-label": t("Results") }, searchResults.map((item, index) => btn(item.title, item.run, { key: item.id, id: `bt-comm-search-${index}`, role: "option", "aria-selected": index === searchIndex, children: (0, import_react60.createElement)(import_react60.Fragment, null, item.avatar, (0, import_react60.createElement)("span", null, (0, import_react60.createElement)("strong", null, item.title), (0, import_react60.createElement)("small", null, item.preview))) }))),
+          !searchResults.length ? (0, import_react60.createElement)("p", { role: "status" }, t("No matching conversations or contacts.")) : null
+        ) : activePanel === "settings" ? (0, import_react60.createElement)(
           "div",
           { className: "bt-comm-personal-settings" },
-          (0, import_react59.createElement)("label", { className: "bt-comm-check" }, (0, import_react59.createElement)("input", { type: "checkbox", checked: showHidden, onChange: (event) => setShowHidden(event.target.checked) }), t("Show closed conversations")),
-          state ? (0, import_react59.createElement)(
+          (0, import_react60.createElement)("label", { className: "bt-comm-check" }, (0, import_react60.createElement)("input", { type: "checkbox", checked: showHidden, onChange: (event) => setShowHidden(event.target.checked) }), t("Show closed conversations")),
+          state ? (0, import_react60.createElement)(
             "section",
             null,
-            (0, import_react59.createElement)("h3", null, t("Your profile")),
-            (0, import_react59.createElement)(HumanProfile, { key: state.humanPrincipalId, human: contacts.find((person) => person.principalId === state.humanPrincipalId) ?? { principalId: state.humanPrincipalId, displayName: t("You"), kind: "human" }, request, operation }),
-            (0, import_react59.createElement)("details", null, (0, import_react59.createElement)("summary", null, t("Device identity")), (0, import_react59.createElement)("p", null, state.instanceId), (0, import_react59.createElement)("code", null, state.humanPrincipalId))
+            (0, import_react60.createElement)("h3", null, t("Your profile")),
+            (0, import_react60.createElement)(HumanProfile, { key: `${scope}:${state.humanPrincipalId}`, human: contacts.find((person) => person.principalId === state.humanPrincipalId) ?? { principalId: state.humanPrincipalId, displayName: t("You"), kind: "human" }, request, operation }),
+            (0, import_react60.createElement)("details", null, (0, import_react60.createElement)("summary", null, t("Device identity")), (0, import_react60.createElement)("p", null, state.instanceId), (0, import_react60.createElement)("code", null, state.humanPrincipalId))
           ) : null,
-          (0, import_react59.createElement)(
+          (0, import_react60.createElement)(
             "section",
             null,
-            (0, import_react59.createElement)("h3", null, t("Connection and contacts")),
+            (0, import_react60.createElement)("h3", null, t("Connection and contacts")),
             btn("Add a device", () => setActivePanel("pairing")),
-            adminUrl ? (0, import_react59.createElement)("a", { className: "bt-comm-admin-link", href: adminUrl, target: "_blank", rel: "noopener noreferrer" }, t("Open Hub management"), (0, import_react59.createElement)("small", null, new URL(adminUrl).origin)) : btn("Hub management", () => setActivePanel("hub-management")),
             btn("Manage contacts", () => setActivePanel("manage-contacts"), { disabled: !team.communicationEnabled })
           )
-        ) : activePanel === "thread" ? member && threadMessageId ? (0, import_react59.createElement)(CommunicationThread, {
+        ) : activePanel === "thread" ? member && threadMessageId ? (0, import_react60.createElement)(CommunicationThread, {
           key: `${contextKey.current}:${threadMessageId}`,
           member,
           messageId: threadMessageId,
@@ -22707,7 +23158,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
             setActivePanel("");
             requestAnimationFrame(() => input.current?.focus());
           }
-        }) : null : activePanel === "hub-management" ? (0, import_react59.createElement)("div", null, (0, import_react59.createElement)("p", null, t("The Hub administrator has not provided an active management entry. Ask the administrator to start the Hub and enable its management page.")), btn("Open setup guide", () => setActivePanel("pairing"))) : activePanel === "activity" ? (0, import_react59.createElement)(CommunicationActivity, {
+        }) : null : activePanel === "activity" ? (0, import_react60.createElement)(CommunicationActivity, {
           state,
           member,
           events,
@@ -22734,14 +23185,14 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
             setActivePanel("");
             input.current?.focus();
           }
-        }) : activePanel === "participant" ? (0, import_react59.createElement)("div", { className: "bt-comm-participant-information" }, currentMembers.filter((person) => inspectedIds.includes(person.principalId)).map((person) => (0, import_react59.createElement)("section", { key: person.principalId }, personLabel(person), (0, import_react59.createElement)("p", null, t(roleLabel(person.role ?? "member"))), (0, import_react59.createElement)("code", null, person.principalId)))) : activePanel === "manage-contacts" ? (0, import_react59.createElement)(ContactManager, { request, operation, contacts, managementUrl: adminUrl }) : activePanel === "profile" ? (0, import_react59.createElement)(HumanProfile, { human: contacts.find((person) => person.principalId === state?.humanPrincipalId) ?? { principalId: state?.humanPrincipalId ?? "human:local", displayName: t("You"), kind: "human" }, request, operation }) : activePanel === "pairing" ? (0, import_react59.createElement)(AddDevice, { request, displayName: contacts.find((person) => person.principalId === state?.humanPrincipalId)?.displayName ?? t("You"), manualGuide: (0, import_react59.createElement)(PairingGuide, { connectionLabel }) }) : (0, import_react59.createElement)(
-          import_react59.Fragment,
+        }) : activePanel === "participant" ? (0, import_react60.createElement)("div", { className: "bt-comm-participant-information" }, currentMembers.filter((person) => inspectedIds.includes(person.principalId)).map((person) => (0, import_react60.createElement)("section", { key: person.principalId }, personLabel(person), (0, import_react60.createElement)("p", null, t(roleLabel(person.role ?? "member"))), (0, import_react60.createElement)("code", null, person.principalId)))) : activePanel === "manage-contacts" ? (0, import_react60.createElement)(ContactManager, { request, operation, contacts }) : activePanel === "profile" ? (0, import_react60.createElement)(HumanProfile, { key: scope, human: contacts.find((person) => person.principalId === state?.humanPrincipalId) ?? { principalId: state?.humanPrincipalId ?? "human:local", displayName: t("You"), kind: "human" }, request, operation }) : activePanel === "pairing" ? (0, import_react60.createElement)(AddDevice, { request, displayName: contacts.find((person) => person.principalId === state?.humanPrincipalId)?.displayName ?? t("You"), manualGuide: (0, import_react60.createElement)(PairingGuide, { connectionLabel }) }) : (0, import_react60.createElement)(
+          import_react60.Fragment,
           null,
-          activePanel === "group" ? (0, import_react59.createElement)("label", { className: "bt-comm-field" }, t("Group name"), (0, import_react59.createElement)("input", { value: title, onChange: (event) => setTitle(event.target.value), "aria-label": t("Group name") })) : null,
-          groupedContacts((contact) => activePanel === "group" ? (0, import_react59.createElement)(
+          activePanel === "group" ? (0, import_react60.createElement)("label", { className: "bt-comm-field" }, t("Group name"), (0, import_react60.createElement)("input", { value: title, onChange: (event) => setTitle(event.target.value), "aria-label": t("Group name") })) : null,
+          groupedContacts((contact) => activePanel === "group" ? (0, import_react60.createElement)(
             "label",
             { key: contact.principalId, className: "bt-comm-check" },
-            (0, import_react59.createElement)("input", { type: "checkbox", checked: invitees.includes(contact.principalId), onChange: (event) => setInvitees((current) => event.target.checked ? [...current, contact.principalId] : current.filter((id) => id !== contact.principalId)) }),
+            (0, import_react60.createElement)("input", { type: "checkbox", checked: invitees.includes(contact.principalId), onChange: (event) => setInvitees((current) => event.target.checked ? [...current, contact.principalId] : current.filter((id) => id !== contact.principalId)) }),
             personLabel(contact)
           ) : btn(labels.get(contact.principalId), () => {
             void act(async () => {
@@ -22752,7 +23203,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
               }
             });
           }, { key: contact.principalId, children: personLabel(contact), className: "bt-comm-contact" })),
-          !contacts.some((person) => person.principalId !== state?.humanPrincipalId) ? (0, import_react59.createElement)("p", { className: "bt-comm-reference" }, t("Remote contacts appear after the other device connects and publishes its identities.")) : null,
+          !contacts.some((person) => person.principalId !== state?.humanPrincipalId) ? (0, import_react60.createElement)("p", { className: "bt-comm-reference" }, t("Remote contacts appear after the other device connects and publishes its identities.")) : null,
           activePanel === "group" ? btn("Create and invite", () => {
             void act(async () => {
               const value = await operation("create-group", { title });
@@ -22779,36 +23230,41 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
         })
       )
     ) : null,
-    error ? (0, import_react59.createElement)("aside", { className: "bt-comm-toast", role: "alert" }, (0, import_react59.createElement)("span", null, t(error)), btn("Dismiss", () => setError(""), { disabled: false, "aria-label": t("Dismiss notification") })) : null,
-    (0, import_react59.createElement)(
+    error ? (0, import_react60.createElement)("aside", { className: "bt-comm-toast", role: "alert" }, (0, import_react60.createElement)("span", null, t(error)), btn("Dismiss", () => setError(""), { disabled: false, "aria-label": t("Dismiss notification") })) : null,
+    (0, import_react60.createElement)(
       "main",
       { className: "bt-comm-main" },
-      (0, import_react59.createElement)(
+      (0, import_react60.createElement)(
         "header",
         null,
-        member ? btn("Conversations", () => setBrowse(true), { className: "bt-comm-mobile" }) : null,
+        sidebarHidden ? btn("Expand sidebar", () => {
+          collapseSidebar(false);
+          setBrowse(true);
+        }, { className: "bt-comm-icon-button bt-comm-expand", "aria-label": t("Expand sidebar"), title: t("Expand sidebar"), children: (0, import_react60.createElement)(SidebarIcon) }) : null,
+        member ? btn("Conversations", () => {
+          collapseSidebar(false);
+          setBrowse(true);
+        }, { className: "bt-comm-mobile" }) : null,
         !team.communicationEnabled ? btn("Back to local chats", close, { className: "bt-comm-mobile" }) : null,
-        (0, import_react59.createElement)(
-          "div",
-          { className: "bt-comm-heading" },
-          member ? avatar(member.kind === "group" ? member.conversationId : currentMembers.find((person) => person.principalId !== state.humanPrincipalId)?.principalId ?? member.conversationId, member.kind === "group" ? member.title : currentMembers.find((person) => person.principalId !== state.humanPrincipalId)?.displayName) : null,
-          (0, import_react59.createElement)("h2", null, member ? conversationTitle(member, state.humanPrincipalId, labels) : t("Remote communication")),
-          member ? (0, import_react59.createElement)("p", { className: "bt-comm-reference" }, member.kind === "group" ? `${currentMembers.length} ${t("Members")} · ${t(roleLabel(member.role))} · ${t(speechLabel(member))}` : t("Private conversation")) : null
-        ),
-        btn("Activity details", () => showPanel("activity")),
-        member ? btn("Close on this device", hide) : null
+        (0, import_react60.createElement)("div", { className: "bt-comm-heading bt-head" }, member ? btn("View conversation details", () => {
+          if (member.kind === "group") frame.current?.querySelector(".bt-comm-members>summary")?.click();
+          else inspect(currentMembers.filter((person) => person.principalId !== state.humanPrincipalId).map((person) => person.principalId));
+        }, { className: "bt-pill bt-comm-title-pill", children: (0, import_react60.createElement)(import_react60.Fragment, null, (0, import_react60.createElement)(ConversationAvatar, { conversation: member, humanId: state.humanPrincipalId, request, size: 24 }), (0, import_react60.createElement)("h2", { className: "bt-pill-name" }, conversationTitle(member, state.humanPrincipalId, labels)), (0, import_react60.createElement)("span", { "aria-hidden": true }, "›")) }) : (0, import_react60.createElement)("h2", null, t("Remote communication"))),
+        btn("Activity details", () => showPanel("activity"), { className: "bt-comm-icon-button", "aria-label": t("Activity details"), title: t("Activity details"), children: (0, import_react60.createElement)(InfoIcon) }),
+        member?.kind === "group" ? (0, import_react60.createElement)("span", { className: "bt-sr" }, `${currentMembers.length} ${t("Members")} · ${t(roleLabel(member.role))} · ${t(member.speakingMode === "readOnly" ? "Read only" : "Can speak")}`) : null,
+        member ? btn("Close on this device", hide, { className: "bt-comm-icon-button", "aria-label": t("Close on this device"), title: t("Close on this device"), children: (0, import_react60.createElement)(CloseIcon) }) : null
       ),
-      !member ? (0, import_react59.createElement)(
+      !member ? (0, import_react60.createElement)(
         "section",
         { className: "bt-comm-empty" },
-        (0, import_react59.createElement)("span", { className: "bt-comm-empty-symbol", "aria-hidden": true }, "↔"),
-        (0, import_react59.createElement)("h2", null, t(team.communicationEnabled ? "Start a conversation across devices" : "Pair this device to get started")),
-        (0, import_react59.createElement)("p", null, t(team.communicationEnabled ? "Message a Human or Bot directly, or bring them together in a group." : "Ask the Hub owner to configure communication and pair this device.")),
-        team.communicationEnabled ? (0, import_react59.createElement)("div", { className: "bt-comm-start-actions" }, btn("New message", () => showPanel("contacts")), btn("New group", () => showPanel("group"), { className: "bt-comm-primary" })) : null,
-        (0, import_react59.createElement)("p", { className: "bt-comm-reference" }, t("Local chats stay separate from communication conversations."))
+        (0, import_react60.createElement)("span", { className: "bt-comm-empty-symbol", "aria-hidden": true }, "↔"),
+        (0, import_react60.createElement)("h2", null, t(team.communicationEnabled ? "Start a conversation across devices" : "Pair this device to get started")),
+        (0, import_react60.createElement)("p", null, t(team.communicationEnabled ? "Message a Human or Bot directly, or bring them together in a group." : "Ask the Hub owner to configure communication and pair this device.")),
+        team.communicationEnabled ? btn("New…", startMenu, { className: "bt-comm-primary" }) : null,
+        (0, import_react60.createElement)("p", { className: "bt-comm-reference" }, t("Local chats stay separate from communication conversations."))
       ) : null,
-      member?.kind === "group" ? (0, import_react59.createElement)(GroupSettings, {
-        key: `${selected}:${member.membershipEpoch}`,
+      member?.kind === "group" ? (0, import_react60.createElement)(GroupSettings, {
+        key: `${scope}:${selected}:${member.membershipEpoch}`,
         member,
         contacts,
         labels,
@@ -22820,9 +23276,9 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
         btn,
         personLabel,
         chooseContact,
-        pendingSettings: (id) => [...operationIds.current.keys()].map((item) => JSON.parse(item)).find(([instanceId, endpoint, values]) => instanceId === state.instanceId && endpoint === "save-settings" && values.conversationId === id)?.[2] ?? null
+        pendingSettings: (id) => [...operationIds.current.keys()].map((item) => JSON.parse(item)).find(([instanceId, endpoint, values]) => instanceId === scope && endpoint === "save-settings" && values.conversationId === id)?.[2] ?? null
       }) : null,
-      (0, import_react59.createElement)(
+      (0, import_react60.createElement)(
         "div",
         { ref: log, className: "bt-comm-log", role: "log", "aria-label": t("Communication messages"), onScroll: (event) => {
           const element = event.currentTarget;
@@ -22830,45 +23286,48 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
         } },
         member && events.length > 0 && events[0].conversationSeq > member.joinSeq ? btn("Load earlier messages", () => setOlder(events[0].conversationSeq - 1)) : null,
         older !== null ? btn("Show latest messages", () => setOlder(null)) : null,
-        communicationLogEvents(events).map((event) => event.type === "bot.work.started" ? (0, import_react59.createElement)(BotWorkStarted, { key: event.eventId, event, members: currentMembers, request, onInspect: inspect }) : (0, import_react59.createElement)(
+        communicationLogEvents(events).map((event) => event.type === "bot.work.started" ? (0, import_react60.createElement)(BotWorkStarted, { key: event.eventId, event, members: currentMembers, request, onInspect: inspect }) : (0, import_react60.createElement)(
           "article",
           { key: event.message.messageId, "data-message-id": event.message.messageId, "data-self": event.message.author.principalId === state.humanPrincipalId, "data-referenced": event.message.messageId === referenced },
           avatar(event.message.author.principalId, contacts.find((person) => person.principalId === event.message.author.principalId)?.displayName ?? event.message.author.displayName),
-          (0, import_react59.createElement)("strong", { title: event.message.author.principalId }, labels.get(event.message.author.principalId) ?? event.message.author.displayName ?? (event.message.author.principalId === state.humanPrincipalId ? t("You") : event.message.author.principalId), identityIcons(contacts.find((person) => person.principalId === event.message.author.principalId) ?? event.message.author)),
-          event.message.replyToMessageId ? (0, import_react59.createElement)(ReferenceQuote, {
-            key: `${selected}:${member.membershipEpoch}:${event.message.replyToMessageId}`,
-            conversationId: selected,
-            membershipEpoch: member.membershipEpoch,
-            messageId: event.message.replyToMessageId,
-            request,
-            labels,
-            onJump: openReference
-          }) : null,
-          (0, import_react59.createElement)("div", { className: "bt-comm-body" }, (0, import_react59.createElement)(CommunicationMessage, { message: event.message, members: currentMembers, request, onInspect: inspect })),
-          (0, import_react59.createElement)("div", { className: "bt-comm-message-actions" }, (0, import_react59.createElement)("time", null, new Date(event.serverAcceptedAt).toLocaleString()), canSpeak ? btn("Reply", () => {
+          (0, import_react60.createElement)("strong", { title: event.message.author.principalId }, labels.get(event.message.author.principalId) ?? event.message.author.displayName ?? (event.message.author.principalId === state.humanPrincipalId ? t("You") : event.message.author.principalId), identityIcons(contacts.find((person) => person.principalId === event.message.author.principalId) ?? event.message.author)),
+          (0, import_react60.createElement)(
+            "div",
+            { className: "bt-comm-message-bubble" },
+            event.message.replyToMessageId ? (0, import_react60.createElement)(ReferenceQuote, {
+              key: `${scope}:${selected}:${member.membershipEpoch}:${event.message.replyToMessageId}`,
+              conversationId: selected,
+              membershipEpoch: member.membershipEpoch,
+              messageId: event.message.replyToMessageId,
+              request,
+              labels,
+              onJump: openReference
+            }) : null,
+            (0, import_react60.createElement)("div", { className: "bt-comm-body" }, (0, import_react60.createElement)(CommunicationMessage, { message: event.message, members: currentMembers, request, onInspect: inspect }))
+          ),
+          (0, import_react60.createElement)("div", { className: "bt-comm-message-actions" }, (0, import_react60.createElement)("time", { title: new Date(event.serverAcceptedAt).toLocaleString() }, new Date(event.serverAcceptedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })), canSpeak ? btn("Reply", () => {
             setReply(event.message);
             input.current?.focus();
           }) : null, member.kind === "group" ? btn("View replies", () => {
             setThreadMessageId(event.message.messageId);
             showPanel("thread");
-          }) : null),
-          ownOutbox.find((item) => item.id === event.message.messageId)?.deliveries.filter((delivery) => delivery.recipientPrincipalId !== state.humanPrincipalId).map((delivery) => (0, import_react59.createElement)("p", { key: delivery.deliveryId, className: "bt-comm-reference" }, `${labels.get(delivery.recipientPrincipalId) ?? delivery.recipientPrincipalId} · ${t(deliveryPhase(delivery))}`))
+          }) : null)
         )),
-        ownOutbox.filter((item) => item.state !== "failed" && !visibleIds.has(item.id) && (item.state !== "accepted" || older === null && item.result?.conversationSeq > (page?.watermark ?? 0))).map((item) => (0, import_react59.createElement)(
+        ownOutbox.filter((item) => item.state !== "failed" && !visibleIds.has(item.id) && (item.state !== "accepted" || older === null && item.result?.conversationSeq > (page?.watermark ?? 0))).map((item) => (0, import_react60.createElement)(
           "article",
           { key: item.id, "data-message-id": item.id, "data-self": true, "data-failed": item.state === "failed" },
           avatar(state.humanPrincipalId, contacts.find((person) => person.principalId === state.humanPrincipalId)?.displayName),
-          (0, import_react59.createElement)("strong", { title: state.humanPrincipalId }, contacts.find((person) => person.principalId === state.humanPrincipalId)?.displayName ?? t("You"), identityIcons({ principalId: state.humanPrincipalId, kind: "human", homeInstanceId: state.instanceId })),
-          (0, import_react59.createElement)("p", { className: "bt-comm-pending-text" }, item.text),
-          (0, import_react59.createElement)("p", { role: "status" }, t(item.state === "accepted" ? "Hub accepted" : "Queued on this device"))
+          (0, import_react60.createElement)("strong", { title: state.humanPrincipalId }, contacts.find((person) => person.principalId === state.humanPrincipalId)?.displayName ?? t("You"), identityIcons({ principalId: state.humanPrincipalId, kind: "human", homeInstanceId: state.instanceId })),
+          (0, import_react60.createElement)("p", { className: "bt-comm-pending-text" }, item.text),
+          (0, import_react60.createElement)("p", { role: "status" }, t(item.state === "accepted" ? "Hub accepted" : "Queued on this device"))
         ))
       ),
-      canSpeak ? (0, import_react59.createElement)(
+      canSpeak ? (0, import_react60.createElement)(
         "footer",
         null,
-        reply ? (0, import_react59.createElement)("div", { className: "bt-comm-reference" }, `${t("Reply to")} ${reply.content.text.slice(0, 120)}`, btn("Cancel reply", () => setReply(null))) : null,
-        (0, import_react59.createElement)("div", { className: "bt-comm-mentions" }, (draft.mentions ?? []).map((id) => btn(`@${labels.get(id) ?? id} ×`, () => changeDraft({ mentions: draft.mentions.filter((item) => item !== id), manualMentions: (draft.manualMentions ?? []).filter((item) => item !== id) }), { key: id, "data-manual-mention": (draft.manualMentions ?? []).includes(id), "aria-label": `${t("Remove mention")}: ${labels.get(id) ?? id}` }))),
-        suggestions.length ? (0, import_react59.createElement)("div", { className: "bt-comm-completion", role: "listbox", id: "bt-comm-completion", "aria-label": t("Mention participant") }, suggestions.map((person, index) => (0, import_react59.createElement)("button", {
+        reply ? (0, import_react60.createElement)("div", { className: "bt-comm-reference" }, `${t("Reply to")} ${reply.content.text.slice(0, 120)}`, btn("Cancel reply", () => setReply(null))) : null,
+        (0, import_react60.createElement)("div", { className: "bt-comm-mentions" }, (draft.mentions ?? []).map((id) => btn(`@${labels.get(id) ?? id} ×`, () => changeDraft({ mentions: draft.mentions.filter((item) => item !== id), manualMentions: (draft.manualMentions ?? []).filter((item) => item !== id) }), { key: id, "data-manual-mention": (draft.manualMentions ?? []).includes(id), "aria-label": `${t("Remove mention")}: ${labels.get(id) ?? id}` }))),
+        suggestions.length ? (0, import_react60.createElement)("div", { className: "bt-comm-completion", role: "listbox", id: "bt-comm-completion", "aria-label": t("Mention participant") }, suggestions.map((person, index) => (0, import_react60.createElement)("button", {
           type: "button",
           key: person.principalId,
           id: `bt-comm-option-${index}`,
@@ -22876,11 +23335,12 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
           "aria-selected": completionIndex === index,
           onMouseDown: (event) => event.preventDefault(),
           onClick: () => complete(person)
-        }, person.all ? (0, import_react59.createElement)("span", null, avatar("@all", "All"), t("All Bots")) : personLabel(person)))) : null,
-        (0, import_react59.createElement)("label", { className: "bt-comm-field" }, t("Communication message"), (0, import_react59.createElement)("textarea", {
+        }, person.all ? (0, import_react60.createElement)("span", null, avatar("@all", "All"), t("All Bots")) : personLabel(person)))) : null,
+        (0, import_react60.createElement)("label", { className: "bt-comm-field bt-comm-compose-field" }, (0, import_react60.createElement)("span", { className: "bt-sr" }, t("Communication message")), (0, import_react60.createElement)("textarea", {
           ref: input,
           value: draft.text,
-          rows: 3,
+          rows: 2,
+          placeholder: t("Message {name}", { name: conversationTitle(member, state.humanPrincipalId, labels) }),
           disabled: !canSpeak || Boolean(attempts[key]),
           onChange: (event) => {
             changeDraft({ text: event.target.value, mentions: retainedMentions(event.target.value, draft.mentions, currentMembers, draft.manualMentions) });
@@ -22928,19 +23388,32 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
           onPaste: (event) => {
             if (event.clipboardData?.files.length) {
               event.preventDefault();
-              setError("Only text and Markdown are supported.");
+              event.stopPropagation();
+              if (state.attachmentsAvailable) void attach(event.clipboardData.files);
+              else setError("Attachments require a compatible Hub and clients.");
             }
+          },
+          onDragOver: (event) => {
+            event.preventDefault();
+            event.stopPropagation();
           },
           onDrop: (event) => {
             event.preventDefault();
-            setError("Only text and Markdown are supported.");
+            event.stopPropagation();
+            if (state.attachmentsAvailable) void attach(event.dataTransfer.files);
+            else setError("Attachments require a compatible Hub and clients.");
           },
           "aria-label": t("Communication message")
         })),
+        state.attachmentsAvailable ? (0, import_react60.createElement)("label", { className: "bt-comm-attach-picker", title: t("Attach images or files (64 KiB total)") }, (0, import_react60.createElement)(PlusIcon), (0, import_react60.createElement)("span", { className: "bt-sr" }, t("Attach images or files (64 KiB total)")), (0, import_react60.createElement)("input", { type: "file", multiple: true, disabled: busy || attaching || Boolean(attempts[key]), "aria-label": t("Attach images or files (64 KiB total)"), onChange: (event) => {
+          void attach(event.target.files);
+          event.target.value = "";
+        } })) : null,
+        draft.attachments?.length ? (0, import_react60.createElement)("div", { className: "bt-comm-attachment-drafts" }, draft.attachments.map((file, index) => (0, import_react60.createElement)("span", { key: index }, file.name, (0, import_react60.createElement)("button", { type: "button", disabled: busy || attaching || Boolean(attempts[key]), "aria-label": t("Remove {name}", { name: file.name }), onClick: () => changeDraft({ attachments: draft.attachments.filter((_, i) => i !== index) }) }, (0, import_react60.createElement)(CloseIcon))))) : null,
         btn(attempts[key] ? "Retry same send" : "Send message", () => {
           void send();
-        }, { disabled: busy || !canSpeak || !draft.text.trim() }),
-        (0, import_react59.createElement)("span", { className: "bt-comm-reference" }, t("Enter to send · Shift+Enter for a new line")),
+        }, { className: "bt-comm-send", "aria-label": t(attempts[key] ? "Retry same send" : "Send message"), title: t("Enter to send · Shift+Enter for a new line"), children: (0, import_react60.createElement)(import_react60.Fragment, null, (0, import_react60.createElement)(ArrowUpIcon), (0, import_react60.createElement)("span", { className: "bt-sr" }, t(attempts[key] ? "Retry same send" : "Send message"))), disabled: busy || attaching || !canSpeak || !draft.text.trim() && !draft.attachments?.length }),
+        (0, import_react60.createElement)("span", { className: "bt-sr" }, t("Enter to send · Shift+Enter for a new line")),
         null
       ) : null
     )
@@ -22956,7 +23429,7 @@ function installCommunication(ctx, { roster, surface }) {
   }, "ds-bot: communication styles");
   ctx.slots.inject("shell.overlay", () => ctx.slots.register(
     { name: "shell.overlay", id: "bot-communication", order: 52 },
-    () => (0, import_react59.createElement)(CommunicationSurface, { roster, surface, panel })
+    () => (0, import_react60.createElement)(CommunicationSurface, { roster, surface, panel })
   ));
   return { open: () => {
     save(OPEN, true);

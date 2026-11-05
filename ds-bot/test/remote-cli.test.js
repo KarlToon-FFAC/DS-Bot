@@ -5,7 +5,7 @@ import { Readable } from 'node:stream'
 import { readFile, writeFile, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { randomUUID } from 'node:crypto'
+import { randomUUID,createHash } from 'node:crypto'
 import { prepare, execute, main, help } from '../bin/dsbot-remote.mjs'
 import { install, remotePackagePaths } from '../src/host/prompt.js'
 
@@ -28,6 +28,10 @@ const requests = {
   avatar: { principalId: 'human:a:id', revision: 'a'.repeat(64) },
   'decode-hub-code': { hubCode: 'synthetic-hub-code' },
   'join-hub': { hubCode: 'synthetic-hub-code', displayName: 'Person', confirmedHubId: 'hub-test', confirmedUrl: 'wss://hub.example.test/communication' },
+  'update-hub-trust': {hubCode:'synthetic-code',confirmedHubId:'hub-test',confirmedUrl:'wss://hub.example.test/communication',confirmedTrustFingerprint:'a'.repeat(64)},
+  'disconnect-hub': {hubId:'hub-test'},
+  'switch-hub': {hubCode:'synthetic-code',displayName:'Person',expectedCurrentHubId:'old-hub',confirmedHubId:'hub-test',confirmedUrl:'wss://hub.example.test/communication'},
+  'resume-hub': {hubId:'hub-test',confirmedUrl:'wss://hub.example.test/communication',confirmResume:true},
   'onboarding-storage': { hubId: 'hub-test' }, 'hub-join-status': { hubId: 'hub-test' }, 'cancel-hub-join': { hubId: 'hub-test' },
   'user-code': {}, 'rotate-user-code': {}, 'request-contact': { userCode: 'synthetic-user-code', localBotIds: [] },
   'contact-requests': {}, 'contact-relations': {},
@@ -40,6 +44,15 @@ const requests = {
     policies: [{ targetPrincipalId: 'bot:a:id', role: 'admin', speakingMode: 'active' }, { targetPrincipalId: 'human:a:id', speakingMode: 'speak' }] },
 }
 const capture = () => { let value = ''; return { write: chunk => { value += chunk }, get value() { return value } } }
+
+test('file-only CLI sends validate bytes, preserve complete retry intent and never read a supplied path',async()=>{
+ const bytes=Buffer.from('synthetic CLI file'),attachment={name:'note.txt',mime:'text/plain',size:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex'),data:bytes.toString('base64')}
+ const input={conversationId:'group',text:'',attachments:[attachment]}
+ const prepared=prepare('send',input)
+ assert.deepEqual(prepared.request.attachments,[attachment])
+ assert.deepEqual(prepare('retry',prepared.request).request,prepared.request)
+ for(const extra of [{...attachment,data:'BAD'},{...attachment,path:'D:/private'},{...attachment,name:'../private'}])assert.throws(()=>prepare('send',{...input,attachments:[extra]}),{code:'INVALID_FIELD_attachments'})
+})
 async function mock(t, handler) {
   const server = createServer(async (req, res) => {
     let raw = ''
@@ -52,6 +65,7 @@ async function mock(t, handler) {
 }
 
 test('every CLI operation reaches its real local API endpoint and retains all supported fields', async t => {
+  assert.deepEqual(Object.keys(requests).sort(),Object.keys(JSON.parse(help()).operations).sort(),'new commands require a real endpoint contract case')
   const seen = []
   const url = await mock(t, (req, res, body) => {
     assert.equal(req.url, '/api/communication')

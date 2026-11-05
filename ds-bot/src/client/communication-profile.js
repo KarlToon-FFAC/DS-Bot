@@ -5,20 +5,22 @@ import { principalAvatar } from './communication-model.js'
 import { t } from './i18n.js'
 
 const images = new Map(), requests = new Map(), authorized = new Map()
+let avatarScope = 'legacy'
 export function safeAvatarImage(value) {
   return typeof value === 'string' && value.length <= 160000 && /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/]+={0,2}$/.test(value) ? value : null
 }
-export function syncAvatarDirectory(contacts) {
+export function syncAvatarDirectory(contacts, scope = 'legacy') {
+  if(scope !== avatarScope){avatarScope=scope;images.clear();requests.clear()}
   authorized.clear()
   for (const person of contacts) if (person.avatar?.imageRevision) authorized.set(person.principalId, person.avatar.imageRevision)
   for (const key of images.keys()) {
-    const [principalId, revision] = JSON.parse(key)
+    const [,principalId, revision] = JSON.parse(key)
     if (authorized.get(principalId) !== revision) images.delete(key)
   }
 }
 export function CommunicationAvatar({ person, request, allowed = true, size = 28 }) {
   const revision = allowed ? person.avatar?.imageRevision : null
-  const key = JSON.stringify([person.principalId, revision])
+  const scope = avatarScope, key = JSON.stringify([scope,person.principalId, revision])
   const [loaded, setLoaded] = useState(null)
   useEffect(() => {
     let active = true
@@ -29,7 +31,7 @@ export function CommunicationAvatar({ person, request, allowed = true, size = 28
     if (!requests.has(key)) {
       const promise = request({ endpoint: 'avatar', principalId: person.principalId, revision }).then(value => {
         const image = value.principalId && value.principalId !== person.principalId || value.revision && value.revision !== revision ? null : safeAvatarImage(value.image)
-        if (image && authorized.get(person.principalId) === revision) images.set(key, image)
+        if (image && scope === avatarScope && authorized.get(person.principalId) === revision) images.set(key, image)
         return image
       }).catch(() => null).finally(() => requests.delete(key))
       requests.set(key, promise)
@@ -41,7 +43,7 @@ export function CommunicationAvatar({ person, request, allowed = true, size = 28
   const bot = person.kind === 'bot' || person.principalId?.startsWith('bot:')
   const value = principalAvatar(person.kind === 'human' || person.principalId?.startsWith('human:') ? person.displayName ?? 'Human' : person.principalId, person.displayName ?? '')
   return h('span', { className: 'bt-comm-avatar', 'data-avatar': value.variant, 'data-kind': bot ? 'bot' : person.kind, 'data-avatar-id': person.principalId, 'data-initials': !bot && !image ? value.initials : undefined,
-    'data-has-image': Boolean(image), 'aria-hidden': true, style: { width: size, height: size, flexBasis: size } },
+    'data-has-image': Boolean(image), 'aria-hidden': true, style: { width: size, height: size, flexBasis: size, fontSize: Math.min(11, size * .45), lineHeight: 1, overflow: 'hidden' } },
     bot ? h(BotMark, { bot: { id: person.avatar?.seed ?? person.principalId, color: person.avatar?.color, avatar: { shape: person.avatar?.shape, ...(image ? { image } : {}) } }, size }) :
       image ? h('img', { src: image, alt: '', width: size, height: size, draggable: false }) : null)
 }

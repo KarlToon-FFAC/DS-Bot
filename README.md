@@ -7,6 +7,16 @@
 
 # DS Bot
 
+Remote communication in this branch provides authenticated contacts, private
+chats and groups between independently paired instances. The toolbar's + opens
+private/group pickers; personal settings contains pairing and profile controls.
+Each instance connects to one Hub at a time and retains separate Hub history and
+queues when switching. Signed Hub codes can carry private-CA trust without
+changing system trust. Images/files support at most four attachments and 64 KiB
+total per message. See the [Hub guide](communication-hub/README.md) and packaged
+[operator/Bot Skill](ds-bot/skills/dsbot-remote/SKILL.md) for permissions, setup,
+CLI commands, compatibility and recovery limits.
+
 English | [中文](README.zh.md)
 
 ![version](https://img.shields.io/badge/version-v0.2_preview-blue) ![DSH](https://img.shields.io/badge/DSH-0.2.1--rc.4-4D6BFE) ![license](https://img.shields.io/badge/license-Apache_2.0-green)

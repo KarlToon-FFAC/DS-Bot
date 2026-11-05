@@ -53,10 +53,12 @@ authoritative if you change the port or public origin. This starter is loopback
 only. For other machines, configure reachable trusted WSS/TLS as described below.
 The existing `config.example.json` keeps management disabled for static-peer
 compatibility; starting that file alone does not enable an administrator page.
-The client exposes **Personal settings (sidebar gear) → Hub management**, with no
-permanent Hub link in the sidebar, and uses only an actual management
-URL advertised by an enabled Hub. Old or disabled Hubs show setup guidance rather
-than inventing a working page. Opening a link does not start the Hub or sign in.
+Management is independent: open the printed `/admin/` URL directly. Client and
+DSH settings deliberately have no management-page entry. Opening the URL does
+not start the Hub or sign in. The standard login form supports your browser's
+password manager; DS Bot does not save the password. Sessions expire after 15
+minutes. Sign out, sign out all sessions, or rotate the admin password to revoke
+access. Browser HTTPS trust is separate from client-scoped Hub trust.
 
 Enable `management.enabled` and supply an administrator password of at least
 16 characters through `management.adminPasswordEnv`, using your existing local
@@ -71,6 +73,19 @@ same-origin HTTPS admin address. The Hub code contains that full address and a
 stable Hub ID: it is a locator, not a secret, discovery service or NAT traversal.
 Loopback plaintext is for local isolated tests only. This service does not install
 certificates, open firewall rules or create a persistent system service.
+
+For a private CA, set `management.pairingCaFile` to the public PEM root bundle
+(relative to the config file), alongside the existing TLS cert/key settings. The
+Hub then issues signed `dsbot-hub:2:` codes valid for at most seven days. Give the
+code through a trusted channel: it contains public trust material, not an admin
+credential, and cannot authenticate its own source. The client reviews the exact
+address/Hub ID/CA fingerprint and saves trust only for that Hub. No client CA file,
+environment variable or system trust change is needed. Clients predating v2 must
+upgrade; legacy v1 codes keep strict ambient TLS and cannot bootstrap a private
+CA. Renewing a leaf under the same CA needs no re-pairing. For CA rotation, obtain
+a new trusted code and use **Update this Hub CA trust** in the device setup guide;
+this keeps the device identity. Remove expired roots from overlap bundles before
+they expire. Codes do not create routes, public DNS, firewall rules or NAT tunnels.
 
 In DS Bot choose Remote communication → Add a device, paste the code, verify the
 displayed address/Hub ID and explicitly request admission. The Hub administrator
@@ -253,3 +268,42 @@ permissions, compatibility and verification boundary.
 Databases advance to schema v3 to prevent unsafe downgrade replay. Stop and back
 up both Hub and client data before upgrade; rollback requires the matching
 pre-upgrade backup and binary. Never lower database version markers manually.
+
+## Current client workflow and bounded attachments
+
+The client's Remote communication toolbar contains personal settings, search,
+New (+) and sidebar collapse. New opens private/group pickers. Personal settings
+contains device pairing, publication/contact management and profile settings.
+The administrator website remains independently available at the configured
+HTTPS origin's `/admin/`; it has no client/DSH link. Its native login form permits
+the browser password manager to offer saving the password, without the Hub
+storing a recoverable plaintext copy. Logout/session revoke invalidates cookies.
+
+`npm run admin -- --help` describes the standalone administrator CLI and each
+operation's JSON stdin schema. Supply the explicit trusted origin and existing
+password privately through `DSBOT_HUB_ADMIN_URL` and `DSBOT_HUB_ADMIN_PASSWORD`;
+an optional `DSBOT_HUB_ADMIN_CA_FILE` contains public CA certificates only. Do not
+put passwords in command arguments, files, transcripts or Bot prompts. This
+operator CLI does not confer administrator rights on a communication Bot.
+
+Signed v2 Hub codes carry public, Hub-scoped CA material for code-only pairing;
+the client verifies its signature, chain, dates and exact hostname and persists
+trust through the existing local SDK. Obtain the initial code from a trusted
+owner channel. Updating an existing CA requires explicit reviewed trust update;
+there is no global trust installation or TLS bypass. A code cannot create network
+reachability. v1 retains strict preexisting TLS requirements.
+
+Clients connect to only one Hub at once. Explicit local disconnect retains that
+Hub's identity, credentials, history and queue. Selecting another Hub leaves it
+disabled until separate join/approval or explicit resume. Data is isolated per
+Hub; returning can resume retained pending work only after confirmation and a
+fresh authorization check. Local pause does not revoke the device on the server.
+See [lifecycle details](../docs/plans/federated-communication/hub-lifecycle.md).
+
+`inline-attachments-v1` supports at most four images/files and **64 KiB total**
+binary bytes per message, also bounded by the complete envelope limit. Exact
+base64/size/SHA-256 and raster geometry are validated. Files share authenticated
+message/history permissions, stable IDs and offline recovery; there is no public
+download URL. HTML/SVG are never rendered as images. Older Hubs/recipients produce
+an explicit capability rejection for attachments; text remains available.
+See [format and limits](../docs/plans/federated-communication/attachments.md).

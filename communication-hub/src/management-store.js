@@ -1,5 +1,6 @@
 import { createHash, createPublicKey, randomBytes, randomUUID, verify } from 'node:crypto'
 import { identifier, requireThat, hash } from './protocol.js'
+import { signedHubCode } from './hub-code.js'
 
 const digest = value => createHash('sha256').update(value).digest('hex')
 const day = 86400000
@@ -14,9 +15,10 @@ export function hubCode(hubId, url) {
 
 // All durable enrollment and consent state shares the Hub transaction boundary.
 export class HubManagement {
-  constructor(store, { now = Date.now, url, maxPendingJoins = 64 } = {}) {
+  constructor(store, { now = Date.now, url, maxPendingJoins = 64, pairingTrust } = {}) {
     this.store = store; this.db = store.db; this.now = now; this.url = url; this.maxPendingJoins = maxPendingJoins
     this.challenges = new Map()
+    this.pairingTrust = pairingTrust
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS hub_management (key TEXT PRIMARY KEY,value TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS hub_join_requests (id TEXT PRIMARY KEY,public_key TEXT NOT NULL,label TEXT NOT NULL,status TEXT NOT NULL,created_at INTEGER NOT NULL,expires_at INTEGER NOT NULL,version INTEGER NOT NULL DEFAULT 1,instance_id TEXT);
@@ -32,7 +34,8 @@ export class HubManagement {
     this.db.prepare('INSERT OR IGNORE INTO hub_management VALUES (?,?)').run('hubId', randomUUID())
     this.hubId = this.db.prepare('SELECT value FROM hub_management WHERE key=?').get('hubId').value
   }
-  info() { return { hubId: this.hubId, ...(this.url ? { url: this.url, code: hubCode(this.hubId, this.url) } : {}) } }
+  info() { return { hubId: this.hubId, ...(this.url ? { url: this.url, code: this.pairingTrust
+    ? signedHubCode(this.hubId, this.url, { ...this.pairingTrust, now: this.now() }) : hubCode(this.hubId, this.url) } : {}) } }
   rate(key, limit = 20, windowMs = 60000) {
     const window = Math.floor(this.now() / windowMs) * windowMs, id = digest(key)
     this.db.prepare('DELETE FROM hub_rate_limits WHERE window<?').run(this.now() - 2 * day)

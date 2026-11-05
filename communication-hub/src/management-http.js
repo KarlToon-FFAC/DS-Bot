@@ -8,6 +8,7 @@ export function initializeAdmin(management, password) {
   requireThat(typeof password === 'string' && password.length >= 16 && password.length <= 1024, 'INVALID_ADMIN_PASSWORD')
   const salt = randomBytes(16).toString('hex'), verifier = scryptSync(password, salt, 32).toString('hex')
   management.db.prepare('INSERT INTO hub_management VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run('adminVerifier', JSON.stringify({ salt, verifier }))
+  management.db.prepare("INSERT INTO hub_management VALUES ('adminRevision','1') ON CONFLICT(key) DO UPDATE SET value=CAST(value AS INTEGER)+1").run()
   management.audit('admin.initialize', 'local')
 }
 export function createManagementHttp(management, { password, origin, onRevoke = id => management.revoke(id) } = {}) {
@@ -15,6 +16,7 @@ export function createManagementHttp(management, { password, origin, onRevoke = 
   requireThat(origin.startsWith('https:') || ['127.0.0.1', '[::1]'].includes(new URL(origin).hostname), 'TLS_REQUIRED')
   const secure = origin.startsWith('https:'), sessions = new Map()
   let verifier
+  let revision = management.db.prepare("SELECT value FROM hub_management WHERE key='adminRevision'").get()?.value ?? '0'
   if (password !== undefined) {
     requireThat(typeof password === 'string' && password.length >= 16 && password.length <= 1024, 'INVALID_ADMIN_PASSWORD')
     const salt = randomBytes(16).toString('hex'); verifier = { salt, verifier: scryptSync(password, salt, 32).toString('hex') }
@@ -24,15 +26,15 @@ export function createManagementHttp(management, { password, origin, onRevoke = 
   }
   const check = value => typeof value === 'string' && value.length <= 1024 && same(scryptSync(value, verifier.salt, 32).toString('hex'), verifier.verifier)
   const cookie = token => `dsbot_hub_admin=${token}; Path=/admin; HttpOnly; SameSite=Strict; Max-Age=900${secure ? '; Secure' : ''}`
-  const headers = { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer',
+  const headers = { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'referrer-policy': 'same-origin',
     'content-security-policy': "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'" }
   const send = (res, status, value, extra = {}) => { res.writeHead(status, { ...headers, 'content-type': 'application/json', ...extra }); res.end(JSON.stringify(value)) }
-  const body = async req => {
-    requireThat((req.headers['content-type'] ?? '').split(';')[0] === 'application/json', 'INVALID_REQUEST')
+  const body = async (req, form = false) => {
+    requireThat((req.headers['content-type'] ?? '').split(';')[0] === (form ? 'application/x-www-form-urlencoded' : 'application/json'), 'INVALID_REQUEST')
     let size = 0, chunks = []
     for await (const chunk of req) { size += chunk.length; requireThat(size <= 8192, 'PAYLOAD_TOO_LARGE'); chunks.push(chunk) }
     let value
-    try { value = JSON.parse(Buffer.concat(chunks).toString('utf8')) } catch { requireThat(false, 'INVALID_REQUEST') }
+    try { value = form ? Object.fromEntries(new URLSearchParams(Buffer.concat(chunks).toString('utf8'))) : JSON.parse(Buffer.concat(chunks).toString('utf8')) } catch { requireThat(false, 'INVALID_REQUEST') }
     requireThat(value && typeof value === 'object' && !Array.isArray(value), 'INVALID_REQUEST'); return value
   }
   const handler = async (req, res) => {
@@ -52,15 +54,22 @@ export function createManagementHttp(management, { password, origin, onRevoke = 
         res.writeHead(200, { ...headers, 'content-type': 'text/javascript; charset=utf-8' }); res.end((await import('./management-ui.js')).managementScript); return true
       }
       requireThat(req.method === 'POST', 'INVALID_REQUEST')
+      const currentRevision = management.db.prepare("SELECT value FROM hub_management WHERE key='adminRevision'").get()?.value ?? '0'
+      if (currentRevision !== revision) {
+        sessions.clear(); revision = currentRevision
+        verifier = JSON.parse(management.db.prepare("SELECT value FROM hub_management WHERE key='adminVerifier'").get().value)
+      }
       for (const [key, session] of sessions) if (session.expires <= management.now()) sessions.delete(key)
       const address = req.socket.remoteAddress ?? 'unknown'
-      if (path === '/admin/api/login') {
+      if (path === '/admin/api/login' || path === '/admin/login') {
         requireThat(requestOrigin === origin, 'ORIGIN_REJECTED')
         management.rate('admin-login:global', 30); management.rate(`admin-login:${address}`, 5)
-        const input = await body(req); requireThat(check(input.password), 'UNAUTHENTICATED')
+        const input = await body(req, path === '/admin/login'); requireThat(check(input.password), 'UNAUTHENTICATED')
+        requireThat(input.username === undefined || input.username === 'admin', 'UNAUTHENTICATED')
         requireThat(sessions.size < 64, 'RATE_LIMITED')
         const token = randomBytes(32).toString('base64url'), csrf = randomBytes(32).toString('base64url')
         sessions.set(digest(token), { csrf, expires: management.now() + 900000 })
+        if (path === '/admin/login') { res.writeHead(303, { ...headers, location: '/admin/', 'set-cookie': cookie(token) }); res.end(); return true }
         send(res, 200, { ok: true, csrf }, { 'set-cookie': cookie(token) }); return true
       }
       const bearer = /^Bearer ([^\s]+)$/.exec(req.headers.authorization ?? '')?.[1]
@@ -72,10 +81,15 @@ export function createManagementHttp(management, { password, origin, onRevoke = 
       } else {
         const token = /(?:^|;\s*)dsbot_hub_admin=([^;]+)/.exec(req.headers.cookie ?? '')?.[1]
         session = token && sessions.get(digest(token))
-        requireThat(session && requestOrigin === origin && same(req.headers['x-csrf-token'], session.csrf), 'UNAUTHENTICATED')
+        requireThat(session && requestOrigin === origin && (path === '/admin/api/session' || same(req.headers['x-csrf-token'], session.csrf)), 'UNAUTHENTICATED')
       }
       const input = await body(req)
       let value
+      if (path === '/admin/api/session') { requireThat(session, 'UNAUTHENTICATED'); send(res, 200, { ok: true, csrf: session.csrf }); return true }
+      if (path === '/admin/api/sessions/revoke') {
+        sessions.clear(); management.audit('admin.sessions.revoke', 'all')
+        send(res, 200, { ok: true }, { 'set-cookie': cookie('') + '; Max-Age=0' }); return true
+      }
       if (path === '/admin/api/logout') {
         if (session) for (const [key, s] of sessions) if (s === session) sessions.delete(key)
         send(res, 200, { ok: true }, { 'set-cookie': cookie('') + '; Max-Age=0' }); return true
@@ -89,6 +103,11 @@ export function createManagementHttp(management, { password, origin, onRevoke = 
       send(res, 200, { ok: true, value })
     } catch (error) {
       const code = ['INVALID_REQUEST', 'UNAUTHENTICATED', 'ORIGIN_REJECTED', 'RATE_LIMITED', 'PAYLOAD_TOO_LARGE', 'JOIN_VERSION_CONFLICT', 'PAIRING_REVISION_CONFLICT', 'INSTANCE_NOT_FOUND', 'INSTANCE_NAME_VERSION_CONFLICT', 'UNKNOWN_OPERATION', 'ALREADY_ENROLLED', 'DIRECTORY_FULL'].includes(error.code) ? error.code : 'MANAGEMENT_UNAVAILABLE'
+      if (path === '/admin/login') {
+        res.writeHead(code === 'RATE_LIMITED' ? 429 : 401, { ...headers, 'content-type': 'text/html; charset=utf-8' })
+        res.end(managementPage.replace('<p id="error" role="status"></p>', '<p id="error" role="alert">Sign-in failed. Check the trusted address and password, or wait before trying again.</p>'))
+        return true
+      }
       send(res, code === 'RATE_LIMITED' ? 429 : code === 'UNAUTHENTICATED' ? 401 : 400, { ok: false, error: { code } })
     }
     return true

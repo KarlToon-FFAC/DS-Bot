@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import { mkdir } from 'node:fs/promises'
 import { createHash, randomUUID } from 'node:crypto'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import { normalizeAttachments, attachmentMetadata, ATTACHMENT_CAPABILITY } from '../../shared/communication-attachments.js'
 import { CommunicationQueue } from './queue-store.js'
 import { CommunicationTransport, communicationUrl } from './transport.js'
 import { completedOutputs, inspectBinding, interruptedInputs, reconcileInput, recoverBinding, resumePendingInput, resumeInterruptedInput, SOURCE_KIND } from './session-journal.js'
@@ -18,7 +19,7 @@ import { COMMUNICATION_PRESET, hasCommunicationPreset, communicationInputs, sour
 const PROTOCOL = 'dsbot-communication/1'
 const fail = code => { throw Object.assign(new Error(code), { code }) }
 const operationId = source => `communication-${createHash('sha256').update(source).digest('hex')}`
-const humanSendIntent = input => JSON.stringify([input.conversationId, input.text, input.clientCreatedAt, input.mentions ?? [], input.replyToMessageId ?? null, input.membershipEpoch ?? null])
+const humanSendIntent = input => JSON.stringify([input.conversationId, input.text, input.clientCreatedAt, input.mentions ?? [], input.replyToMessageId ?? null, input.membershipEpoch ?? null, ...(input.attachments?.length ? [input.attachments] : [])])
 
 export class CommunicationRuntime {
   constructor(rt, settings, credential, toolDefinitions, { onAuthenticationFailure } = {}) {
@@ -307,7 +308,9 @@ export class CommunicationRuntime {
     }
   }
   message(principalId, conversationId, { text, mentions = [], activationTargets = [], replyToMessageId = null, responseToDeliveryId, causationDeliveryId, membershipEpoch, messageId = randomUUID(), clientCreatedAt = new Date().toISOString(), attachments, files } = {}) {
-    if (attachments || files) fail('UNSUPPORTED_CONTENT')
+    if (files) fail('UNSUPPORTED_CONTENT')
+    const admitted = normalizeAttachments(attachments)
+    if(admitted.length&&!this.transport.welcome?.capabilities?.includes(ATTACHMENT_CAPABILITY))fail('ATTACHMENT_CAPABILITY_REQUIRED')
     if (typeof text !== 'string') fail('INVALID_REQUEST')
     const info = this.conversations?.get(conversationId), members = info?.members
     const contacts = members ? members.map(member => ({ ...this.contacts.find(contact => contact.principalId === member.principalId), ...member })) : this.contacts
@@ -318,6 +321,7 @@ export class CommunicationRuntime {
     return { protocol: PROTOCOL, type: 'message.publish', messageId, conversationId,
       author: { principalId, homeInstanceId: this.queue.instanceId, kind: principalId.startsWith('human:') ? 'human' : 'bot' },
       clientCreatedAt, content: { format: 'markdown', text },
+      ...(admitted.length ? { attachments:admitted } : {}),
       mentions: communicationMentions(text, contacts, mentions, { displayOnly: bot }),
       ...(bot ? { activationTargets: activationTargets.map(item => ({ principalId: typeof item === 'string' ? item : item.principalId })) } : {}),
       replyToMessageId, ...(responseToDeliveryId ? { responseToDeliveryId } : {}),
@@ -327,7 +331,7 @@ export class CommunicationRuntime {
   sendHuman(input) {
     if (typeof input.messageId !== 'string' || typeof input.clientCreatedAt !== 'string') fail('INVALID_REQUEST')
     if (input.responseToDeliveryId !== undefined || input.causationDeliveryId !== undefined) fail('INVALID_REQUEST')
-    if (input.attachments || input.files) fail('UNSUPPORTED_CONTENT')
+    if (input.files) fail('UNSUPPORTED_CONTENT')
     const saved = this.queue.intent(input.messageId)
     if (saved) {
       if (saved.type !== 'message.publish' || saved.payload.author?.principalId !== this.human.principalId) fail('MESSAGE_ID_CONFLICT')
@@ -424,7 +428,8 @@ export class CommunicationRuntime {
     const memberships = this.everReconciled ? this.queue.memberships().filter(member => member.principalId === this.human.principalId) : []
     const managementUrl = safeManagementUrl(this.transport.welcome?.managementUrl)
     return { enabled: true, connected: this.transport.connected, reconciled: this.everReconciled, instanceId: this.queue.instanceId, humanPrincipalId: this.human.principalId,
-      hubUrl: this.settings.url, hubId: this.settings.hubId ?? this.transport.welcome?.hubId ?? null,
+      hubUrl: this.settings.url, hubId: this.settings.hubId ?? this.transport.welcome?.hubId ?? null, queueScope:this.settings.queueScope??'legacy',
+      attachmentsAvailable: this.transport.welcome?.capabilities?.includes(ATTACHMENT_CAPABILITY) === true,
       managementUrl, managementAvailable: managementUrl !== null,
       lastConnectedAt: this.lastConnectedAt ?? null, error: this.transportError ?? this.lastError ?? null, avatarError: this.avatarError ?? null, contacts: this.contacts,
       limits: this.queue.limits,
@@ -496,7 +501,7 @@ export class CommunicationRuntime {
         ?? this.conversations?.get(delivery.conversationId)?.members.find(member => member.principalId === event.message.author.principalId)
       return JSON.stringify({ messageId: event.message.messageId, author: event.message.author,
         displayName: person?.displayName ?? event.message.author.principalId, instanceLabel: person?.instanceLabel,
-        content: event.message.content, mentions: event.message.mentions, activationTargets: event.message.activationTargets ?? null, replyToMessageId: event.message.replyToMessageId,
+        content: event.message.content, attachments:attachmentMetadata(event.message.attachments), mentions: event.message.mentions, activationTargets: event.message.activationTargets ?? null, replyToMessageId: event.message.replyToMessageId,
         ...(event.causality ? { causality: event.causality } : {}),
         ...(event.dispatchSuppressed ? { dispatchSuppressed: event.dispatchSuppressed } : {}) })
     }
@@ -550,12 +555,24 @@ export class CommunicationRuntime {
       agent = await this.ensureSession(binding, bot, { fresh: true })
       recovered.sessions = await inspectBinding(this.ctx.sessionController, binding, AbortSignal.timeout(15000))
     }
-    this.queue.aiState(delivery.deliveryId, 'injecting')
-    this.attempted.add(delivery.deliveryId)
     sessions = recovered.sessions
     const current = sessions.find(session => session.sessionId === agent.id)
     const emptySession = !current?.events.some(event => event.type === 'user/message')
-    agent.followup(createUserMessage({ source, content: [{ type: 'text', text: this.inputText(delivery, binding, emptySession) }] }))
+    const attachments = normalizeAttachments(delivery.event.message.attachments)
+    const content = [{ type:'text',text:this.inputText(delivery,binding,emptySession) }]
+    if(attachments.length){
+      const store=this.ctx.get('attachments')
+      if(!store?.admitPromptContent||!store?.admitEncodedFile)fail('ATTACHMENT_SERVICE_UNAVAILABLE')
+      for(const file of attachments){
+        if(file.mime.startsWith('image/'))content.push(...await store.admitPromptContent([{type:'image',mediaType:file.mime,data:file.data,name:file.name}]))
+        else content.push({type:'file',attachment:await store.admitEncodedFile({data:file.data,name:file.name})})
+      }
+      // Admission can yield. Recheck authoritative membership before injection.
+      await this.authorize(binding)
+    }
+    this.queue.aiState(delivery.deliveryId, 'injecting')
+    this.attempted.add(delivery.deliveryId)
+    agent.followup(createUserMessage({ source, content }))
     await this.ctx.sessions.flush(agent.session)
     await this.ctx.parallel('ds-bot/communication-checkpoint', { point: 'after-injection', deliveryId: delivery.deliveryId, messageId: delivery.messageId,
       conversationId: delivery.conversationId, bindingId: binding.id, sessionId: agent.id })
@@ -650,21 +667,21 @@ export class CommunicationRuntime {
     for (const binding of this.queue.bindings()) {
       try { await this.export(binding); await this.recoverInterrupted(binding) } catch (error) { this.errors.set(binding.id, error.code ?? 'RECOVERY_UNKNOWN') }
     }
-    const seen = new Set()
+    const seen = new Set(), injectionFailed = new Set()
     for (const delivery of this.queue.pendingAi()) {
       const key = JSON.stringify([delivery.conversationId, delivery.recipientPrincipalId, delivery.membershipEpoch])
       if (seen.has(key)) continue
       seen.add(key)
       try { await this.consume(delivery) } catch (error) {
         const binding = this.queue.bindings().find(item => item.conversationId === delivery.conversationId && item.recipientPrincipalId === delivery.recipientPrincipalId && item.membershipEpoch === delivery.membershipEpoch)
-        if (binding) this.errors.set(binding.id, error.code ?? 'INJECTION_UNKNOWN')
+          if (binding) { this.errors.set(binding.id, error.code ?? 'INJECTION_UNKNOWN'); injectionFailed.add(binding.id) }
         else this.lastError = error.code ?? 'INJECTION_UNKNOWN'
       }
     }
     for (const binding of this.queue.bindings()) {
       try {
         await this.export(binding)
-        if (!['INPUT_CANCELED','COMMUNICATION_SESSION_MIGRATION_REQUIRED','COMMUNICATION_INPUT_SOURCE_UNKNOWN'].includes(this.errors.get(binding.id))) this.errors.delete(binding.id)
+          if (!injectionFailed.has(binding.id) && !['INPUT_CANCELED','COMMUNICATION_SESSION_MIGRATION_REQUIRED','COMMUNICATION_INPUT_SOURCE_UNKNOWN'].includes(this.errors.get(binding.id))) this.errors.delete(binding.id)
         const failed = this.queue.exportFailures().find(item => item.bindingId === binding.id)
         if (failed) this.errors.set(binding.id, failed.code ?? 'EXPORT_REJECTED')
       } catch (error) { this.errors.set(binding.id, error.code ?? 'EXPORT_UNKNOWN') }

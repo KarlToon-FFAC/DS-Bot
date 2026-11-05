@@ -47,8 +47,10 @@ export function conversationTitle(member, humanId, labels) {
 export function principalAvatar(principalId, displayName = '') {
   let hash = 0
   for (const char of String(principalId)) hash = (hash * 31 + char.codePointAt(0)) >>> 0
-  return { initials: [...(displayName.trim() || '?')].slice(0, 2).join('').toUpperCase(), variant: hash % 4 }
+  const chars = [...(displayName.trim() || '?')]
+  return { initials: /\p{Script=Han}/u.test(chars[0]) ? chars[0] : chars.slice(0, 2).join('').toUpperCase(), variant: hash % 4 }
 }
+export const communicationScope = state => state?.queueScope && state.queueScope !== 'legacy' ? `${state.hubId??state.hubUrl}:${state.instanceId}` : state?.instanceId
 
 export function mentionQuery(text, caret) {
   const before = text.slice(0, caret)

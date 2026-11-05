@@ -187,7 +187,7 @@ test('payload limits count UTF-8 bytes; attachments, cross-conversation referenc
   const conversationId=store.createDm(a,operation({principalId:A,otherPrincipalId:B})).conversationId
   assert.throws(()=>store.publish(a,message(A,conversationId,'中文啊')),{code:'PAYLOAD_TOO_LARGE'})
   const first=message(A,conversationId,'中文');store.publish(a,first)
-  assert.throws(()=>store.publish(a,message(A,conversationId,'x',{attachments:[{}]})),{code:'UNSUPPORTED_CONTENT'})
+  assert.throws(()=>store.publish(a,message(A,conversationId,'x',{attachments:[{}]})),{code:'INVALID_ATTACHMENT'})
   assert.throws(()=>store.publish(b,first),{code:'AUTHOR_MISMATCH'})
   const second=store.createDm(a,operation({principalId:A,otherPrincipalId:J})).conversationId
   assert.throws(()=>store.publish(a,message(A,second,'x',{replyToMessageId:first.messageId})),{code:'INVALID_REPLY_TARGET'})

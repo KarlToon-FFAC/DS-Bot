@@ -9,12 +9,22 @@ import { LocalTopology, until } from './local-topology.mjs'
 import { benchClient, repo } from './bench-client.mjs'
 import { startHub } from '../../../communication-hub/src/server.js'
 import { CommunicationError } from '../../../communication-hub/src/protocol.js'
+import { createServer as createHttpServer } from 'node:http'
+import { createManagementHttp } from '../../../communication-hub/src/management-http.js'
+import { caFixture } from '../../test/fixtures/hub-ca-fixture.mjs'
 
 if(process.argv[2]==='--owned-hub'){
   let denied=null
-  const hub=await startHub({databasePath:process.argv[3],port:3194,peers:[],management:{enabled:true,password:process.env.DSBOT_TEST_ADMIN_PASSWORD,url:'ws://127.0.0.1:3194/communication'},beforeRequest:request=>{
+  const scoped=process.argv.includes('--scoped-ca'),fixture=scoped?caFixture():null,ca=fixture?.ca('native-root'),leaf=ca?fixture.leaf('native-leaf',ca):null
+  const hub=await startHub({databasePath:process.argv[3],port:3194,peers:[],...(leaf?{tls:{cert:leaf.cert,key:leaf.key}}:{}),management:{enabled:true,password:process.env.DSBOT_TEST_ADMIN_PASSWORD,url:`${scoped?'wss':'ws'}://127.0.0.1:3194/communication`,...(ca?{pairingCa:ca.pem}:{})},beforeRequest:request=>{
     if(request.type==='message.publish'&&denied?.principalId===request.payload.author?.principalId&&denied.conversationId===request.payload.conversationId)throw new CommunicationError('STORAGE_UNAVAILABLE')
   }})
+  let browserAdmin
+  if(scoped){
+    const handler=createManagementHttp(hub.management,{password:process.env.DSBOT_TEST_ADMIN_PASSWORD,origin:'http://127.0.0.1:3195'})
+    browserAdmin=createHttpServer(async(req,res)=>{if(!await handler.handle(req,res)){res.writeHead(404);res.end()}})
+    await new Promise(resolve=>browserAdmin.listen(3195,'127.0.0.1',resolve))
+  }
   delete process.env.DSBOT_TEST_ADMIN_PASSWORD
   process.on('message',message=>{
     let value
@@ -24,26 +34,27 @@ if(process.argv[2]==='--owned-hub'){
     else return process.send({id:message.id,ok:false})
     process.send({id:message.id,ok:true,value})
   })
-  process.once('disconnect',()=>void hub.close().finally(()=>process.exit(0)))
+  process.once('disconnect',()=>void hub.close().finally(()=>{browserAdmin?.close();fixture?.close();process.exit(0)}))
   process.send({type:'ready'})
   await new Promise(()=>{})
 }
 
 const nonce=randomUUID().slice(0,8),topology=new LocalTopology({prefix:`hub-onboard-${nonce}`,webPort:3185,mockPort:8885,hubPort:3194})
 const output=join(topology.root,`${topology.prefix}-acceptance.json`),enrollOnly=process.argv.includes('--enroll-only'),liveForBrowser=process.argv.includes('--live-for-browser')
+const scopedCa=process.argv.includes('--scoped-ca')
 const evidence={status:'RUNNING',scope:enrollOnly?'enrollment minimum':'full onboarding/consent/avatar acceptance',network:'same-machine loopback',model:'local deterministic Mock',prefix:topology.prefix,cases:[],uncovered:['cross-physical-machine/WSS deployment','real model/GUI behavior','reject/expire/admin-revoke-repair/rate-limit/replay/forgery (independent unit suites)'],temporaryKeys:'Fresh isolated DSH SDK records only; owned profiles deleted after stopping processes by default. --keep-profiles retains them privately for diagnosis.'}
 const save=()=>writeFileSync(output,JSON.stringify(evidence,null,2))
 const record=(id,detail={})=>{evidence.cases.push({id,status:'PASS',...detail});save();console.log(`PASS ${id}`)}
 const stage=value=>{evidence.stage=value;save()}
 const milestone=value=>{(evidence.minimumMilestones??=[]).push(value);save()}
 // Public synthetic password is opt-in and valid only for this isolated GUI fixture.
-const adminPassword=liveForBrowser?'mock-only-hub-admin-browser-pass-20261104':randomBytes(24).toString('base64url'),origin='http://127.0.0.1:3194'
+const adminPassword=liveForBrowser?'mock-only-hub-admin-browser-pass-20261104':randomBytes(24).toString('base64url'),origin=`http://127.0.0.1:${scopedCa?3195:3194}`
 let adminCookie,csrf
 let browserReadyPath,browserReady
 const ownerEnv=process.env.DSBOT_COMMUNICATION_OWNER_PID
 process.env.DSBOT_COMMUNICATION_OWNER_PID=String(process.pid)
 const bench=topology.bench.bind(topology)
-topology.bench=(peer,action,extra={})=>bench(peer,action,{DSBOT_COMMUNICATION_OWNER_PID:String(process.pid),DSBOT_COMMUNICATION_ONBOARDING_FIXTURE:'1',DSBOT_COMMUNICATION_CONFIG:'',DSBOT_COMMUNICATION_CREDENTIAL:'',...extra})
+topology.bench=(peer,action,extra={})=>bench(peer,action,{DSBOT_COMMUNICATION_OWNER_PID:String(process.pid),...(process.argv.includes('--play')?{DSBOT_COMMUNICATION_TEST_LIFETIME_MS:String(3.5*60*60*1000)}:{}),DSBOT_COMMUNICATION_ONBOARDING_FIXTURE:'1',DSBOT_COMMUNICATION_CONFIG:'',DSBOT_COMMUNICATION_CREDENTIAL:'',...extra})
 const freePort=port=>new Promise((resolve,reject)=>{const server=createServer();server.once('error',()=>reject(new Error(`Required isolated port ${port} occupied`)));server.listen(port,'127.0.0.1',()=>server.close(resolve))})
 const deadline=setTimeout(()=>{console.error('Acceptance deadline exceeded');void topology.close().finally(()=>process.exit(1))},12*60*1000)
 async function api(peer,endpoint,input={}){
@@ -95,9 +106,9 @@ async function connected(peer){
   return value
 }
 async function minimum(){
-  for(const port of [3185,3186,8885,8886,3194])await freePort(port)
+  for(const port of [3185,3186,8885,8886,3194,...(scopedCa?[3195]:[])])await freePort(port)
   for(const peer of topology.peers){peer.home=join(repo,`.dsh-test-${peer.name}`);assert.equal(existsSync(peer.home),false,'fresh unconfigured profile only')}
-  const child=fork(import.meta.filename,['--owned-hub',join(topology.root,`${topology.prefix}-hub.sqlite`)],{windowsHide:true,stdio:['ignore','ignore','ignore','ipc'],env:{...process.env,DSBOT_TEST_ADMIN_PASSWORD:adminPassword}})
+  const child=fork(import.meta.filename,['--owned-hub',join(topology.root,`${topology.prefix}-hub.sqlite`),...(scopedCa?['--scoped-ca']:[])],{windowsHide:true,stdio:['ignore','ignore','ignore','ipc'],env:{...process.env,DSBOT_TEST_ADMIN_PASSWORD:adminPassword}})
   topology.child=child
   await new Promise((resolveReady,reject)=>{const timer=setTimeout(()=>reject(new Error('Owned management Hub startup timeout')),15000);child.once('message',message=>{clearTimeout(timer);assert.equal(message.type,'ready');resolveReady()});child.once('exit',()=>{clearTimeout(timer);reject(new Error('Owned management Hub exited'))})})
   const info=await (await fetch(origin+'/hub-info',{signal:AbortSignal.timeout(10000)})).json()
@@ -113,7 +124,8 @@ async function minimum(){
     const decoded=await api(peer,'decode-hub-code',{hubCode:info.code})
     assert.equal(decoded.hubId,info.hubId)
     stage(`${peer.id}: SDK join submission`)
-    const pending=await api(peer,'join-hub',{hubCode:info.code,confirmedHubId:decoded.hubId,confirmedUrl:decoded.url,displayName:`Enrolled ${peer.id.toUpperCase()} ${nonce}`})
+    if(scopedCa){assert.equal(decoded.version,2);assert.ok(decoded.trustFingerprint)}
+    const pending=await api(peer,'join-hub',{hubCode:info.code,confirmedHubId:decoded.hubId,confirmedUrl:decoded.url,...(decoded.trustFingerprint?{confirmedTrustFingerprint:decoded.trustFingerprint}:{}),displayName:`Enrolled ${peer.id.toUpperCase()} ${nonce}`})
     assert.equal(pending.status,'pending');peer.requestId=pending.requestId
     const pendingStorage=await api(peer,'onboarding-storage',{hubId:info.hubId})
     assert.equal(pendingStorage.configured,true);assert.equal(pendingStorage.storage.kind,'dsh-credential-record')
@@ -247,8 +259,22 @@ async function full(){
 async function peerLook(peer,payload){return peer.client.request('/api/bot',{endpoint:'update-bot',payload:{id:peer.botId,...payload}})}
 async function holdForBrowser(){
   clearTimeout(deadline)
+  // Restart exercises saved SDK-scoped trust with no CA environment variable.
+  for(const peer of topology.peers){
+    await topology.bench(peer,'stop');await topology.bench(peer,'start',{DSBOT_WEB_OPEN:'1'});await reconnectClient(peer);await connected(peer)
+  }
+  record('native-process-restart-reloads-saved-Hub-scoped-CA')
+  if(scopedCa){
+    const info=await(await fetch(origin+'/hub-info')).json(),peer=topology.peers[0],decoded=await api(peer,'decode-hub-code',{hubCode:info.code})
+    const updated=await cli(peer,'update-hub-trust',{hubCode:info.code,confirmedHubId:decoded.hubId,confirmedUrl:decoded.url,confirmedTrustFingerprint:decoded.trustFingerprint})
+    assert.equal(updated.instanceId,peer.instanceId);await connected(peer)
+    record('native-Human-CLI-explicit-trust-update-verifies-real-Hub-and-preserves-instance')
+  }
+  const reference=await topology.peers[0].client.request('/api/bot',{endpoint:'create-bot',payload:{name:'Reviewer',model:'deepseek-official/deepseek-v4-pro'}})
+  const local=await topology.peers[0].client.request('/api/bot',{endpoint:'create-room',payload:{name:'Local layout reference',members:[topology.peers[0].botId,reference.id]}})
+  evidence.localReferenceRoom=local.id
   const info=await (await fetch(origin+'/hub-info',{signal:AbortSignal.timeout(10000)})).json()
-  const stopFile=join(topology.root,`${topology.prefix}-browser-stop`),expiresAt=Date.now()+12*60*1000
+  const stopFile=join(topology.root,`${topology.prefix}-browser-stop`),expiresAt=Date.now()+(process.argv.includes('--play')?3*60*60*1000:30*60*1000)
   browserReadyPath=join(topology.root,`${topology.prefix}-browser-ready.json`)
   browserReady={status:'READY',expiresAt:new Date(expiresAt).toISOString(),profiles:topology.peers.map(peer=>({url:`http://127.0.0.1:${peer.web}/`,instanceId:peer.instanceId,humanPrincipalId:peer.human,...(peer.bot?{botPrincipalId:peer.bot}:{})})),hub:{origin,hubId:info.hubId,code:info.code},stopFile}
   writeFileSync(browserReadyPath,JSON.stringify(browserReady,null,2))

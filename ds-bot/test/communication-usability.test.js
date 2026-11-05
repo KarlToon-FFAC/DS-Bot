@@ -34,7 +34,10 @@ async function pane({ enabled = true, snapshot, history = [], getState, handleRe
   let root = createRoot(dom.window.document.getElementById('root'))
   const doc = dom.window.document
   const button = label => [...doc.querySelectorAll('button')].find(node => node.textContent === label || node.getAttribute('aria-label') === label)
-  const click = async label => { assert.ok(button(label), `button: ${label}`); await act(async () => button(label).click()) }
+  const click = async label => {
+    if (!button(label) && ['New group','New message'].includes(label)) await act(async()=>button('New…').click())
+    assert.ok(button(label), `button: ${label}`); await act(async () => button(label).click())
+  }
   const edit = async (node, value) => {
     await act(async () => {
       const type = node.tagName === 'SELECT' ? dom.window.HTMLSelectElement : node.tagName === 'TEXTAREA' ? dom.window.HTMLTextAreaElement : dom.window.HTMLInputElement
@@ -61,6 +64,167 @@ async function pane({ enabled = true, snapshot, history = [], getState, handleRe
 const membership = { conversationId: 'group', title: 'Shared group', kind: 'group', role: 'owner', speakingMode: 'speak', membershipEpoch: 'epoch', membershipVersion: 1,
   ownerPrincipalId: 'human:a:owner', joinSeq: 1, watermark: 1, info: { members: [{ principalId: 'human:a:owner', displayName: 'Owner', kind: 'human', role: 'owner', speakingMode: 'speak' }] } }
 const state = () => ({ connected: true, instanceId: 'a', humanPrincipalId: 'human:a:owner', contacts: [], conversations: [], invites: [], outbox: [], errors: [] })
+
+test('picked files can be sent without text using one stable request and clear only after acknowledgement',async()=>{
+ const snapshot={...state(),attachmentsAvailable:true,conversations:[membership]}
+ await pane({snapshot},async({dom,doc,click,calls,button})=>{
+  await click('Shared group')
+  const picker=doc.querySelector('input[type=file]');assert.ok(picker)
+  Object.defineProperty(picker,'files',{configurable:true,value:[{name:'合成文档.txt',type:'text/plain',size:4,arrayBuffer:async()=>new Uint8Array([116,101,115,116]).buffer}]})
+  await act(async()=>{picker.dispatchEvent(new dom.window.Event('change',{bubbles:true}));await new Promise(resolve=>setTimeout(resolve,25))})
+  assert.match(doc.querySelector('.bt-comm-attachment-drafts').textContent,/合成文档/)
+  assert.equal(button('Send message').disabled,false)
+  await click('Send message')
+  const sends=calls.filter(call=>call.endpoint==='send');assert.equal(sends.length,1)
+  assert.equal(sends[0].text,'');assert.equal(sends[0].attachments[0].data,'dGVzdA==')
+  assert.equal(sends[0].attachments[0].sha256,'9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08')
+  assert.equal(doc.querySelector('.bt-comm-attachment-drafts'),null)
+ })
+})
+
+test('oversized or unsupported attachments show non-chat feedback; readonly members have no picker',async()=>{
+ await pane({snapshot:{...state(),attachmentsAvailable:true,conversations:[membership]}},async({dom,doc,click,calls})=>{
+  await click('Shared group')
+  const picker=doc.querySelector('input[type=file]')
+  Object.defineProperty(picker,'files',{value:[{name:'too-large.bin',size:65537}]})
+  await act(async()=>{picker.dispatchEvent(new dom.window.Event('change',{bubbles:true}));await new Promise(resolve=>setTimeout(resolve,0))})
+  assert.match(doc.querySelector('.bt-comm-toast').textContent,/64 KiB/)
+  assert.equal(doc.querySelector('.bt-comm-log article'),null)
+  assert.equal(calls.some(call=>call.endpoint==='send'),false)
+ })
+ await pane({snapshot:{...state(),attachmentsAvailable:true,conversations:[{...membership,role:'member',speakingMode:'readOnly'}]}},async({doc,click})=>{
+  await click('Shared group');assert.equal(doc.querySelector('input[type=file]'),null)
+ })
+})
+
+test('remote file paste and drop stay in this composer without bubbling into local chat or auto-sending',async()=>{
+ for(const kind of ['paste','drop'])await pane({snapshot:{...state(),attachmentsAvailable:true,conversations:[membership]}},async({dom,doc,click,calls})=>{
+  await click('Shared group')
+  let escaped=0
+  doc.addEventListener(kind,()=>escaped++)
+  const event=new dom.window.Event(kind,{bubbles:true,cancelable:true})
+  Object.defineProperty(event,kind==='paste'?'clipboardData':'dataTransfer',{value:{files:[{name:kind+'.txt',type:'text/plain',size:4,arrayBuffer:async()=>new Uint8Array([116,101,115,116]).buffer}]}})
+  await act(async()=>{doc.querySelector('textarea[aria-label="Communication message"]').dispatchEvent(event);await new Promise(resolve=>setTimeout(resolve,25))})
+  assert.equal(event.defaultPrevented,true)
+  assert.equal(escaped,0,'remote file event must not reach local chat upload handlers')
+  assert.match(doc.querySelector('.bt-comm-attachment-drafts').textContent,new RegExp(kind+'\\.txt'))
+  assert.equal(doc.getElementById('native').value,'private draft')
+  assert.equal(calls.some(body=>body.endpoint==='send'),false)
+ })
+})
+
+test('switching Hubs with colliding conversation identity cannot display old history or reuse its draft',async()=>{
+ let snapshot={...state(),hubId:'hub-a',queueScope:'hub-a',conversations:[membership]},release
+ const event={type:'message',conversationSeq:1,serverAcceptedAt:'2026-11-04T00:00:00Z',message:{messageId:'old',author:membership.info.members[0],content:{text:'Only Hub A secret'},mentions:[]}}
+ await pane({getState:()=>snapshot,history:()=>snapshot.hubId==='hub-a'?[event]:new Promise(resolve=>{release=resolve})},async({doc,click,edit})=>{
+  await click('Shared group');assert.match(doc.querySelector('.bt-comm-log').textContent,/Only Hub A/)
+  await edit(doc.querySelector('textarea[aria-label="Communication message"]'),'Hub A private draft')
+  snapshot={...snapshot,hubId:'hub-b',queueScope:'hub-b'}
+  await click('Refresh status')
+  assert.doesNotMatch(doc.querySelector('.bt-comm-log').textContent,/Only Hub A/)
+  assert.equal(doc.querySelector('textarea[aria-label="Communication message"]').value,'')
+  await act(async()=>release([]))
+  snapshot={...snapshot,hubId:'hub-a',queueScope:'hub-a'};await click('Refresh status')
+  assert.equal(doc.querySelector('textarea[aria-label="Communication message"]').value,'Hub A private draft')
+ })
+})
+
+test('native-style title opens member details and returns keyboard focus without losing permission checks', async () => {
+  await pane({ snapshot: { ...state(), conversations: [membership] } }, async ({ doc, click, calls }) => {
+    await click('Shared group')
+    const pill = doc.querySelector('.bt-comm-title-pill')
+    assert.ok(pill.querySelector('.bt-comm-room-avatar'))
+    assert.equal(doc.querySelector('.bt-comm-members').open, false)
+    await act(async () => pill.click())
+    assert.equal(doc.querySelector('.bt-comm-members').open, true)
+    assert.ok(doc.querySelector('input[aria-label="Group name"]'))
+    await click('Close member settings')
+    assert.equal(doc.activeElement, pill)
+    assert.equal(doc.querySelector('.bt-comm-members>summary').tabIndex, -1)
+    assert.equal(calls.some(call => call.endpoint === 'save-settings'), false)
+    assert.ok(doc.querySelector('footer textarea[aria-label="Communication message"]'))
+    assert.equal(doc.querySelector('footer>button').getAttribute('aria-label'), 'Send message')
+  })
+})
+
+test('signed Hub review confirms exact scoped fingerprint and trust update never submits enrollment', async () => {
+  const hub = { version: 2, hubId: 'hub-review', url: 'wss://hub.example.test/communication', trustFingerprint: 'a'.repeat(64) }
+  const saved = { ...hub, status: 'approved', requestId: 'existing', instanceId: 'a' }
+  await pane({ enabled: false, handle: async body => {
+    if (body.endpoint === 'onboarding-storage') return { storage: { kind: 'test' }, enrollments: [saved] }
+    if (body.endpoint === 'decode-hub-code') return hub
+    if (body.endpoint === 'update-hub-trust') { assert.equal(body.confirmedTrustFingerprint, hub.trustFingerprint); assert.equal(body.confirmedHubId, hub.hubId); assert.equal(body.confirmedUrl, hub.url); return saved }
+    assert.fail(`Unexpected endpoint ${body.endpoint}`)
+  } }, async ({ doc, click, edit, calls }) => {
+    await click('Personal settings'); await click('Add a device')
+    await edit(doc.querySelector('textarea[aria-label="Hub code"]'), 'synthetic-v2-code')
+    await click('Review Hub')
+    assert.match(doc.querySelector('.bt-comm-onboarding').textContent, /trusted channel/)
+    assert.match(doc.querySelector('.bt-comm-onboarding').textContent, new RegExp(hub.trustFingerprint))
+    await click('Update this Hub CA trust')
+    assert.equal(calls.filter(call => call.endpoint === 'update-hub-trust').length, 1)
+    assert.equal(calls.some(call => call.endpoint === 'join-hub'), false)
+    assert.equal(doc.querySelector('a.bt-comm-admin-link'), null)
+  })
+})
+
+test('a host modal above restored remote communication does not compete for focus or consume Escape', async () => {
+  await pane({ snapshot: state() }, async ({ doc, dom, panel }) => {
+    const dialog=doc.createElement('section'),button=doc.createElement('button')
+    dialog.setAttribute('role','dialog');button.textContent='Host first-run';dialog.append(button);doc.body.append(dialog)
+    await act(async()=>button.focus())
+    assert.equal(doc.activeElement===button,true,'host modal keeps focus without a recursive trap')
+    await act(async()=>button.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true})))
+    assert.equal(panel.getSnapshot(),true,'host Escape does not close the underlying remote window')
+    dialog.remove()
+  })
+})
+
+test('native toolbar creation submenu supports both actions, keyboard, outside dismissal and return focus', async () => {
+  await pane({snapshot:state()},async({doc,dom,panel,click})=>{
+    assert.deepEqual([...doc.querySelectorAll('.bt-comm-nav-actions button')].map(node=>node.getAttribute('aria-label')),['Personal settings','Search','New…','Collapse sidebar'])
+    assert.equal(doc.querySelector('[role=menuitem]'),null)
+    await click('New…')
+    const items=[...doc.querySelectorAll('[role=menuitem]')]
+    assert.deepEqual(items.map(node=>node.textContent),['New message','New group'])
+    assert.equal(doc.activeElement===items[0],true)
+    await act(async()=>items[0].dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true})))
+    assert.equal(doc.activeElement===items[1],true)
+    await act(async()=>items[1].dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true})))
+    assert.equal(doc.querySelector('[role=menuitem]'),null);assert.equal(panel.getSnapshot(),true)
+    assert.equal(doc.activeElement.getAttribute('aria-label'),'New…')
+    for(const [action,label] of [['New message','New message'],['New group','New group']]){
+      await click(action);assert.ok(doc.querySelector(`.bt-comm-modal[aria-label="${label}"]`));await click('Cancel')
+    }
+    await click('New…');await act(async()=>doc.querySelector('main').dispatchEvent(new dom.window.Event('pointerdown',{bubbles:true})))
+    assert.equal(doc.querySelector('[role=menuitem]'),null)
+  })
+})
+
+test('sidebar restores across empty/chat/narrow navigation and scoped search preserves drafts without sending',async()=>{
+  const snapshot={...state(),conversations:[membership,{...membership,conversationId:'hidden',title:'Hidden group'}]}
+  await pane({snapshot},async({doc,dom,click,edit,calls,remount})=>{
+    await click('Collapse sidebar');assert.equal(doc.querySelector('.bt-comm-frame').dataset.collapsed,'true')
+    assert.equal(doc.activeElement.getAttribute('aria-label'),'Expand sidebar')
+    await remount();assert.equal(doc.querySelector('.bt-comm-frame').dataset.collapsed,'true')
+    await click('Expand sidebar');assert.equal(doc.querySelector('.bt-comm-frame').dataset.collapsed,'false')
+    await click('Hidden group');await click('Close on this device')
+    await click('Shared group');await edit(doc.querySelector('textarea[aria-label="Communication message"]'),'Keep this draft')
+    await click('Collapse sidebar')
+    await act(async()=>doc.activeElement.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'k',ctrlKey:true,bubbles:true})))
+    assert.ok(doc.querySelector('.bt-comm-modal[aria-label="Search"]'))
+    assert.doesNotMatch(doc.querySelector('.bt-comm-search').textContent,/Hidden group/)
+    const search=doc.querySelector('input[aria-label="Search conversations and contacts"]')
+    await edit(search,'no-match');await act(async()=>{for(const key of ['End','Enter'])search.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key,bubbles:true}))})
+    assert.match(doc.querySelector('.bt-comm-search').textContent,/No matching/)
+    await edit(search,'Shared');await act(async()=>search.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Enter',bubbles:true})))
+    assert.equal(doc.querySelector('.bt-comm-modal'),null)
+    assert.equal(doc.querySelector('textarea[aria-label="Communication message"]').value,'Keep this draft')
+    assert.equal(calls.some(call=>['send','create-group','dm'].includes(call.endpoint)),false)
+    await click('Conversations');assert.equal(doc.querySelector('.bt-comm-frame').dataset.collapsed,'false')
+    assert.equal(doc.querySelector('.bt-comm-frame').dataset.browse,'true')
+  })
+})
 
 test('uncertain enrollment restores its saved request, exposes safe diagnostics and never automatically resubmits', async () => {
   const hub = { hubId: 'onboarding-test', url: 'wss://hub.example.test/communication' }, storage = { defaultProvider: 'test', encryptedByDefault: false }
@@ -177,11 +341,14 @@ test('late thread responses cannot survive a selected conversation change or mem
 })
 
 test('unconfigured communication explains pairing without API calls, and keyboard users can return to local chats', async () => {
-  await pane({ enabled: false }, async ({ doc, dom, panel, calls, button }) => {
+  await pane({ enabled: false }, async ({ doc, dom, panel, calls, button, click }) => {
     assert.ok(doc.querySelector('[role=dialog][aria-modal=true]'))
     assert.match(doc.querySelector('.bt-comm-main').textContent, /Ask the Hub owner to configure communication/)
+    await click('New…')
     assert.equal(button('New group').disabled, true)
     assert.equal(calls.length, 0)
+    await act(async () => doc.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })))
+    assert.equal(panel.getSnapshot(), true, 'Escape closes the creation submenu first')
     await act(async () => doc.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })))
     assert.equal(panel.getSnapshot(), false)
     assert.equal(doc.getElementById('native').value, 'private draft')
@@ -208,7 +375,7 @@ test('partial invitations preserve the created group and never create another gr
     assert.equal(doc.querySelector('.bt-comm-modal'), null)
     assert.equal(doc.querySelector('input[aria-label="Group name"]'), null)
     assert.match(doc.querySelector('.bt-comm-toast').textContent, /Group created\. Some invitations were not sent/)
-    assert.match(doc.querySelector('.bt-comm-heading').textContent, /Group owner.*Can speak/)
+    assert.match(doc.querySelector('.bt-comm-main header').textContent, /Group owner.*Can speak/)
     assert.equal(doc.querySelector('.bt-comm-frame').dataset.browse, 'false')
   })
 })
@@ -238,7 +405,7 @@ test('connection recovery refreshes status without resending failures and naviga
     assert.equal(panel.getSnapshot(), true)
     await act(async () => memberSettings.querySelector('summary').click())
     await click('Close member settings')
-    assert.equal(doc.activeElement, memberSettings.querySelector('summary'))
+    assert.equal(doc.activeElement, doc.querySelector('.bt-comm-title-pill'))
     await click('Refresh status')
     assert.equal(calls.filter(call => call.endpoint === 'send').length, 0)
     assert.equal(doc.querySelector('textarea[aria-label="Communication message"]').value, 'Preserved draft')
@@ -768,25 +935,22 @@ test('routine failures, queues and reconciliation have no bottom console and act
   })
 })
 
-test('Hub management uses only the advertised enabled URL and explains unavailable or unsafe entries', async () => {
+test('Hub management is independent and has no entry in client settings or pairing', async () => {
   const snapshot = { ...state(), hubUrl: 'wss://hub.example.test:3190/communication', managementAvailable: true, managementUrl: 'https://manage.example.test:9443/admin/' }
   await pane({ snapshot }, async ({ doc, calls, click }) => {
     assert.equal(doc.querySelector('.bt-comm-nav a.bt-comm-admin-link'), null)
     assert.doesNotMatch(doc.querySelector('.bt-comm-nav').textContent, /Open Hub management|Hub management/)
     await click('Personal settings')
-    const link = doc.querySelector('.bt-comm-personal-settings a.bt-comm-admin-link')
-    assert.equal(link.href, snapshot.managementUrl)
-    assert.match(link.textContent, /https:\/\/manage.example.test:9443/)
-    assert.equal(link.target, '_blank'); assert.match(link.rel, /noopener/); assert.match(link.rel, /noreferrer/)
+    assert.equal(doc.querySelector('a.bt-comm-admin-link'), null)
+    assert.doesNotMatch(doc.querySelector('.bt-comm-personal-settings').textContent, /Open Hub management|Hub management/)
     assert.equal(calls.some(body => /management|admin/.test(body.endpoint)), false)
   })
   for (const options of [{ managementAvailable: false, managementUrl: null }, { managementAvailable: true, managementUrl: 'https://user:password@hub.example.test/admin/' }, { managementAvailable: true, managementUrl: 'http://remote.example.test/admin/' }]) {
     await pane({ snapshot: { ...snapshot, ...options } }, async ({ doc, click }) => {
       assert.equal(doc.querySelector('a.bt-comm-admin-link'), null)
       await click('Personal settings')
-      await click('Hub management')
-      assert.match(doc.querySelector('.bt-comm-modal').textContent, /has not provided an active management entry/)
-      await click('Open setup guide')
+      assert.doesNotMatch(doc.querySelector('.bt-comm-personal-settings').textContent, /Open Hub management|Hub management/)
+      await click('Add a device')
       assert.ok(doc.querySelector('[role=dialog][aria-label="Pairing guide"]'))
       assert.equal(doc.querySelector('a.bt-comm-admin-link'), null, 'no WSS-derived guessed management link in the guide')
     })

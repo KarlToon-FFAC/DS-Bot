@@ -3,18 +3,20 @@ import { createPortal } from 'react-dom'
 import { createSource } from './sources.js'
 import { t } from './i18n.js'
 import { useLinger } from './motion.js'
-import { contactLabels, conversationTitle, deliveryPhase, contactsByAddress, mentionQuery, mentionChoices, insertMention, retainedMentions, groupSettingsValues, groupSettingsChanges, referenceExcerpt, communicationLogEvents } from './communication-model.js'
-import { AddDevice, ContactManager, hubManagementAddress } from './communication-onboarding.js'
+import { contactLabels, conversationTitle, contactsByAddress, mentionQuery, mentionChoices, insertMention, retainedMentions, groupSettingsValues, groupSettingsChanges, referenceExcerpt, communicationLogEvents, communicationScope } from './communication-model.js'
+import { AddDevice, ContactManager } from './communication-onboarding.js'
 import { CommunicationAvatar, HumanProfile, syncAvatarDirectory } from './communication-profile.js'
 import { CommunicationMessage, BotWorkStarted } from './communication-message.js'
-import { ConversationRow } from './communication-list.js'
+import { selectedAttachments } from './communication-attachments.js'
+import { ConversationRow, ConversationAvatar } from './communication-list.js'
 import { CommunicationActivity } from './communication-activity.js'
 import { CommunicationThread } from './communication-thread.js'
-import { GearIcon } from './icons.js'
+import { GearIcon, ArrowUpIcon, CloseIcon, InfoIcon, PeopleIcon, ChatsIcon, SearchIcon, PlusIcon, SidebarIcon } from './icons.js'
 import { communicationCSS } from './communication-styles.js'
 import { communicationFailure as friendly, operationOutcomeUncertain } from './communication-errors.js'
 
 const OPEN = 'ds-bot:communication:open', SELECTED = 'ds-bot:communication:selected'
+const SIDEBAR_HIDDEN = 'ds-bot:communication:sidebar-hidden'
 const OPERATION_IDS = 'ds-bot:communication:operation-ids'
 const DRAFTS = 'ds-bot:communication:drafts', HIDDEN = 'ds-bot:communication:hidden', ATTEMPTS = 'ds-bot:communication:attempts'
 const read = (key, fallback) => { try { return JSON.parse(sessionStorage.getItem(key)) ?? fallback } catch { return fallback } }
@@ -82,7 +84,7 @@ function GroupSettings({ member, contacts, operation, pendingSettings, operation
   useEffect(() => { if (pending && !pendingSettings(member.conversationId)) setPending(null) }, [operationPending, member.membershipVersion])
   const isOwner = member.role === 'owner', canManage = ['owner', 'admin'].includes(member.role)
   const members = member.info?.members ?? []
-  const close = () => { generation.current += 1; setOpen(false); setBase(null); setDraft(null); setFailure(''); setSaving(false); setPending(null); summary.current?.focus() }
+  const close = () => { generation.current += 1; setOpen(false); setBase(null); setDraft(null); setFailure(''); setSaving(false); setPending(null); summary.current?.closest('main')?.querySelector('.bt-comm-title-pill')?.focus() }
   const begin = () => {
     generation.current += 1; revision.current = 0
     const values = groupSettingsValues(member)
@@ -115,8 +117,8 @@ function GroupSettings({ member, contacts, operation, pendingSettings, operation
   }
   const values = draft ?? groupSettingsValues(member)
   const roleLabel = role => role === 'owner' ? 'Group owner' : role === 'admin' ? 'Group admin' : 'Group member'
-  return h('details', { className: 'bt-comm-members', open },
-    h('summary', { ref: summary, onClick: event => { event.preventDefault(); if (open) close(); else begin() } }, t('Group members and receiving rules')),
+  return h('details', { id: 'bt-comm-members', className: 'bt-comm-members', open, onKeyDown: event => { if (open && event.key === 'Escape') { event.stopPropagation(); close() } } },
+    h('summary', { ref: summary, tabIndex: open ? 0 : -1, onClick: event => { event.preventDefault(); if (open) close(); else begin() } }, t('Group members and receiving rules')),
     open ? h(Fragment, null,
       h('div', { className: 'bt-comm-settings-actions' }, canManage ? h('button', { type: 'button', onClick: () => { void saveSettings() }, disabled: saving || !dirty && !pending, 'data-dirty': dirty, 'aria-label': t('Save group settings') }, t('Save')) : null,
         h('button', { type: 'button', onClick: close, 'aria-label': t('Close member settings') }, t('Close member settings'))),
@@ -158,9 +160,11 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
   const mode = useSyncExternalStore(surface.subscribe, surface.getSnapshot)
   const open = useSyncExternalStore(panel.subscribe, panel.getSnapshot)
   const [shown, closing] = useLinger(open && mode.mode === 'bot', 160)
-  const [state, setState] = useState(null), [error, setError] = useState(''), [busy, setBusy] = useState(false)
+  const [receivedState, setState] = useState(null), [error, setError] = useState(''), [busy, setBusy] = useState(false)
+  const state = !team.communicationEnabled || team.communicationHubId && receivedState?.hubId !== team.communicationHubId ? null : receivedState
   const [pollError, setPollError] = useState(''), [syncError, setSyncError] = useState(null)
   const [operationPending, setOperationPending] = useState(() => read(OPERATION_IDS, []).length > 0)
+  const [attaching,setAttaching]=useState(false),attachmentFlight=useRef(false)
   const [selected, setSelected] = useState(() => read(SELECTED, null))
   const [drafts, setDrafts] = useState(() => read(DRAFTS, {})), [attempts, setAttempts] = useState(() => read(ATTEMPTS, {}))
   const [hidden, setHidden] = useState(() => read(HIDDEN, [])), [showHidden, setShowHidden] = useState(false)
@@ -171,18 +175,24 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
   const [completion, setCompletion] = useState(null), [completionIndex, setCompletionIndex] = useState(0), [composing, setComposing] = useState(false)
   const chooser = useRef(null), chooserTrigger = useRef(null)
   const [browse, setBrowse] = useState(false), [activePanel, setActivePanel] = useState(''), [inspectedIds, setInspectedIds] = useState([])
+  const [sidebarHidden, setSidebarHidden] = useState(() => read(SIDEBAR_HIDDEN, false)), [newMenuOpen, setNewMenuOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState(''), [searchCursor, setSearchCursor] = useState(0)
+  const newMenu = useRef(null), newTrigger = useRef(null)
+  const newMenuShown = useRef(newMenuOpen), previousSidebar = useRef(sidebarHidden)
+  newMenuShown.current = newMenuOpen
   const [threadMessageId, setThreadMessageId] = useState(null)
   const input = useRef(null), frame = useRef(null), log = useRef(null), autoScroll = useRef(true), pageOrder = useRef(0), operationIds = useRef(new Map(read(OPERATION_IDS, [])))
   const labels = contactLabels(state?.contacts ?? [], state?.instanceId, t)
+  const scope = communicationScope(state)
+  syncAvatarDirectory(state?.contacts??[],state?.hubId??state?.hubUrl??'legacy')
   const member = state?.conversations?.find(item => item.conversationId === selected)
-  const key = `${state?.instanceId}:${selected}`
+  const key = `${scope}:${selected}`
   contextKey.current = `${key}:${member?.membershipEpoch}`
-  useEffect(() => { setThreadMessageId(null); setActivePanel(current => ['thread', 'participant'].includes(current) ? '' : current) }, [selected, member?.membershipEpoch])
+  useEffect(() => { setThreadMessageId(null); setActivePanel(current => ['thread', 'participant'].includes(current) ? '' : current) }, [scope, selected, member?.membershipEpoch])
   const draft = drafts[key] ?? { text: '', mentions: [] }
-  const changeDraft = value => setDrafts(current => { const next = { ...current, [key]: { ...draft, ...value } }; save(DRAFTS, next); return next })
+  const changeDraft = value => setDrafts(current => { const next = { ...current, [key]: { ...(current[key] ?? {text:'',mentions:[]}), ...value } }; save(DRAFTS, next); return next })
   const close = () => { panel.set(false); save(OPEN, false) }
   const refresh = async () => { const value = await request({ endpoint: 'state' }); setState(value); setPollError(''); return value }
-  useEffect(() => { syncAvatarDirectory(state?.contacts ?? []) }, [state?.contacts])
   useEffect(() => {
     if (!team.communicationEnabled) { setState(null); setPollError(''); return undefined }
     let active = true, timer
@@ -193,7 +203,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
     }
     void poll()
     return () => { active = false; clearTimeout(timer) }
-  }, [team.communicationEnabled, request])
+  }, [team.communicationEnabled, team.communicationHubId, request])
   useEffect(() => {
     if (!shown) return undefined
     const visible = node => !node.checkVisibility || node.checkVisibility()
@@ -201,10 +211,20 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
       .filter(node => visible(node) && (!node.closest('details:not([open])') || node.tagName === 'SUMMARY'))
     const focusDefault = () => (activePanel ? controls()[0] : input.current && !input.current.disabled && visible(input.current) ? input.current : controls()[0])?.focus()
     focusDefault()
-    const retain = event => { if (!(activePanel ? chooser.current : frame.current)?.contains(event.target)) focusDefault() }
+    // A host sign-in/first-run dialog may open above this restored surface.
+    // Competing focus traps must not bounce focus indefinitely between portals.
+    const foreignDialog = node => !frame.current?.contains(node) && node?.closest?.('dialog,[role="dialog"],[role="alertdialog"]')
+    const retain = event => { if (!foreignDialog(event.target) && !(activePanel ? chooser.current : frame.current)?.contains(event.target)) focusDefault() }
     const keys = event => {
+      if (foreignDialog(event.target)) return
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault(); event.stopImmediatePropagation(); setNewMenuOpen(false); setSearchQuery(''); setSearchCursor(0); chooserTrigger.current = document.activeElement; setActivePanel('search'); return
+      }
+      if (newMenuShown.current && event.key === 'Tab') { setNewMenuOpen(false); return }
       if (event.key === 'Escape') {
+        event.preventDefault()
         event.stopPropagation()
+        if (newMenuShown.current) { setNewMenuOpen(false); newTrigger.current?.focus(); return }
         if (completion) { setCompletion(null); return }
         if (activePanel) { setActivePanel(''); chooserTrigger.current?.focus(); return }
         const members = frame.current?.querySelector('.bt-comm-members[open]')
@@ -223,9 +243,21 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
   }, [shown, browse, selected, member?.speakingMode, activePanel, Boolean(completion)])
   useEffect(() => {
     if (!shown || !activePanel) return
-    chooser.current?.querySelector(activePanel === 'group' ? 'input' : 'button')?.focus()
+    chooser.current?.querySelector(['group','search'].includes(activePanel) ? 'input' : 'button')?.focus()
   }, [shown, activePanel])
-  useEffect(() => { save(SELECTED, selected); setOlder(null); setReply(null); setReferenced(null); pendingJump.current = null; referenceOrder.current += 1; setCompletion(null); autoScroll.current = true; input.current?.focus() }, [selected])
+  useEffect(() => {
+    if (!shown || !newMenuOpen) return undefined
+    ;(newMenu.current?.querySelector('[role="menuitem"]:not(:disabled)') ?? newTrigger.current)?.focus()
+    const outside = event => { if (!newMenu.current?.contains(event.target)) setNewMenuOpen(false) }
+    document.addEventListener('pointerdown', outside, true)
+    return () => document.removeEventListener('pointerdown', outside, true)
+  }, [shown, newMenuOpen])
+  useEffect(() => {
+    if (!shown || previousSidebar.current === sidebarHidden) return
+    previousSidebar.current = sidebarHidden
+    frame.current?.querySelector(sidebarHidden ? '.bt-comm-expand' : '.bt-comm-collapse')?.focus()
+  }, [shown, sidebarHidden])
+  useEffect(() => { save(SELECTED, selected); setOlder(null); setReply(null); setReferenced(null); pendingJump.current = null; referenceOrder.current += 1; setCompletion(null); autoScroll.current = true; input.current?.focus() }, [scope, selected])
   useEffect(() => {
     if (!shown) return undefined
     const clear = () => { pendingJump.current = null; referenceOrder.current += 1; setReferenced(null) }
@@ -245,12 +277,12 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
     let active = true
     const order = ++pageOrder.current
     void request({ endpoint: 'history', conversationId: selected, limit: 50, ...(older === null ? {} : { before: older }) }).then(value => {
-      if (active && pageOrder.current === order) { setPage(value); setSyncError(null) }
+      if (active && pageOrder.current === order) { setPage({ ...value, scope }); setSyncError(null) }
     }).catch(failure => { if (active) { setPage(null); setSyncError({ conversationId: selected, message: friendly(failure) }) } })
     return () => { active = false }
-  }, [shown, selected, member?.membershipEpoch, older, older === null ? member?.watermark : null, request])
+  }, [scope, shown, selected, member?.membershipEpoch, older, older === null ? member?.watermark : null, request])
   useEffect(() => {
-    if (!shown || page?.conversationId !== selected || !page.events.length) return undefined
+    if (!shown || page?.scope !== scope || page?.conversationId !== selected || !page.events.length) return undefined
     let active = true
     const mark = () => {
       if (document.visibilityState === 'visible' && document.hasFocus()) void request({ endpoint: 'read', conversationId: selected, seq: page.events.at(-1).conversationSeq }).catch(failure => {
@@ -261,11 +293,11 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
     }
     mark(); window.addEventListener('focus', mark); document.addEventListener('visibilitychange', mark)
     return () => { active = false; window.removeEventListener('focus', mark); document.removeEventListener('visibilitychange', mark) }
-  }, [shown, selected, page, request])
+  }, [scope, shown, selected, page, request])
   const operation = async (endpoint, values) => {
     const current = state?.conversations?.find(item => item.conversationId === values.conversationId)
     if (current && !['reclaim','dm','create-group','accept'].includes(endpoint)) values = { membershipEpoch: current.membershipEpoch, expectedVersion: current.membershipVersion, ...values }
-    const operationKey = JSON.stringify([state?.instanceId, endpoint, values])
+    const operationKey = JSON.stringify([scope, endpoint, values])
     if (!operationIds.current.has(operationKey)) operationIds.current.set(operationKey, crypto.randomUUID())
     const persist = () => { save(OPERATION_IDS, [...operationIds.current]); setOperationPending(operationIds.current.size > 0) }
     persist()
@@ -286,18 +318,19 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
     try { await work() } catch (failure) { setError(friendly(failure)) } finally { setBusy(false) }
   }
   const send = () => act(async () => {
-    if (!member || member.kind === 'group' && member.speakingMode !== 'speak' || !draft.text.trim()) return
+    if(attachmentFlight.current)return
+    if (!member || member.kind === 'group' && member.speakingMode !== 'speak' || !draft.text.trim() && !draft.attachments?.length) return
     const intent = attempts[key] ?? { endpoint: 'send', conversationId: selected, membershipEpoch: member.membershipEpoch, messageId: crypto.randomUUID(), clientCreatedAt: new Date().toISOString(),
-      text: draft.text, mentions: draft.mentions, replyToMessageId: reply?.messageId ?? null }
+      text: draft.text, mentions: draft.mentions, ...(draft.attachments?.length ? {attachments:draft.attachments} : {}), replyToMessageId: reply?.messageId ?? null }
     const next = { ...attempts, [key]: intent }; save(ATTEMPTS, next); setAttempts(next)
     // Keep the exact intent on every failure; retry must retain the original ID.
     await request(intent)
     delete next[key]; save(ATTEMPTS, next); setAttempts({ ...next })
-    changeDraft({ text: '', mentions: [], manualMentions: [] }); setReply(null)
+    changeDraft({ text: '', mentions: [], manualMentions: [], attachments:[] }); setReply(null)
     await refresh(); input.current?.focus()
   })
   const choose = id => {
-    const next = hidden.filter(item => item !== `${state?.instanceId}:${id}`)
+    const next = hidden.filter(item => item !== `${scope}:${id}`)
     save(HIDDEN, next); setHidden(next); setSelected(id); setBrowse(false); setError('')
   }
   const hide = () => { const next = [...new Set([...hidden, key])]; save(HIDDEN, next); setHidden(next); setSelected(null) }
@@ -319,23 +352,32 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
     h('summary', null, t(label), value ? ': ' : '', value ? personLabel(people.find(person => person.principalId === value) ?? { principalId: value }) : ''),
     contactsByAddress(people).map(group => h('section', { key: group.address, className: 'bt-comm-address' }, h('h3', null, t(group.address)), group.instances.map(instance => h('section', { key: instance.instanceId ?? 'unknown' }, h('p', { className: 'bt-comm-reference', title: instance.instanceId }, instance.label), instance.contacts.map(person => btn(labels.get(person.principalId) ?? person.displayName, event => { onChange(person.principalId); const details = event.currentTarget.closest('details'); details.open = false; details.querySelector('summary')?.focus() }, { key: person.principalId, 'aria-pressed': person.principalId === value, children: personLabel(person) })))))))
   if (!shown) return null
-  const events = page?.conversationId === selected && page?.membershipEpoch === member?.membershipEpoch ? page.events : []
+  const events = page?.scope === scope && page?.conversationId === selected && page?.membershipEpoch === member?.membershipEpoch ? page.events : []
   const visibleIds = new Set(events.map(event => event.message?.messageId))
   const ownOutbox = member ? (state?.outbox ?? []).filter(item => (!item.principalId || item.principalId === state.humanPrincipalId) && item.type === 'message.publish' && item.conversationId === selected) : []
   const activityOutbox = (state?.outbox ?? []).filter(item => (!item.principalId || item.principalId === state.humanPrincipalId) && item.type === 'message.publish' && (!member || item.conversationId === selected))
   const currentMembers = member?.info?.members ?? []
   const canSpeak = member && (member.kind !== 'group' || member.speakingMode === 'speak')
   const contacts = state?.contacts ?? []
+  const attach = async files => {
+    const context=contextKey.current
+    if(!canSpeak||!state.attachmentsAvailable||attempts[key]||busy)return
+    if(attachmentFlight.current){setError('Wait for the current attachment to finish.');return}
+    attachmentFlight.current=true;setAttaching(true)
+    try{const attachments=await selectedAttachments([...files],draft.attachments??[]);if(context===contextKey.current)changeDraft({attachments})}
+    catch(failure){if(context===contextKey.current)setError(friendly(failure))}
+    finally{attachmentFlight.current=false;setAttaching(false)}
+  }
   const operations = state?.outbox?.filter(item => (!item.principalId || item.principalId === state.humanPrincipalId) && item.type !== 'message.publish' && item.state !== 'accepted' && (!member || item.conversationId === selected)) ?? []
-  const pendingForConversation = [...operationIds.current.keys()].some(item => { const values = JSON.parse(item)[2]; return member ? values.conversationId === selected : !values.conversationId })
-  const adminUrl = state?.managementAvailable ? hubManagementAddress(state.managementUrl) : null
+  const pendingForConversation = [...operationIds.current.keys()].some(item => { const [operationScope, , values] = JSON.parse(item); return operationScope === scope && (member ? values.conversationId === selected : !values.conversationId) })
   const remoteCount = contacts.filter(contact => contact.homeInstanceId !== state?.instanceId).length
   const inspect = ids => { const authorized = ids.filter(id => currentMembers.some(person => person.principalId === id)); if (authorized.length) { setInspectedIds(authorized); showPanel('participant') } }
-  const showPanel = name => { chooserTrigger.current = document.activeElement; setActivePanel(name) }
+  const showPanel = name => { setNewMenuOpen(false); chooserTrigger.current = newMenuOpen ? newTrigger.current : document.activeElement; if (name === 'search') { setSearchQuery(''); setSearchCursor(0) }; setActivePanel(name) }
+  const collapseSidebar = value => { setSidebarHidden(value); save(SIDEBAR_HIDDEN, value) }
+  const startMenu = () => { collapseSidebar(false); setBrowse(true); setNewMenuOpen(true) }
   const connectionBlocked = state?.error && !['CONNECTION_LOST','REQUEST_TIMEOUT','STORAGE_UNAVAILABLE','BACKPRESSURE','HISTORY_GAP'].includes(state.error)
   const connectionLabel = !team.communicationEnabled ? 'Not configured' : pollError ? 'Offline' : !state ? 'Connecting…' : state.connected ? 'Connected to Hub' : connectionBlocked ? 'Offline' : 'Reconnecting to Hub'
   const roleLabel = role => role === 'owner' ? 'Group owner' : role === 'admin' ? 'Group admin' : 'Group member'
-  const speechLabel = person => person.speakingMode === 'readOnly' ? 'Read only' : person.speakingMode === 'passive' ? 'Reply only' : 'Can speak'
   const avatar = (id, name) => {
     const contact = contacts.find(person => person.principalId === id)
     return h(CommunicationAvatar, { person: contact ?? { principalId: id, displayName: name ?? id, kind: id?.startsWith('bot:') ? 'bot' : id?.startsWith('human:') ? 'human' : 'group' }, request, allowed: Boolean(contact) })
@@ -357,23 +399,40 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
     requestAnimationFrame(() => { input.current?.focus(); input.current?.setSelectionRange(result.caret, result.caret) })
   }
   const updateCompletion = node => { setCompletion(mentionQuery(node.value, node.selectionStart)); setCompletionIndex(0) }
+  const wanted = searchQuery.trim().toLocaleLowerCase()
+  const searchable = value => String(value ?? '').toLocaleLowerCase().includes(wanted)
+  const searchResults = [
+    ...(state?.conversations ?? []).filter(item => (showHidden || !hidden.includes(`${scope}:${item.conversationId}`)) && [conversationTitle(item,state.humanPrincipalId,labels),item.lastMessage?.summary,...(item.info?.members ?? []).map(person=>person.displayName)].some(searchable)).map(item => ({ id:item.conversationId, title:conversationTitle(item,state.humanPrincipalId,labels), preview:item.lastMessage?.summary ?? '', avatar:h(ConversationAvatar,{conversation:item,humanId:state.humanPrincipalId,request,size:24}), run:()=>{setActivePanel('');choose(item.conversationId)} })),
+    ...contacts.filter(person=>person.principalId !== state?.humanPrincipalId && [labels.get(person.principalId),person.displayName,person.instanceLabel].some(searchable)).map(person=>({ id:person.principalId,title:labels.get(person.principalId) ?? person.displayName,preview:t('New message'),avatar:h(CommunicationAvatar,{person,request,size:24}),run:()=>{void act(async()=>{const value=await operation('dm',{otherPrincipalId:person.principalId});setActivePanel('');choose(value.conversationId)})} })),
+  ].slice(0,50)
+  const searchIndex = Math.max(0, Math.min(searchCursor, searchResults.length-1))
 
-  return createPortal(h('section', { ref: frame, className: 'bt-comm-frame', role: 'dialog', 'aria-modal': true, 'data-closing': closing, 'data-browse': browse || !member, 'data-setup': !team.communicationEnabled, 'aria-label': t('Remote communication') },
-    h('aside', { className: 'bt-comm-nav' },
-      h('div', { className: 'bt-comm-nav-heading' }, h('h2', null, t('Remote communication')), btn('Personal settings', () => showPanel('settings'), { className: 'bt-comm-settings-icon', 'aria-label': t('Personal settings'), title: t('Personal settings'), children: h(GearIcon) })),
+  return createPortal(h('section', { ref: frame, className: 'bt-comm-frame', role: 'dialog', 'aria-modal': true, 'data-closing': closing, 'data-collapsed': sidebarHidden, 'data-browse': browse || !member, 'data-setup': !team.communicationEnabled, 'aria-label': t('Remote communication') },
+    h('aside', { id:'bt-comm-nav', className: 'bt-comm-nav' },
+      h('div', { className: 'bt-comm-nav-heading' }, h('h2', {title:t('Remote communication')}, t('Remote communication')),
+        h('div', { className:'bt-comm-nav-actions' },
+          btn('Personal settings', () => showPanel('settings'), { className: 'bt-comm-settings-icon', 'aria-label': t('Personal settings'), title: t('Personal settings'), children: h(GearIcon) }),
+          btn('Search',()=>showPanel('search'),{className:'bt-comm-settings-icon','aria-label':t('Search'),title:t('Search'),children:h(SearchIcon)}),
+          h('div',{ref:newMenu,className:'bt-comm-new-menu',onKeyDown:event=>{
+            if(!newMenuOpen||!['ArrowDown','ArrowUp','Home','End'].includes(event.key))return
+            event.preventDefault();const items=[...newMenu.current.querySelectorAll('[role="menuitem"]:not(:disabled)')],index=items.indexOf(document.activeElement)
+            const next=event.key==='Home'?0:event.key==='End'?items.length-1:event.key==='ArrowDown'?(index+1)%items.length:(index-1+items.length)%items.length
+            items[next]?.focus()
+          }},btn('New…',()=>setNewMenuOpen(value=>!value),{ref:newTrigger,className:'bt-comm-settings-icon','aria-label':t('New…'),title:t('New…'),'aria-haspopup':'menu','aria-expanded':newMenuOpen,'aria-controls':newMenuOpen?'bt-comm-create-menu':undefined,children:h(PlusIcon),onKeyDown:event=>{if(['ArrowDown','ArrowUp'].includes(event.key)){event.preventDefault();setNewMenuOpen(true)}}}),
+            newMenuOpen?h('div',{className:'bt-comm-create-menu',id:'bt-comm-create-menu',role:'menu','aria-label':t('New chat')},
+              btn('New message',()=>showPanel('contacts'),{role:'menuitem',disabled:busy||!team.communicationEnabled,children:h(Fragment,null,h(ChatsIcon),t('New message'))}),
+              btn('New group',()=>showPanel('group'),{role:'menuitem',disabled:busy||!team.communicationEnabled,children:h(Fragment,null,h(PeopleIcon),t('New group'))})):null),
+          btn('Collapse sidebar',()=>{setNewMenuOpen(false);collapseSidebar(true)},{className:'bt-comm-settings-icon bt-comm-collapse','aria-label':t('Collapse sidebar'),'aria-controls':'bt-comm-nav','aria-expanded':true,title:t('Collapse sidebar'),children:h(SidebarIcon)}))),
       btn('Back to local chats', close, { className: 'bt-comm-back' }),
       member ? btn('Back to conversation', () => setBrowse(false), { className: 'bt-comm-mobile' }) : null,
       h('section', { className: 'bt-comm-connection', 'aria-label': t('Connection status') },
         h('p', { className: 'bt-comm-connection-label', role: 'status', 'data-connected': Boolean(state?.connected && !pollError) }, h('span', { className: 'bt-comm-dot', 'aria-hidden': true }), t(connectionLabel)),
-        state ? h('p', { className: 'bt-comm-reference' }, `${state.instanceId} · ${t('Remote contacts')}: ${remoteCount}`) : null,
+        state ? h('p', { className: 'bt-comm-reference bt-comm-connection-details' }, `${state.instanceId} · ${t('Remote contacts')}: ${remoteCount}`) : null,
         team.communicationEnabled && !state?.connected && !connectionBlocked ? h('p', { className: 'bt-comm-reference' }, t('Queued messages send automatically when the connection returns.')) : null,
         team.communicationEnabled ? btn('Refresh status', () => { void act(refresh) }) : null,
         null),
-      h('div', { className: 'bt-comm-start-actions' },
-        btn('New message', () => showPanel('contacts'), { disabled: busy || !team.communicationEnabled }),
-        btn('New group', () => showPanel('group'), { className: 'bt-comm-primary', disabled: busy || !team.communicationEnabled })),
       h('div', { className: 'bt-comm-section-title' }, t('Conversations'), h('span', null, state?.conversations?.length ?? 0)),
-      h('nav', { 'aria-label': t('Communication conversations') }, (state?.conversations ?? []).filter(item => showHidden || !hidden.includes(`${state.instanceId}:${item.conversationId}`)).map(item =>
+      h('nav', { 'aria-label': t('Communication conversations') }, (state?.conversations ?? []).filter(item => showHidden || !hidden.includes(`${scope}:${item.conversationId}`)).map(item =>
         h(ConversationRow, { key: item.conversationId, conversation: item, humanId: state.humanPrincipalId, labels, request, selected: item.conversationId === selected, onChoose: choose, disabled: busy }))),
       !state?.conversations?.length ? h('p', { className: 'bt-comm-reference' }, t('Your cross-device conversations will appear here.')) : null,
       state?.invites?.length ? h('div', null, h('h3', null, t('Invitations')), state.invites.map(invitation => h('div', { key: invitation.inviteId },
@@ -383,18 +442,24 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
         btn('Restore retained ownership', () => { void act(() => operation('reclaim', { conversationId: item.conversationId, expectedVersion: item.membershipVersion })) }))),
       null),
     activePanel ? h('div', { className: 'bt-comm-modal-backdrop', onMouseDown: event => { if (event.target === event.currentTarget) { setActivePanel(''); chooserTrigger.current?.focus() } } },
-      h('section', { ref: chooser, className: 'bt-comm-modal', role: 'dialog', 'aria-modal': true, 'aria-label': t(activePanel === 'settings' ? 'Personal settings' : activePanel === 'thread' ? 'Message replies' : activePanel === 'hub-management' ? 'Hub management' : activePanel === 'activity' ? 'Activity details' : activePanel === 'participant' ? 'Participant information' : activePanel === 'manage-contacts' ? 'Manage contacts' : activePanel === 'profile' ? 'Human profile' : activePanel === 'pairing' ? 'Pairing guide' : activePanel === 'group' ? 'New group' : 'New message') },
-        h('h2', null, t(activePanel === 'settings' ? 'Personal settings' : activePanel === 'thread' ? 'Message replies' : activePanel === 'hub-management' ? 'Hub management' : activePanel === 'activity' ? 'Activity details' : activePanel === 'participant' ? 'Participant information' : activePanel === 'manage-contacts' ? 'Manage contacts' : activePanel === 'profile' ? 'Human profile' : activePanel === 'pairing' ? 'Pairing guide' : activePanel === 'group' ? 'New group' : 'New message')),
-        activePanel === 'settings' ? h('div', { className: 'bt-comm-personal-settings' },
+      h('section', { ref: chooser, className: 'bt-comm-modal', role: 'dialog', 'aria-modal': true, 'aria-label': t(activePanel === 'search' ? 'Search' : activePanel === 'settings' ? 'Personal settings' : activePanel === 'thread' ? 'Message replies' : activePanel === 'activity' ? 'Activity details' : activePanel === 'participant' ? 'Participant information' : activePanel === 'manage-contacts' ? 'Manage contacts' : activePanel === 'profile' ? 'Human profile' : activePanel === 'pairing' ? 'Pairing guide' : activePanel === 'group' ? 'New group' : 'New message') },
+        h('h2', null, t(activePanel === 'search' ? 'Search' : activePanel === 'settings' ? 'Personal settings' : activePanel === 'thread' ? 'Message replies' : activePanel === 'activity' ? 'Activity details' : activePanel === 'participant' ? 'Participant information' : activePanel === 'manage-contacts' ? 'Manage contacts' : activePanel === 'profile' ? 'Human profile' : activePanel === 'pairing' ? 'Pairing guide' : activePanel === 'group' ? 'New group' : 'New message')),
+        activePanel === 'search' ? h('div',{className:'bt-comm-search'},
+          h('label',{className:'bt-comm-field'},t('Search conversations and contacts'),h('input',{value:searchQuery,role:'combobox','aria-label':t('Search conversations and contacts'),'aria-autocomplete':'list','aria-expanded':true,'aria-controls':'bt-comm-search-results','aria-activedescendant':searchResults.length?`bt-comm-search-${searchIndex}`:undefined,onChange:event=>{setSearchQuery(event.target.value);setSearchCursor(0)},onKeyDown:event=>{
+            if(event.nativeEvent.isComposing)return
+            if(['ArrowDown','ArrowUp','Home','End'].includes(event.key)){event.preventDefault();setSearchCursor(index=>!searchResults.length?0:event.key==='Home'?0:event.key==='End'?searchResults.length-1:(index+(event.key==='ArrowDown'?1:-1)+searchResults.length)%searchResults.length)}
+            if(event.key==='Enter'&&searchResults.length){event.preventDefault();searchResults[searchIndex].run()}
+          }})),h('p',{className:'bt-comm-reference'},t('Search current conversations, contacts and recent message summaries.')),
+          h('div',{id:'bt-comm-search-results',role:'listbox','aria-label':t('Results')},searchResults.map((item,index)=>btn(item.title,item.run,{key:item.id,id:`bt-comm-search-${index}`,role:'option','aria-selected':index===searchIndex,children:h(Fragment,null,item.avatar,h('span',null,h('strong',null,item.title),h('small',null,item.preview)))}))),
+          !searchResults.length?h('p',{role:'status'},t('No matching conversations or contacts.')):null) : activePanel === 'settings' ? h('div', { className: 'bt-comm-personal-settings' },
           h('label', { className: 'bt-comm-check' }, h('input', { type: 'checkbox', checked: showHidden, onChange: event => setShowHidden(event.target.checked) }), t('Show closed conversations')),
-          state ? h('section', null, h('h3', null, t('Your profile')), h(HumanProfile, { key: state.humanPrincipalId, human: contacts.find(person => person.principalId === state.humanPrincipalId) ?? { principalId: state.humanPrincipalId, displayName: t('You'), kind: 'human' }, request, operation }),
+          state ? h('section', null, h('h3', null, t('Your profile')), h(HumanProfile, { key: `${scope}:${state.humanPrincipalId}`, human: contacts.find(person => person.principalId === state.humanPrincipalId) ?? { principalId: state.humanPrincipalId, displayName: t('You'), kind: 'human' }, request, operation }),
             h('details', null, h('summary', null, t('Device identity')), h('p', null, state.instanceId), h('code', null, state.humanPrincipalId))) : null,
           h('section', null, h('h3', null, t('Connection and contacts')), btn('Add a device', () => setActivePanel('pairing')),
-            adminUrl ? h('a', { className: 'bt-comm-admin-link', href: adminUrl, target: '_blank', rel: 'noopener noreferrer' }, t('Open Hub management'), h('small', null, new URL(adminUrl).origin)) : btn('Hub management', () => setActivePanel('hub-management')),
             btn('Manage contacts', () => setActivePanel('manage-contacts'), { disabled: !team.communicationEnabled }))) : activePanel === 'thread' ? member && threadMessageId ? h(CommunicationThread, { key: `${contextKey.current}:${threadMessageId}`, member, messageId: threadMessageId, request, canSpeak, onInspect: inspect,
-              onReply: message => { setReply(message); setActivePanel(''); requestAnimationFrame(() => input.current?.focus()) } }) : null : activePanel === 'hub-management' ? h('div', null, h('p', null, t('The Hub administrator has not provided an active management entry. Ask the administrator to start the Hub and enable its management page.')), btn('Open setup guide', () => setActivePanel('pairing'))) : activePanel === 'activity' ? h(CommunicationActivity, { state, member, events, outbox: activityOutbox, operations, operationPending: pendingForConversation, pendingAttempt: attempts[key], error, pollError: pollError || (syncError?.conversationId === selected ? syncError.message : ''), friendly, labels, busy,
+              onReply: message => { setReply(message); setActivePanel(''); requestAnimationFrame(() => input.current?.focus()) } }) : null : activePanel === 'activity' ? h(CommunicationActivity, { state, member, events, outbox: activityOutbox, operations, operationPending: pendingForConversation, pendingAttempt: attempts[key], error, pollError: pollError || (syncError?.conversationId === selected ? syncError.message : ''), friendly, labels, busy,
           onRefresh: () => { void act(refresh) }, onRetry: () => { setActivePanel(''); void send() }, copyDisabled: Boolean(draft.text) || Boolean(attempts[key]) || !member,
-          onCopy: item => { if (draft.text || attempts[key] || !member) return; changeDraft({ text: item.text, mentions: [], manualMentions: [] }); setActivePanel(''); input.current?.focus() } }) : activePanel === 'participant' ? h('div', { className: 'bt-comm-participant-information' }, currentMembers.filter(person => inspectedIds.includes(person.principalId)).map(person => h('section', { key: person.principalId }, personLabel(person), h('p', null, t(roleLabel(person.role ?? 'member'))), h('code', null, person.principalId)))) : activePanel === 'manage-contacts' ? h(ContactManager, { request, operation, contacts, managementUrl: adminUrl }) : activePanel === 'profile' ? h(HumanProfile, { human: contacts.find(person => person.principalId === state?.humanPrincipalId) ?? { principalId: state?.humanPrincipalId ?? 'human:local', displayName: t('You'), kind: 'human' }, request, operation }) : activePanel === 'pairing' ? h(AddDevice, { request, displayName: contacts.find(person => person.principalId === state?.humanPrincipalId)?.displayName ?? t('You'), manualGuide: h(PairingGuide, { connectionLabel }) }) : h(Fragment, null,
+          onCopy: item => { if (draft.text || attempts[key] || !member) return; changeDraft({ text: item.text, mentions: [], manualMentions: [] }); setActivePanel(''); input.current?.focus() } }) : activePanel === 'participant' ? h('div', { className: 'bt-comm-participant-information' }, currentMembers.filter(person => inspectedIds.includes(person.principalId)).map(person => h('section', { key: person.principalId }, personLabel(person), h('p', null, t(roleLabel(person.role ?? 'member'))), h('code', null, person.principalId)))) : activePanel === 'manage-contacts' ? h(ContactManager, { request, operation, contacts }) : activePanel === 'profile' ? h(HumanProfile, { key: scope, human: contacts.find(person => person.principalId === state?.humanPrincipalId) ?? { principalId: state?.humanPrincipalId ?? 'human:local', displayName: t('You'), kind: 'human' }, request, operation }) : activePanel === 'pairing' ? h(AddDevice, { request, displayName: contacts.find(person => person.principalId === state?.humanPrincipalId)?.displayName ?? t('You'), manualGuide: h(PairingGuide, { connectionLabel }) }) : h(Fragment, null,
         activePanel === 'group' ? h('label', { className: 'bt-comm-field' }, t('Group name'), h('input', { value: title, onChange: event => setTitle(event.target.value), 'aria-label': t('Group name') })) : null,
         groupedContacts(contact => activePanel === 'group' ? h('label', { key: contact.principalId, className: 'bt-comm-check' },
           h('input', { type: 'checkbox', checked: invitees.includes(contact.principalId), onChange: event => setInvitees(current => event.target.checked ? [...current, contact.principalId] : current.filter(id => id !== contact.principalId)) }), personLabel(contact)) :
@@ -411,20 +476,24 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
     error ? h('aside', { className: 'bt-comm-toast', role: 'alert' }, h('span', null, t(error)), btn('Dismiss', () => setError(''), { disabled: false, 'aria-label': t('Dismiss notification') })) : null,
     h('main', { className: 'bt-comm-main' },
       h('header', null,
-        member ? btn('Conversations', () => setBrowse(true), { className: 'bt-comm-mobile' }) : null,
+        sidebarHidden ? btn('Expand sidebar',()=>{collapseSidebar(false);setBrowse(true)},{className:'bt-comm-icon-button bt-comm-expand','aria-label':t('Expand sidebar'),title:t('Expand sidebar'),children:h(SidebarIcon)}) : null,
+        member ? btn('Conversations', () => {collapseSidebar(false);setBrowse(true)}, { className: 'bt-comm-mobile' }) : null,
         !team.communicationEnabled ? btn('Back to local chats', close, { className: 'bt-comm-mobile' }) : null,
-        h('div', { className: 'bt-comm-heading' }, member ? avatar(member.kind === 'group' ? member.conversationId : currentMembers.find(person => person.principalId !== state.humanPrincipalId)?.principalId ?? member.conversationId, member.kind === 'group' ? member.title : currentMembers.find(person => person.principalId !== state.humanPrincipalId)?.displayName) : null, h('h2', null, member ? conversationTitle(member, state.humanPrincipalId, labels) : t('Remote communication')),
-          member ? h('p', { className: 'bt-comm-reference' }, member.kind === 'group' ? `${currentMembers.length} ${t('Members')} · ${t(roleLabel(member.role))} · ${t(speechLabel(member))}` : t('Private conversation')) : null),
-        btn('Activity details', () => showPanel('activity')),
-        member ? btn('Close on this device', hide) : null),
+        h('div', { className: 'bt-comm-heading bt-head' }, member ? btn('View conversation details', () => {
+          if (member.kind === 'group') frame.current?.querySelector('.bt-comm-members>summary')?.click()
+          else inspect(currentMembers.filter(person => person.principalId !== state.humanPrincipalId).map(person => person.principalId))
+        }, { className: 'bt-pill bt-comm-title-pill', children: h(Fragment, null, h(ConversationAvatar, { conversation: member, humanId: state.humanPrincipalId, request, size: 24 }), h('h2', { className: 'bt-pill-name' }, conversationTitle(member, state.humanPrincipalId, labels)), h('span', { 'aria-hidden': true }, '›')) }) : h('h2', null, t('Remote communication'))),
+        btn('Activity details', () => showPanel('activity'), { className: 'bt-comm-icon-button', 'aria-label': t('Activity details'), title: t('Activity details'), children: h(InfoIcon) }),
+        member?.kind === 'group' ? h('span', { className: 'bt-sr' }, `${currentMembers.length} ${t('Members')} · ${t(roleLabel(member.role))} · ${t(member.speakingMode === 'readOnly' ? 'Read only' : 'Can speak')}`) : null,
+        member ? btn('Close on this device', hide, { className: 'bt-comm-icon-button', 'aria-label': t('Close on this device'), title: t('Close on this device'), children: h(CloseIcon) }) : null),
       !member ? h('section', { className: 'bt-comm-empty' },
         h('span', { className: 'bt-comm-empty-symbol', 'aria-hidden': true }, '↔'),
         h('h2', null, t(team.communicationEnabled ? 'Start a conversation across devices' : 'Pair this device to get started')),
         h('p', null, t(team.communicationEnabled ? 'Message a Human or Bot directly, or bring them together in a group.' : 'Ask the Hub owner to configure communication and pair this device.')),
-        team.communicationEnabled ? h('div', { className: 'bt-comm-start-actions' }, btn('New message', () => showPanel('contacts')), btn('New group', () => showPanel('group'), { className: 'bt-comm-primary' })) : null,
+        team.communicationEnabled ? btn('New…',startMenu,{className:'bt-comm-primary'}) : null,
         h('p', { className: 'bt-comm-reference' }, t('Local chats stay separate from communication conversations.'))) : null,
-      member?.kind === 'group' ? h(GroupSettings, { key: `${selected}:${member.membershipEpoch}`, member, contacts, labels, operation, operationPending, act, busy, humanId: state.humanPrincipalId, btn, personLabel, chooseContact,
-        pendingSettings: id => [...operationIds.current.keys()].map(item => JSON.parse(item)).find(([instanceId, endpoint, values]) => instanceId === state.instanceId && endpoint === 'save-settings' && values.conversationId === id)?.[2] ?? null }) : null,
+      member?.kind === 'group' ? h(GroupSettings, { key: `${scope}:${selected}:${member.membershipEpoch}`, member, contacts, labels, operation, operationPending, act, busy, humanId: state.humanPrincipalId, btn, personLabel, chooseContact,
+        pendingSettings: id => [...operationIds.current.keys()].map(item => JSON.parse(item)).find(([instanceId, endpoint, values]) => instanceId === scope && endpoint === 'save-settings' && values.conversationId === id)?.[2] ?? null }) : null,
       h('div', { ref: log, className: 'bt-comm-log', role: 'log', 'aria-label': t('Communication messages'), onScroll: event => {
         const element = event.currentTarget; autoScroll.current = !referenced && !pendingJump.current && element.scrollHeight - element.scrollTop - element.clientHeight < 80
       } },
@@ -432,11 +501,10 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
         older !== null ? btn('Show latest messages', () => setOlder(null)) : null,
         communicationLogEvents(events).map(event => event.type === 'bot.work.started' ? h(BotWorkStarted, { key: event.eventId, event, members: currentMembers, request, onInspect: inspect }) : h('article', { key: event.message.messageId, 'data-message-id': event.message.messageId, 'data-self': event.message.author.principalId === state.humanPrincipalId, 'data-referenced': event.message.messageId === referenced },
           avatar(event.message.author.principalId, contacts.find(person => person.principalId === event.message.author.principalId)?.displayName ?? event.message.author.displayName), h('strong', { title: event.message.author.principalId }, labels.get(event.message.author.principalId) ?? event.message.author.displayName ?? (event.message.author.principalId === state.humanPrincipalId ? t('You') : event.message.author.principalId), identityIcons(contacts.find(person => person.principalId === event.message.author.principalId) ?? event.message.author)),
-          event.message.replyToMessageId ? h(ReferenceQuote, { key: `${selected}:${member.membershipEpoch}:${event.message.replyToMessageId}`, conversationId: selected,
+          h('div', { className: 'bt-comm-message-bubble' }, event.message.replyToMessageId ? h(ReferenceQuote, { key: `${scope}:${selected}:${member.membershipEpoch}:${event.message.replyToMessageId}`, conversationId: selected,
             membershipEpoch: member.membershipEpoch, messageId: event.message.replyToMessageId, request, labels, onJump: openReference }) : null,
-          h('div', { className: 'bt-comm-body' }, h(CommunicationMessage, { message: event.message, members: currentMembers, request, onInspect: inspect })),
-          h('div', { className: 'bt-comm-message-actions' }, h('time', null, new Date(event.serverAcceptedAt).toLocaleString()), canSpeak ? btn('Reply', () => { setReply(event.message); input.current?.focus() }) : null, member.kind === 'group' ? btn('View replies', () => { setThreadMessageId(event.message.messageId); showPanel('thread') }) : null),
-          ownOutbox.find(item => item.id === event.message.messageId)?.deliveries.filter(delivery => delivery.recipientPrincipalId !== state.humanPrincipalId).map(delivery => h('p', { key: delivery.deliveryId, className: 'bt-comm-reference' }, `${labels.get(delivery.recipientPrincipalId) ?? delivery.recipientPrincipalId} · ${t(deliveryPhase(delivery))}`)))),
+          h('div', { className: 'bt-comm-body' }, h(CommunicationMessage, { message: event.message, members: currentMembers, request, onInspect: inspect }))),
+          h('div', { className: 'bt-comm-message-actions' }, h('time', { title: new Date(event.serverAcceptedAt).toLocaleString() }, new Date(event.serverAcceptedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })), canSpeak ? btn('Reply', () => { setReply(event.message); input.current?.focus() }) : null, member.kind === 'group' ? btn('View replies', () => { setThreadMessageId(event.message.messageId); showPanel('thread') }) : null))),
         ownOutbox.filter(item => item.state !== 'failed' && !visibleIds.has(item.id) && (item.state !== 'accepted' || older === null && item.result?.conversationSeq > (page?.watermark ?? 0))).map(item => h('article', { key: item.id, 'data-message-id': item.id, 'data-self': true, 'data-failed': item.state === 'failed' },
           avatar(state.humanPrincipalId, contacts.find(person => person.principalId === state.humanPrincipalId)?.displayName), h('strong', { title: state.humanPrincipalId }, contacts.find(person => person.principalId === state.humanPrincipalId)?.displayName ?? t('You'), identityIcons({ principalId: state.humanPrincipalId, kind: 'human', homeInstanceId: state.instanceId })), h('p', { className: 'bt-comm-pending-text' }, item.text), h('p', { role: 'status' }, t(item.state === 'accepted' ? 'Hub accepted' : 'Queued on this device'))))),
       canSpeak ? h('footer', null,
@@ -445,7 +513,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
         suggestions.length ? h('div', { className: 'bt-comm-completion', role: 'listbox', id: 'bt-comm-completion', 'aria-label': t('Mention participant') }, suggestions.map((person, index) =>
           h('button', { type: 'button', key: person.principalId, id: `bt-comm-option-${index}`, role: 'option', 'aria-selected': completionIndex === index,
             onMouseDown: event => event.preventDefault(), onClick: () => complete(person) }, person.all ? h('span', null, avatar('@all', 'All'), t('All Bots')) : personLabel(person)))) : null,
-        h('label', { className: 'bt-comm-field' }, t('Communication message'), h('textarea', { ref: input, value: draft.text, rows: 3, disabled: !canSpeak || Boolean(attempts[key]),
+        h('label', { className: 'bt-comm-field bt-comm-compose-field' }, h('span', { className: 'bt-sr' }, t('Communication message')), h('textarea', { ref: input, value: draft.text, rows: 2, placeholder: t('Message {name}', { name: conversationTitle(member, state.humanPrincipalId, labels) }), disabled: !canSpeak || Boolean(attempts[key]),
           onChange: event => { changeDraft({ text: event.target.value, mentions: retainedMentions(event.target.value, draft.mentions, currentMembers, draft.manualMentions) }); if (!composing) updateCompletion(event.target) },
           onClick: event => updateCompletion(event.target), onCompositionStart: () => { setComposing(true); setCompletion(null) },
           onCompositionEnd: event => { setComposing(false); updateCompletion(event.target) },
@@ -460,10 +528,12 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
               if (['Enter', 'Tab'].includes(event.key)) { event.preventDefault(); complete(suggestions[Math.min(completionIndex, suggestions.length - 1)]); return }
             }
             if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send() }
-          }, onPaste: event => { if (event.clipboardData?.files.length) { event.preventDefault(); setError('Only text and Markdown are supported.') } },
-          onDrop: event => { event.preventDefault(); setError('Only text and Markdown are supported.') }, 'aria-label': t('Communication message') })),
-        btn(attempts[key] ? 'Retry same send' : 'Send message', () => { void send() }, { disabled: busy || !canSpeak || !draft.text.trim() }),
-        h('span', { className: 'bt-comm-reference' }, t('Enter to send · Shift+Enter for a new line')),
+          }, onPaste: event => { if (event.clipboardData?.files.length) { event.preventDefault(); event.stopPropagation(); if(state.attachmentsAvailable)void attach(event.clipboardData.files);else setError('Attachments require a compatible Hub and clients.') } },
+          onDragOver:event=>{event.preventDefault();event.stopPropagation()},onDrop: event => { event.preventDefault();event.stopPropagation(); if(state.attachmentsAvailable)void attach(event.dataTransfer.files);else setError('Attachments require a compatible Hub and clients.') }, 'aria-label': t('Communication message') })),
+        state.attachmentsAvailable ? h('label',{className:'bt-comm-attach-picker',title:t('Attach images or files (64 KiB total)')},h(PlusIcon),h('span',{className:'bt-sr'},t('Attach images or files (64 KiB total)')),h('input',{type:'file',multiple:true,disabled:busy||attaching||Boolean(attempts[key]),'aria-label':t('Attach images or files (64 KiB total)'),onChange:event=>{void attach(event.target.files);event.target.value=''}})) : null,
+        draft.attachments?.length ? h('div',{className:'bt-comm-attachment-drafts'},draft.attachments.map((file,index)=>h('span',{key:index},file.name,h('button',{type:'button',disabled:busy||attaching||Boolean(attempts[key]),'aria-label':t('Remove {name}',{name:file.name}),onClick:()=>changeDraft({attachments:draft.attachments.filter((_,i)=>i!==index)})},h(CloseIcon))))) : null,
+        btn(attempts[key] ? 'Retry same send' : 'Send message', () => { void send() }, { className: 'bt-comm-send', 'aria-label': t(attempts[key] ? 'Retry same send' : 'Send message'), title: t('Enter to send · Shift+Enter for a new line'), children: h(Fragment, null, h(ArrowUpIcon), h('span', { className: 'bt-sr' }, t(attempts[key] ? 'Retry same send' : 'Send message'))), disabled: busy || attaching || !canSpeak || !draft.text.trim() && !draft.attachments?.length }),
+        h('span', { className: 'bt-sr' }, t('Enter to send · Shift+Enter for a new line')),
         null) : null)), document.body)
 }
 

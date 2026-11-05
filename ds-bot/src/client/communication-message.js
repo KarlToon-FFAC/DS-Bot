@@ -5,6 +5,7 @@ import { mdLabels } from './btw.js'
 import { t } from './i18n.js'
 import { contactLabels, messageMentionSpans } from './communication-model.js'
 import { CommunicationAvatar } from './communication-profile.js'
+import { CommunicationAttachments } from './communication-attachments.js'
 
 // A random component namespace makes authored links incapable of impersonating a
 // structured mention. Only anchors produced by our exact span mapping become chips.
@@ -52,6 +53,7 @@ export function CommunicationMessage({ message, members, request, onInspect }) {
   }
   return h('div', { ref: wrapper, onClickCapture: activate, onAuxClickCapture: activate, onContextMenuCapture: activate, onKeyDownCapture: event => { if (['Enter', ' '].includes(event.key)) activate(event) } },
     h(MarkdownText, { text: projection.text, labels: mdLabels(), variant: 'compact' }),
+    message.attachments?.length ? h(CommunicationAttachments, { files:message.attachments }) : null,
     slots.map(slot => createPortal(h('span', { className: 'bt-comm-inline-mention-content', 'aria-hidden': true },
       slot.all ? null : h(CommunicationAvatar, { person: slot.people[0], request, size: 16 }), h('span', { className: 'bt-comm-mention-label' }, slot.label)), slot.node, slot.url)),
     unmatched.length ? h('span', { className: 'bt-comm-mention-targets' }, unmatched.map(person => h('button', { type: 'button', key: person.principalId,

@@ -8,7 +8,7 @@ const statuses = new Set(['prepared', 'pending', 'approved', 'rejected', 'cancel
 const statusLabel = value => t(statuses.has(value) ? value : 'Status unavailable')
 const failureLabel = error => t(communicationFailure(error ?? {}))
 const enrollmentErrors = {
-  HUB_TLS_UNTRUSTED: 'The Hub certificate authority is not trusted. Verify its public CA fingerprint with the administrator and launch the app with NODE_EXTRA_CA_CERTS. Restart the app; keep TLS verification enabled.',
+  HUB_TLS_UNTRUSTED: 'The Hub certificate authority is not trusted. Obtain a fresh signed Hub code through a trusted channel and explicitly update this Hub CA trust. Keep TLS verification enabled.',
   HUB_TLS_HOSTNAME_MISMATCH: 'The Hub address does not match the certificate. Ask its administrator for a certificate covering this exact reachable hostname or IP.',
   HUB_TLS_CERT_EXPIRED: 'The Hub certificate has expired. Ask its administrator to renew it.',
   HUB_TLS_CERT_TIME_INVALID: 'The Hub certificate is not valid yet. Check both clocks and the certificate dates.',
@@ -57,13 +57,13 @@ export function hubManagementAddress(value) {
     return url.href
   } catch { return null }
 }
-const adminLink = url => hubManagementAddress(url) ? h('a', { href: hubManagementAddress(url), target: '_blank', rel: 'noopener noreferrer', className: 'bt-comm-admin-link' }, t('Open Hub management'), ' · ', new URL(url).origin) : null
 
 export function AddDevice({ request, manualGuide, displayName = 'Human' }) {
   const [code, setCode] = useState(''), [name, setName] = useState(displayName), [hub, setHub] = useState(null)
   const [storage, setStorage] = useState(null), [enrollments, setEnrollments] = useState([]), [busy, setBusy] = useState(false), [error, setError] = useState('')
   const [absentHub, setAbsentHub] = useState(null)
   const [uncertainHub, setUncertainHub] = useState(null)
+  const [selectedHub,setSelectedHub] = useState(null),[resumeConfirmed,setResumeConfirmed]=useState({})
   const generation = useRef(0)
   useEffect(() => {
     let active = true
@@ -71,6 +71,7 @@ export function AddDevice({ request, manualGuide, displayName = 'Human' }) {
       if (!active) return
       setStorage(value.storage ?? value.enrollments?.[0]?.storage ?? null)
       setEnrollments(value.enrollments ?? (value.hubId ? [value] : []))
+      setSelectedHub(value.selectedHub??null)
     }).catch(() => { if (active) setError(t('Unable to read pairing status')) })
     return () => { active = false; generation.current += 1 }
   }, [request])
@@ -90,34 +91,60 @@ export function AddDevice({ request, manualGuide, displayName = 'Human' }) {
   }
   const update = value => setEnrollments(current => [...current.filter(item => item.hubId !== value.hubId), value])
   const refreshStorage = async token => {
-    const value = await request({ endpoint: 'onboarding-storage', ...(hub ? { hubId: hub.hubId } : {}) })
+    const value = await request({ endpoint: 'onboarding-storage' })
     if (token !== generation.current) return
     setStorage(value.storage ?? storage)
+    setSelectedHub(value.selectedHub??selectedHub)
     if (hub) setUncertainHub(current => current === hub.hubId ? null : current)
     if (value.enrollments) setEnrollments(value.enrollments)
     else if (value.hubId) update(value)
   }
   const existingRequest = hub && enrollments.some(item => item.hubId === hub.hubId && item.requestId && ['prepared', 'pending', 'approved'].includes(item.status)) && absentHub !== hub.hubId
+  const differentHub=Boolean(hub&&selectedHub?.url&&(selectedHub.hubId!==hub.hubId||selectedHub.url!==hub.url))
+  const select = async (value,token,hubCode) => {
+    await request({endpoint:'switch-hub',...(hubCode?{hubCode,displayName:name}:{hubId:value.hubId}),...(selectedHub?.hubId?{expectedCurrentHubId:selectedHub.hubId}:{}),
+      confirmedHubId:value.hubId,confirmedUrl:value.url,...(value.trustFingerprint?{confirmedTrustFingerprint:value.trustFingerprint}:{})})
+    if(token===generation.current){setResumeConfirmed({});await refreshStorage(token)}
+  }
   return h('div', { className: 'bt-comm-onboarding' },
     h('p', null, t('Paste a Hub code from its owner. Review the actual address before requesting access. Devices are not discovered automatically.')),
     h('p', { className: 'bt-comm-reference' }, t('Review only decodes the Hub code locally. It does not test network access or submit a request.')),
-    h('label', { className: 'bt-comm-field' }, t('Hub code'), h('textarea', { value: code, rows: 2, maxLength: 4096, 'aria-label': t('Hub code'), onChange: event => { generation.current += 1; setBusy(false); setCode(event.target.value); setHub(null); setError('') } })),
+    h('label', { className: 'bt-comm-field' }, t('Hub code'), h('textarea', { value: code, rows: 2, maxLength: 65536, 'aria-label': t('Hub code'), onChange: event => { generation.current += 1; setBusy(false); setCode(event.target.value); setHub(null); setError('') } })),
     h('button', { type: 'button', disabled: busy || !code.trim(), onClick: () => { void run(async token => { const value = await request({ endpoint: 'decode-hub-code', hubCode: code }); if (token === generation.current) setHub(value) }) } }, t('Review Hub')),
     hub ? h('section', { className: 'bt-comm-set-card' }, h('h3', null, t('Confirm the Hub')), h('p', null, t('Hub address'), ': ', h('code', null, hub.url)), h('p', null, 'Hub ID: ', h('code', null, hub.hubId)),
+      h('p', { className: 'bt-comm-reference' }, t('Accept this code only from a trusted channel. Its own certificate cannot authenticate an untrusted source.')),
+      hub.trustFingerprint ? h('p', null, t('Hub CA fingerprint'), ': ', h('code', null, hub.trustFingerprint)) : h('p', null, t('Legacy code: ask the Hub owner for a v2 code to pair a private CA without environment settings.')),
       h('label', { className: 'bt-comm-field' }, t('Device display name'), h('input', { value: name, maxLength: 100, 'aria-label': t('Device display name'), onChange: event => setName(event.target.value) })),
-      h('button', { type: 'button', disabled: busy || !name.trim() || !storage || existingRequest || uncertainHub === hub.hubId, onClick: () => { void run(async token => {
+      differentHub?h('p',{className:'bt-comm-reference'},t('Switching pauses the current Hub and retains its data. A new Hub starts with a separate identity and no published Bots.')):null,
+      differentHub&&selectedHub?.legacy?h('p',{role:'status'},t('Legacy shared-secret pairing cannot be safely assigned to another Hub. Keep this data and enroll through a separate profile first.')):null,
+      differentHub?h('button',{type:'button',disabled:busy||!name.trim()||selectedHub?.legacy,onClick:()=>{void run(token=>select(hub,token,code))}},t('Select this Hub')):null,
+      h('button', { type: 'button', disabled: busy || differentHub || !name.trim() || !storage || existingRequest || uncertainHub === hub.hubId, onClick: () => { void run(async token => {
         setAbsentHub(null)
         setUncertainHub(hub.hubId)
-        const value = await request({ endpoint: 'join-hub', hubCode: code, displayName: name, confirmedHubId: hub.hubId, confirmedUrl: hub.url })
+        const value = await request({ endpoint: 'join-hub', hubCode: code, displayName: name, confirmedHubId: hub.hubId, confirmedUrl: hub.url, ...(hub.trustFingerprint ? { confirmedTrustFingerprint: hub.trustFingerprint } : {}) })
         if (token === generation.current) { update(value); setUncertainHub(null) }
-      }) } }, t('Confirm and request access'))) : null,
+      }) } }, t('Confirm and request access')),
+      hub.trustFingerprint && enrollments.some(item => item.hubId === hub.hubId && item.url === hub.url) ? h('button', { type: 'button', disabled: busy, onClick: () => { void run(async token => {
+        const value = await request({ endpoint: 'update-hub-trust', hubCode: code, confirmedHubId: hub.hubId, confirmedUrl: hub.url, confirmedTrustFingerprint: hub.trustFingerprint })
+        if (token === generation.current) update(value)
+      }) } }, t('Update this Hub CA trust')) : null) : null,
     h('button', { type: 'button', disabled: busy, onClick: () => { void run(token => refreshStorage(token)) } }, t('Refresh saved request')),
-    h('p', { className: 'bt-comm-storage-note' }, t('Pairing keys are created only when you confirm a request. The default local credential store is plaintext protected by your OS account permissions, not encryption or isolation from tools running as the same user.')),
+    h('p', { className: 'bt-comm-storage-note' }, t('Confirming a new Hub selection or join creates its own device key. Disconnecting retains that key and Hub data; it does not revoke membership on the server. The default credential store is plaintext protected by your OS account permissions, not encrypted against the same user.')),
     storage ? h('p', { className: 'bt-comm-reference' }, t('Credential storage'), ': ', storage.defaultProvider, ' · ', t(storage.encryptedByDefault ? 'Encrypted by provider' : 'Not encrypted by default')) : null,
+    selectedHub?.legacy?h('section',{className:'bt-comm-address'},h('h3',null,t('Current Hub')),h('code',null,selectedHub.url),
+      h('p',{className:'bt-comm-reference'},t('Local disconnect preserves server membership and queued work.')),
+      selectedHub.enabled?h('button',{type:'button',disabled:busy,onClick:()=>{void run(async token=>{await request({endpoint:'disconnect-hub',confirmedUrl:selectedHub.url,...(selectedHub.hubId?{hubId:selectedHub.hubId}:{})});await refreshStorage(token)})}},t('Disconnect this Hub')):h(Fragment,null,
+        h('label',{className:'bt-comm-check'},h('input',{type:'checkbox',checked:Boolean(resumeConfirmed.legacy),onChange:event=>setResumeConfirmed({legacy:event.target.checked})}),t('Resume retained pending messages and work after the Hub checks authorization.')),
+        h('button',{type:'button',disabled:busy||!resumeConfirmed.legacy,onClick:()=>{void run(async token=>{await request({endpoint:'resume-hub',confirmedUrl:selectedHub.url,confirmResume:true,...(selectedHub.hubId?{hubId:selectedHub.hubId}:{})});setResumeConfirmed({});await refreshStorage(token)})}},t('Resume this Hub')))):null,
     enrollments.map(item => h('section', { key: item.hubId, className: 'bt-comm-address' }, h('p', null, h('code', null, item.hubId), ' · ', statusLabel(item.status)), h('p', { className: 'bt-comm-reference' }, item.url),
       item.requestId ? h('p', { className: 'bt-comm-reference' }, t('Request ID'), ': ', h('code', null, item.requestId)) : null,
-      item.status === 'approved' ? h('p', { role: 'status' }, t('Approved. The device configuration is saved through the app and will reload. Existing settings are preserved.')) : null,
-      item.requestId ? h('button', { type: 'button', disabled: busy, onClick: () => { void run(async token => {
+      item.paused?h('p',{role:'status'},t('Paused. Identity, trust and Hub history are retained separately.')):item.status === 'approved' ? h('p', { role: 'status' }, t('Approved. The device configuration is saved through the app and will reload. Existing settings are preserved.')) : null,
+      selectedHub?.hubId!==item.hubId?h('button',{type:'button',disabled:busy,onClick:()=>{void run(token=>select(item,token))}},t('Select this Hub')):null,
+      selectedHub?.hubId===item.hubId&&selectedHub.enabled?h('button',{type:'button',disabled:busy,onClick:()=>{void run(async token=>{await request({endpoint:'disconnect-hub',hubId:item.hubId});if(token===generation.current)await refreshStorage(token)})}},t('Disconnect this Hub')):null,
+      selectedHub?.hubId===item.hubId&&item.paused&&item.status==='approved'?h(Fragment,null,
+        h('label',{className:'bt-comm-check'},h('input',{type:'checkbox',checked:Boolean(resumeConfirmed[item.hubId]),onChange:event=>setResumeConfirmed(current=>({...current,[item.hubId]:event.target.checked}))}),t('Resume retained pending messages and work after the Hub checks authorization.')),
+        h('button',{type:'button',disabled:busy||!resumeConfirmed[item.hubId],onClick:()=>{void run(async token=>{const value=await request({endpoint:'resume-hub',hubId:item.hubId,confirmedUrl:item.url,confirmResume:true});if(token===generation.current){update(value);setResumeConfirmed({});await refreshStorage(token)}})}},t('Resume this Hub'))):null,
+      item.requestId ? h('button', { type: 'button', disabled: busy||Boolean(selectedHub?.hubId&&selectedHub.hubId!==item.hubId), onClick: () => { void run(async token => {
         try { const value = await request({ endpoint: 'hub-join-status', hubId: item.hubId }); if (token === generation.current) update(value) }
         catch (failure) { if (token === generation.current && failure.code === 'JOIN_NOT_FOUND') setAbsentHub(item.hubId); throw failure }
       }) } }, t('Check approval')) : h('p', { role: 'status' }, t('Device identity is saved locally. No request ID exists yet; access has not been requested from the Hub.')),
@@ -132,7 +159,7 @@ function BotChoices({ bots, selected, onChange, label }) {
     h(BotMark, { bot, size: 24 }), bot.name, h('span', { className: 'bt-comm-reference' }, bot.id))) : h('p', { className: 'bt-comm-reference' }, t('No published Bots')))
 }
 
-export function ContactManager({ request, operation, contacts, managementUrl }) {
+export function ContactManager({ request, operation, contacts }) {
   const [data, setData] = useState(null), [code, setCode] = useState(''), [userCode, setUserCode] = useState('')
   const [published, setPublished] = useState([]), [share, setShare] = useState([]), [incomingShares, setIncomingShares] = useState({})
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [confirm, setConfirm] = useState('')
@@ -163,7 +190,6 @@ export function ContactManager({ request, operation, contacts, managementUrl }) 
   const sharedBots = available.bots.filter(bot => available.publishedBotIds.includes(bot.id))
   const labelFor = id => contacts.find(person => person.principalId === id)?.displayName ?? id
   return h('div', { className: 'bt-comm-contact-manager' },
-    adminLink(managementUrl),
     h('button', { type: 'button', disabled: busy, onClick: () => { void run(async () => {}) } }, t('Refresh status')),
     h('h3', null, t('Your user code')), h('p', { className: 'bt-comm-user-code', tabIndex: 0 }, code || t('Loading…')),
     h('p', { className: 'bt-comm-reference' }, t('Share this code with the person you want to add. Both people choose which local Bots to share; none are selected by default.')),

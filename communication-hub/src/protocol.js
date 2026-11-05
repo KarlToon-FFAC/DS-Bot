@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto'
+import { normalizeAttachments, ATTACHMENT_CAPABILITY } from './attachments.js'
 
 export const PROTOCOL = 'dsbot-communication/1'
 export const CAPABILITIES = ['text', 'markdown', 'mentions', 'group', 'dm', 'reply', 'history', 'group-policy', 'membership-epoch', 'explicit-bot-activation']
-export const HUB_CAPABILITIES = [...CAPABILITIES, 'bounded-bot-collaboration', 'principal-avatars', 'principal-publication', 'bot-work-events']
+export const HUB_CAPABILITIES = [...CAPABILITIES, 'bounded-bot-collaboration', 'principal-avatars', 'principal-publication', 'bot-work-events', ATTACHMENT_CAPABILITY]
 export const DEFAULT_LIMITS = { maxTextBytes: 65536, maxEnvelopeBytes: 131072, maxMembers: 64, maxPendingDeliveries: 10000,
   maxPrincipals: 64, maxMembershipsPerInstance: 64, maxPendingInvitesPerInstance: 64, maxCausalDepth: 8, maxAiDeliveriesPerRoot: 32 }
 
@@ -34,9 +35,11 @@ export function normalizeMessage(input, author, limits) {
   requireThat(input.content && ['text', 'markdown'].includes(input.content.format)
     && typeof input.content.text === 'string', 'UNSUPPORTED_CONTENT')
   requireThat(Object.keys(input.content).every(key => ['format', 'text'].includes(key))
-    && !input.attachments && !input.files, 'UNSUPPORTED_CONTENT')
+    && !input.files, 'UNSUPPORTED_CONTENT')
+  let attachments
+  try { attachments = normalizeAttachments(input.attachments) } catch(error) { throw new CommunicationError(error.code) }
   const bytes = Buffer.byteLength(input.content.text, 'utf8')
-  requireThat(bytes > 0, 'INVALID_REQUEST')
+  requireThat(bytes > 0 || attachments.length > 0, 'INVALID_REQUEST')
   requireThat(bytes <= limits.maxTextBytes, 'PAYLOAD_TOO_LARGE', 'Message exceeds the UTF-8 byte limit', { actualBytes: bytes, maxBytes: limits.maxTextBytes })
   requireThat(Array.isArray(input.mentions) && input.mentions.length <= limits.maxMembers, 'INVALID_REQUEST')
   const mentions = [...new Set(input.mentions.map(item => identifier(item?.principalId)))].sort().map(principalId => ({ principalId }))
@@ -57,6 +60,7 @@ export function normalizeMessage(input, author, limits) {
   return { protocol: PROTOCOL, type: 'message.publish', messageId: input.messageId, conversationId: input.conversationId,
     author, clientCreatedAt: input.clientCreatedAt, content: { format: input.content.format, text: input.content.text }, mentions,
     ...(activationTargets === undefined ? {} : { activationTargets }),
+    ...(attachments.length ? { attachments } : {}),
     replyToMessageId: input.replyToMessageId, ...(input.responseToDeliveryId === undefined ? {} : { responseToDeliveryId: input.responseToDeliveryId }),
     ...(input.causationDeliveryId === undefined ? {} : { causationDeliveryId: input.causationDeliveryId }),
     ...(input.membershipEpoch === undefined ? {} : { membershipEpoch: input.membershipEpoch }) }

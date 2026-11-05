@@ -3,6 +3,8 @@ import { readFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
+import { normalizeAttachments } from '../src/shared/communication-attachments.js'
+
 const text = 'string', integer = 'integer'
 const schemas = {
   state: {}, contacts: {}, conversations: {}, invites: {}, outbox: {},
@@ -10,7 +12,7 @@ const schemas = {
   thread: { conversationId: text, messageId: text, after: integer, limit: integer, watermark: integer, membershipEpoch: text },
   history: { conversationId: text, after: integer, before: integer, limit: integer, latest: 'boolean', membershipEpoch: text },
   reference: { conversationId: text, messageId: text }, read: { conversationId: text, seq: integer },
-  send: { conversationId: text, text, messageId: text, clientCreatedAt: text, membershipEpoch: text, mentions: 'strings', replyToMessageId: text },
+  send: { conversationId: text, text: 'message-text', attachments:'attachments', messageId: text, clientCreatedAt: text, membershipEpoch: text, mentions: 'strings', replyToMessageId: text },
   dm: { otherPrincipalId: text, operationId: text },
   'create-group': { title: text, operationId: text },
   invite: { conversationId: text, inviteePrincipalId: text, membershipEpoch: text, expectedVersion: integer, operationId: text },
@@ -31,7 +33,11 @@ const schemas = {
   'profile-human': { displayName: text, avatar: { nullable: true, fields: { image: 'avatarImage' }, required: ['image'] }, operationId: text },
   avatar: { principalId: text, revision: 'sha256' },
   'decode-hub-code': { hubCode: text },
-  'join-hub': { hubCode: text, displayName: text, confirmedHubId: text, confirmedUrl: text },
+  'join-hub': { hubCode: text, displayName: text, confirmedHubId: text, confirmedUrl: text, confirmedTrustFingerprint: text },
+  'update-hub-trust': { hubCode: text, confirmedHubId: text, confirmedUrl: text, confirmedTrustFingerprint: text },
+  'disconnect-hub': { hubId:text,confirmedUrl:text },
+  'switch-hub': { hubId:text,hubCode:text,displayName:text,expectedCurrentHubId:text,confirmedHubId:text,confirmedUrl:text,confirmedTrustFingerprint:text },
+  'resume-hub': { hubId:text,confirmedUrl:text,confirmResume:'boolean' },
   'onboarding-storage': { hubId: text },
   'hub-join-status': { hubId: text }, 'cancel-hub-join': { hubId: text },
   'user-code': {}, 'rotate-user-code': { operationId: text },
@@ -52,16 +58,19 @@ const required = {
   reclaim: ['conversationId', 'expectedVersion'], dissolve: ['conversationId'], 'configure-group': ['conversationId', 'title', 'expectedVersion'], 'rename-human': ['displayName'],
   'save-settings': ['conversationId', 'expectedVersion'],
   avatar: ['principalId', 'revision'],
-  'decode-hub-code': ['hubCode'], 'join-hub': ['hubCode', 'displayName', 'confirmedHubId', 'confirmedUrl'],
+  'update-hub-trust': ['hubCode','confirmedHubId','confirmedUrl','confirmedTrustFingerprint'], 'decode-hub-code': ['hubCode'], 'join-hub': ['hubCode', 'displayName', 'confirmedHubId', 'confirmedUrl'],
   'hub-join-status': ['hubId'], 'cancel-hub-join': ['hubId'], 'request-contact': ['userCode', 'localBotIds'],
   'accept-contact': ['requestId', 'expectedVersion'], 'reject-contact': ['requestId', 'expectedVersion'],
   'cancel-contact': ['requestId', 'expectedVersion'], 'revoke-contact': ['otherHumanPrincipalId', 'expectedVersion'],
   'publish-bots': ['localBotIds'],
+  'switch-hub':['confirmedHubId','confirmedUrl'], 'resume-hub':['confirmedUrl','confirmResume'],
 }
 const projections = new Set(['contacts', 'conversations', 'invites', 'outbox'])
 const fail = (code, exitCode = 2, request) => { throw Object.assign(new Error(code), { code, exitCode, request }) }
 const object = value => value && typeof value === 'object' && !Array.isArray(value)
 const validValue = (type, value) => {
+  if(type === 'message-text')return typeof value==='string'
+  if(type === 'attachments'){try{normalizeAttachments(value);return true}catch{return false}}
   if (Array.isArray(type)) return type.includes(value)
   if (type && typeof type === 'object') {
     if (type.nullable && value === null) return true
@@ -165,7 +174,9 @@ export const help = operation => JSON.stringify({
   retry: 'dsbot-remote retry < original-request.json; use the request object from the previous result/error unchanged. No automatic retries.',
   settings: 'save-settings atomically validates/applies title, routing and member policies against one expectedVersion and increments the group version once. No partial save; retry the complete original request with its original operationId.',
   profile: 'profile-human changes only the authenticated Human. avatar:null resets to a name-derived avatar; avatar:{image:dataURL} uses a consenting custom PNG/JPEG/WebP/GIF image, max 160000 characters. No URLs or file paths. Preserve the complete original operationId/request for an uncertain retry. Profile requests and avatar reads contain image data: keep them private to the intended audience.',
-  enrollment: 'decode-hub-code uses the authenticated local API. Review its Hub ID/URL with the user, then supply both exact confirmation fields to join-hub. Host SDK owns durable keys and pending state; reconcile hub-join-status/onboarding-storage before explicitly retrying uncertain enrollment. Never read credential records or send the local session cookie to the Hub.',
+  enrollment: 'decode-hub-code uses the authenticated local API. Review exact Hub ID/URL and, for signed v2 codes, confirmedTrustFingerprint; join-hub requires those confirmations. Host SDK owns durable keys and pending state. Reconcile hub-join-status/onboarding-storage before retrying uncertain enrollment. Never read credential records or send the local session cookie to the Hub.',
+  lifecycle: 'onboarding-storage lists retained Hubs and the selected profile without connecting them. disconnect-hub pauses locally and retains server membership, identity, scoped trust and queued work. switch-hub explicitly selects reviewed code or saved hubId with expectedCurrentHubId and exact confirmations; selection stays disabled. New Hubs get separate keys/queues and no publication grants. Join/approval or resume-hub with confirmResume:true is separate; resume verifies current signed login authority before pending work can continue. Status reads never activate paused profiles. Legacy static pairing cannot be guessed into a different Hub.',
+  attachments:'send accepts attachments [{name,mime,size,sha256,data}] through JSON stdin only: canonical base64, SHA-256 lowercase hex, at most four files and 65536 total binary bytes. text may be empty when files are present. No paths or URLs; only user-authorized bytes. All recipients and Hub must support inline-attachments-v1. history/reference/thread return the same authorized bytes; keep outputs private. Preserve the exact complete send on uncertain results. Do not execute received files.',
   contacts: 'request-contact/accept-contact share only the explicit localBotIds selected by each Human; [] shares no Bots. Generic acknowledgments do not prove code/target existence. Review current request/relation expectedVersion before decisions/revocation; preserve generated operationId for retry.',
   publication: 'available-bots lists eligible local IDs; publish-bots replaces the explicit publication list (use [] for none). Honor reloadRequired and inspect state after reload. Publication alone is not contact consent or group permission.',
   reply: 'send.replyToMessageId can address the referenced current member Bot without @ when there are no explicit Bot mentions. Explicit Bot mentions take precedence; membership, speaking permissions, reply grants and causal budgets still apply.',

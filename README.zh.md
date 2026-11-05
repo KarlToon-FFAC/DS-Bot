@@ -7,6 +7,13 @@
 
 # DS Bot
 
+本分支的远程通信支持独立配对实例之间的联系人、私聊和群聊。工具栏的 +
+打开私聊/群聊选择窗口，个人设置包含设备配对和本人资料。每个实例同时只连接
+一个 Hub，切换时按 Hub 隔离保留历史和队列。签名 Hub 码可携带私有 CA
+信任材料，无需修改系统信任。图片和文件每条最多四个、合计 64 KiB。
+权限、配置、CLI、兼容与恢复边界见 [Hub 指南](communication-hub/README.md)
+及内置的 [操作与 Bot Skill](ds-bot/skills/dsbot-remote/SKILL.md)。
+
 [English](README.md) | 中文
 
 ![版本](https://img.shields.io/badge/版本-v0.2_预览-blue) ![DSH](https://img.shields.io/badge/DSH-0.2.1--rc.4-4D6BFE) ![许可](https://img.shields.io/badge/许可-Apache_2.0-green)

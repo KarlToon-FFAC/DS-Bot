@@ -1,10 +1,12 @@
 import { randomUUID } from 'node:crypto'
+import { ATTACHMENT_CAPABILITY } from '../../shared/communication-attachments.js'
 
 const PROTOCOL = 'dsbot-communication/1'
 const CAPABILITIES = ['text', 'markdown', 'mentions', 'group', 'dm', 'reply', 'history', 'group-policy', 'membership-epoch', 'explicit-bot-activation']
 const BOUNDED_COLLABORATION = 'bounded-bot-collaboration'
+export const communicationCapabilities = () => [...CAPABILITIES, BOUNDED_COLLABORATION, ATTACHMENT_CAPABILITY]
 const outboxCapacity = Symbol('outbox-capacity')
-const transient = new Set(['CONNECTION_LOST', 'REQUEST_TIMEOUT', 'STORAGE_UNAVAILABLE', 'BACKPRESSURE', 'HISTORY_GAP'])
+const transient = new Set(['CONNECTION_LOST', 'REQUEST_TIMEOUT', 'HUB_CONNECTION_REFUSED', 'HUB_CONNECTION_TIMEOUT', 'HUB_UNREACHABLE', 'STORAGE_UNAVAILABLE', 'BACKPRESSURE', 'HISTORY_GAP'])
 const errorWith = (code, message = code) => Object.assign(new Error(message), { code })
 
 export function communicationUrl(url) {
@@ -72,7 +74,7 @@ export class CommunicationTransport {
       socket.addEventListener('close', () => { clearTimeout(deadline); reject(errorWith('CONNECTION_LOST')) }, { once: true })
     })
     try {
-      const capabilities = [...CAPABILITIES, BOUNDED_COLLABORATION]
+      const capabilities = communicationCapabilities()
       const welcome = typeof credential?.authenticate === 'function'
         ? await credential.authenticate((type, payload) => this.send(type, payload), capabilities)
         : await this.send('hello', { instanceId: this.queue.instanceId, credential, capabilities })
@@ -111,7 +113,10 @@ export class CommunicationTransport {
     let deferredError
     for (const item of this.queue.pendingOutbox()) {
       try {
-        if (item.type === 'message.publish') this.queue.validateMessage(item.payload)
+        if (item.type === 'message.publish') {
+          this.queue.validateMessage(item.payload)
+          if(item.payload.attachments?.length&&!this.welcome.capabilities.includes(ATTACHMENT_CAPABILITY))throw errorWith('ATTACHMENT_CAPABILITY_REQUIRED')
+        }
         this.queue.accepted(item.id, await this.request(item.type, item.payload))
       }
       catch (error) {

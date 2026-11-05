@@ -29,7 +29,8 @@ export async function startHub({ databasePath, peers, host='127.0.0.1', port=319
     allowed.set(peer.instanceId,{credentialHash:digest(peer.credential),label:peer.instanceLabel??peer.instanceId,pairingRevision:peer.pairingRevision??1})
   }
   const store=new HubStore(databasePath,{limits,beforeCommit})
-  const management=new HubManagement(store,{url:managementOptions?.url??managementOptions?.publicUrl})
+  const pairingTrust=managementOptions?.pairingCa ? { caPem:String(managementOptions.pairingCa), certificatePem:String(tls?.cert??''), privateKey:tls?.key } : undefined
+  const management=new HubManagement(store,{url:managementOptions?.url??managementOptions?.publicUrl,pairingTrust})
   store.directoryFilter=(auth,rows,principalId)=>management.filterDirectory(auth,rows,principalId)
   store.contactPolicy=(auth,actorId,targetId)=>management.assertContact(auth,actorId,targetId)
   store.dmPolicy=id=>management.assertDm(id)
@@ -130,6 +131,7 @@ export async function startHub({ databasePath, peers, host='127.0.0.1', port=319
   if(managementOptions?.enabled){
     try{
       management.url??=url
+      if(pairingTrust)management.info()
       const origin=managementOptions.origin??new URL(management.url.replace(/^ws/,'http')).origin
       managementHttp=createManagementHttp(management,{password:managementOptions.password,origin,onRevoke:revoke})
       if(managementHttp.enabled)managementUrl=`${origin}/admin/`

@@ -9,6 +9,12 @@ import { contactLabels, deliveryPhase, contactsByAddress, principalAvatar, menti
 import { communicationMentions } from '../src/shared/communication-mentions.js'
 import { createSource } from '../src/client/sources.js'
 
+test('Chinese-leading Human and Bot name initials use one Han character; English stays two and astral Han stays whole',()=>{
+  for(const [name,initials] of [['张三','张'],['阿尔法','阿'],['𠮷田','𠮷'],['李Alice','李'],['Alice','AL'],['','?']]){
+    for(const id of ['human:a:one','bot:a:one'])assert.equal(principalAvatar(id,name).initials,initials)
+  }
+})
+
 test('communication labels disambiguate same-name origins and never equate storage, Human read and AI admission', () => {
   const contacts = [
     { principalId: 'bot:a:j', displayName: 'Chief', homeInstanceId: 'a', instanceLabel: 'Office', kind: 'bot' },

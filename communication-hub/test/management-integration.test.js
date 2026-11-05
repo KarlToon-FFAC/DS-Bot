@@ -65,3 +65,46 @@ test('actual HTTP approval, signed socket login, Human assignment and scoped con
   assert.ok((await a.signed.request('dm.open', { principalId: a.human, otherPrincipalId: b.human, operationId: randomUUID() })).conversationId)
   await assert.rejects(a.signed.request('contacts.list', { principalId: b.human }), { code: 'AUTHOR_MISMATCH' })
 })
+
+test('native password form supports browser autofill, safe session reload, logout and revocation',async t=>{
+  const hub=await startHub({databasePath:':memory:',port:0,management:{enabled:true,password:'mock-native-form-password-only'}});t.after(()=>hub.close())
+  const origin=`http://127.0.0.1:${hub.port}`
+  const pageResponse=await fetch(origin+'/admin/'),page=await pageResponse.text()
+  assert.equal(pageResponse.headers.get('referrer-policy'),'same-origin','native same-origin form must retain its Origin; external referrers remain suppressed')
+  assert.match(page,/<form[^>]*method="post"[^>]*action="\/admin\/login"[^>]*autocomplete="on"/)
+  assert.match(page,/name="username"[^>]*autocomplete="username"/)
+  assert.match(page,/name="password"[^>]*autocomplete="current-password"/)
+  const script=await(await fetch(origin+'/admin/app.js')).text();assert.doesNotMatch(script,/localStorage|sessionStorage|password\.value/)
+  const login=async()=>{
+    const response=await fetch(origin+'/admin/login',{method:'POST',redirect:'manual',headers:{origin,'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({username:'admin',password:'mock-native-form-password-only'})})
+    assert.equal(response.status,303);assert.equal(response.headers.get('location'),'/admin/')
+    const header=response.headers.getSetCookie()[0];assert.match(header,/HttpOnly; SameSite=Strict; Max-Age=900/)
+    assert.equal(await response.text(),'');return header.split(';')[0]
+  }
+  const request=(cookie,action,input={},csrf,requestOrigin=origin)=>fetch(origin+'/admin/api/'+action,{method:'POST',headers:{origin:requestOrigin,cookie,'content-type':'application/json',...(csrf?{'x-csrf-token':csrf}:{})},body:JSON.stringify(input)})
+  const a=await login(),b=await login()
+  const failure=await fetch(origin+'/admin/login',{method:'POST',headers:{origin,'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({username:'admin',password:'wrong-synthetic-password'})})
+  assert.equal(failure.status,401);assert.match(await failure.text(),/Sign-in failed/)
+  const session=await(await request(a,'session')).json();assert.equal(session.ok,true);assert.ok(session.csrf)
+  assert.equal((await request(a,'state')).status,401,'session bootstrap never removes mutation CSRF checks')
+  assert.equal((await request(a,'session',{},undefined,'https://untrusted.example')).status,400)
+  assert.equal((await request(a,'state',{},session.csrf)).status,200)
+  assert.equal((await request(a,'sessions/revoke',{},session.csrf)).status,200)
+  assert.equal((await request(a,'session')).status,401);assert.equal((await request(b,'session')).status,401)
+  const c=await login(),active=await(await request(c,'session')).json()
+  const logout=await request(c,'logout',{},active.csrf);assert.equal(logout.status,200);assert.match(logout.headers.get('set-cookie'),/Max-Age=0/)
+  assert.equal((await request(c,'session')).status,401)
+})
+
+test('changing the administrator verifier revokes existing sessions without weakening login checks',async t=>{
+  const {initializeAdmin}=await import('../src/management-http.js')
+  const hub=await startHub({databasePath:':memory:',port:0,management:{enabled:true,password:'mock-original-admin-password'}});t.after(()=>hub.close())
+  const origin=`http://127.0.0.1:${hub.port}`
+  const login=password=>fetch(origin+'/admin/api/login',{method:'POST',headers:{origin,'content-type':'application/json'},body:JSON.stringify({password})})
+  const original=await login('mock-original-admin-password'),cookie=original.headers.getSetCookie()[0].split(';')[0]
+  initializeAdmin(hub.management,'mock-rotated-admin-password')
+  const expired=await fetch(origin+'/admin/api/session',{method:'POST',headers:{origin,cookie,'content-type':'application/json'},body:'{}'})
+  assert.equal(expired.status,401)
+  assert.equal((await login('mock-original-admin-password')).status,401)
+  assert.equal((await login('mock-rotated-admin-password')).status,200)
+})

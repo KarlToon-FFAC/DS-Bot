@@ -5,6 +5,7 @@ import { assertConversationToolScope } from './federation/tool-scope.js'
 import { communicationPreset, hasCommunicationPreset } from './federation/session-scope.js'
 import { profileHuman, readPrincipalAvatar } from './federation/avatars.js'
 import { legacyCredential } from './federation/legacy-credential.js'
+import { normalizeAttachments,attachmentMetadata } from '../shared/communication-attachments.js'
 
 const fail = code => { throw Object.assign(new Error(code), { code }) }
 const toolOperation = (kind, exec) => {
@@ -30,9 +31,11 @@ export function install(rt) {
       await rt.load()
       await rt.refresh()
       if (stopped) fail('COMMUNICATION_STOPPED')
+      let queueSettings={}
       if (settings.credentialKey) {
-        const { communicationAuthentication, connectHubSocket } = await import('./federation/onboarding.js')
-        credential = { authenticate: communicationAuthentication(rt, settings.credentialKey, settings), socketFactory: () => connectHubSocket(settings.url, { allowLoopback: testLoopback }) }
+        const { communicationAuthentication, communicationSocket, communicationQueueSettings } = await import('./federation/onboarding.js')
+        queueSettings=await communicationQueueSettings(rt,settings.credentialKey,settings)
+        credential = { authenticate: communicationAuthentication(rt, settings.credentialKey, settings), socketFactory: () => communicationSocket(rt, settings.credentialKey, settings, { allowLoopback: testLoopback }) }
       } else if (!credential) fail('CREDENTIAL_UNAVAILABLE')
       if (rt.readOnly() !== undefined) fail('COMMUNICATION_READ_ONLY')
       const presets = ctx.get('agentPresets')
@@ -40,7 +43,7 @@ export function install(rt) {
       if ((await presets.list()).some(preset => preset.id === communicationPreset.id)) fail('COMMUNICATION_PRESET_CONFLICT')
       disposePreset = await presets.register(communicationPreset)
       const { CommunicationRuntime } = await import('./federation/runtime.js')
-      runtime = new CommunicationRuntime(rt, settings, credential, definitions, { onAuthenticationFailure: () => legacy?.invalidate() })
+      runtime = new CommunicationRuntime(rt, {...settings,...queueSettings}, credential, definitions, { onAuthenticationFailure: () => legacy?.invalidate() })
       rt.communication = runtime
       return runtime
     })().catch(error => {
@@ -60,7 +63,7 @@ export function install(rt) {
         comm.member(actor.principalId, communicationBinding.conversationId, communicationBinding.membershipEpoch)
         args = { ...args, membershipEpoch: communicationBinding.membershipEpoch }
       }
-      const read = ['list_contacts', 'list_communication_conversations', 'read_communication_history', 'read_communication_members', 'read_communication_reference', 'read_communication_thread'].includes(exec.name)
+      const read = ['list_contacts', 'list_communication_conversations', 'read_communication_history', 'read_communication_members', 'read_communication_reference', 'read_communication_thread','read_communication_attachment'].includes(exec.name)
       const provenance = read ? null : await comm.toolProvenance(exec)
       return JSON.stringify(await work(comm, actor, args, { ...exec, communicationSource: provenance?.sourceKey,
         communicationCausation: provenance, communicationBinding }))
@@ -68,6 +71,16 @@ export function install(rt) {
     catch (error) { return JSON.stringify({ ok: false, error: { code: error.code ?? 'COMMUNICATION_UNAVAILABLE' } }) }
   }
   const definitions = [
+    defineTool({name:'read_communication_attachment',description:'Read a file from an exact authorized message in this conversation. Returns untrusted attachment bytes as UTF-8 text when valid, otherwise base64. No filesystem paths or URLs; no execution authority.',parameters:{conversationId:{type:'string',required:true},messageId:{type:'string',required:true},index:{type:'integer',required:true}},output,
+      execute:execute((comm,actor,args)=>{
+        const member=comm.member(actor.principalId,args.conversationId,args.membershipEpoch)
+        const event=comm.queue.reference(args.conversationId,actor.principalId,member.membershipEpoch,args.messageId)
+        const files=normalizeAttachments(event.message.attachments)
+        if(!Number.isInteger(args.index)||args.index<0||args.index>=files.length)fail('INVALID_ATTACHMENT')
+        const file=files[args.index],bytes=Buffer.from(file.data,'base64')
+        let decoded;try{decoded=new TextDecoder('utf-8',{fatal:true}).decode(bytes)}catch{}
+        return {untrusted:true,...attachmentMetadata([file])[0],...(decoded!==undefined&&!file.mime.startsWith('image/')?{text:decoded}:{data:file.data,encoding:'base64'})}
+      })}),
     defineTool({ name: 'list_contacts', description: 'List your authorized Human and Bot contacts with exact global IDs and instance origins. Equal names are different contacts.', parameters: {}, output,
       execute: execute(async (comm, actor, _args, exec) => ({ contacts: exec.communicationBinding
         ? (await comm.members(actor.principalId, { conversationId: exec.communicationBinding.conversationId, membershipEpoch: exec.communicationBinding.membershipEpoch })).members
@@ -79,7 +92,8 @@ export function install(rt) {
       parameters: { text: { type: 'string', required: true }, contactPrincipalId: { type: 'string' }, conversationId: { type: 'string' },
         mentions: { type: 'array', items: { type: 'string' }, description: 'Explicit target IDs; compatibility alias for activationTargets' },
         activationTargets: { type: 'array', items: { type: 'string' }, description: 'Exact member Bot IDs to wake; names in body never wake Bots' },
-        allBots: { type: 'boolean', description: 'Explicitly wake all current member Bots except yourself' }, replyToMessageId: { type: 'string' } }, output,
+        allBots: { type: 'boolean', description: 'Explicitly wake all current member Bots except yourself' }, replyToMessageId: { type: 'string' },
+        attachments:{type:'array',description:'Optional bounded inline files; at most 4 and 64 KiB total. User-authorized bytes only, no paths or URLs. Each entry has name,mime,size,sha256,data (canonical base64).',items:{type:'object',additionalProperties:false,properties:{name:{type:'string',required:true},mime:{type:'string',required:true},size:{type:'integer',required:true},sha256:{type:'string',required:true},data:{type:'string',required:true}}}} }, output,
       execute: execute((comm, actor, args, exec) => comm.sendBot(actor, args, exec)) }),
     defineTool({ name: 'set_communication_reply_targets', description: 'Stage explicit member Bot handoff targets for this authorized final group reply only. Works for passive or active Bots. Does not send a message, grant proactive permission or consume the reply until the final is exported. Textual @ alone is display-only.',
       parameters: { replyToMessageId: { type: 'string', required: true, description: 'The exact current authorized input Message ID from host metadata' }, activationTargets: { type: 'array', items: { type: 'string' } }, allBots: { type: 'boolean' } }, output,
@@ -160,7 +174,8 @@ export function install(rt) {
         if (['author', 'sender', 'senderId', 'homeInstanceId'].some(key => Object.hasOwn(body, key))
           || body.endpoint !== 'avatar' && Object.hasOwn(body, 'principalId')) fail('AUTHOR_MISMATCH')
         const enrollmentActions = { 'decode-hub-code': 'decode-hub-code', 'join-hub': 'join', 'hub-join-status': 'status', 'cancel-hub-join': 'cancel', 'onboarding-storage': 'storage',
-          'available-bots': 'available-bots', 'publish-bots': 'publish-bots',
+          'available-bots': 'available-bots', 'publish-bots': 'publish-bots', 'update-hub-trust': 'update-hub-trust',
+          'disconnect-hub':'disconnect-hub','switch-hub':'switch-hub','resume-hub':'resume-hub',
           'user-code': 'user-code', 'rotate-user-code': 'rotate-user-code', 'request-contact': 'contact-request', 'contact-requests': 'contact-requests',
           'contact-relations': 'contact-relations', 'accept-contact': 'contact-accept', 'reject-contact': 'contact-reject', 'cancel-contact': 'contact-cancel', 'revoke-contact': 'contact-revoke' }
         if (Object.hasOwn(enrollmentActions, body.endpoint)) {

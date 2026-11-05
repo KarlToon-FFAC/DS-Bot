@@ -36,6 +36,7 @@ export function install(rt) {
   const modelsKey = () => `${rt.cachedCatalog().map(entry => `${entry.ref}${entry.needsKey ? '!' : ''}${entry.reasoning ? `:${JSON.stringify(entry.reasoning)}` : ''}`).join(',')}|${rt.cachedDefault() ?? ''}`
   const view = () => ({
     ...(rt.config.communication?.enabled ? { communicationEnabled: true } : {}),
+    ...(rt.config.communication?.hubId ? { communicationHubId:rt.config.communication.hubId } : {}),
     revision: state.revision,
     workspaceId: state.workspaceId ?? null,
     // `mainBotId` is the first Main Bot, which the sidebar shows as its tile.

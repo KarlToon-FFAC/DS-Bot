@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { randomUUID } from 'node:crypto'
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
+import { ATTACHMENT_CAPABILITY } from './attachments.js'
 import { MAX_AVATAR_LENGTH, AVATAR_CHUNK_LENGTH, avatarRevision, validAvatarRevision, normalizeAvatar, validateAvatarImage } from './avatars.js'
 import { CAPABILITIES, HUB_CAPABILITIES, DEFAULT_LIMITS, PROTOCOL, CommunicationError, hash, identifier, normalizeMessage, requireThat, responseBytes } from './protocol.js'
 
@@ -18,6 +19,7 @@ export class HubStore {
       CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY);
       INSERT OR IGNORE INTO schema_version VALUES (1);
       CREATE TABLE IF NOT EXISTS instances (id TEXT PRIMARY KEY, epoch INTEGER NOT NULL DEFAULT 0, label TEXT NOT NULL, trusted INTEGER NOT NULL DEFAULT 1, pairing_revision INTEGER NOT NULL DEFAULT 1);
+      CREATE TABLE IF NOT EXISTS instance_features (instance_id TEXT PRIMARY KEY REFERENCES instances(id), attachments INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS principals (id TEXT PRIMARY KEY, instance_id TEXT NOT NULL REFERENCES instances(id), kind TEXT NOT NULL, local_id TEXT NOT NULL, name TEXT NOT NULL, UNIQUE(instance_id,kind,local_id));
       CREATE TABLE IF NOT EXISTS conversations (id TEXT PRIMARY KEY, kind TEXT NOT NULL, dm_key TEXT UNIQUE, title TEXT NOT NULL, seq INTEGER NOT NULL DEFAULT 0, version INTEGER NOT NULL DEFAULT 1, routing_mode TEXT NOT NULL, admin_bot TEXT);
       CREATE TABLE IF NOT EXISTS memberships (conversation_id TEXT NOT NULL REFERENCES conversations(id), principal_id TEXT NOT NULL REFERENCES principals(id), epoch TEXT NOT NULL, join_seq INTEGER NOT NULL, active INTEGER NOT NULL, manager INTEGER NOT NULL, PRIMARY KEY(conversation_id,principal_id));
@@ -90,6 +92,8 @@ export class HubStore {
       const named = this.db.prepare('SELECT label FROM hub_instance_names WHERE instance_id=?').get(instanceId)
       this.db.prepare('INSERT INTO instances(id,label) VALUES (?,?) ON CONFLICT(id) DO UPDATE SET label=excluded.label').run(instanceId, named?.label ?? String(label ?? instanceId).slice(0,256))
       this.db.prepare('UPDATE instances SET epoch=epoch+1 WHERE id=?').run(instanceId)
+      this.db.prepare('INSERT INTO instance_features VALUES (?,?) ON CONFLICT(instance_id) DO UPDATE SET attachments=excluded.attachments').run(instanceId, Number(capabilities.includes(ATTACHMENT_CAPABILITY)))
+      if(!capabilities.includes(ATTACHMENT_CAPABILITY))requireThat(!this.db.prepare("SELECT 1 FROM memberships m JOIN messages msg ON msg.conversation_id=m.conversation_id JOIN principals p ON p.id=m.principal_id WHERE p.instance_id=? AND m.active=1 AND msg.seq>=m.join_seq AND json_array_length(msg.body,'$.attachments')>0 LIMIT 1").get(instanceId),'ATTACHMENT_CAPABILITY_REQUIRED')
       return { instanceId, epoch: this.db.prepare('SELECT epoch FROM instances WHERE id=?').get(instanceId).epoch,
         protocol: PROTOCOL, capabilities: HUB_CAPABILITIES, limits: this.limits }
     })
@@ -592,6 +596,7 @@ export class HubStore {
         cause=delivery
       }
       const members=this.db.prepare('SELECT m.*,p.kind,coalesce(pub.published,1) published FROM memberships m JOIN principals p ON p.id=m.principal_id LEFT JOIN principal_publication pub ON pub.principal_id=p.id WHERE conversation_id=? AND active=1').all(message.conversationId)
+      if(message.attachments?.length)for(const member of members){const instance=this.db.prepare('SELECT instance_id FROM principals WHERE id=?').get(member.principal_id);requireThat(this.db.prepare('SELECT attachments FROM instance_features WHERE instance_id=?').get(instance.instance_id)?.attachments===1,'ATTACHMENT_CAPABILITY_REQUIRED')}
       for(const mention of message.mentions) requireThat(members.some(member=>member.principal_id===mention.principalId),'UNKNOWN_MENTION')
       for(const target of message.activationTargets??[]){
         const recipient=members.find(member=>member.kind==='bot'&&member.principal_id===target.principalId)
