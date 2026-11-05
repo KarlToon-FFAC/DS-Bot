@@ -7,7 +7,7 @@ import { HubManagement } from '../src/management-store.js'
 import { createManagementHttp } from '../src/management-http.js'
 import { CAPABILITIES } from '../src/protocol.js'
 
-const origin = 'http://127.0.0.1:3190', password = 'synthetic-live-admin-password'
+const origin = 'http://127.0.0.1:3190', password = 'test-synthetic-live-admin-password'
 async function call(portal, action, payload = {}, headers = {}, response) {
   const req = Readable.from([Buffer.from(JSON.stringify(payload))])
   Object.assign(req, { url: '/admin/api/' + action, method: 'POST', socket: { remoteAddress: '127.0.0.1' }, headers: { host: '127.0.0.1:3190', 'content-type': 'application/json', ...headers } })

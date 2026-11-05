@@ -36,7 +36,7 @@ async function fixture(t) {
   const root = mkdtempSync(join(tmpdir(), 'dsbot-contact-recovery-')), peers = []
   let hub, fault
   const start = async () => { hub = await startHub({ databasePath: join(root, 'hub.sqlite'), port: 0, peers: [],
-    management: { enabled: true, password: 'synthetic-contact-recovery-administrator' },
+    management: { enabled: true, password: 'test-synthetic-contact-recovery-administrator' },
     beforeResponse: ({ type, value, socket }) => {
       if (fault?.type !== type) return
       const current = fault; fault = undefined; current.committed = value

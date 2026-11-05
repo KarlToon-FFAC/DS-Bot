@@ -139,7 +139,7 @@ test('message activity wakes the durable pump without invalidating contact-manag
 })
 
 test('authenticated admin HTTP changes invalidate live WebSocket directory snapshots', async () => {
-  const password = 'synthetic-administrator-password'
+  const password = 'test-synthetic-administrator-password'
   const hub = await startHub({ databasePath: ':memory:', peers, port: 0, management: { enabled: true, password } })
   const scopes = [], a = make(hub, 'a', { onInvalidate: scope => scopes.push(scope) })
   try {
@@ -170,7 +170,7 @@ test('delayed close of an old socket cannot mark its current replacement offline
 })
 
 test('a new enrollment invalidates management but repeated signed status reads do not', async () => {
-  const hub = await startHub({ databasePath: ':memory:', peers, port: 0, management: { enabled: true, password: 'synthetic-admin-status-password' } })
+  const hub = await startHub({ databasePath: ':memory:', peers, port: 0, management: { enabled: true, password: 'test-synthetic-admin-status-password' } })
   const scopes = [], a = make(hub, 'a', { onInvalidate: scope => scopes.push(scope) }), socket = new WebSocket(hub.url)
   const pair = generateKeyPairSync('ed25519')
   const rpc = async (type, payload) => {
