@@ -5,6 +5,7 @@ import { AddressNotes } from './communication-address-notes.js'
 import { BotMark } from './mark.js'
 import { t } from './i18n.js'
 import { communicationFailure, knownCommunicationFailure } from './communication-errors.js'
+import { useLiveRefresh } from './communication-live.js'
 
 const statuses = new Set(['prepared', 'pending', 'approved', 'rejected', 'cancelled', 'expired', 'accepted'])
 const statusLabel = value => t(statuses.has(value) ? value : 'Status unavailable')
@@ -60,28 +61,35 @@ export function hubManagementAddress(value) {
   } catch { return null }
 }
 
-export function AddDevice({ request, manualGuide, displayName = 'Human' }) {
+export function AddDevice({ request, manualGuide, displayName = 'Human', revision }) {
   const [code, setCode] = useState(''), [name, setName] = useState(displayName), [hub, setHub] = useState(null)
   const [storage, setStorage] = useState(null), [enrollments, setEnrollments] = useState([]), [busy, setBusy] = useState(false), [error, setError] = useState('')
   const [absentHub, setAbsentHub] = useState(null)
   const [uncertainHub, setUncertainHub] = useState(null)
   const [selectedHub,setSelectedHub] = useState(null),[resumeConfirmed,setResumeConfirmed]=useState({})
   const [lifecycle,setLifecycle]=useState(null),[deleteHistory,setDeleteHistory]=useState(false)
-  const generation = useRef(0)
-  useEffect(() => {
-    let active = true
-    void request({ endpoint: 'onboarding-storage' }).then(value => {
-      if (!active) return
-      setStorage(value.storage ?? value.enrollments?.[0]?.storage ?? null)
-      setEnrollments(value.enrollments ?? (value.hubId ? [value] : []))
-      setSelectedHub(value.selectedHub ?? (value.configured && value.hubId ? {hubId:value.hubId,url:value.url} : null))
-    }).catch(() => { if (active) setError(t('Unable to read pairing status')) })
-    return () => { active = false; generation.current += 1 }
-  }, [request])
-  const run = async work => {
-    if (busy) return
+  const [liveError, setLiveError] = useState('')
+  const generation = useRef(0), loadOrder = useRef(0), working = useRef(false)
+  useEffect(() => () => { generation.current += 1; loadOrder.current += 1 }, [request])
+  useLiveRefresh(async () => {
+    if (working.current) return
     const token = generation.current
-    setBusy(true); setError('')
+    await refreshStorage(token)
+    // Only check a request the user already submitted. Never join, resume a paused
+    // identity, rotate trust, or recreate credentials in a background refresh.
+    const pending = enrollments.filter(item => item.requestId && ['prepared', 'pending'].includes(item.status) && !item.paused && !item.departed && (!selectedHub?.hubId || selectedHub.hubId === item.hubId))
+    for (const item of pending) {
+      if (token !== generation.current || working.current) return
+      const value = await request({ endpoint: 'hub-join-status', hubId: item.hubId })
+      if (token === generation.current && !working.current) update(value)
+    }
+    if (token === generation.current) setLiveError('')
+  }, failure => setLiveError(enrollmentFailure(failure)), request, revision)
+  const run = async work => {
+    if (working.current) return
+    working.current = true; loadOrder.current += 1
+    const token = ++generation.current
+    setBusy(true); setError(''); setLiveError('')
     try { await work(token) } catch (failure) {
       if (token === generation.current) {
         setError(enrollmentFailure(failure))
@@ -90,12 +98,13 @@ export function AddDevice({ request, manualGuide, displayName = 'Human' }) {
         try { await refreshStorage(token) } catch { /* Preserve the original safe diagnostic. */ }
       }
     }
-    finally { if (token === generation.current) setBusy(false) }
+    finally { working.current = false; if (token === generation.current) setBusy(false) }
   }
   const update = value => setEnrollments(current => [...current.filter(item => item.hubId !== value.hubId), value])
   const refreshStorage = async token => {
+    const order = ++loadOrder.current
     const value = await request({ endpoint: 'onboarding-storage' })
-    if (token !== generation.current) return
+    if (token !== generation.current || order !== loadOrder.current) return
     setStorage(value.storage ?? storage)
     setSelectedHub(value.selectedHub ?? (value.configured && value.hubId ? {hubId:value.hubId,url:value.url} : null))
     if (hub) setUncertainHub(current => current === hub.hubId ? null : current)
@@ -112,7 +121,7 @@ export function AddDevice({ request, manualGuide, displayName = 'Human' }) {
   return h('div', { className: 'bt-comm-onboarding' },
     h('p', null, t('Paste a Hub code from its owner. Review the actual address before requesting access. Devices are not discovered automatically.')),
     h('p', { className: 'bt-comm-reference' }, t('Review only decodes the Hub code locally. It does not test network access or submit a request.')),
-    h('label', { className: 'bt-comm-field' }, t('Hub code'), h('textarea', { value: code, rows: 2, maxLength: 65536, 'aria-label': t('Hub code'), onChange: event => { generation.current += 1; setBusy(false); setCode(event.target.value); setHub(null); setError('') } })),
+    h('label', { className: 'bt-comm-field' }, t('Hub code'), h('textarea', { value: code, rows: 2, maxLength: 65536, 'aria-label': t('Hub code'), onChange: event => { generation.current += 1; loadOrder.current += 1; setBusy(false); setCode(event.target.value); setHub(null); setError('') } })),
     h('button', { type: 'button', disabled: busy || !code.trim(), onClick: () => { void run(async token => { const value = await request({ endpoint: 'decode-hub-code', hubCode: code }); if (token === generation.current) setHub(value) }) } }, t('Review Hub')),
     hub ? h('section', { className: 'bt-comm-set-card' }, h('h3', null, t('Confirm the Hub')), h('p', null, t('Hub address'), ': ', h('code', null, hub.url)), h('p', null, 'Hub ID: ', h('code', null, hub.hubId)),
       h('p', { className: 'bt-comm-reference' }, t('Accept this code only from a trusted channel. Its own certificate cannot authenticate an untrusted source.')),
@@ -141,7 +150,7 @@ export function AddDevice({ request, manualGuide, displayName = 'Human' }) {
         h('button',{type:'button',disabled:busy||!resumeConfirmed.legacy,onClick:()=>{void run(async token=>{await request({endpoint:'resume-hub',confirmedUrl:selectedHub.url,confirmResume:true,...(selectedHub.hubId?{hubId:selectedHub.hubId}:{})});setResumeConfirmed({});await refreshStorage(token)})}},t('Resume this Hub')))):null,
     enrollments.map(item => h('section', { key: item.hubId, className: 'bt-comm-address' }, h('p', null, h('code', null, item.hubId), ' · ', statusLabel(item.status)), h('p', { className: 'bt-comm-reference' }, item.url),
       item.requestId ? h('p', { className: 'bt-comm-reference' }, t('Request ID'), ': ', h('code', null, item.requestId)) : null,
-      item.departed?h('p',{role:'status'},t('Access revoked. History is retained; this device cannot resume.')):item.paused?h('p',{role:'status'},t('Paused. Identity, trust and Hub history are retained separately.')):item.status === 'approved' ? h('p', { role: 'status' }, t('Approved. The device configuration is saved through the app and will reload. Existing settings are preserved.')) : null,
+      item.departed?h('p',{role:'status'},t('Access revoked. History is retained; this device cannot resume.')):item.paused?h('p',{role:'status'},t('Paused. Identity, trust and Hub history are retained separately.')):item.status === 'approved' ? h('p', { role: 'status' }, t('Saved approval. This is not a live connection check. The device configuration is saved through the app; current connection status is shown separately.')) : null,
       item.status==='approved'?h(Fragment,null,
         !item.departed?h('button',{type:'button',disabled:busy,onClick:()=>setLifecycle({kind:'leave',item})},t('Leave this Hub')):null,
         h('button',{type:'button',disabled:busy,onClick:()=>{void run(async token=>{await request({endpoint:'hub-leave-status',hubId:item.hubId,confirmedUrl:item.url});await refreshStorage(token)})}},t('Check revoked access'))):null,
@@ -168,6 +177,7 @@ export function AddDevice({ request, manualGuide, displayName = 'Human' }) {
       })}},t(lifecycle.kind==='leave'?'Confirm leaving':'Confirm forgetting')),
       h('button',{type:'button',disabled:busy,onClick:()=>setLifecycle(null)},t('Cancel'))):null,
     h('details', { className: 'bt-comm-manual-guide' }, h('summary', null, t('Manual configuration guide')), manualGuide),
+    liveError ? h('p', { className: 'bt-comm-reference', role: 'status' }, t('Status may be out of date.'), ' ', liveError) : null,
     error ? h('p', { className: 'bt-comm-error', role: 'alert' }, error) : null)
 }
 
@@ -177,29 +187,32 @@ function BotChoices({ bots, selected, onChange, label }) {
     h(BotMark, { bot, size: 24 }), bot.name, h('span', { className: 'bt-comm-reference' }, bot.id))) : h('p', { className: 'bt-comm-reference' }, t('No published Bots')))
 }
 
-export function ContactManager({ request, operation, contacts, humanPrincipalId, instanceId, onMessage, messageBusy, addressNotes, onSaveAddressNote }) {
+export function ContactManager({ request, operation, contacts, humanPrincipalId, instanceId, onMessage, messageBusy, addressNotes, onSaveAddressNote, revision, connectionKnown }) {
   const [data, setData] = useState(null), [code, setCode] = useState(''), [userCode, setUserCode] = useState('')
   const [published, setPublished] = useState([]), [share, setShare] = useState([]), [incomingShares, setIncomingShares] = useState({})
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [confirm, setConfirm] = useState('')
-  const generation = useRef(0)
+  const generation = useRef(0), loadOrder = useRef(0), working = useRef(false), publicationDirty = useRef(false)
+  const [liveError, setLiveError] = useState('')
   const load = async () => {
-    const token = generation.current
+    const token = generation.current, order = ++loadOrder.current
     const results = await Promise.allSettled([
       request({ endpoint: 'user-code' }), request({ endpoint: 'contact-requests' }), request({ endpoint: 'contact-relations' }), request({ endpoint: 'available-bots' }),
     ])
-    if (token !== generation.current) return
+    if (token !== generation.current || order !== loadOrder.current) return
     const [ownCode, requests, relations, available] = results.map(result => result.status === 'fulfilled' ? result.value : null)
     if (ownCode) setCode(ownCode.userCode)
-    if (available) setPublished(available.publishedBotIds ?? [])
-    setData(previous => ({ requests: requests ?? [], relations: relations ?? [], available: available ?? previous?.available ?? { bots: [], publishedBotIds: [] } }))
+    if (available && !publicationDirty.current) setPublished(available.publishedBotIds ?? [])
+    setData(previous => ({ requests: requests ?? previous?.requests ?? [], relations: relations ?? previous?.relations ?? [], available: available ?? previous?.available ?? { bots: [], publishedBotIds: [] } }))
     const failed = results.find(result => result.status === 'rejected')
     if (failed) throw failed.reason
   }
-  useEffect(() => { void load().catch(failure => setError(failureLabel(failure))); return () => { generation.current += 1 } }, [request])
+  useEffect(() => () => { generation.current += 1; loadOrder.current += 1 }, [request])
+  useLiveRefresh(async () => { if (working.current) return; const token = generation.current; await load(); if (token === generation.current) setLiveError('') }, failure => setLiveError(failureLabel(failure)), request, revision)
   const run = async work => {
-    if (busy) return
-    const token = generation.current
-    setBusy(true); setError('')
+    if (working.current) return
+    working.current = true; loadOrder.current += 1
+    const token = ++generation.current
+    setBusy(true); setError(''); setLiveError('')
     try { await work(); if (token === generation.current) await load() }
     catch (failure) {
       if (token === generation.current) {
@@ -209,15 +222,16 @@ export function ContactManager({ request, operation, contacts, humanPrincipalId,
         }
       }
     }
-    finally { if (token === generation.current) setBusy(false) }
+    finally { working.current = false; if (token === generation.current) setBusy(false) }
   }
   const available = data?.available ?? { bots: [], publishedBotIds: [] }
   const sharedBots = available.bots.filter(bot => available.publishedBotIds.includes(bot.id))
   const pending = (data?.requests ?? []).filter(item => item.status === 'pending').length
   return h('div', { className: 'bt-comm-contact-manager' },
     h('button', { type: 'button', disabled: busy, onClick: () => { void run(async () => {}) } }, t('Refresh status')),
+    liveError ? h('p', { className: 'bt-comm-reference', role: 'status' }, t('Status may be out of date.'), ' ', liveError) : null,
     error ? h('p', { className: 'bt-comm-error', role: 'alert' }, error) : null,
-    h(ContactDirectory, { contacts, relations: data?.relations ?? [], humanPrincipalId, instanceId, request, addressNotes, busy: busy || messageBusy, onMessage, confirm, onRemove: item => {
+    h(ContactDirectory, { contacts, relations: data?.relations ?? [], humanPrincipalId, instanceId, request, addressNotes, connectionKnown, busy: busy || messageBusy, onMessage, confirm, onRemove: item => {
       const id = item.otherHumanPrincipalId
       if (confirm !== id) setConfirm(id)
       else { setConfirm(''); void run(() => operation('revoke-contact', { otherHumanPrincipalId: id, expectedVersion: item.version })) }
@@ -240,6 +254,6 @@ export function ContactManager({ request, operation, contacts, humanPrincipalId,
         h('button', { type: 'button', disabled: busy, onClick: () => { void run(() => operation('reject-contact', { requestId: item.requestId, expectedVersion: item.version })) } }, t('Reject contact'))) :
         item.status === 'pending' ? h('button', { type: 'button', disabled: busy, onClick: () => { void run(() => operation('cancel-contact', { requestId: item.requestId, expectedVersion: item.version })) } }, t('Cancel request')) : null)),
     !(data?.requests ?? []).length ? h('p', { className: 'bt-comm-reference' }, t('No contact requests')) : null),
-    h('details', { className: 'bt-comm-contact-section' }, h('summary', null, t('Published Bots')), h(BotChoices, { bots: available.bots, selected: published, onChange: setPublished, label: 'Bots available to contacts' }),
-      h('button', { type: 'button', disabled: busy || JSON.stringify([...published].sort()) === JSON.stringify([...available.publishedBotIds].sort()), 'data-dirty': JSON.stringify([...published].sort()) !== JSON.stringify([...available.publishedBotIds].sort()), onClick: () => { void run(() => operation('publish-bots', { localBotIds: published })) } }, t('Save published Bots'))))
+    h('details', { className: 'bt-comm-contact-section' }, h('summary', null, t('Published Bots')), h(BotChoices, { bots: available.bots, selected: published, onChange: value => { publicationDirty.current = true; setPublished(value) }, label: 'Bots available to contacts' }),
+      h('button', { type: 'button', disabled: busy || JSON.stringify([...published].sort()) === JSON.stringify([...available.publishedBotIds].sort()), 'data-dirty': JSON.stringify([...published].sort()) !== JSON.stringify([...available.publishedBotIds].sort()), onClick: () => { void run(async () => { await operation('publish-bots', { localBotIds: published }); publicationDirty.current = false }) } }, t('Save published Bots'))))
 }

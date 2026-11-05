@@ -19,6 +19,10 @@ const ZH = {
   "Use an IP note of at most 160 characters without line breaks or hidden control characters.": "IP 备注最多 160 个字符，不能包含换行或隐藏控制字符。",
   "Up to 256 IP notes can be saved for this Hub. Clear an old note before adding another.": "当前 Hub 最多保存 256 条 IP 备注，请先清除旧备注再添加。",
 
+  "Connection status unavailable": "连接状态未知",
+  "Disconnected from Hub": "未连接 Hub",
+  "Status may be out of date.": "状态可能已过期。",
+  "Saved approval. This is not a live connection check. The device configuration is saved through the app; current connection status is shown separately.": "已保存批准记录，不代表当前已连接。设备配置由应用保存；当前连接状态会单独显示。",
   "This browser cannot create secure request identifiers. Nothing was sent. Use a supported browser and refresh.":"浏览器无法生成安全请求标识，未发送任何内容。请使用受支持的浏览器并刷新。",
   "The API does not recognise this action. Update the plugin and restart its host process.":"接口不支持此操作。请更新插件并重启宿主进程。",
   "The request was incomplete. Refresh before trying again.":"请求不完整，请刷新后再试。",

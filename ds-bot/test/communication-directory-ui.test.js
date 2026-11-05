@@ -8,7 +8,7 @@ import { build } from 'esbuild'
 
 const harness = createRequire(join(process.env.DSH_HARNESS, 'package.json'))
 const { JSDOM } = harness('jsdom'), React = harness('react'), { act } = React
-const { outputFiles } = await build({ stdin: { contents: "export * from './communication-contacts.js'; export * from './communication-address-notes.js'; export * from './communication-profile.js'; export * from './communication-onboarding.js'; export * from './communication-list.js'; export { BotMark } from './mark.js'", resolveDir: fileURLToPath(new URL('../src/client/', import.meta.url)), loader: 'js' },
+const { outputFiles } = await build({ stdin: { contents: "export * from './communication-live.js'; export * from './communication-contacts.js'; export * from './communication-address-notes.js'; export * from './communication-profile.js'; export * from './communication-onboarding.js'; export * from './communication-list.js'; export { BotMark } from './mark.js'", resolveDir: fileURLToPath(new URL('../src/client/', import.meta.url)), loader: 'js' },
   bundle: true, platform: 'browser', format: 'cjs', external: ['react', 'react-dom', '@deepseek-ai/dsh-client-ui-primitives'], write: false })
 
 async function ui(check) {
@@ -243,7 +243,7 @@ test('Hub approval is checked explicitly and invalidated code review cannot subm
     await render(React.createElement(api.AddDevice, { request }))
     assert.equal(calls.some(call => call.endpoint === 'hub-join-status'), false)
     await click('Check approval')
-    assert.match(doc.body.textContent, /Approved. The device configuration is saved/)
+    assert.match(doc.body.textContent, /Saved approval. This is not a live connection check/)
     await edit('Hub code', 'first-code')
     await click('Review Hub')
     await edit('Hub code', 'different-code')
@@ -394,5 +394,128 @@ test('IP note search and display leave same-address Human and Bot identity and m
     assert.equal(doc.querySelectorAll('[data-principal-id="bot:b:helper"]').length, 1)
     for (const button of doc.querySelectorAll('button')) if (button.textContent === 'Message') await act(async () => button.click())
     assert.deepEqual(recipients, ['human:a:one', 'human:b:two', 'bot:b:helper'])
+  })
+})
+
+test('live contact hints refresh incoming decisions without discarding unsaved publication choices', async () => {
+  await ui(async ({ exports: api, doc, render, edit }) => {
+    let status = 'pending', reads = 0
+    const request = async body => {
+      if (body.endpoint === 'user-code') return { userCode: 'SYNTHETIC' }
+      if (body.endpoint === 'available-bots') return { bots: [{ id: 'one', name: 'One' }, { id: 'two', name: 'Two' }], publishedBotIds: ['one'] }
+      if (body.endpoint === 'contact-requests') { reads++; return [{ requestId: 'incoming', direction: 'incoming', status, senderName: 'Synthetic person', version: 1 }] }
+      if (body.endpoint === 'contact-relations') return []
+      throw Error('Unexpected read')
+    }
+    const pane = revision => React.createElement(api.ContactManager, { request, revision, operation: async () => assert.fail('refresh must not mutate'), contacts: [] })
+    await render(pane(1))
+    const box = doc.querySelector('[data-local-bot-id="two"]')
+    await act(async () => box.click())
+    await edit('Other user code', 'retained-draft')
+    status = 'accepted'; await render(pane(2))
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 550)) })
+    assert.equal(reads, 2)
+    assert.equal(doc.querySelector('[data-local-bot-id="two"]').checked, true)
+    assert.equal(doc.querySelector('[aria-label="Other user code"]').value, 'retained-draft')
+    assert.ok(![...doc.querySelectorAll('button')].some(node => node.textContent === 'Accept contact'))
+    assert.equal(doc.querySelector('[data-dirty="true"]').textContent, 'Save published Bots')
+  })
+})
+
+test('contact refresh failure preserves the last confirmed relations and marks them stale', async () => {
+  await ui(async ({ exports: api, doc, render }) => {
+    let fail = false
+    const request = async body => {
+      if (body.endpoint === 'user-code') return { userCode: 'SYNTHETIC' }
+      if (body.endpoint === 'available-bots') return { bots: [], publishedBotIds: [] }
+      if (body.endpoint === 'contact-requests') return []
+      if (body.endpoint === 'contact-relations') {
+        if (fail) throw Object.assign(Error('CONNECTION_LOST'), { code: 'CONNECTION_LOST' })
+        return [{ active: true, otherHumanPrincipalId: 'human:b:synthetic', version: 1, botPrincipalIds: [] }]
+      }
+      throw Error('Unexpected read')
+    }
+    const pane = revision => React.createElement(api.ContactManager, { request, revision, contacts: [] })
+    await render(pane(1)); fail = true; await render(pane(2))
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 550)) })
+    assert.ok(doc.querySelector('[data-contact-id="human:b:synthetic"]'))
+    assert.match(doc.body.textContent, /Status may be out of date/)
+  })
+})
+
+test('live reads coalesce bursts, pause hidden views, back off failures and stop after disposal', async () => {
+  await ui(async ({ exports: api, dom }) => {
+    const timers = new Map(); let sequence = 0, release, calls = 0, hidden = false
+    Object.defineProperty(dom.window.document, 'visibilityState', { configurable: true, get: () => hidden ? 'hidden' : 'visible' })
+    const controller = api.liveRefresh(async () => { calls++; await new Promise(resolve => { release = resolve }) }, {
+      document: dom.window.document, window: dom.window,
+      setTimer: (fn, delay) => { const id = ++sequence; timers.set(id, { fn, delay }); return id }, clearTimer: id => timers.delete(id),
+    })
+    assert.equal(calls, 1)
+    for (let i = 0; i < 100; i++) controller.wake()
+    assert.equal(calls, 1)
+    release(); await new Promise(resolve => setImmediate(resolve))
+    assert.equal(timers.size, 1); assert.ok([...timers.values()][0].delay > 0 && [...timers.values()][0].delay <= 500)
+    hidden = true; dom.window.document.dispatchEvent(new dom.window.Event('visibilitychange'))
+    assert.equal(timers.size, 0)
+    hidden = false; dom.window.document.dispatchEvent(new dom.window.Event('visibilitychange'))
+    const task = [...timers.values()][0]; timers.clear(); task.fn()
+    assert.equal(calls, 2)
+    controller.stop(); release(); await new Promise(resolve => setImmediate(resolve))
+    assert.equal(timers.size, 0)
+  })
+})
+
+
+test('pending saved enrollment checks approval automatically but paused and never-submitted identities stay untouched', async () => {
+  await ui(async ({ exports: api, doc, render }) => {
+    const calls = [], pending = { hubId: 'pending', requestId: 'existing-request', url: 'wss://hub.example.test/communication', status: 'pending' }
+    let approved = false
+    const request = async body => {
+      calls.push(body)
+      if (body.endpoint === 'onboarding-storage') return { enrollments: [{ ...pending, status: approved ? 'approved' : 'pending' },
+        { hubId: 'paused', requestId: 'paused-request', status: 'pending', paused: true }, { hubId: 'unsubmitted', status: 'prepared' }], selectedHub: { hubId: 'pending' } }
+      assert.equal(body.endpoint, 'hub-join-status'); assert.equal(body.hubId, 'pending'); approved = true
+      return { ...pending, status: 'approved' }
+    }
+    const pane = revision => React.createElement(api.AddDevice, { request, revision })
+    await render(pane(1)); await render(pane(2))
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 550)) })
+    assert.equal(calls.filter(call => call.endpoint === 'hub-join-status').length, 1)
+    assert.equal(calls.some(call => ['join-hub', 'resume-hub', 'switch-hub', 'hub-leave-status'].includes(call.endpoint)), false)
+    assert.match(doc.body.textContent, /Saved approval/)
+  })
+})
+
+test('late contact snapshot cannot resurrect a relation removed while automatic refresh was in flight', async () => {
+  await ui(async ({ exports: api, doc, render, click }) => {
+    let removed = false, reads = 0, release
+    const relation = { active: true, otherHumanPrincipalId: 'human:b:synthetic', version: 1, botPrincipalIds: [] }
+    const request = async body => {
+      if (body.endpoint === 'user-code') return { userCode: 'SYNTHETIC' }
+      if (body.endpoint === 'available-bots') return { bots: [], publishedBotIds: [] }
+      if (body.endpoint === 'contact-requests') return []
+      if (body.endpoint === 'contact-relations') {
+        if (++reads === 2) return new Promise(resolve => { release = () => resolve([relation]) })
+        return removed ? [] : [relation]
+      }
+      throw Error('Unexpected endpoint')
+    }
+    const operation = async endpoint => { assert.equal(endpoint, 'revoke-contact'); removed = true }
+    const pane = revision => React.createElement(api.ContactManager, { request, operation, contacts: [], revision })
+    await render(pane(1)); await render(pane(2))
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 550)) })
+    await click('Remove contact'); await click('Confirm contact removal')
+    await act(async () => release())
+    assert.equal(doc.querySelector('[data-contact-id="human:b:synthetic"]'), null)
+  })
+})
+
+test('cached contacts never appear connected when the observing Hub connection is unavailable', async () => {
+  await ui(async ({ exports: api, doc, render }) => {
+    const contacts = [{ principalId: 'human:b:synthetic', kind: 'human', displayName: 'Synthetic', connected: true }]
+    await render(React.createElement(api.ContactDirectory, { contacts, relations: [], request: async () => ({}), connectionKnown: false }))
+    assert.match(doc.body.textContent, /Connection status unavailable/)
+    assert.doesNotMatch(doc.body.textContent, /Connected to Hub/)
   })
 })

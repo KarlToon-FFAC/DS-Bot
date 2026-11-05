@@ -23,14 +23,14 @@ export function contactDirectory(contacts, relations = [], humanPrincipalId) {
   return { people: [...directory.values()], otherBots }
 }
 
-export function ContactDirectory({ contacts, relations, humanPrincipalId, instanceId, request, busy, onMessage, onRemove, confirm, addressNotes = {} }) {
+export function ContactDirectory({ contacts, relations, humanPrincipalId, instanceId, request, busy, onMessage, onRemove, confirm, addressNotes = {}, connectionKnown }) {
   const [query, setQuery] = useState('')
   const labels = contactLabels(contacts), { people, otherBots } = contactDirectory(contacts, relations, humanPrincipalId)
   const needle = query.trim().toLocaleLowerCase()
   const matches = person => [labels.get(person.principalId), person.displayName, person.principalId, person.instanceLabel, person.homeInstanceId, person.ipAddress, addressNotes[normalizeIpAddress(person.ipAddress)]].some(value => value?.toLocaleLowerCase().includes(needle))
   const shown = people.filter(item => matches(item.person) || item.bots.some(matches)), bots = otherBots.filter(matches)
   const identity = (person, allowed = true) => h('span', { className: 'bt-comm-directory-person' }, h(CommunicationAvatar, { person, request, allowed }),
-    h('span', null, h('strong', null, labels.get(person.principalId) ?? person.displayName ?? person.principalId), h('small', null, t(person.kind === 'bot' ? 'Bot' : 'Human'), person.homeInstanceId && instanceId ? ` · ${t(person.homeInstanceId === instanceId ? 'Local' : 'Remote')}` : '', person.kind === 'bot' && person.homeInstanceId ? ` · ${person.instanceLabel ?? person.homeInstanceId}` : '')))
+    h('span', null, h('strong', null, labels.get(person.principalId) ?? person.displayName ?? person.principalId), h('small', null, t(person.kind === 'bot' ? 'Bot' : 'Human'), person.homeInstanceId && instanceId ? ` · ${t(person.homeInstanceId === instanceId ? 'Local' : 'Remote')}` : '', person.kind === 'bot' && person.homeInstanceId ? ` · ${person.instanceLabel ?? person.homeInstanceId}` : '', ' · ', t(connectionKnown === false || typeof person.connected !== 'boolean' ? 'Connection status unavailable' : person.connected ? 'Connected to Hub' : 'Disconnected from Hub'))))
   const message = person => onMessage ? h('button', { type: 'button', disabled: busy, 'aria-label': `${t('Message')} ${labels.get(person.principalId) ?? person.displayName}`, onClick: () => onMessage(person.principalId) }, t('Message')) : null
   const botRow = person => h('li', { key: person.principalId, 'data-principal-id': person.principalId }, identity(person), message(person))
   return h('section', { className: 'bt-comm-directory', 'aria-label': t('Connected contacts') },

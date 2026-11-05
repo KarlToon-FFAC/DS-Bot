@@ -11,10 +11,33 @@ export function initializeAdmin(management, password) {
   management.db.prepare("INSERT INTO hub_management VALUES ('adminRevision','1') ON CONFLICT(key) DO UPDATE SET value=CAST(value AS INTEGER)+1").run()
   management.audit('admin.initialize', 'local')
 }
-export function createManagementHttp(management, { password, origin, onRevoke = id => management.revoke(id) } = {}) {
+export function createManagementHttp(management, { password, origin, onRevoke = id => management.revoke(id), onChange, changeWaitMs = 20000 } = {}) {
   requireThat(typeof origin === 'string' && ['http:', 'https:'].includes(new URL(origin).protocol) && new URL(origin).origin === origin, 'INVALID_CONFIG')
   requireThat(origin.startsWith('https:') || ['127.0.0.1', '[::1]'].includes(new URL(origin).hostname), 'TLS_REQUIRED')
-  const secure = origin.startsWith('https:'), sessions = new Map()
+  const secure = origin.startsWith('https:'), sessions = new Map(), waiters = new Set()
+  const generation = randomBytes(12).toString('base64url')
+  let stateRevision = 0, closed = false
+  const currentRevision = () => `${generation}:${stateRevision}`
+  const wake = () => { for (const waiter of [...waiters]) waiter.finish() }
+  const changed = () => {
+    stateRevision += 1; wake()
+    try { onChange?.() } catch { /* A notification must not change a committed result. */ }
+  }
+  const waitForChange = (req, res, since, session) => {
+    if (closed || since !== currentRevision()) return Promise.resolve()
+    requireThat(waiters.size < 128 && [...waiters].filter(waiter => waiter.session === session).length < 4, 'RATE_LIMITED')
+    return new Promise(resolve => {
+      let timer
+      const waiter = { session, finish: () => {
+        clearTimeout(timer); waiters.delete(waiter); res.off?.('close', waiter.finish); resolve()
+      } }
+      waiters.add(waiter)
+      res.once?.('close', waiter.finish)
+      timer = setTimeout(waiter.finish, Math.min(20000, Math.max(1, changeWaitMs)))
+      timer.unref?.()
+      if (req.aborted || res.destroyed) waiter.finish()
+    })
+  }
   let verifier
   let revision = management.db.prepare("SELECT value FROM hub_management WHERE key='adminRevision'").get()?.value ?? '0'
   if (password !== undefined) {
@@ -54,9 +77,9 @@ export function createManagementHttp(management, { password, origin, onRevoke = 
         res.writeHead(200, { ...headers, 'content-type': 'text/javascript; charset=utf-8' }); res.end((await import('./management-ui.js')).managementScript); return true
       }
       requireThat(req.method === 'POST', 'INVALID_REQUEST')
-      const currentRevision = management.db.prepare("SELECT value FROM hub_management WHERE key='adminRevision'").get()?.value ?? '0'
-      if (currentRevision !== revision) {
-        sessions.clear(); revision = currentRevision
+      const adminRevision = management.db.prepare("SELECT value FROM hub_management WHERE key='adminRevision'").get()?.value ?? '0'
+      if (adminRevision !== revision) {
+        sessions.clear(); wake(); revision = adminRevision
         verifier = JSON.parse(management.db.prepare("SELECT value FROM hub_management WHERE key='adminVerifier'").get().value)
       }
       for (const [key, session] of sessions) if (session.expires <= management.now()) sessions.delete(key)
@@ -87,12 +110,21 @@ export function createManagementHttp(management, { password, origin, onRevoke = 
       let value
       if (path === '/admin/api/session') { requireThat(session, 'UNAUTHENTICATED'); send(res, 200, { ok: true, csrf: session.csrf }); return true }
       if (path === '/admin/api/sessions/revoke') {
-        sessions.clear(); management.audit('admin.sessions.revoke', 'all')
+        sessions.clear(); wake(); management.audit('admin.sessions.revoke', 'all')
         send(res, 200, { ok: true }, { 'set-cookie': cookie('') + '; Max-Age=0' }); return true
       }
       if (path === '/admin/api/logout') {
         if (session) for (const [key, s] of sessions) if (s === session) sessions.delete(key)
+        wake()
         send(res, 200, { ok: true }, { 'set-cookie': cookie('') + '; Max-Age=0' }); return true
+      }
+      if (path === '/admin/api/changes') {
+        requireThat(session && typeof input.revision === 'string' && input.revision.length <= 100, 'INVALID_REQUEST')
+        await waitForChange(req, res, input.revision, session)
+        if (res.destroyed) return true
+        const latestRevision = management.db.prepare("SELECT value FROM hub_management WHERE key='adminRevision'").get()?.value ?? '0'
+        requireThat(!closed && latestRevision === revision && session.expires > management.now() && [...sessions.values()].includes(session), 'UNAUTHENTICATED')
+        send(res, 200, { ok: true, revision: currentRevision() }); return true
       }
       if (path === '/admin/api/state') value = { ...management.info(), requests: management.joins(), instances: management.instances() }
       else if (path === '/admin/api/decide') value = management.decide(input)
@@ -100,7 +132,8 @@ export function createManagementHttp(management, { password, origin, onRevoke = 
       else if (path === '/admin/api/repair') value = management.repair(input)
       else if (path === '/admin/api/rename') value = management.rename(input)
       else requireThat(false, 'UNKNOWN_OPERATION')
-      send(res, 200, { ok: true, value })
+      if (path !== '/admin/api/state') changed()
+      send(res, 200, { ok: true, value, revision: currentRevision() })
     } catch (error) {
       const code = ['INVALID_REQUEST', 'UNAUTHENTICATED', 'ORIGIN_REJECTED', 'RATE_LIMITED', 'PAYLOAD_TOO_LARGE', 'JOIN_VERSION_CONFLICT', 'PAIRING_REVISION_CONFLICT', 'INSTANCE_NOT_FOUND', 'INSTANCE_NAME_VERSION_CONFLICT', 'UNKNOWN_OPERATION', 'ALREADY_ENROLLED', 'DIRECTORY_FULL'].includes(error.code) ? error.code : 'MANAGEMENT_UNAVAILABLE'
       if (path === '/admin/login') {
@@ -112,5 +145,5 @@ export function createManagementHttp(management, { password, origin, onRevoke = 
     }
     return true
   }
-  return { handle: handler, close() { sessions.clear() }, enabled: Boolean(verifier) }
+  return { handle: handler, changed, currentRevision, close() { closed = true; sessions.clear(); wake() }, enabled: Boolean(verifier) }
 }

@@ -17,6 +17,7 @@ import { CommunicationMessageActions } from './communication-message-actions.js'
 import { GearIcon, ArrowUpIcon, CloseIcon, InfoIcon, PeopleIcon, ChatsIcon, SearchIcon, PlusIcon, SidebarIcon, ChevronLeftIcon } from './icons.js'
 import { communicationCSS } from './communication-styles.js'
 import { communicationFailure as friendly, operationOutcomeUncertain } from './communication-errors.js'
+import { liveRefresh } from './communication-live.js'
 
 const OPEN = 'ds-bot:communication:open', SELECTED = 'ds-bot:communication:selected'
 const SIDEBAR_HIDDEN = 'ds-bot:communication:sidebar-hidden'
@@ -165,6 +166,8 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
   const visible = open && mode.mode === 'bot'
   const [shown, closing] = useLinger(visible, 160)
   const [receivedState, setState] = useState(null), [error, setError] = useState(''), [busy, setBusy] = useState(false)
+  const stateScope = `${Boolean(team.communicationEnabled)}:${team.communicationHubId ?? ''}`, currentStateScope = useRef(stateScope), stateOrder = useRef(0)
+  if (currentStateScope.current !== stateScope) { currentStateScope.current = stateScope; stateOrder.current += 1 }
   const state = !team.communicationEnabled || team.communicationHubId && receivedState?.hubId !== team.communicationHubId ? null : receivedState
   const [pollError, setPollError] = useState(''), [syncError, setSyncError] = useState(null)
   const [operationPending, setOperationPending] = useState(() => read(OPERATION_IDS, []).length > 0)
@@ -211,17 +214,21 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
     setThreadPosition({left:Math.max(8,Math.min(anchor.left,window.innerWidth-box.width-8)),top:Math.max(8,Math.min(anchor.bottom+6,maxTop))})
   },[activePanel,threadMessageId,viewportTick,member?.speakingMode])
   const close = () => { panel.set(false); save(OPEN, false) }
-  const refresh = async () => { const value = await request({ endpoint: 'state' }); setState(value); setPollError(''); return value }
+  const refresh = async () => {
+    const order = ++stateOrder.current, scope = stateScope
+    try {
+      const value = await request({ endpoint: 'state' })
+      if (currentStateScope.current === scope && order === stateOrder.current) { setState(value); setPollError('') }
+      return value
+    } catch (failure) {
+      if (currentStateScope.current === scope && order === stateOrder.current) setPollError(friendly(failure))
+      throw failure
+    }
+  }
   useEffect(() => {
     if (!team.communicationEnabled) { setState(null); setPollError(''); return undefined }
-    let active = true, timer
-    const poll = async () => {
-      try { const value = await request({ endpoint: 'state' }); if (active) { setState(value); setPollError('') } }
-      catch (failure) { if (active) setPollError(friendly(failure)) }
-      if (active) timer = setTimeout(() => { void poll() }, 750)
-    }
-    void poll()
-    return () => { active = false; clearTimeout(timer) }
+    const live = liveRefresh(refresh, { intervalMs: 750 })
+    return () => { stateOrder.current += 1; live.stop() }
   }, [team.communicationEnabled, team.communicationHubId, request])
   useEffect(() => {
     if (!shown) return undefined
@@ -496,7 +503,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
             btn('Manage contacts', () => { setPanelBack('settings'); setActivePanel('manage-contacts') }, { disabled: !team.communicationEnabled, 'data-open-panel': 'manage-contacts' }))) : activePanel === 'thread' ? member && threadMessageId ? h(Fragment,null,h(CommunicationThread, { key: `view:${contextKey.current}:${threadMessageId}`, member, messageId: threadMessageId, request, canSpeak, onInspect: inspect,
           selectedBranch:true,onReply:setThreadReplyTarget }),canSpeak?h(ThreadReplyComposer,{key:`composer:${contextKey.current}:${threadMessageId}`,storageKey:`ds-bot:communication:thread:${contextKey.current}:${threadMessageId}`,member,target:threadReplyTarget,request,onSent:refresh,attachmentsAvailable:state.attachmentsAvailable}):null) : null : activePanel === 'activity' ? h(CommunicationActivity, { state, member, events, outbox: activityOutbox, operations, operationPending: pendingForConversation, pendingAttempt: attempts[key], error, pollError: pollError || (syncError?.conversationId === selected ? syncError.message : ''), friendly, labels, busy,
           onRefresh: () => { void act(refresh) }, onRetry: () => { setActivePanel(''); void send() }, copyDisabled: Boolean(draft.text) || Boolean(attempts[key]) || !member,
-          onCopy: item => { if (draft.text || attempts[key] || !member) return; changeDraft({ text: item.text, mentions: [], manualMentions: [] }); setActivePanel(''); input.current?.focus() } }) : activePanel === 'participant' ? h('div', { className: 'bt-comm-participant-information' }, currentMembers.filter(person => inspectedIds.includes(person.principalId)).map(person => h('section', { key: person.principalId }, personLabel(person), h('p', null, t(roleLabel(person.role ?? 'member'))), h('code', null, person.principalId)))) : activePanel === 'manage-contacts' ? h(ContactManager, { key: scope, request, operation, contacts, humanPrincipalId: state?.humanPrincipalId, instanceId: state?.instanceId, addressNotes: state?.addressNotes, onSaveAddressNote: async (address, note) => { const expectedScope = state?.addressNotesScope; const result = await request({ endpoint: 'set-address-note', address, note, expectedScope }); setState(current => current?.addressNotesScope === expectedScope ? { ...current, addressNotes: result.addressNotes } : current) }, onMessage: messageContact, messageBusy: busy }) : activePanel === 'profile' ? h(HumanProfile, { key: scope, human: contacts.find(person => person.principalId === state?.humanPrincipalId) ?? { principalId: state?.humanPrincipalId ?? 'human:local', displayName: t('You'), kind: 'human' }, request, operation }) : activePanel === 'pairing' ? h(AddDevice, { request, displayName: contacts.find(person => person.principalId === state?.humanPrincipalId)?.displayName ?? t('You'), manualGuide: h(PairingGuide, { connectionLabel }) }) : h(Fragment, null,
+          onCopy: item => { if (draft.text || attempts[key] || !member) return; changeDraft({ text: item.text, mentions: [], manualMentions: [] }); setActivePanel(''); input.current?.focus() } }) : activePanel === 'participant' ? h('div', { className: 'bt-comm-participant-information' }, currentMembers.filter(person => inspectedIds.includes(person.principalId)).map(person => h('section', { key: person.principalId }, personLabel(person), h('p', null, t(roleLabel(person.role ?? 'member'))), h('code', null, person.principalId)))) : activePanel === 'manage-contacts' ? h(ContactManager, { key: scope, request, operation, contacts, connectionKnown: state?.connected === true && !pollError, revision: `${state?.managementRevision ?? ''}:${state?.connected ?? false}`, humanPrincipalId: state?.humanPrincipalId, instanceId: state?.instanceId, addressNotes: state?.addressNotes, onSaveAddressNote: async (address, note) => { const expectedScope = state?.addressNotesScope; const result = await request({ endpoint: 'set-address-note', address, note, expectedScope }); setState(current => current?.addressNotesScope === expectedScope ? { ...current, addressNotes: result.addressNotes } : current) }, onMessage: messageContact, messageBusy: busy }) : activePanel === 'profile' ? h(HumanProfile, { key: scope, human: contacts.find(person => person.principalId === state?.humanPrincipalId) ?? { principalId: state?.humanPrincipalId ?? 'human:local', displayName: t('You'), kind: 'human' }, request, operation }) : activePanel === 'pairing' ? h(AddDevice, { request, revision: `${team.communicationEnabled}:${team.communicationHubId}:${state?.managementRevision ?? ''}:${state?.connected ?? false}`, displayName: contacts.find(person => person.principalId === state?.humanPrincipalId)?.displayName ?? t('You'), manualGuide: h(PairingGuide, { connectionLabel }) }) : h(Fragment, null,
         activePanel === 'group' ? h('label', { className: 'bt-comm-field' }, t('Group name'), h('input', { value: title, onChange: event => setTitle(event.target.value), 'aria-label': t('Group name') })) : null,
         groupedContacts(contact => activePanel === 'group' ? h('label', { key: contact.principalId, className: 'bt-comm-check' },
           h('input', { type: 'checkbox', checked: invitees.includes(contact.principalId), onChange: event => setInvitees(current => event.target.checked ? [...current, contact.principalId] : current.filter(id => id !== contact.principalId)) }), personLabel(contact)) :
