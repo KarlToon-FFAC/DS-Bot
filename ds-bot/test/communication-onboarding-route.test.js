@@ -53,3 +53,12 @@ test('contact HTTP failures retain exact conflict codes for UI refresh without e
     assert.doesNotMatch(JSON.stringify(body), /PRIVATE_EXCEPTION/)
   }
 })
+
+test('legacy ownership recovery API is rejected without starting runtime or touching data', async () => {
+  let route
+  const rt = { config: {}, teamTools: [], load: async () => assert.fail('removed operation must not load data'),
+    ctx: { effect: fn => fn(), connection: { fetch: { register: value => { route = value; return () => {} } } } } }
+  install(rt)
+  const response = await route.fetch(new Request('http://127.0.0.1/api/communication', { method: 'POST', body: JSON.stringify({ endpoint: 'reclaim', conversationId: 'old-group', operationId: 'old-reclaim', expectedVersion: 2 }) }))
+  assert.deepEqual((await response.json()).error.code, 'UNKNOWN_OPERATION')
+})

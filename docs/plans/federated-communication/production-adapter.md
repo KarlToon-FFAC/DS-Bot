@@ -103,8 +103,8 @@ Sessions use these exact-contact tools and cannot use local team-management,
 private-memory, filesystem, environment, secret, execution or subagent/workflow tools.
 Their tool allowlist is checked again at execution. History/list/send and group
 operations are confined to that Session's conversation. Opening other contacts,
-creating groups and recovering ownership remain available from the original local
-Bot chat. They run through the normal DSH model/tool loop and
+creating groups remain available from the original local Bot chat. Ownership
+recovery is unavailable in this version. They run through the normal DSH model/tool loop and
 existing local permissions; a remote Chief gains no Main Bot authority.
 
 Projection, target storage, Human read and AI admission are separate. Receipts
@@ -128,7 +128,7 @@ authority. Owner/admin/member and Human readOnly/speak or Bot passive/active are
 separate. New invitees start restricted; v1 members keep their prior speech rights.
 Only the owner appoints admins, transfers ownership or ends a group. An admin
 manages ordinary members and routing. Policy/transfer require the current version.
-Offline owners are retained; a re-paired exact owner may reclaim a fresh epoch.
+Offline owners are retained. Revoked ownership cannot be restored after re-pairing.
 A dissolved group cannot be resurrected.
 
 Passive Bots cannot call the send tool into a group. Automatic final export adds

@@ -372,8 +372,7 @@ Hub 在实际发出投递时再次检查当前资格，不能只依赖最初创�
 - `group.policy`：`principalId, operationId, conversationId, targetPrincipalId,
   expectedVersion, role?, speakingMode?`。仅 owner 任免 admin；admin 只能改普通成员发言模式。
 - `group.transfer`：同上但无 role/mode；原子转移至活跃成员，旧 owner 变为 admin。
-- `group.reclaim`：`principalId, operationId, conversationId, expectedVersion`，只允许重新配对后的
-  原 owner 恢复新 epoch；不能接管他人身份或复活已解散群。
+- 本版本移除 `group.reclaim`；旧客户端调用返回 `UNKNOWN_OPERATION`。重新配对不恢复群主或成员资格。
 - `message.publish` 可附 `responseToDeliveryId`。被动 Bot 必须携带此字段，且其
   `replyToMessageId` 必须等于相应真实 AI delivery 的原消息。Hub 校验作者、会话、epoch、
   stored 与 revoked，事务性保存唯一回复资格消耗；重复同 messageId 返回原 ACK。

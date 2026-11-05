@@ -62,10 +62,13 @@ test('production pane ignores a late history response and retries an uncertain H
     throw new Error('Unexpected request')
   }
   dom.window.sessionStorage.setItem('ds-bot:communication:selected', JSON.stringify('one'))
+  const retainedOperation = [JSON.stringify(['old-scope', 'transfer', { conversationId: 'other' }]), 'keep-original-id']
+  dom.window.sessionStorage.setItem('ds-bot:communication:operation-ids', JSON.stringify([[JSON.stringify(['old-scope', 'reclaim', { conversationId: 'stale-owner' }]), 'remove-recovery-id'], retainedOperation]))
   const root = createRoot(dom.window.document.getElementById('root'))
   const field = () => dom.window.document.querySelector('.bt-comm-frame textarea')
   try {
     await act(async () => root.render(React.createElement(mod.exports.CommunicationSurface, { roster, surface, panel, request })))
+    assert.deepEqual(JSON.parse(dom.window.sessionStorage.getItem('ds-bot:communication:operation-ids')), [retainedOperation])
     await act(async () => [...dom.window.document.querySelectorAll('nav button')].find(button => button.dataset.conversationId === 'two').click())
     await act(async () => releaseFirst(history('one')))
     assert.equal(dom.window.document.querySelector('.bt-comm-main h2').textContent, 'two')
@@ -98,6 +101,11 @@ test('production pane ignores a late history response and retries an uncertain H
     await act(async () => { panel.set(false) })
     await act(async () => { panel.set(true) })
     assert.equal(dom.window.document.querySelector('.bt-comm-log').textContent.includes('previous epoch local send'), false)
+    snapshot.recoverableOwnership = [{ conversationId: 'stale-owner', title: 'Stale owner recovery canary', membershipVersion: 2 }]
+    await act(async () => { panel.set(false) })
+    await act(async () => { panel.set(true) })
+    assert.equal(dom.window.document.querySelector('.bt-comm-frame').textContent.includes('Stale owner recovery canary'), false)
+    assert.equal([...dom.window.document.querySelectorAll('button')].some(button => /Restore retained ownership|恢复原群主/.test(button.textContent)), false)
   } finally {
     await act(async () => root.unmount()); dom.window.close()
     for (const [key, descriptor] of Object.entries(saved)) { if (descriptor) Object.defineProperty(globalThis, key, descriptor); else delete globalThis[key] }

@@ -197,7 +197,6 @@ export class CommunicationQueue {
   }
   disconnected() { this.authorized = false }
   memberships() { return this.db.prepare('SELECT body FROM memberships WHERE active=1').all().map(row => JSON.parse(row.body)) }
-  recoverableOwnership(principalId) { return this.db.prepare('SELECT body FROM memberships WHERE principal_id=? AND active=0').all(principalId).map(row => JSON.parse(row.body)).filter(member => member.kind==='group'&&member.role==='owner'&&member.ownerPrincipalId===principalId&&!member.dissolved) }
   invites() { return JSON.parse(this.db.prepare('SELECT value FROM metadata WHERE key=?').get('invites')?.value ?? '[]') }
   member(conversationId, principalId, epoch) {
     requireValue(this.owns(principalId), 'AUTHOR_MISMATCH')

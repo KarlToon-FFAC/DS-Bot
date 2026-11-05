@@ -146,7 +146,7 @@ Pending deliveries and invitations become revoked, active memberships close,
 and a default reply Bot loses that role in the same transaction. Restarting or
 reconnecting does not undo revocation. An owner must increase that peer's public
 `pairingRevision` in config to re-pair. Group re-entry requires a fresh invitation;
-the retained owner can instead explicitly reclaim its own identity. Reopening a canonical DM preserves its ID and establishes a new membership epoch
+the former owner cannot restore its group ownership in this version. Reopening a canonical DM preserves its ID and establishes a new membership epoch
 and history boundary. Old revoked deliveries never return.
 
 Plain `ws://` is accepted only on literal loopback addresses. For a non-loopback
@@ -231,10 +231,10 @@ other Bots. Queued new publishes use current permissions; same-ID retries of a
 committed message return its original result.
 
 An offline owner keeps its identity. Trust revocation removes memberships but
-retains the owner ID. After explicit re-pairing, only that exact identity can use
-`group.reclaim` to join with a fresh epoch/history boundary. Admins never inherit
-ownership automatically; dissolved groups cannot be reclaimed. There is no
-impersonation or administrative takeover backdoor.
+retains the owner ID as an authorization fence. Re-pairing does not restore group
+membership or ownership. This version has no ownership recovery operation. Admins
+never inherit ownership automatically; create a new group if its owner is unavailable.
+Dissolved groups cannot be revived, and there is no administrative takeover backdoor.
 
 ### Rename an instance
 

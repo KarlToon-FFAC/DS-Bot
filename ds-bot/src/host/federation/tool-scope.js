@@ -1,4 +1,4 @@
-export const OUTSIDE_CONVERSATION_TOOLS = new Set(['create_communication_group','accept_communication_invite','reclaim_communication_ownership'])
+export const OUTSIDE_CONVERSATION_TOOLS = new Set(['create_communication_group','accept_communication_invite'])
 
 export function assertConversationToolScope(binding, name, args) {
   if (!binding) return

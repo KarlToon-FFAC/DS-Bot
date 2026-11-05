@@ -25,6 +25,12 @@ const OPERATION_IDS = 'ds-bot:communication:operation-ids'
 const DRAFTS = 'ds-bot:communication:drafts', ATTEMPTS = 'ds-bot:communication:attempts'
 const read = (key, fallback) => { try { return JSON.parse(sessionStorage.getItem(key)) ?? fallback } catch { return fallback } }
 const save = (key, value) => { try { sessionStorage.setItem(key, JSON.stringify(value)) } catch { /* A full browser store must not prevent sending. */ } }
+const readOperationIds = () => {
+  const entries = read(OPERATION_IDS, [])
+  const current = entries.filter(([key]) => { try { return JSON.parse(key)?.[1] !== 'reclaim' } catch { return true } })
+  if (current.length !== entries.length) save(OPERATION_IDS, current)
+  return current
+}
 export async function communicationRequest(body) {
   const response = await fetch('/api/communication', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(15000) })
   if ([401,403].includes(response.status)) throw Object.assign(new Error('INSTANCE_AUTHENTICATION_REQUIRED'), { code: 'INSTANCE_AUTHENTICATION_REQUIRED' })
@@ -170,7 +176,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
   if (currentStateScope.current !== stateScope) { currentStateScope.current = stateScope; stateOrder.current += 1 }
   const state = !team.communicationEnabled || team.communicationHubId && receivedState?.hubId !== team.communicationHubId ? null : receivedState
   const [pollError, setPollError] = useState(''), [syncError, setSyncError] = useState(null)
-  const [operationPending, setOperationPending] = useState(() => read(OPERATION_IDS, []).length > 0)
+  const [operationPending, setOperationPending] = useState(() => readOperationIds().length > 0)
   const [attaching,setAttaching]=useState(false),attachmentFlight=useRef(false)
   const [selected, setSelected] = useState(() => read(SELECTED, null))
   const [drafts, setDrafts] = useState(() => read(DRAFTS, {})), [attempts, setAttempts] = useState(() => read(ATTEMPTS, {}))
@@ -191,7 +197,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
   const [threadMessageId, setThreadMessageId] = useState(null)
   const [threadReplyTarget,setThreadReplyTarget]=useState(null),[threadPosition,setThreadPosition]=useState({left:8,top:8})
   const threadAnchor=useRef(null),viewportTick=useViewport()
-  const input = useRef(null), frame = useRef(null), log = useRef(null), autoScroll = useRef(true), pageOrder = useRef(0), operationIds = useRef(new Map(read(OPERATION_IDS, [])))
+  const input = useRef(null), frame = useRef(null), log = useRef(null), autoScroll = useRef(true), pageOrder = useRef(0), operationIds = useRef(new Map(readOperationIds()))
   const labels = contactLabels(state?.contacts ?? [], state?.instanceId, t)
   const scope = communicationScope(state)
   syncAvatarDirectory(state?.contacts??[],state?.hubId??state?.hubUrl??'legacy')
@@ -329,7 +335,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
   }, [scope, shown, selected, page, request])
   const operation = async (endpoint, values) => {
     const current = state?.conversations?.find(item => item.conversationId === values.conversationId)
-    if (current && !['reclaim','dm','create-group','accept'].includes(endpoint)) values = { membershipEpoch: current.membershipEpoch, expectedVersion: current.membershipVersion, ...values }
+    if (current && !['dm','create-group','accept'].includes(endpoint)) values = { membershipEpoch: current.membershipEpoch, expectedVersion: current.membershipVersion, ...values }
     const operationKey = JSON.stringify([scope, endpoint, values])
     if (!operationIds.current.has(operationKey)) operationIds.current.set(operationKey, randomId())
     const persist = () => { save(OPERATION_IDS, [...operationIds.current]); setOperationPending(operationIds.current.size > 0) }
@@ -477,8 +483,6 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
       state?.invites?.length ? h('div', null, h('h3', null, t('Invitations')), state.invites.map(invitation => h('div', { key: invitation.inviteId },
         avatar(invitation.principalId), h('p', null, `${invitation.title} · ${labels.get(invitation.principalId) ?? invitation.principalId}`),
         btn('Accept invitation', () => { void act(() => operation('accept', { inviteId: invitation.inviteId, recipientPrincipalId: invitation.principalId })) })))) : null,
-      (state?.recoverableOwnership ?? []).map(item => h('div', { key: item.conversationId }, h('p', null, item.title),
-        btn('Restore retained ownership', () => { void act(() => operation('reclaim', { conversationId: item.conversationId, expectedVersion: item.membershipVersion })) }))),
       null),
     activePanel ? h('div', { className: `bt-comm-modal-backdrop${activePanel==='thread'?' bt-comm-thread-backdrop':''}`, onMouseDown: event => { if (event.target === event.currentTarget) { setActivePanel(''); chooserTrigger.current?.focus() } } },
       h('section', { ref: chooser, className: `bt-comm-modal${activePanel==='thread'?' bt-comm-thread-popover':''}${activePanel==='manage-contacts'?' bt-comm-contacts-modal':''}`,style:activePanel==='thread'?threadPosition:undefined, role: 'dialog', 'aria-modal': true, 'aria-label': t(activePanel === 'search' ? 'Search' : activePanel === 'settings' ? 'Personal settings' : activePanel === 'thread' ? 'Message replies' : activePanel === 'activity' ? 'Activity details' : activePanel === 'participant' ? 'Participant information' : activePanel === 'manage-contacts' ? 'Manage contacts' : activePanel === 'profile' ? 'Human profile' : activePanel === 'pairing' ? 'Pairing guide' : activePanel === 'group' ? 'New group' : 'New message') },

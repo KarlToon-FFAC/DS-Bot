@@ -144,9 +144,8 @@ prerequisites; this work changes no firewall rules, system trust or services.
 
 An HTTPS `/health` response proves readiness only. Ctrl+C stops the Hub normally.
 Removing a peer from config and restarting revokes it durably. Re-pairing requires
-a larger `pairingRevision`; reconnecting alone does not restore access. A retained
-owner can reclaim only its exact identity with a fresh epoch. Re-entry otherwise
-requires a fresh invitation. Old revoked deliveries do not return.
+a larger `pairingRevision`; reconnecting alone does not restore group access.
+Ownership recovery is unavailable. Ordinary members require fresh invitations. Old revoked deliveries do not return.
 
 ## Verify in the real environment
 

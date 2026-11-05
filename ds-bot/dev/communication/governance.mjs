@@ -40,7 +40,7 @@ try{
     assert.ok(row.communicationBoundary.privacy)
     assert.ok(row.communicationBoundary.passive)
     assert.equal(row.watchHit,false)
-    assert.ok(row.toolNames.every(name=>['list_contacts','list_communication_conversations','send_contact_message','read_communication_history','create_communication_group','invite_communication_member','accept_communication_invite','leave_communication_group','remove_communication_member','set_communication_receiving_rule','end_communication_group','set_communication_member_policy','transfer_communication_ownership','reclaim_communication_ownership'].includes(name)))
+    assert.ok(row.toolNames.every(name=>['list_contacts','list_communication_conversations','send_contact_message','read_communication_history','create_communication_group','invite_communication_member','accept_communication_invite','leave_communication_group','remove_communication_member','set_communication_receiving_rule','end_communication_group','set_communication_member_policy','transfer_communication_ownership'].includes(name)))
   }
   record('real-passive-final-and-private-tool-boundary',{messageId:message.messageId,replyMessageId:reply.id,responseToDeliveryId:body.responseToDeliveryId,privateCanaryLeaked:false,canaryLocations:['local Bot project','isolated DSH_HOME/AGENTS.md','communication workspace ancestor AGENTS.md']})
   const privateDm=(await topology.operation(b,'dm',{otherPrincipalId:b.bot})).conversationId

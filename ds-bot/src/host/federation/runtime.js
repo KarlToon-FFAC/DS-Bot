@@ -377,12 +377,13 @@ export class CommunicationRuntime {
     return cwd
   }
   async operation(principalId, type, payload, id = randomUUID()) {
+    if (type === 'group.reclaim') fail('UNKNOWN_OPERATION')
     payload = Object.fromEntries(Object.entries(payload).filter(([,value]) => value !== undefined))
     const saved = this.queue.intent(id)
     if (saved) {
       if (saved.type !== type) fail('MESSAGE_ID_CONFLICT')
       payload = { ...saved.payload, ...payload }
-    } else if (payload.conversationId && type !== 'group.reclaim') {
+    } else if (payload.conversationId) {
       const member = this.member(principalId, payload.conversationId, payload.membershipEpoch)
       payload = { ...payload, membershipEpoch: member.membershipEpoch,
         ...(['group.invite','group.remove','group.routing','group.dissolve'].includes(type) && payload.expectedVersion === undefined ? { expectedVersion: member.membershipVersion } : {}) }
@@ -614,7 +615,6 @@ export class CommunicationRuntime {
         lastMessage: conversationSummary(this.queue.lastMessage(member.conversationId, member.principalId, member.membershipEpoch),
           [...this.contacts, ...(this.conversations.get(member.conversationId)?.members ?? [])]),
         unread: this.queue.unread(member.conversationId, member.principalId, member.membershipEpoch) })),
-      recoverableOwnership: this.queue.recoverableOwnership(this.human.principalId),
       invites: this.queue.invites(), outbox: this.queue.outboxFor(this.human.principalId).map(item => ({ ...item, deliveries: this.deliveryStates.get(item.id) ?? [] })),
       errors: [...this.errors].flatMap(([bindingId,code]) => {
         const binding = this.queue.bindings().find(item => item.id === bindingId)

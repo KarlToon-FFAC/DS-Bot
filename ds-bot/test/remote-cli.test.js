@@ -22,7 +22,7 @@ const requests = {
   routing: { conversationId: 'group', mode: 'admin', adminBotPrincipalId: 'bot:a:id' },
   policy: { conversationId: 'group', targetPrincipalId: 'bot:a:id', expectedVersion: 2, speakingMode: 'active', role: 'admin' },
   transfer: { conversationId: 'group', targetPrincipalId: 'bot:a:id', expectedVersion: 2 },
-  reclaim: { conversationId: 'group', expectedVersion: 2 }, dissolve: { conversationId: 'group' },
+  dissolve: { conversationId: 'group' },
   'configure-group': { conversationId: 'group', expectedVersion: 2, title: 'New name' }, 'rename-human': { displayName: 'Human' },
   'profile-human': { displayName: 'Human', avatar: { image: 'data:image/png;base64,iVBORw0KGgo=' } },
   avatar: { principalId: 'human:a:id', revision: 'a'.repeat(64) },
@@ -337,4 +337,9 @@ test('only the explicitly named config is read and process authentication overri
   }
   assert.deepEqual(seen, ['explicit-config=synthetic', 'process-env=synthetic'])
   assert.equal(await main(['state', '--config', path + '.missing'], {}, Readable.from([]), capture(), capture()), 3)
+})
+
+test('removed ownership recovery cannot be prepared or retried by CLI', () => {
+  assert.throws(() => prepare('reclaim', { conversationId: 'old', expectedVersion: 2 }), /INVALID_OPERATION_OR_INPUT/)
+  assert.throws(() => prepare('retry', { endpoint: 'reclaim', conversationId: 'old', expectedVersion: 2, operationId: 'old' }), /INVALID_OPERATION_OR_INPUT/)
 })

@@ -108,7 +108,7 @@ export function install(rt) {
         : await comm.transport.request('contacts.list', { principalId: actor.principalId }) })) }),
     defineTool({ name: 'list_communication_conversations', description: 'List only communication conversations and invitations authorized for your own Bot identity; original private chats are separate.', parameters: {}, output,
       execute: execute((comm, actor, _args, exec) => ({ conversations: comm.queue.memberships().filter(item => item.principalId === actor.principalId && (!exec.communicationBinding || item.conversationId === exec.communicationBinding.conversationId && item.membershipEpoch === exec.communicationBinding.membershipEpoch)),
-        invites: exec.communicationBinding ? [] : comm.queue.invites().filter(item => item.principalId === actor.principalId), recoverableOwnership: exec.communicationBinding ? [] : comm.queue.recoverableOwnership(actor.principalId) })) }),
+        invites: exec.communicationBinding ? [] : comm.queue.invites().filter(item => item.principalId === actor.principalId) })) }),
     defineTool({ name: 'send_contact_message', description: 'Immediately send as your executing Bot. A same-group send completes the current input only after Hub acceptance. While pending, write a substantive final fallback, not a tool receipt; the host retains it through uncertainty and publishes it on rejection. Prefer set_communication_reply_targets plus one natural final for normal group replies. Only active Bots can send this way. Structured targets wake member Bots; text @ is display-only. Never provide a sender identity.',
       parameters: { text: { type: 'string', required: true }, contactPrincipalId: { type: 'string' }, conversationId: { type: 'string' },
         mentions: { type: 'array', items: { type: 'string' }, description: 'Explicit target IDs; compatibility alias for activationTargets' },
@@ -175,9 +175,6 @@ export function install(rt) {
     defineTool({ name: 'transfer_communication_ownership', description: 'As current owner, atomically transfer ownership to an active group participant; you become an admin. Names and Main Bot labels grant no ownership.',
       parameters: { conversationId: { type: 'string', required: true }, targetPrincipalId: { type: 'string', required: true }, expectedVersion: { type: 'integer', required: true } }, output,
       execute: execute((comm, actor, args, exec) => comm.operation(actor.principalId, 'group.transfer', args, toolOperation('transfer', exec))) }),
-    defineTool({ name: 'reclaim_communication_ownership', description: 'After explicit instance re-pairing, restore only your own retained ownership as a fresh membership. It never takes over another owner or restores a dissolved group.',
-      parameters: { conversationId: { type: 'string', required: true }, expectedVersion: { type: 'integer', required: true } }, output,
-      execute: execute((comm, actor, args, exec) => comm.operation(actor.principalId, 'group.reclaim', args, toolOperation('reclaim', exec))) }),
   ]
   const diagnosticState = () => ({ settings: appliedSettings, runtime, startupError, legacy, credentialObserved, toolNames: definitions.map(tool => tool.name) })
   rt.teamTools.push(communicationDiagnoseTool(rt, diagnosticState))
@@ -202,6 +199,7 @@ export function install(rt) {
         if (!body || typeof body !== 'object' || Array.isArray(body)) fail('INVALID_REQUEST')
         if (['author', 'sender', 'senderId', 'homeInstanceId'].some(key => Object.hasOwn(body, key))
           || body.endpoint !== 'avatar' && Object.hasOwn(body, 'principalId')) fail('AUTHOR_MISMATCH')
+        if (body.endpoint === 'reclaim') fail('UNKNOWN_OPERATION')
         if (body.endpoint === 'diagnose') {
           await rt.load(); await rt.refresh()
           return Response.json({ ok: true, value: await diagnoseCommunication(rt, diagnosticState()) })
@@ -272,7 +270,6 @@ export function install(rt) {
           case 'policy': value = await comm.operation(comm.human.principalId, 'group.policy', { membershipEpoch: body.membershipEpoch, expectedVersion: body.expectedVersion, conversationId: body.conversationId, targetPrincipalId: body.targetPrincipalId,
             ...(body.role === undefined ? {} : { role: body.role }), ...(body.speakingMode === undefined ? {} : { speakingMode: body.speakingMode }) }, body.operationId); break
           case 'transfer': value = await comm.operation(comm.human.principalId, 'group.transfer', { membershipEpoch: body.membershipEpoch, expectedVersion: body.expectedVersion, conversationId: body.conversationId, targetPrincipalId: body.targetPrincipalId }, body.operationId); break
-          case 'reclaim': value = await comm.operation(comm.human.principalId, 'group.reclaim', { conversationId: body.conversationId, expectedVersion: body.expectedVersion }, body.operationId); break
           default: fail('UNKNOWN_OPERATION')
         }
         return Response.json({ ok: true, value })

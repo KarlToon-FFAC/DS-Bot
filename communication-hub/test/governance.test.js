@@ -94,7 +94,7 @@ test('passive replies require one real stored AI delivery and may explicitly del
   assert.throws(()=>publish(b,K,'queued active send arrives after downgrade'),{code:'PASSIVE_REPLY_REQUIRED'})
 })
 
-test('ownership transfer, trust loss and exact-owner reclaim never permit takeover or resurrection',t=>{
+test('ownership transfer and device repair never restore membership or permit takeover',t=>{
   const {store,a,b,A,B,group,version,policy}=fixture(t)
   policy(B,{role:'admin'})
   assert.throws(()=>store.remove(a,op({principalId:A,conversationId:group,targetPrincipalId:A})),{code:'OWNER_TRANSFER_REQUIRED'})
@@ -106,14 +106,20 @@ test('ownership transfer, trust loss and exact-owner reclaim never permit takeov
   const before=store.memberships(b).memberships.find(m=>m.principalId===B&&m.conversationId===group)
   store.revokeInstance('b')
   assert.throws(()=>store.transfer(a,op({principalId:A,conversationId:group,targetPrincipalId:A,expectedVersion:version()})),{code:'FORBIDDEN'})
-  assert.throws(()=>store.reclaim(a,op({principalId:A,conversationId:group,expectedVersion:version()})),{code:'FORBIDDEN'})
+  assert.throws(()=>store.dissolve(a,op({principalId:A,conversationId:group})),{code:'FORBIDDEN'})
+  assert.throws(()=>policy(A,{role:'owner'},a,A),{code:'FORBIDDEN'})
   store.configurePeer('b','B',2)
-  const restored=store.connect('b','B',CAPABILITIES)
-  const reclaim=store.reclaim(restored,op({principalId:B,conversationId:group,expectedVersion:version()}))
-  assert.notEqual(reclaim.membershipEpoch,before.membershipEpoch)
-  assert.ok(reclaim.joinSeq>before.joinSeq)
-  store.dissolve(restored,op({principalId:B,conversationId:group}))
-  assert.throws(()=>store.reclaim(restored,op({principalId:B,conversationId:group,expectedVersion:version()})),{code:'FORBIDDEN'})
+  const repaired=store.connect('b','B',CAPABILITIES)
+  const after=store.memberships(repaired).memberships.find(m=>m.principalId===B&&m.conversationId===group)
+  assert.equal(after.active,false)
+  assert.equal(after.membershipEpoch,before.membershipEpoch)
+  assert.equal(after.ownerPrincipalId,B)
+  assert.equal(store.reclaim,undefined)
+  assert.throws(()=>store.authorize(repaired,{principalId:B,conversationId:group}),{code:'NOT_A_MEMBER'})
+  assert.throws(()=>store.sync(repaired,{principalId:B,conversationId:group,membershipEpoch:before.membershipEpoch,after:0}),{code:'NOT_A_MEMBER'})
+  const invitation=store.invite(a,op({principalId:A,conversationId:group,inviteePrincipalId:B}))
+  assert.throws(()=>store.accept(repaired,op({principalId:B,inviteId:invitation.inviteId})),{code:'OWNER_UNAVAILABLE'})
+  assert.equal(store.db.prepare("SELECT count(*) n FROM events WHERE type='ownership.reclaimed'").get().n,0)
 })
 
 test('Bot-created ownership is explicit and neither its Human nor another Chief inherits it',t=>{

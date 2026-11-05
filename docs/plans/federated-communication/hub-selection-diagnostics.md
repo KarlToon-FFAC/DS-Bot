@@ -40,7 +40,7 @@ revoke its server access and memberships. It refuses voluntary departure while
 any participant on the device owns an open group: transfer or dissolve first.
 An administrator can revoke an unavailable owner; its retained inactive ownership
 is deliberately not reassigned. Other members do not acquire its privileges.
-Only explicit administrator repair of that same device permits owner recovery.
+Explicit administrator repair does not restore group rights. This version has no ownership recovery operation.
 
 Uncertain departure is reconciled through `hub-leave-status`, which remains
 signature-protected after revocation. A verified non-revoked status after explicit

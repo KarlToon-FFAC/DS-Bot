@@ -66,7 +66,7 @@ test('accepted publishes fit complete sync and delivery envelopes; malformed ide
   assert.equal(store.db.prepare('SELECT count(*) n FROM messages').get().n, count)
 })
 
-test('an absent owner retains a reserved group slot and can reclaim without exceeding the limit', t => {
+test('an absent owner cannot recover and no longer reserves an unusable member slot', t => {
   const { store, a, b, A, B, group, scoped, invite, accept } = fixture(t, { limits: { maxMembers: 2 } })
   accept(invite())
   store.policy(a, scoped(A, { targetPrincipalId: B, role: 'admin', expectedVersion: store.members(a, scoped(A)).membershipVersion }))
@@ -74,10 +74,11 @@ test('an absent owner retains a reserved group slot and can reclaim without exce
   const invitation = store.invite(b, scoped(B, { inviteePrincipalId: C }))
   store.revokeInstance('a'); store.configurePeer('a', 'A', 2)
   const next = store.connect('a', 'A', CAPABILITIES)
-  const version = store.members(b, { conversationId: group, principalId: B }).membershipVersion
-  assert.throws(() => store.accept(b, { operationId: randomUUID(), principalId: C, inviteId: invitation.inviteId }), { code: 'MEMBER_LIMIT' })
-  store.reclaim(next, { operationId: randomUUID(), principalId: A, conversationId: group, expectedVersion: version })
+  store.accept(b, { operationId: randomUUID(), principalId: C, inviteId: invitation.inviteId })
   assert.equal(store.db.prepare('SELECT count(*) n FROM memberships WHERE conversation_id=? AND active=1').get(group).n, 2)
+  assert.equal(store.members(b, scoped(B)).ownerPrincipalId, A)
+  assert.throws(() => store.authorize(next, { principalId: A, conversationId: group }), { code: 'NOT_A_MEMBER' })
+  assert.throws(() => store.transfer(b, scoped(B, { targetPrincipalId: B, expectedVersion: store.members(b, scoped(B)).membershipVersion })), { code: 'FORBIDDEN' })
 })
 
 test('an exactly full accepted envelope remains pullable and readable as later watermarks gain digits', t => {

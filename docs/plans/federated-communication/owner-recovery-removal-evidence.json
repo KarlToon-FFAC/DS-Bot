@@ -1,0 +1,166 @@
+{
+  "status": "PASS",
+  "baseCommit": "673b12bd436a440a4bb11e5df960b87eb8e39abd",
+  "date": "2026-11-05",
+  "scope": "Remove retained-owner recovery without changing ordinary group management or explicit reset/deletion scope",
+  "checks": {
+    "pluginUnit": {
+      "status": "PASS",
+      "tests": 1883,
+      "pass": 1879,
+      "skip": 4,
+      "fail": 0,
+      "logSha256": "6ba7f28d20c26460a14fbcc97446190a85a8776a920d62a89e9bdc0c4a1d3d17",
+      "command": "DSH_HARNESS=<installed isolated harness> npm --prefix ds-bot test"
+    },
+    "hubUnit": {
+      "status": "PASS",
+      "tests": 143,
+      "pass": 143,
+      "fail": 0,
+      "logSha256": "9144bbe06f21f0e71978a711191f312d4b74db10eb9e01176865dac4226b52c2",
+      "command": "npm test --prefix communication-hub"
+    },
+    "targetedInitial": {
+      "status": "PASS",
+      "tests": 41,
+      "pass": 41,
+      "logSha256": "62683820fe8783c30fb87631012c8f1b6dfe82518dd7165f6daafa6363bb8e6a"
+    },
+    "finalBrowserDom": {
+      "status": "PASS",
+      "tests": 8,
+      "pass": 8,
+      "details": "Production React surface with stale recovery snapshot and persisted legacy recovery operation ID; unrelated transfer ID preserved",
+      "logSha256": "fff6f30202ba1f26ecc39fd9fdb5f2d39ff42c124107b4f9844539186b0672a5"
+    },
+    "buildConsistency": {
+      "status": "PASS",
+      "command": "node ds-bot/scripts/build-client.mjs --check"
+    },
+    "lint": {
+      "status": "PASS",
+      "exitCode": 0,
+      "existingWarningsRemain": true,
+      "logSha256": "1f2d5dc79696f1dd0631fb9122f85fee26ba876f1aa09a37c1024fc4be1a6a08"
+    },
+    "smoke": {
+      "status": "PASS",
+      "steps": 52,
+      "model": "local deterministic Mock",
+      "cleanup": "Owned bench stopped",
+      "logSha256": "64f4ed5612ddf8d21442eb80d7602446b4492557a11739ef7a570f6d3137a59f"
+    },
+    "remoteImAcceptance": {
+      "status": "PASS",
+      "cases": [
+        {
+          "id": "isolated-ports-and-fresh-profiles",
+          "status": "PASS"
+        },
+        {
+          "id": "CLI-state-projections-same-IP-isolation-and-rename-restart",
+          "status": "PASS"
+        },
+        {
+          "id": "CLI-DM-history-reference-read-and-same-ID-retry",
+          "status": "PASS",
+          "messageId": "c0ad1d7e-f647-409c-b28b-d6d47abfc47c"
+        },
+        {
+          "id": "CLI-members-invites-roles-speech-title-routing-and-permission-failures",
+          "status": "PASS",
+          "conversationId": "b95dda88-04ef-43a6-b4ae-a7ac83fcf988"
+        },
+        {
+          "id": "all-only-current-Bots-two-passive-granted-replies-no-Human-no-outside-no-nativeChief",
+          "status": "PASS",
+          "messageId": "e50e6e63-204b-45d5-a188-7848c9c3b024",
+          "botAuthors": [
+            "bot:1154e085-4334-4954-992e-b98785bcd4c7:289ac0ac-edf7-4f3c-a7b5-fce6ace76bba",
+            "bot:ad8f467f-d809-4ad1-8bec-d6835b901df0:da73bbfb-b92d-48d3-bdfc-79eed900b656"
+          ]
+        },
+        {
+          "id": "all-original-request-retry-after-rename-and-member-removal-raw-conflict",
+          "status": "PASS"
+        },
+        {
+          "id": "passive-proactive-send-denied-and-removed-member-not-routed",
+          "status": "PASS"
+        },
+        {
+          "id": "CLI-transfer-leave-device-repair-no-owner-recovery-fresh-group-dissolve",
+          "status": "PASS"
+        }
+      ],
+      "distinctCliOperations": 23,
+      "operationCounts": {
+        "state": 10,
+        "contacts": 1,
+        "conversations": 1,
+        "invites": 1,
+        "outbox": 1,
+        "rename-human": 2,
+        "dm": 1,
+        "retry": 5,
+        "send": 7,
+        "history": 1,
+        "reference": 2,
+        "read": 1,
+        "create-group": 2,
+        "members": 9,
+        "invite": 4,
+        "accept": 4,
+        "configure-group": 4,
+        "policy": 3,
+        "routing": 2,
+        "remove": 1,
+        "transfer": 1,
+        "dissolve": 2,
+        "leave": 2
+      },
+      "cleanedUp": true,
+      "portsVerifiedFreeByRun": [
+        3151,
+        3152,
+        8851,
+        8852,
+        3197
+      ],
+      "originalEvidenceSha256": "5991d8af95d2c4cb12f1cb40e94e800af59d5a40415e1a0e017c1d2c6c08bc82",
+      "logSha256": "1826e9c4fadb4fe473da0981b7ce139537f8f57e4c71707b459cecfa5b002f0e"
+    },
+    "independentReview": {
+      "status": "NO_BLOCKING_FINDINGS",
+      "method": "Read-only final implementation diff review; no independent full test rerun"
+    },
+    "diffWhitespace": {
+      "status": "PASS",
+      "command": "git diff --check"
+    }
+  },
+  "earlierAttempts": [
+    {
+      "check": "smoke startup",
+      "status": "FAIL",
+      "reason": "A bench started in a prior command had exited before the next command; ECONNREFUSED before test assertions. Final run kept startup, smoke and cleanup in one owned command and passed all 52 steps."
+    },
+    {
+      "check": "parallel plugin full rerun",
+      "status": "FAIL",
+      "tests": 1883,
+      "pass": 1878,
+      "skip": 4,
+      "fail": 1,
+      "reason": "Existing memory.test.js:1472 compares a source timestamp across a real minute boundary: expected 04:19, actual 04:20. Unchanged test passed in isolation; final serial complete run passed. No unrelated test/code was changed."
+    }
+  ],
+  "boundaries": [
+    "All databases, credentials, principals and model traffic were synthetic isolated fixtures. No real Hub, external model, GitHub Actions, user profile or production data was used.",
+    "No commit was pushed from this worktree.",
+    "Physical multi-machine, Windows and real provider acceptance were not run.",
+    "UI regression was checked in the production React surface under JSDOM; no browser screenshot was claimed.",
+    "Historical event reading remains compatible but grants no recovery authority. Complete reset/deletion changes are implemented separately."
+  ]
+}

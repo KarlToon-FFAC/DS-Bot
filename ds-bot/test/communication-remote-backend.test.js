@@ -62,6 +62,7 @@ test('reconciliation loads Bot-only participants without exposing that conversat
     assert.deepEqual(calls[1], { type: 'conversation.members', payload: { conversationId: 'bot-only', principalId, membershipEpoch: 'epoch' } })
     assert.equal(runtime.conversations.get('bot-only').members[0].principalId, principalId)
     assert.deepEqual(runtime.snapshot().conversations, [])
+    assert.equal(Object.hasOwn(runtime.snapshot(), 'recoverableOwnership'), false)
     displayName = 'Renamed'; instanceLabel = 'Renamed device'
     await runtime.transport.onChange()
     assert.equal(runtime.conversations.get('bot-only').members[0].displayName, 'Renamed')
@@ -206,4 +207,37 @@ test('remove then immediately @all uses refreshed members, and refresh failure p
     await runtime.refreshConversation(conversationId)
     assert.deepEqual(runtime.message(human.principalId, conversationId, { text: '@all' }).mentions, [])
   } finally { queue.close(); store.close() }
+})
+
+test('removed ownership recovery is rejected before saved intents and absent from tools', async () => {
+  const runtime = { queue: { intent: () => assert.fail('removed operation cannot inspect accepted intent') } }
+  await assert.rejects(CommunicationRuntime.prototype.operation.call(runtime, 'human:a:owner', 'group.reclaim', { conversationId: 'old-group' }, 'old-accepted'), { code: 'UNKNOWN_OPERATION' })
+  const rt = { config: { communication: { enabled: true } }, teamTools: [], ctx: { effect: () => {} } }
+  install(rt)
+  assert.equal(rt.teamTools.some(tool => tool.name === 'reclaim_communication_ownership'), false)
+})
+
+test('legacy durable reclaim is not replayed to an older Hub and does not block other operations', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'dsbot-no-owner-recovery-')), path = join(dir, 'queue.sqlite')
+  let queue = new CommunicationQueue(path, { instanceId: 'a' })
+  try {
+    queue.enqueueOperation('group.reclaim', { operationId: 'legacy-reclaim', principalId: 'human:a:old', conversationId: 'old-group', expectedVersion: 2 })
+    queue.enqueueOperation('group.create', { operationId: 'fresh-group', principalId: 'human:a:old', title: 'Fresh' })
+    queue.close(); queue = new CommunicationQueue(path, { instanceId: 'a' })
+    const calls = [], transport = { connected: true, queue, request: async (type, payload) => {
+      calls.push(type)
+      if (type === 'group.reclaim') assert.fail('must never transmit removed operation')
+      if (type === 'group.create') return { conversationId: 'fresh-group', operationId: payload.operationId }
+      if (type === 'memberships.list') return { memberships: [], invites: [] }
+      if (type === 'deliveries.pull') return []
+      assert.fail(`Unexpected request: ${type}`)
+    } }
+    await CommunicationTransport.prototype.synchronize.call(transport)
+    assert.equal(queue.outboxStatus('legacy-reclaim').state, 'failed')
+    assert.equal(queue.outboxStatus('legacy-reclaim').error, 'UNKNOWN_OPERATION')
+    assert.equal(queue.outboxStatus('fresh-group').state, 'accepted')
+    await CommunicationTransport.prototype.synchronize.call(transport)
+    assert.equal(calls.filter(type => type === 'group.create').length, 1)
+    assert.equal(queue.db.prepare('SELECT count(*) n FROM outbox').get().n, 2)
+  } finally { queue.close(); rmSync(dir, { recursive: true, force: true }) }
 })

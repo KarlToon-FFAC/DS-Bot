@@ -13,12 +13,12 @@ const digest = value => createHash('sha256').update(value).digest()
 // pass through the authenticated RPC routes and durable per-membership cursors.
 const invalidatingRoutes = new Set(['principal.register', 'principal.rename', 'principal.publication', 'principal.avatar.chunk',
   'dm.open', 'group.create', 'group.invite', 'group.accept', 'group.remove', 'group.routing', 'group.dissolve',
-  'group.policy', 'group.transfer', 'group.reclaim', 'group.configure', 'group.settings', 'message.publish',
+  'group.policy', 'group.transfer', 'group.configure', 'group.settings', 'message.publish',
   'principal.profile', 'contact.code.rotate', 'contact.request', 'contact.accept', 'contact.reject', 'contact.cancel', 'contact.revoke'])
 const routes = {
   'principal.register':'register', 'contacts.list':'contacts', 'dm.open':'createDm', 'group.create':'createGroup',
   'group.invite':'invite', 'group.accept':'accept', 'group.remove':'remove', 'group.routing':'routing', 'group.dissolve':'dissolve',
-  'group.policy':'policy', 'group.transfer':'transfer', 'group.reclaim':'reclaim', 'principal.rename':'renameHuman', 'group.configure':'configureGroup', 'group.settings':'settings',
+  'group.policy':'policy', 'group.transfer':'transfer', 'principal.rename':'renameHuman', 'group.configure':'configureGroup', 'group.settings':'settings',
   'message.publish':'publish', 'memberships.list':'memberships', 'conversation.sync':'sync', 'conversation.authorize':'authorize', 'conversation.members':'members',
   'conversation.ack':'acknowledgeCursor', 'deliveries.pull':'pending', 'delivery.receipt':'receipt', 'message.status':'deliveryStatus',
   'principal.avatar.begin':'avatarBegin', 'principal.avatar.chunk':'avatarChunk', 'principal.avatar.read':'avatarRead', 'principal.profile':'profile',

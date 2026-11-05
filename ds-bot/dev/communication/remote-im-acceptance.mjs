@@ -170,7 +170,6 @@ try {
   await cli(a,'dissolve',{conversationId:group},['FORBIDDEN'])
   await cli(b,'leave',{conversationId:group},['OWNER_TRANSFER_REQUIRED'])
   await value(a,'leave',{conversationId:group})
-  await cli(a,'reclaim',{conversationId:group,expectedVersion:await version(b,group)},['FORBIDDEN'])
   // Exercise public Hub trust revocation with all owned processes stopped, then
   // explicitly re-pair B at revision 2. Never edit rows to manufacture membership.
   for(const peer of topology.peers)await topology.bench(peer,'stop')
@@ -180,14 +179,15 @@ try {
   topology.child=fork(import.meta.filename,['--repaired-hub',hubPath],{windowsHide:true,stdio:['ignore','ignore','ignore','ipc'],env:{...process.env,DSBOT_TEST_PEERS:JSON.stringify(topology.peers.map(peer=>({instanceId:peer.instanceId,instanceLabel:`Instance ${peer.id.toUpperCase()}`,credential:peer.credential,pairingRevision:peer===b?2:1})))}})
   await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Repaired Hub startup timeout')),15000);topology.child.once('message',message=>{clearTimeout(timer);assert.equal(message.type,'ready');resolve()});topology.child.once('exit',()=>{clearTimeout(timer);reject(new Error('Repaired Hub startup failed'))})})
   for(const peer of topology.peers){await topology.startPeer(peer);await login(peer)}
-  await until(async()=> (await state(b)).recoverableOwnership.some(c=>c.conversationId===group),'current owner recovery slot')
-  const recovery=(await state(b)).recoverableOwnership.find(c=>c.conversationId===group)
-  await value(b,'reclaim',{conversationId:group,expectedVersion:recovery.membershipVersion})
-  await until(async()=> (await current(b,group)).role==='owner','current owner reclaims')
-  await value(b,'dissolve',{conversationId:group})
-  await cli(b,'send',{conversationId:group,text:'after dissolve'},['NOT_A_MEMBER','CONVERSATION_ENDED','GROUP_DISSOLVED','CONVERSATION_DISSOLVED'])
-  await cli(b,'reference',{conversationId:group,messageId:input.id},['NOT_A_MEMBER','CONVERSATION_ENDED','GROUP_DISSOLVED','CONVERSATION_DISSOLVED'])
-  record('CLI-transfer-leave-reserved-owner-reclaim-dissolve')
+  const repaired=await until(async()=>{const snapshot=await state(b);return snapshot.connected&&snapshot.reconciled&&snapshot},'repaired device reconnects')
+  assert.ok(!repaired.conversations.some(c=>c.conversationId===group))
+  assert.equal(Object.hasOwn(repaired,'recoverableOwnership'),false)
+  await cli(b,'send',{conversationId:group,text:'after device repair'},['NOT_A_MEMBER'])
+  await cli(b,'reference',{conversationId:group,messageId:input.id},['NOT_A_MEMBER'])
+  const fresh=(await value(b,'create-group',{title:`Fresh group ${nonce}`})).conversationId
+  await value(b,'dissolve',{conversationId:fresh})
+  await cli(b,'send',{conversationId:fresh,text:'after dissolve'},['NOT_A_MEMBER','CONVERSATION_ENDED','GROUP_DISSOLVED','CONVERSATION_DISSOLVED'])
+  record('CLI-transfer-leave-device-repair-no-owner-recovery-fresh-group-dissolve')
   evidence.status='PASS'
 }catch(error){evidence.status='FAIL';evidence.error=error.message;console.error(error.message);process.exitCode=1}
 finally {

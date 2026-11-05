@@ -82,7 +82,7 @@ test('remote input cannot use a shared Bot identity to read or send through anot
   const binding={conversationId:'group'}
   for(const [name,args] of [['read_communication_history',{conversationId:'private-dm'}],['send_contact_message',{contactPrincipalId:'human:other:user'}],
     ['send_contact_message',{conversationId:'another-group'}],['set_communication_member_policy',{conversationId:'another-group'}],
-    ['create_communication_group',{}],['accept_communication_invite',{}],['reclaim_communication_ownership',{}]]){
+    ['create_communication_group',{}],['accept_communication_invite',{}]]){
     assert.throws(()=>assertConversationToolScope(binding,name,args),{code:'CONVERSATION_SCOPE_MISMATCH'})
   }
   assertConversationToolScope(binding,'read_communication_history',{conversationId:'group'})

@@ -12,7 +12,7 @@ Contacts are explicitly published stable principals of paired instances, not sca
 |---|---|---|
 | Contacts and avatars | IP/instance headings; local deterministic avatars throughout contacts, chooser, authors, members, invitations and completion | contacts, state; exact stable IDs |
 | DM/group creation | Modal selection with empty/offline guidance and explicit invitation acceptance | dm, create-group, invite, accept |
-| Existing groups | Members, invitations, role/speech, receiving rule, rename, transfer, retained-owner recovery, leave and dissolve | members, remove, leave, policy, routing, configure-group, transfer, reclaim, dissolve |
+| Existing groups | Members, invitations, role/speech, receiving rule, rename, transfer, leave and dissolve; no ownership recovery | members, remove, leave, policy, routing, configure-group, transfer, dissolve |
 | Mentions | Type @ with keyboard/IME completion; @all selects current group Bots only | send text or exact mentions; scoped Bot tools |
 | Human rename | Own Human profile | rename-human |
 | History/delivery | History, references, read/delivery state; actionable failures outside chat | history, reference, read, outbox, retry |
@@ -42,6 +42,8 @@ Main MEMORY.md capacity increases from 4000 to 10000 using the existing JavaScri
 Main Bots can change other local Bots' workspaces through update_bot/work_dir. Roster actor checks reject non-Main cross-Bot changes; existing self-edit and Human settings remain available. Folder approval, privacy collisions and OS permissions remain authoritative. This grants no remote filesystem access. The native settings UI and authenticated local Human dsbot-team set-workspace use the same service; skills/dsbot-team/SKILL.md documents identity boundaries.
 
 ## Verification and limits
+
+The retained-ownership recovery mentioned in the historical run below has since been removed; it is not supported by this version.
 
 [Executable acceptance](../../../ds-bot/dev/communication/remote-im-acceptance.mjs) and [run instructions](../../../ds-bot/dev/communication/remote-im-acceptance.md) use two actual DSH hosts, a real Hub and deterministic Mock models on one Windows computer. Final run passed 8 grouped cases and 24 distinct CLI operations: exact @all recipients, passive restrictions, permission failures, rename persistence, stale versions, original-ID retries, remove-then-send race, transfer, retained ownership recovery and dissolve. Hub tests separately cover unique/legacy Humans, spoof rejection and IP changes/shared addresses.
 

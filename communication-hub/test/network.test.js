@@ -324,3 +324,16 @@ test('revoked trust stays rejected after ordinary Hub restart until the owner in
     rmSync(root,{recursive:true,force:true})
   }
 })
+
+test('authenticated legacy owner recovery RPC is unknown and cannot mutate stored groups', async () => {
+  const hub = await startHub({ databasePath: ':memory:', port: 0, peers })
+  const a = makeClient('a', hub.url)
+  try {
+    await a.client.connect()
+    const principalId = (await a.client.request('principal.register', { localId: 'owner', kind: 'human', displayName: 'Owner' })).principalId
+    const { conversationId } = await a.client.request('group.create', op({ principalId, title: 'No recovery' }))
+    const before = { members: hub.store.db.prepare('SELECT * FROM memberships').all(), conversations: hub.store.db.prepare('SELECT * FROM conversations').all(), events: hub.store.db.prepare('SELECT * FROM events').all() }
+    await assert.rejects(a.client.request('group.reclaim', op({ principalId, conversationId, expectedVersion: 1 })), { code: 'UNKNOWN_OPERATION' })
+    assert.deepEqual({ members: hub.store.db.prepare('SELECT * FROM memberships').all(), conversations: hub.store.db.prepare('SELECT * FROM conversations').all(), events: hub.store.db.prepare('SELECT * FROM events').all() }, before)
+  } finally { a.client.stop(); a.queue.close(); await hub.close() }
+})

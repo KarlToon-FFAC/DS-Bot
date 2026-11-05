@@ -18,11 +18,10 @@ and does not claim subsequent cases passed. This covers local end-to-end behavio
 not cross-physical-machine acceptance. Human uniqueness/legacy compatibility and
 recovery fault injection remain in the dedicated Hub/recovery suites.
 
-The end of this script also exercises retained-owner recovery: after verifying
-that an owner cannot leave, it stops its own hosts and Hub, invokes the Hub's
-public `revokeInstance` method on its private database, and restarts an independent
-Hub process with an explicit higher pairing revision for B. The CLI then reclaims
-B's retained ownership and dissolves the group. A former owner cannot reclaim it.
+The end verifies that an owner cannot leave without transfer, then stops its own
+hosts and Hub, revokes B in the isolated fixture and reconnects B at a higher
+pairing revision. Membership and ownership remain inactive, and no recovery list
+is exposed. A newly created group can still be dissolved normally.
 
 `@all` evidence compares canonical Hub deliveries and authors: exactly the current
 two group Bots get AI deliveries and one granted reply each. It includes a third

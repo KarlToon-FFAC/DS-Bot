@@ -80,7 +80,7 @@ never a cookie/password argument. No operation silently retries a mutation.
 | Contacts/conversations, members/history/reference/thread | `contacts`, `conversations`, `members`, `history`, `reference`, `thread` | Own authorized communication read tools; isolated Sessions stay in their exact conversation/epoch |
 | DM, send, reply/@all | `dm`, `send` (replyToMessageId/mentions) | `send_contact_message`; passive final handoff uses `set_communication_reply_targets`; no Human impersonation |
 | Create/invite/accept/leave/remove | `create-group`, `invite`, `accept`, `leave`, `remove` | Matching group tools as own Bot, subject to membership/role/speaking authority |
-| Group name/routing/policies/ownership | `save-settings`, `configure-group`, `routing`, `policy`, `transfer`, `reclaim`, `dissolve` | Matching tools, current owner/admin/version checks remain authoritative |
+| Group name/routing/policies/ownership | `save-settings`, `configure-group`, `routing`, `policy`, `transfer`, `dissolve` | Matching tools, current owner/admin/version checks remain authoritative |
 | Publication | `available-bots`, `publish-bots` with exact localBotIds; [] withdraws all | Own local chat: `list_communication_bots`, `publish_communication_bots` for a direct local-user request, including an unpublished Bot; never a group role |
 | Human profile/avatar | `profile-human`, `rename-human`, `avatar` | Cannot rename the Human or impersonate another Bot; Bot appearance follows its authorized local settings |
 | Contact consent/user codes | `user-code`, `rotate-user-code`, `request-contact`, `contact-requests`, `contact-relations`, `accept-contact`, `reject-contact`, `cancel-contact`, `revoke-contact` | Own local chat: `manage_communication_contacts` for the direct local-user request; no automatic acceptance or Remote-session consent |
@@ -117,8 +117,8 @@ Other Hub records and queues are preserved. There is no automatic retry.
 Hub administrators use the independent management page's Remove device action or
 `dsbot-hub-admin revoke` (private administrator authentication, not CLI arguments).
 Removal retains principal/message rows but frees live directory capacity. Existing
-owners are retained as inactive owners: groups remain safe/frozen until an
-administrator explicitly repairs that same device and its owner reclaims it.
+owners remain inactive authorization fences. Device repair does not restore group
+membership or ownership; create a new group if its owner is unavailable.
 Administrator repair cannot exceed active-principal capacity. Permanent removal
 does not silently transfer ownership or grant group rights to other members.
 After explicit repair, `hub-leave-status` can clear the local departed fence
@@ -275,7 +275,6 @@ translated. Read live help for complete optional fields and use current versions
 | routing | routing | Default reply Bot / mentions only | set_communication_receiving_rule |
 | policy | policy | Member role / speaking mode | set_communication_member_policy |
 | transfer | transfer | Transfer ownership | transfer_communication_ownership |
-| reclaim | reclaim | Recover retained ownership | reclaim_communication_ownership |
 | dissolve | dissolve | End group for everyone | end_communication_group |
 | configure-group | configure-group | Rename group | configure_communication_group |
 | save-settings | save-settings | Save group settings atomically | save_communication_group_settings |
@@ -336,11 +335,10 @@ wait for each invitation to be accepted; an invitation alone is not membership.
 Check partial failures individually. Use `members` and state for membership epoch,
 group/membership version and current role. Supply `expectedVersion` and
 `membershipEpoch` for applicable management requests; configure, save-settings, policy,
-transfer and reclaim require the expected version. Owner appoints admins and
+transfer require the expected version. Owner appoints admins and
 transfers/dissolves; admins manage ordinary members and routing only. Leaving is
-different from dissolution. Reclaim restores only the actor's retained ownership
-after authorized re-pairing and never takes someone else's group or revives a
-dissolved group. No role permits reading other participants' private conversations.
+different from dissolution. Ownership recovery is unavailable in this version.
+Device re-pairing never restores group rights or revives a dissolved group. No role permits reading other participants' private conversations.
 
 Use `save-settings` (Bot tool `save_communication_group_settings`) when saving
 several group settings together. Supply `conversationId`, the current
@@ -564,8 +562,8 @@ Do not expose real private chats to test connectivity.
 If pairing fails, distinguish wrong secret/instance ID, untrusted certificate,
 unreachable Hub and revoked peer from sanitized errors. Fix only the authorized
 configuration. Revoked peers require the Hub owner to increase `pairingRevision`;
-reconnecting does not restore membership. Reclaim only the same retained owner,
-otherwise invite afresh. Never reset/delete a live queue or change instance ID
+reconnecting does not restore membership or ownership. Invite ordinary members
+afresh; create a new group if the owner is unavailable. Never reset/delete a live queue or change instance ID
 as a recovery shortcut. Disabling client communication stops it without revoking
 the peer; revocation is an explicit Hub-owner action.
 

@@ -205,6 +205,8 @@ export class CommunicationTransport {
     let deferredError
     for (const item of this.queue.pendingOutbox()) {
       try {
+        // Upgrades must not replay removed ownership recovery against an older Hub.
+        if (item.type === 'group.reclaim') throw errorWith('UNKNOWN_OPERATION')
         if (item.type === 'message.publish') {
           this.queue.validateMessage(item.payload)
           if(item.payload.attachments?.length&&!this.welcome.capabilities.includes(ATTACHMENT_CAPABILITY))throw errorWith('ATTACHMENT_CAPABILITY_REQUIRED')

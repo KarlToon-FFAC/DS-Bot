@@ -1628,12 +1628,11 @@ Object.assign(ZH, {
   "Transfer ownership": "移交群主",
   "Confirm ownership transfer": "确认移交群主",
   "Transfer ownership before leaving": "请先移交群主再退出",
-  "Restore retained ownership": "恢复原群主身份",
   "You have read-only access to this group.": "你在此群中只有只读权限。",
   "This Bot can only reply to an authorized message.": "此 Bot 只能被动回复已授权的消息。",
   "Group settings changed. Review the current members and try again.": "群设置已变更，请核对当前成员后重试。",
   "Transfer ownership before leaving or removing the owner.": "退出或移除群主前，请先移交群主身份。",
-  "Restore your retained ownership first.": "请先恢复原群主身份。",
+  "Group ownership cannot be restored in this version. Create a new group if the owner is unavailable.": "此版本不支持恢复群主身份。群主不可用时，请创建新群。",
   "The owner is unavailable. Ownership stays with that identity.": "群主暂不可用，群主身份仍保留给原身份。",
   "This legacy group has no retained owner. No automatic takeover is allowed.": "此旧群没有保留的群主身份，不允许自动接管。"
 });
@@ -21448,7 +21447,8 @@ var communicationDescriptions = {
   PASSIVE_REPLY_ONLY: "This Bot can only reply to an authorized message.",
   GROUP_VERSION_CONFLICT: "Group settings changed. Review the current members and try again.",
   OWNER_TRANSFER_REQUIRED: "Transfer ownership before leaving or removing the owner.",
-  OWNER_RECLAIM_REQUIRED: "Restore your retained ownership first.",
+  OWNER_UNAVAILABLE: "Group ownership cannot be restored in this version. Create a new group if the owner is unavailable.",
+  OWNER_RECLAIM_REQUIRED: "Group ownership cannot be restored in this version. Create a new group if the owner is unavailable.",
   CONVERSATION_PENDING: "The conversation is waiting for a connection.",
   COMMUNICATION_READ_ONLY: "This instance is read-only.",
   UNAUTHENTICATED: "The Hub rejected this device. Ask the Hub owner to check its pairing.",
@@ -21735,7 +21735,9 @@ var definitive = /* @__PURE__ */ new Set([
   "PASSIVE_REPLY_ONLY",
   "GROUP_VERSION_CONFLICT",
   "OWNER_TRANSFER_REQUIRED",
+  "OWNER_UNAVAILABLE",
   "OWNER_RECLAIM_REQUIRED",
+  "UNKNOWN_OPERATION",
   "INVALID_REQUEST",
   "INVALID_OPERATION",
   "UNAUTHENTICATED",
@@ -23384,6 +23386,18 @@ var save = (key, value) => {
   } catch {
   }
 };
+var readOperationIds = () => {
+  const entries2 = read(OPERATION_IDS, []);
+  const current = entries2.filter(([key]) => {
+    try {
+      return JSON.parse(key)?.[1] !== "reclaim";
+    } catch {
+      return true;
+    }
+  });
+  if (current.length !== entries2.length) save(OPERATION_IDS, current);
+  return current;
+};
 async function communicationRequest(body) {
   const response = await fetch("/api/communication", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(15e3) });
   if ([401, 403].includes(response.status)) throw Object.assign(new Error("INSTANCE_AUTHENTICATION_REQUIRED"), { code: "INSTANCE_AUTHENTICATION_REQUIRED" });
@@ -23646,7 +23660,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
   }
   const state = !team.communicationEnabled || team.communicationHubId && receivedState?.hubId !== team.communicationHubId ? null : receivedState;
   const [pollError, setPollError] = (0, import_react65.useState)(""), [syncError, setSyncError] = (0, import_react65.useState)(null);
-  const [operationPending, setOperationPending] = (0, import_react65.useState)(() => read(OPERATION_IDS, []).length > 0);
+  const [operationPending, setOperationPending] = (0, import_react65.useState)(() => readOperationIds().length > 0);
   const [attaching, setAttaching] = (0, import_react65.useState)(false), attachmentFlight = (0, import_react65.useRef)(false);
   const [selected, setSelected] = (0, import_react65.useState)(() => read(SELECTED, null));
   const [drafts, setDrafts] = (0, import_react65.useState)(() => read(DRAFTS, {})), [attempts, setAttempts] = (0, import_react65.useState)(() => read(ATTEMPTS, {}));
@@ -23667,7 +23681,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
   const [threadMessageId, setThreadMessageId] = (0, import_react65.useState)(null);
   const [threadReplyTarget, setThreadReplyTarget] = (0, import_react65.useState)(null), [threadPosition, setThreadPosition] = (0, import_react65.useState)({ left: 8, top: 8 });
   const threadAnchor = (0, import_react65.useRef)(null), viewportTick = useViewport();
-  const input = (0, import_react65.useRef)(null), frame = (0, import_react65.useRef)(null), log = (0, import_react65.useRef)(null), autoScroll = (0, import_react65.useRef)(true), pageOrder = (0, import_react65.useRef)(0), operationIds = (0, import_react65.useRef)(new Map(read(OPERATION_IDS, [])));
+  const input = (0, import_react65.useRef)(null), frame = (0, import_react65.useRef)(null), log = (0, import_react65.useRef)(null), autoScroll = (0, import_react65.useRef)(true), pageOrder = (0, import_react65.useRef)(0), operationIds = (0, import_react65.useRef)(new Map(readOperationIds()));
   const labels = contactLabels(state?.contacts ?? [], state?.instanceId, t);
   const scope = communicationScope(state);
   syncAvatarDirectory(state?.contacts ?? [], state?.hubId ?? state?.hubUrl ?? "legacy");
@@ -23891,7 +23905,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
   }, [scope, shown, selected, page, request]);
   const operation = async (endpoint, values) => {
     const current = state?.conversations?.find((item) => item.conversationId === values.conversationId);
-    if (current && !["reclaim", "dm", "create-group", "accept"].includes(endpoint)) values = { membershipEpoch: current.membershipEpoch, expectedVersion: current.membershipVersion, ...values };
+    if (current && !["dm", "create-group", "accept"].includes(endpoint)) values = { membershipEpoch: current.membershipEpoch, expectedVersion: current.membershipVersion, ...values };
     const operationKey = JSON.stringify([scope, endpoint, values]);
     if (!operationIds.current.has(operationKey)) operationIds.current.set(operationKey, randomId());
     const persist = () => {
@@ -24183,14 +24197,6 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
           void act(() => operation("accept", { inviteId: invitation.inviteId, recipientPrincipalId: invitation.principalId }));
         })
       ))) : null,
-      (state?.recoverableOwnership ?? []).map((item) => (0, import_react65.createElement)(
-        "div",
-        { key: item.conversationId },
-        (0, import_react65.createElement)("p", null, item.title),
-        btn("Restore retained ownership", () => {
-          void act(() => operation("reclaim", { conversationId: item.conversationId, expectedVersion: item.membershipVersion }));
-        })
-      )),
       null
     ),
     activePanel ? (0, import_react65.createElement)(

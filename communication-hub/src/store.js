@@ -391,13 +391,12 @@ export class HubStore {
       const current=this.db.prepare('SELECT * FROM memberships WHERE conversation_id=? AND principal_id=?').get(invite.conversation_id,input.principalId)
       if(current?.active)return {conversationId:invite.conversation_id,membershipEpoch:current.epoch,joinSeq:current.join_seq}
       requireThat(invite.active,'INVITE_REVOKED')
-      requireThat(this.db.prepare('SELECT owner_id FROM conversations WHERE id=?').get(invite.conversation_id).owner_id!==input.principalId,'OWNER_RECLAIM_REQUIRED')
+      requireThat(this.db.prepare('SELECT owner_id FROM conversations WHERE id=?').get(invite.conversation_id).owner_id!==input.principalId,'OWNER_UNAVAILABLE')
       if(!current)this.requireMembershipCapacity(input.principalId)
       const inviter=this.db.prepare('SELECT active,role FROM memberships WHERE conversation_id=? AND principal_id=?').get(invite.conversation_id,invite.inviter_id)
       requireThat(inviter?.active&&['owner','admin'].includes(inviter.role),'INVITE_REVOKED')
       const count=this.db.prepare('SELECT count(*) count FROM memberships WHERE conversation_id=? AND active=1').get(invite.conversation_id).count
-      const absentOwner=this.db.prepare('SELECT 1 FROM conversations c JOIN memberships m ON m.conversation_id=c.id AND m.principal_id=c.owner_id WHERE c.id=? AND m.active=0').get(invite.conversation_id)
-      requireThat(count<this.limits.maxMembers-Number(Boolean(absentOwner)),'MEMBER_LIMIT')
+      requireThat(count<this.limits.maxMembers,'MEMBER_LIMIT')
       const epoch=randomUUID()
       const event=this.event(invite.conversation_id,'membership.joined',{principalId:input.principalId,membershipEpoch:epoch})
       this.db.prepare("INSERT INTO memberships(conversation_id,principal_id,epoch,join_seq,active,manager,role,speaking_mode) VALUES (?,?,?,?,1,0,'member',?) ON CONFLICT(conversation_id,principal_id) DO UPDATE SET epoch=excluded.epoch,join_seq=excluded.join_seq,active=1,manager=0,role='member',speaking_mode=excluded.speaking_mode").run(invite.conversation_id,input.principalId,epoch,event.conversationSeq,input.principalId.startsWith('bot:')?'passive':'readOnly')
@@ -528,21 +527,6 @@ export class HubStore {
       this.db.prepare('UPDATE conversations SET owner_id=?,version=version+1 WHERE id=?').run(input.targetPrincipalId,input.conversationId)
       this.event(input.conversationId,'ownership.transferred',{previousOwnerPrincipalId:input.principalId,ownerPrincipalId:input.targetPrincipalId})
       return {ownerPrincipalId:input.targetPrincipalId,membershipVersion:input.expectedVersion+1}
-    })
-  }
-  reclaim(auth,input) {
-    this.principal(auth,input.principalId)
-    return this.operation(auth,input.operationId,input,()=>{
-      const group=this.db.prepare('SELECT * FROM conversations WHERE id=?').get(input.conversationId)
-      requireThat(group?.kind==='group'&&!group.closed&&group.owner_id===input.principalId,'FORBIDDEN')
-      requireThat(Number.isSafeInteger(input.expectedVersion)&&input.expectedVersion===group.version,'GROUP_VERSION_CONFLICT')
-      const previous=this.db.prepare('SELECT * FROM memberships WHERE conversation_id=? AND principal_id=?').get(input.conversationId,input.principalId)
-      requireThat(previous&&!previous.active,'INVALID_REQUEST')
-      requireThat(this.db.prepare('SELECT count(*) n FROM memberships WHERE conversation_id=? AND active=1').get(input.conversationId).n<this.limits.maxMembers,'MEMBER_LIMIT')
-      const epoch=randomUUID(),event=this.event(input.conversationId,'ownership.reclaimed',{principalId:input.principalId,membershipEpoch:epoch})
-      this.db.prepare("UPDATE memberships SET active=1,epoch=?,join_seq=?,role='owner',manager=1,speaking_mode=? WHERE conversation_id=? AND principal_id=?").run(epoch,event.conversationSeq,input.principalId.startsWith('bot:')?'passive':'readOnly',input.conversationId,input.principalId)
-      this.db.prepare('UPDATE conversations SET version=version+1 WHERE id=?').run(input.conversationId)
-      return {conversationId:input.conversationId,membershipEpoch:epoch,joinSeq:event.conversationSeq}
     })
   }
   dissolve(auth,input) {
