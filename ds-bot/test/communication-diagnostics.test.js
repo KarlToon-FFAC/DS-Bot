@@ -187,7 +187,7 @@ test('an initial onChange failure cannot turn unsynchronized empty caches into k
     state.runtime = runtime
     runtime.transport.request = async () => { throw Object.assign(Error('synthetic directory failure'), { code: 'CONNECTION_LOST' }) }
     await assert.rejects(runtime.transport.onChange(), { code: 'CONNECTION_LOST' })
-    assert.equal(runtime.everReconciled, true, 'the legacy authorization flag is not a successful full-pump witness')
+    assert.equal(runtime.everReconciled, false, 'a failed initial directory read must not mark the runtime reconciled')
     assert.equal(runtime.transport.lastSynchronizedAt, undefined)
     const result = await diagnoseCommunication(rt, state)
     assert.equal(result.synchronization.initialSyncComplete, false)
