@@ -23136,7 +23136,8 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
   const team = (0, import_react63.useSyncExternalStore)(roster.subscribe, roster.getSnapshot);
   const mode = (0, import_react63.useSyncExternalStore)(surface.subscribe, surface.getSnapshot);
   const open = (0, import_react63.useSyncExternalStore)(panel.subscribe, panel.getSnapshot);
-  const [shown, closing] = useLinger(open && mode.mode === "bot", 160);
+  const visible = open && mode.mode === "bot";
+  const [shown, closing] = useLinger(visible, 160);
   const [receivedState, setState] = (0, import_react63.useState)(null), [error, setError] = (0, import_react63.useState)(""), [busy, setBusy] = (0, import_react63.useState)(false);
   const state = !team.communicationEnabled || team.communicationHubId && receivedState?.hubId !== team.communicationHubId ? null : receivedState;
   const [pollError, setPollError] = (0, import_react63.useState)(""), [syncError, setSyncError] = (0, import_react63.useState)(null);
@@ -23152,8 +23153,8 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
   const [completion, setCompletion] = (0, import_react63.useState)(null), [completionIndex, setCompletionIndex] = (0, import_react63.useState)(0), [composing, setComposing] = (0, import_react63.useState)(false);
   const chooser = (0, import_react63.useRef)(null), chooserTrigger = (0, import_react63.useRef)(null), previousPanel = (0, import_react63.useRef)(""), panelReturn = (0, import_react63.useRef)("");
   const [browse, setBrowse] = (0, import_react63.useState)(false), [activePanel, setActivePanel] = (0, import_react63.useState)(""), [panelBack, setPanelBack] = (0, import_react63.useState)(""), [inspectedIds, setInspectedIds] = (0, import_react63.useState)([]);
-  const panelShown = (0, import_react63.useRef)({ name: "", version: 0 });
-  if (panelShown.current.name !== activePanel) panelShown.current = { name: activePanel, version: panelShown.current.version + 1 };
+  const panelShown = (0, import_react63.useRef)({ name: "", visible, version: 0 });
+  if (panelShown.current.name !== activePanel || panelShown.current.visible !== visible) panelShown.current = { name: activePanel, visible, version: panelShown.current.version + 1 };
   const [sidebarHidden, setSidebarHidden] = (0, import_react63.useState)(() => read(SIDEBAR_HIDDEN, false)), [newMenuOpen, setNewMenuOpen] = (0, import_react63.useState)(false);
   const [searchQuery, setSearchQuery] = (0, import_react63.useState)(""), [searchCursor, setSearchCursor] = (0, import_react63.useState)(0);
   const newMenu = (0, import_react63.useRef)(null), newTrigger = (0, import_react63.useRef)(null);
@@ -23235,9 +23236,9 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
     if (!shown) return void 0;
     const returning = Boolean(previousPanel.current && !activePanel);
     previousPanel.current = activePanel;
-    const visible = (node) => !node.checkVisibility || node.checkVisibility();
-    const controls = () => [...(activePanel ? chooser.current : frame.current)?.querySelectorAll("button:not(:disabled),input:not(:disabled),textarea:not(:disabled),select:not(:disabled),summary") ?? []].filter((node) => visible(node) && (!node.closest("details:not([open])") || node.tagName === "SUMMARY"));
-    const focusDefault = () => (activePanel ? controls()[0] : input.current && !input.current.disabled && visible(input.current) ? input.current : controls()[0])?.focus();
+    const visible2 = (node) => !node.checkVisibility || node.checkVisibility();
+    const controls = () => [...(activePanel ? chooser.current : frame.current)?.querySelectorAll("button:not(:disabled),input:not(:disabled),textarea:not(:disabled),select:not(:disabled),summary") ?? []].filter((node) => visible2(node) && (!node.closest("details:not([open])") || node.tagName === "SUMMARY"));
+    const focusDefault = () => (activePanel ? controls()[0] : input.current && !input.current.disabled && visible2(input.current) ? input.current : controls()[0])?.focus();
     if (returning && chooserTrigger.current?.isConnected) chooserTrigger.current.focus();
     else focusDefault();
     const foreignDialog = (node) => !frame.current?.contains(node) && node?.closest?.('dialog,[role="dialog"],[role="alertdialog"]');
@@ -23556,7 +23557,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
     const context = contextKey.current, version = panelShown.current.version;
     void act(async () => {
       const value = await operation("dm", { otherPrincipalId: id });
-      if (value.conversationId && context === contextKey.current && panelShown.current.name === "manage-contacts" && version === panelShown.current.version) {
+      if (value.conversationId && context === contextKey.current && panelShown.current.visible && panelShown.current.name === "manage-contacts" && version === panelShown.current.version) {
         choose(value.conversationId);
         setActivePanel("");
       }

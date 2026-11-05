@@ -162,7 +162,8 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
   const team = useSyncExternalStore(roster.subscribe, roster.getSnapshot)
   const mode = useSyncExternalStore(surface.subscribe, surface.getSnapshot)
   const open = useSyncExternalStore(panel.subscribe, panel.getSnapshot)
-  const [shown, closing] = useLinger(open && mode.mode === 'bot', 160)
+  const visible = open && mode.mode === 'bot'
+  const [shown, closing] = useLinger(visible, 160)
   const [receivedState, setState] = useState(null), [error, setError] = useState(''), [busy, setBusy] = useState(false)
   const state = !team.communicationEnabled || team.communicationHubId && receivedState?.hubId !== team.communicationHubId ? null : receivedState
   const [pollError, setPollError] = useState(''), [syncError, setSyncError] = useState(null)
@@ -178,8 +179,8 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
   const [completion, setCompletion] = useState(null), [completionIndex, setCompletionIndex] = useState(0), [composing, setComposing] = useState(false)
   const chooser = useRef(null), chooserTrigger = useRef(null), previousPanel = useRef(''), panelReturn = useRef('')
   const [browse, setBrowse] = useState(false), [activePanel, setActivePanel] = useState(''), [panelBack, setPanelBack] = useState(''), [inspectedIds, setInspectedIds] = useState([])
-  const panelShown = useRef({ name: '', version: 0 })
-  if (panelShown.current.name !== activePanel) panelShown.current = { name: activePanel, version: panelShown.current.version + 1 }
+  const panelShown = useRef({ name: '', visible, version: 0 })
+  if (panelShown.current.name !== activePanel || panelShown.current.visible !== visible) panelShown.current = { name: activePanel, visible, version: panelShown.current.version + 1 }
   const [sidebarHidden, setSidebarHidden] = useState(() => read(SIDEBAR_HIDDEN, false)), [newMenuOpen, setNewMenuOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState(''), [searchCursor, setSearchCursor] = useState(0)
   const newMenu = useRef(null), newTrigger = useRef(null)
@@ -403,7 +404,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
     const context = contextKey.current, version = panelShown.current.version
     void act(async () => {
       const value = await operation('dm', { otherPrincipalId: id })
-      if (value.conversationId && context === contextKey.current && panelShown.current.name === 'manage-contacts' && version === panelShown.current.version) {
+      if (value.conversationId && context === contextKey.current && panelShown.current.visible && panelShown.current.name === 'manage-contacts' && version === panelShown.current.version) {
         choose(value.conversationId); setActivePanel('')
       }
     })

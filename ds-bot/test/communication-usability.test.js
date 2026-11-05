@@ -47,7 +47,7 @@ async function pane({ enabled = true, snapshot, history = [], getState, handleRe
   }
   try {
     await act(async () => root.render(React.createElement(mod.exports.CommunicationSurface, { roster, surface, panel, request })))
-    await check({ dom, doc, panel, calls, button, click, edit, remount: async () => {
+    await check({ dom, doc, panel, surface, calls, button, click, edit, remount: async () => {
       await act(async () => root.unmount())
       root = createRoot(dom.window.document.getElementById('root'))
       await act(async () => root.render(React.createElement(mod.exports.CommunicationSurface, { roster, surface, panel, request })))
@@ -1170,5 +1170,28 @@ test('closing Contacts while a message conversation is opening prevents late nav
     assert.equal(calls.filter(call => call.endpoint === 'dm').length, 1)
     assert.equal(doc.querySelector('.bt-comm-modal'), null)
     assert.equal(doc.querySelector('.bt-comm-conversation-row').getAttribute('aria-pressed'), 'false')
+  })
+})
+
+for (const hiddenBy of ['panel', 'mode']) for (const reopenFirst of [false, true]) test(`hiding the workspace by ${hiddenBy} ${reopenFirst ? 'and reopening before' : 'until after'} a Contacts response preserves selection`, async () => {
+  let finish, created = false
+  const person = { principalId: 'human:b:owner', kind: 'human', displayName: 'Other person', homeInstanceId: 'b' }
+  const dm = { ...membership, conversationId: 'new-dm', kind: 'dm', title: '', info: { members: [person] } }
+  const snapshot = { ...state(), contacts: [person], conversations: [membership] }
+  await pane({ snapshot, getState: () => ({ ...snapshot, conversations: created ? [membership, dm] : [membership] }), handle: async body => {
+    if (body.endpoint === 'dm') return new Promise(resolve => { finish = () => { created = true; resolve({ conversationId: dm.conversationId }) } })
+    return body.endpoint === 'user-code' ? { userCode: 'MY-CODE' } : body.endpoint === 'available-bots' ? { bots: [], publishedBotIds: [] } : []
+  } }, async ({ doc, panel, surface, click, calls }) => {
+    await click('Shared group'); await click('Contacts')
+    await act(async () => doc.querySelector('[aria-label="Message Other person"]').click())
+    const visibility = value => hiddenBy === 'panel' ? panel.set(value) : surface.set({ mode: value ? 'bot' : 'chat' })
+    await act(async () => visibility(false))
+    if (reopenFirst) await act(async () => visibility(true))
+    await act(async () => finish())
+    if (!reopenFirst) await act(async () => visibility(true))
+    assert.equal(calls.filter(call => call.endpoint === 'dm').length, 1)
+    assert.equal(doc.querySelector('[data-conversation-id="group"]').getAttribute('aria-pressed'), 'true')
+    assert.equal(doc.querySelector('[data-conversation-id="new-dm"]').getAttribute('aria-pressed'), 'false')
+    assert.equal(doc.querySelector('.bt-comm-modal').getAttribute('aria-label'), 'Manage contacts')
   })
 })

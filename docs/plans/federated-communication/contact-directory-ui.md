@@ -21,7 +21,9 @@ The existing settings entry remains available.
 - Search matches names, Bot names, device labels, IDs and observed addresses.
   Message always submits the exact principal ID. Duplicate clicks are disabled
   while opening a conversation. Closing or navigating away prevents the late
-  result from selecting a conversation.
+  result from selecting a conversation. Hiding the whole communication workspace
+  or switching out of Bot mode invalidates that navigation even if reopened
+  before the response arrives.
 - Add a contact, Contact requests and Published Bots are separate, initially
   collapsed disclosures. Pending requests have an accessible count. Publishing
   and contact acceptance retain explicit selection and the existing versioned
