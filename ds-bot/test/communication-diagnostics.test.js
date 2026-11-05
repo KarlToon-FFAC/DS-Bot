@@ -29,6 +29,20 @@ test('structured errors identify the unpublished actor and give safe why, next a
   assert.doesNotMatch(JSON.stringify(unknown), /SECRET/)
 })
 
+test('integrated management and relationship failures retain only exact public codes and descriptions', () => {
+  for (const code of ['LOCAL_MANAGEMENT_REJECTED', 'LOCAL_MANAGEMENT_CANCELLED', 'LOCAL_MANAGEMENT_APPROVAL_UNAVAILABLE',
+    'LOCAL_USER_AUTHORIZATION_REQUIRED', 'PUBLICATION_CHANGED', 'INVALID_RELATIONSHIP_MEMORY', 'MEMBERSHIP_EPOCH_REQUIRED', 'RELATIONSHIP_MEMORY_FULL',
+    'RELATIONSHIP_SECRET_REFUSED', 'RELATIONSHIP_SHARING_CONFIRMATION_REQUIRED', 'RELATIONSHIP_SOURCE_REQUIRED', 'RELATIONSHIP_SUBJECT_NOT_VISIBLE']) {
+    const value = communicationError({ code, message: 'PRIVATE_EXCEPTION_MESSAGE', cause: 'PRIVATE_EXCEPTION_CAUSE' })
+    assert.equal(value.code, code)
+    assert.notEqual(value.message, 'The communication operation could not be completed.')
+    assert.doesNotMatch(JSON.stringify(value), /PRIVATE_EXCEPTION/)
+  }
+  const value = communicationError({ code: 'LOCAL_MANAGEMENT_REJECTED_PRIVATE_EXCEPTION', message: 'PRIVATE_EXCEPTION_MESSAGE' })
+  assert.equal(value.code, 'COMMUNICATION_UNAVAILABLE')
+  assert.doesNotMatch(JSON.stringify(value), /PRIVATE_EXCEPTION/)
+})
+
 test('unconfigured diagnose is available only in own local chat and never creates a connection', async () => {
   const { rt, state } = fixture({ enabled: false })
   const tool = communicationDiagnoseTool(rt, () => state)

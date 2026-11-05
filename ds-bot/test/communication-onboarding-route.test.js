@@ -38,3 +38,18 @@ test('enrollment HTTP diagnostics expose only safe failure phase and never an un
   assert.equal(body.error.phase, 'COMMUNICATION_CREDENTIAL_READ_FAILED')
   assert.ok(!JSON.stringify(body).includes('DO_NOT_DISPLAY'))
 })
+
+test('contact HTTP failures retain exact conflict codes for UI refresh without exposing unknown exception details', async () => {
+  let route, code
+  const rt = { config: {}, teamTools: [], load: async () => { throw Object.assign(new Error('PRIVATE_EXCEPTION_MESSAGE'), { code }) }, refresh: async () => {},
+    ctx: { effect: fn => fn(), connection: { fetch: { register: value => { route = value; return () => {} } } } } }
+  install(rt)
+  for (const expected of ['CONTACT_VERSION_CONFLICT', 'OPERATION_ID_CONFLICT', 'COMMUNICATION_UNAVAILABLE']) {
+    code = expected === 'COMMUNICATION_UNAVAILABLE' ? 'PRIVATE_EXCEPTION_CODE' : expected
+    const response = await route.fetch(new Request('http://127.0.0.1/api/communication', { method: 'POST', body: JSON.stringify({ endpoint: 'cancel-contact', requestId: 'synthetic-request', expectedVersion: 1, operationId: 'same-operation' }) }))
+    const body = await response.json()
+    assert.equal(body.ok, false)
+    assert.equal(body.error.code, expected)
+    assert.doesNotMatch(JSON.stringify(body), /PRIVATE_EXCEPTION/)
+  }
+})

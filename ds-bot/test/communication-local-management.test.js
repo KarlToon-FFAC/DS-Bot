@@ -121,8 +121,12 @@ test('a local user input alone never approves contact changes or publication; ev
     const f = fixture(); f.setOutcome(outcome)
     const request = await f.call('manage_communication_contacts', { action: 'request', userCode: 'SYNTHETIC-CODE', localBotIds: ['shared'] })
     assert.equal(request.ok, false)
+    const expected = outcome === 'rejected' ? 'LOCAL_MANAGEMENT_REJECTED' : outcome === 'cancelled' ? 'LOCAL_MANAGEMENT_CANCELLED' : 'LOCAL_MANAGEMENT_APPROVAL_UNAVAILABLE'
+    assert.equal(request.error.code, expected)
+    assert.ok(request.error.message)
     const publication = await f.call('publish_communication_bots', { localBotIds: ['worker', 'shared'] })
     assert.equal(publication.ok, false)
+    assert.equal(publication.error.code, expected)
     assert.equal(f.calls.length, 0); assert.equal(f.edits.length, 0)
     assert.deepEqual(f.rt.config.communication.publishedBotIds, ['shared'])
   }
@@ -163,6 +167,33 @@ test('uncertain contact outcomes expose the generated retry ID and never silentl
   await f.call('manage_communication_contacts', { action: 'request', userCode: 'SYNTHETIC-CODE', operationId: first.operationId })
   assert.equal(f.calls[1].operationId, first.operationId)
   assert.doesNotMatch(JSON.stringify(first), /do not expose/)
+})
+
+test('local management hides unknown error codes and messages while retaining the exact retry operation ID', async () => {
+  const f = fixture()
+  f.comm.transport.request = async (_type, payload) => {
+    f.calls.push(payload)
+    throw Object.assign(new Error('PRIVATE_EXCEPTION_MESSAGE'), { code: 'PRIVATE_EXCEPTION_CODE' })
+  }
+  const result = await f.call('manage_communication_contacts', { action: 'request', userCode: 'SYNTHETIC-CODE', operationId: 'stable-uncertain-contact' })
+  assert.equal(result.ok, false)
+  assert.equal(result.error.code, 'COMMUNICATION_UNAVAILABLE')
+  assert.equal(result.operationId, 'stable-uncertain-contact')
+  assert.equal(result.operationId, f.calls[0].operationId)
+  assert.equal(f.calls.length, 1)
+  assert.doesNotMatch(JSON.stringify(result), /PRIVATE_EXCEPTION/)
+})
+
+test('contact management preserves conflict codes and top-level retry IDs through the diagnostic catch', async () => {
+  for (const code of ['CONTACT_VERSION_CONFLICT', 'OPERATION_ID_CONFLICT']) {
+    const f = fixture()
+    f.comm.transport.request = async () => { throw Object.assign(new Error('PRIVATE_EXCEPTION_MESSAGE'), { code }) }
+    const result = await f.call('manage_communication_contacts', { action: 'cancel', requestId: 'synthetic-request', expectedVersion: 1, operationId: 'same-operation' })
+    assert.equal(result.ok, false)
+    assert.equal(result.error.code, code)
+    assert.equal(result.operationId, 'same-operation')
+    assert.doesNotMatch(JSON.stringify(result), /PRIVATE_EXCEPTION/)
+  }
 })
 
 test('publication approval names the exact list, preserves existing Bots, reports reload and rejects concurrent changes', async () => {

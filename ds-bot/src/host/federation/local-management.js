@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { output } from '../tools.js'
+import { communicationError } from '../../shared/communication-diagnostics.js'
 
 const fail = code => { throw Object.assign(new Error(code), { code }) }
 export const LOCAL_MANAGEMENT_TOOLS = new Set(['manage_communication_contacts', 'list_communication_bots', 'publish_communication_bots', 'communication_diagnose'])
@@ -59,7 +60,7 @@ export function localManagementTools(rt, { ensure, enrollment }) {
       if (!args || typeof args !== 'object' || Array.isArray(args)) fail('INVALID_REQUEST')
       if (['principalId', 'sender', 'author', 'privateKey', 'publicKey', 'credentialKey', 'allowLoopback'].some(key => Object.hasOwn(args, key))) fail('AUTHOR_MISMATCH')
       return JSON.stringify(await work(structuredClone(args), authority, exec))
-    } catch (error) { return JSON.stringify({ ok: false, error: { code: error.code ?? 'COMMUNICATION_UNAVAILABLE' },
+    } catch (error) { return JSON.stringify({ ok: false, error: communicationError(error),
       ...(typeof error.operationId === 'string' ? { operationId: error.operationId } : {}) }) }
   }
   return [
