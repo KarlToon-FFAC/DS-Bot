@@ -39,6 +39,7 @@ async function run(name) {
   const [a, b] = topology.peers, beforeIdentity = identity(b)
   const conversationId = await topology.group(`Prompt RPC ${name} ${nonce}`, [b.bot])
   const membershipEpoch = await until(() => epoch(b, conversationId), 'recipient projects the current membership epoch')
+  const membershipVersion = JSON.parse(localRow(b, 'SELECT body FROM memberships WHERE conversation_id=? AND principal_id=?', conversationId, b.bot).body).membershipVersion
   if (name === 'model-error') {
     await topology.bench(b, 'stop')
     await topology.startPeer(b, { MOCK_REJECT_IMAGES: '1' })
@@ -91,6 +92,8 @@ async function run(name) {
       // The test IPC uses the same canonical store acceptance API with the current
       // synthetic recipient auth; no production permission or Session is patched.
       await topology.hub('accept-scoped-invite', { instanceId: b.instanceId, principalId: b.bot, inviteId: invite.inviteId })
+      const current = await until(async () => { const member = (await a.api({ endpoint: 'state' })).conversations.find(row => row.conversationId === conversationId); return member?.membershipVersion >= membershipVersion + 2 && member.info?.members.some(row => row.principalId === b.bot) && member.info.membershipVersion === member.membershipVersion && member }, 'owner observes the fresh canonical membership')
+      await topology.operation(a, 'policy', { conversationId, targetPrincipalId: b.bot, expectedVersion: current.membershipVersion, speakingMode: 'active' })
     }
   }
   await topology.hub('disconnect-prompt-rpc')
@@ -125,7 +128,15 @@ async function run(name) {
   assert.deepEqual(identity(b), beforeIdentity)
   const stats = await topology.hub('stats')
   assert.equal(stats.messages.filter(row => row.conversation_id === conversationId && row.author_id === b.bot).length, 0)
-  return { conversationId, originalMessageId: sent.messageId, deliveryId, originalMembershipEpoch: membershipEpoch, logicalInputs: 1, finalMessages: 0, modelRequests: 1, fault, terminalKinds: ends(terminal) }
+  let freshScopeControl
+  if (name === 'new-epoch') {
+    const fresh = await topology.send(a, conversationId, `COMM-ECHO fresh-epoch-${nonce}`, [b.bot])
+    await until(() => topology.hasText(a, conversationId, `Communication reply fresh-epoch-${nonce}`), 'a new explicitly authorized input still works in the fresh epoch')
+    assert.equal(callCount(b, sessionId), 1, 'the fresh epoch never reuses the old Session')
+    freshScopeControl = { messageId: fresh.messageId, replyCount: (await topology.history(a, conversationId)).events.filter(event => event.message?.content.text === `Communication reply fresh-epoch-${nonce}`).length }
+    assert.equal(freshScopeControl.replyCount, 1)
+  }
+  return { ...(freshScopeControl ? { freshScopeControl } : {}), conversationId, originalMessageId: sent.messageId, deliveryId, originalMembershipEpoch: membershipEpoch, logicalInputs: 1, finalMessages: 0, modelRequests: 1, fault, terminalKinds: ends(terminal) }
 }
 
 try {
