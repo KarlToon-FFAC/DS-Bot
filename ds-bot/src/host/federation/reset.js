@@ -113,7 +113,7 @@ function validateProviderConfiguration(doc, path, options) {
       const selected = (short, packageName = short) => id === short || name === '@deepseek-ai/dsh-' + packageName
       if (attachment && config.has('dshHome') && absoluteLiteral(config.get('dshHome', true), 'RESET_ATTACHMENT_PROVIDER_UNSUPPORTED') !== options.attachmentsHome) unsupported('RESET_ATTACHMENT_PROVIDER_UNSUPPORTED')
       if (credentials) {
-        const dshHome = config.has('dshHome') ? absoluteLiteral(config.get('dshHome', true), 'RESET_CREDENTIAL_PROVIDER_UNSUPPORTED') : undefined
+        const dshHome = !config.has('path') && config.has('dshHome') ? absoluteLiteral(config.get('dshHome', true), 'RESET_CREDENTIAL_PROVIDER_UNSUPPORTED') : undefined
         const path = config.has('path') ? absoluteLiteral(config.get('path', true), 'RESET_CREDENTIAL_PROVIDER_UNSUPPORTED') : dshHome && join(dshHome, '.credentials.yaml')
         if (path !== undefined && path !== options.credentials) unsupported('RESET_CREDENTIAL_PROVIDER_UNSUPPORTED')
       }

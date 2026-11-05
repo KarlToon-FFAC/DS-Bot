@@ -422,10 +422,14 @@ test('explicit credential and attachment providers must match the offline target
 })
 
 test('matching explicit attachment and credential paths support the documented path-over-home precedence', async t => {
-  const f = await fixture(t)
-  await writeFile(f.profile, await readFile(f.profile, 'utf8') + `- id: attachment-local\n  name: '@deepseek-ai/dsh-attachment-local'\n  config:\n    dshHome: ${JSON.stringify(f.root)}\n- id: credentials\n  config:\n    dshHome: /unused/explicit-home\n    path: ${JSON.stringify(f.credentials)}\n`)
-  assert.equal((await resetFederation({ ...f.options, confirm: undefined })).dryRun, true)
-  assert.equal((await resetFederation(f.options)).erased, true)
+  for (const ignoredHome of ['/unused/explicit-home', 'relative-home', '!expr process.env.IGNORED_TEST_HOME']) {
+    const f = await fixture(t)
+    await writeFile(f.profile, await readFile(f.profile, 'utf8') + `- id: attachment-local\n  name: '@deepseek-ai/dsh-attachment-local'\n  config:\n    dshHome: ${JSON.stringify(f.root)}\n- id: credentials\n  config:\n    dshHome: ${ignoredHome}\n    path: ${JSON.stringify(f.credentials)}\n`)
+    const before = await snapshot(f.root)
+    assert.equal((await resetFederation({ ...f.options, confirm: undefined })).dryRun, true)
+    assert.deepEqual(await snapshot(f.root), before)
+    assert.equal((await resetFederation(f.options)).erased, true)
+  }
   const g = await fixture(t)
   await writeFile(g.profile, await readFile(g.profile, 'utf8') + `- id: credentials\n  config:\n    dshHome: ${JSON.stringify(g.root)}\n`)
   assert.equal((await resetFederation(g.options)).erased, true)
