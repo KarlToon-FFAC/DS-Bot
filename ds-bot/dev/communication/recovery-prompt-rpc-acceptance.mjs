@@ -52,8 +52,10 @@ async function run(name) {
     await reconnectAndReconcile(b); await reconnectAndReconcile(b)
     await topology.bench(b, 'stop'); await topology.startPeer(b)
     assert.equal(callCount(b, sessionId), calls, 'a provider error must not become a transport retry')
-    assert.equal(originalInputs(await inspect(b, conversationId), sent.messageId).length, 1)
-    return { originalMessageId: sent.messageId, conversationId, requestHeaders, providerErrorRequests: 1, modelRequests: calls, retryRequests: 0, terminalKinds: ends(settled) }
+    const reopened = await inspect(b, conversationId)
+    assert.equal(originalInputs(reopened, sent.messageId).length, 1); assert.equal(reopened.exports.length, 0)
+    assert.equal((await topology.hub('stats')).messages.filter(row => row.conversation_id === conversationId && row.author_id === b.bot).length, 0)
+    return { normalHostRestartVerified: true, originalMessageId: sent.messageId, conversationId, requestHeaders, providerErrorRequests: 1, modelRequests: calls, retryRequests: 0, terminalKinds: ends(settled) }
   }
 
   await b.client.api({ operation: 'production-hold', point: 'after-injection', conversationId })
@@ -128,7 +130,7 @@ async function run(name) {
     assert.deepEqual(reopened.exports.map(row => row.message_id), [finalMessageId])
     assert.equal(originalInputs(reopened, sent.messageId).length, 1); assert.equal(callCount(b, sessionId), 2)
     assert.equal(epoch(b, conversationId), membershipEpoch); assert.deepEqual(identity(b), beforeIdentity)
-    return { conversationId, originalMessageId: sent.messageId, deliveryId, membershipEpoch, finalMessageId, logicalInputs: 1, finalMessages: 1, modelRequests: 2, faults, terminalKinds: ends(reopened) }
+    return { normalHostRestartVerified: true, conversationId, originalMessageId: sent.messageId, deliveryId, membershipEpoch, finalMessageId, logicalInputs: 1, finalMessages: 1, modelRequests: 2, faults, terminalKinds: ends(reopened) }
   }
 
   await until(async () => {
@@ -153,7 +155,7 @@ async function run(name) {
     freshScopeControl = { messageId: fresh.messageId, replyCount: (await topology.history(a, conversationId)).events.filter(event => event.message?.content.text === `Communication reply fresh-epoch-${nonce}`).length }
     assert.equal(freshScopeControl.replyCount, 1)
   }
-  return { ...(freshScopeControl ? { freshScopeControl } : {}), conversationId, originalMessageId: sent.messageId, deliveryId, originalMembershipEpoch: membershipEpoch, logicalInputs: 1, finalMessages: 0, modelRequests: 1, faults, terminalKinds: ends(terminal) }
+  return { normalHostRestartVerified: true, ...(freshScopeControl ? { freshScopeControl } : {}), conversationId, originalMessageId: sent.messageId, deliveryId, originalMembershipEpoch: membershipEpoch, logicalInputs: 1, finalMessages: 0, modelRequests: 1, faults, terminalKinds: ends(terminal) }
 }
 
 try {
