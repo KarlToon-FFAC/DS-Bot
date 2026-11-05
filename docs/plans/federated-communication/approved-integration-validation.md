@@ -35,6 +35,7 @@ Integrated verification:
 - Hub full suite: 105 passed.
 - Plugin full suite: 1,703 passed, 3 failed, 2 skipped (1,708 total). The same protected-home and two native DPAPI environment failures remain.
 - Build, generated-client freshness, lint and tracked-source secret scan passed; no mandatory scan findings.
+- The combined build completed all 52 native DSH Mock smoke steps in a fresh loopback-only profile; both owned child processes stopped and the runner exited successfully. This is separate from the outstanding real-model integration gate.
 - Synthetic migration rehearsal used the actual published v3 store implementations for both client and Hub, retained existing rows across v4 upgrade, verified old binaries reject upgraded stores, and restored v3 backups successfully. It did not touch real profiles or test an interrupted filesystem backup.
 
 Hub and clients require coordinated schema 4 / capability upgrades. Stop all writers and take a consistent backup of the selected Hub and client stores before deployment; rollback restores those matching pre-upgrade backups together with the old binaries. Merely reverting code cannot open v4 stores.
