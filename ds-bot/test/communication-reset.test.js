@@ -353,3 +353,93 @@ test('old cleaned profile, credential and epoch temps are precisely removed, but
   assert.equal(await readFile(unknown, 'utf8'), 'unproven foreign contents'); assert.deepEqual(await readFile(g.profile), profile)
   assert.equal((await federationResetStatus(g.home)).pending, false)
 })
+
+async function snapshot(root) {
+  const files = []
+  const visit = async path => {
+    for (const entry of await readdir(path, { withFileTypes: true })) {
+      const child = join(path, entry.name)
+      files.push([child, entry.isDirectory() ? 'directory' : (await readFile(child)).toString('base64')])
+      if (entry.isDirectory()) await visit(child)
+    }
+  }
+  await visit(root)
+  return files.sort(([left], [right]) => left.localeCompare(right))
+}
+
+test('reset-shaped explicit profiles are protected inputs, never disposable temporary files', async t => {
+  for (const credentialTarget of [false, true]) {
+    const f = await fixture(t), alias = (credentialTarget ? f.credentials : f.profile) + '.reset-00000000-0000-4000-8000-000000000001'
+    const text = '- id: model\n  config:\n    model: keep-me\n'
+    await writeFile(f.profile, text); await writeFile(alias, text)
+    const before = await snapshot(f.root)
+    for (const confirm of [undefined, RESET_CONFIRMATION]) {
+      await assert.rejects(resetFederation({ ...f.options, profiles: [f.profile, alias], confirm }), { code: 'RESET_PROTECTED_PATH_OVERLAP', target: alias })
+      assert.deepEqual(await snapshot(f.root), before)
+    }
+  }
+})
+
+test('unmaterialized credentials in a missing parent have no temporary files and need no invented directory', async t => {
+  const f = await fixture(t), credentials = join(f.root, 'never-materialized', 'nested', '.credentials.yaml')
+  await rm(f.credentials)
+  const options = { ...f.options, credentials }, before = await snapshot(f.root)
+  const dry = await resetFederation({ ...options, confirm: undefined })
+  assert.equal(dry.temporaryFiles, 0); assert.deepEqual(await snapshot(f.root), before)
+  assert.equal((await resetFederation(options)).erased, true)
+  await assert.rejects(readdir(join(f.root, 'never-materialized')), { code: 'ENOENT' })
+})
+
+test('a missing credential parent does not bypass an unsafe existing ancestor', async t => {
+  const f = await fixture(t), alias = join(f.root, 'linked-home')
+  await symlink(f.home, alias)
+  await assert.rejects(resetFederation({ ...f.options, credentials: join(alias, 'absent', '.credentials.yaml') }), { code: 'RESET_UNSAFE_PATH' })
+  assert.equal((await federationResetStatus(f.home)).pending, false)
+})
+
+test('explicit credential and attachment providers must match the offline targets before any mutation', async t => {
+  const f = await fixture(t), original = await readFile(f.profile, 'utf8')
+  const attachment = 'RESET_ATTACHMENT_PROVIDER_UNSUPPORTED', credential = 'RESET_CREDENTIAL_PROVIDER_UNSUPPORTED'
+  for (const [suffix, code] of [
+    ['- id: attachment-local\n  config:\n    dshHome: /actual/other-attachments\n', attachment],
+    ['- name: \'@deepseek-ai/dsh-attachment-local\'\n  config:\n    dshHome: !expr process.env.DSH_HOME\n', attachment],
+    ['- id: attachment-local\n  name: custom-attachment-provider\n', attachment],
+    ['- name: \'@deepseek-ai/dsh-attachment-remote\'\n', attachment],
+    ['- id: credentials\n  config:\n    path: /actual/other-credentials.yaml\n', credential],
+    ['- name: \'@deepseek-ai/dsh-credentials-local\'\n  config:\n    dshHome: /actual/other-home\n', credential],
+    ['- id: credentials\n  config:\n    path: !expr process.env.CREDENTIAL_PATH\n', credential],
+    ['- id: credentials\n  config:\n    dshHome: relative-home\n', credential],
+    ['- id: credentials\n  name: custom-credential-provider\n', credential],
+    ['- name: \'@deepseek-ai/dsh-credentials-remote\'\n', credential],
+  ]) {
+    await writeFile(f.profile, original + suffix)
+    const before = await snapshot(f.root)
+    for (const confirm of [undefined, RESET_CONFIRMATION]) {
+      await assert.rejects(resetFederation({ ...f.options, confirm }), { code, target: f.profile })
+      assert.deepEqual(await snapshot(f.root), before)
+    }
+  }
+})
+
+test('matching explicit attachment and credential paths support the documented path-over-home precedence', async t => {
+  const f = await fixture(t)
+  await writeFile(f.profile, await readFile(f.profile, 'utf8') + `- id: attachment-local\n  name: '@deepseek-ai/dsh-attachment-local'\n  config:\n    dshHome: ${JSON.stringify(f.root)}\n- id: credentials\n  config:\n    dshHome: /unused/explicit-home\n    path: ${JSON.stringify(f.credentials)}\n`)
+  assert.equal((await resetFederation({ ...f.options, confirm: undefined })).dryRun, true)
+  assert.equal((await resetFederation(f.options)).erased, true)
+  const g = await fixture(t)
+  await writeFile(g.profile, await readFile(g.profile, 'utf8') + `- id: credentials\n  config:\n    dshHome: ${JSON.stringify(g.root)}\n`)
+  assert.equal((await resetFederation(g.options)).erased, true)
+})
+
+test('empty decoy CLI targets cannot leave explicitly configured real attachment or credential stores behind', async t => {
+  const f = await fixture(t), original = await readFile(f.profile, 'utf8'), decoy = join(f.root, 'empty-decoy')
+  await mkdir(decoy)
+  await writeFile(f.profile, original + `- id: attachment-local\n  config:\n    dshHome: ${JSON.stringify(f.root)}\n- id: credentials\n  config:\n    path: ${JSON.stringify(f.credentials)}\n`)
+  const before = await snapshot(f.root)
+  for (const [overrides, code] of [[{ attachmentsHome: decoy }, 'RESET_ATTACHMENT_PROVIDER_UNSUPPORTED'], [{ credentials: join(decoy, '.credentials.yaml') }, 'RESET_CREDENTIAL_PROVIDER_UNSUPPORTED']]) {
+    for (const confirm of [undefined, RESET_CONFIRMATION]) {
+      await assert.rejects(resetFederation({ ...f.options, ...overrides, confirm }), { code, target: f.profile })
+      assert.deepEqual(await snapshot(f.root), before)
+    }
+  }
+})

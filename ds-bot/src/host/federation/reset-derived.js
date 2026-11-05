@@ -54,9 +54,11 @@ export async function planFederationDerived({ storageRoot, remoteSessionIds, rem
       || !keys(doc.tables, ['workspaces']) || !plain(doc.tables.workspaces)) fail(workspacePath)
     const state = doc.global === null ? workspaceDomainSpec.global.initial : validate(workspaceDomainState.strict(), doc.global, workspacePath)
     if (state.pendingMutation) fail(workspacePath)
+    // The default identity outlives its deleted registration (public workspace lifecycle).
+    // Only registry order, not that initialization marker, must name current records.
     const records = Object.entries(doc.tables.workspaces)
     if (new Set(state.workspaceIds).size !== state.workspaceIds.length || records.some(([id]) => !/^[A-Za-z0-9_-]+$/.test(id) || !state.workspaceIds.includes(id))
-      || state.workspaceIds.some(id => !Object.hasOwn(doc.tables.workspaces, id) && !pendingIds.has(id)) || state.defaultWorkspaceId && !Object.hasOwn(doc.tables.workspaces, state.defaultWorkspaceId) && !pendingIds.has(state.defaultWorkspaceId)) fail(workspacePath)
+      || state.workspaceIds.some(id => !Object.hasOwn(doc.tables.workspaces, id) && !pendingIds.has(id))) fail(workspacePath)
     for (const [id, raw] of records) {
       const row = validate(workspaceRecord.strict(), raw, workspacePath)
       const deletedWitness = pendingWorkspaceDeletes.find(witness => witness.id === id)

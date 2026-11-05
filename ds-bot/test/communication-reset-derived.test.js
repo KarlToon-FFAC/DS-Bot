@@ -126,3 +126,51 @@ test('orphan remote-looking cache or workspace records cannot be silently retain
   await assert.rejects(planFederationDerived(f.options), { code: 'RESET_DERIVED_OWNERSHIP_UNPROVEN', target: f.workspacePath })
   assert.equal(await readFile(f.workspacePath, 'utf8'), changed)
 })
+
+test('an ordinary deleted default registration retains its initialization identity during remote cleanup and retry', async t => {
+  const f = await fixture(t)
+  f.workspace.global.defaultWorkspaceId = 'formerly-registered-ordinary-default'
+  await writeFile(f.workspacePath, JSON.stringify(f.workspace))
+  const plan = await planFederationDerived(f.options)
+  assert.deepEqual(plan.workspaceDeletes, ['remote-workspace'])
+  await applyFederationDerived(plan)
+  const after = JSON.parse(await readFile(f.workspacePath, 'utf8'))
+  assert.equal(after.global.defaultWorkspaceId, 'formerly-registered-ordinary-default')
+  assert.equal(after.global.initialized, true)
+  assert.deepEqual(after.global.workspaceIds, ['local-workspace'])
+  const beforeRetry = await readFile(f.workspacePath, 'utf8')
+  const retry = await planFederationDerived(f.options)
+  assert.equal(retry.globalUpdate, false)
+  await applyFederationDerived(retry)
+  assert.equal(await readFile(f.workspacePath, 'utf8'), beforeRetry)
+})
+
+test('only an exact remote deletion witness clears an orphan default identity', async t => {
+  const f = await fixture(t), remotePath = f.workspace.tables.workspaces['remote-workspace'].path
+  delete f.workspace.tables.workspaces['remote-workspace']
+  f.workspace.global.workspaceIds = ['local-workspace']
+  await writeFile(f.workspacePath, JSON.stringify(f.workspace))
+  // Its name alone proves nothing: a registration may legitimately have been deleted.
+  const unproven = await planFederationDerived(f.options)
+  assert.deepEqual(unproven.workspaceDeletes, [])
+  const proven = await planFederationDerived({ ...f.options, pendingWorkspaceDeletes: [{ id: 'remote-workspace', path: remotePath }] })
+  assert.deepEqual(proven.workspaceDeletes, ['remote-workspace'])
+  await applyFederationDerived(proven)
+  const after = JSON.parse(await readFile(f.workspacePath, 'utf8'))
+  assert.equal(after.global.defaultWorkspaceId, undefined)
+  assert.equal(after.global.initialized, true)
+  assert.deepEqual(after.global.workspaceIds, ['local-workspace'])
+})
+
+test('a valid orphan default identity does not excuse workspace order drift', async t => {
+  const f = await fixture(t)
+  f.workspace.global.defaultWorkspaceId = 'old-default'
+  f.workspace.global.workspaceIds.push('unproven-missing-registration')
+  const missing = JSON.stringify(f.workspace); await writeFile(f.workspacePath, missing)
+  await assert.rejects(planFederationDerived(f.options), { code: 'RESET_DERIVED_PROVIDER_UNSUPPORTED', target: f.workspacePath })
+  assert.equal(await readFile(f.workspacePath, 'utf8'), missing)
+  f.workspace.global.workspaceIds = ['remote-workspace']
+  const unordered = JSON.stringify(f.workspace); await writeFile(f.workspacePath, unordered)
+  await assert.rejects(planFederationDerived(f.options), { code: 'RESET_DERIVED_PROVIDER_UNSUPPORTED', target: f.workspacePath })
+  assert.equal(await readFile(f.workspacePath, 'utf8'), unordered)
+})

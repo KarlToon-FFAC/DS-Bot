@@ -92,13 +92,31 @@ function stripProfile(doc, envNames, path) {
 function validateProviderConfiguration(doc, path, options) {
   const unsupported = code => fail(code, path)
   const literal = node => node && !node.tag ? node.value : undefined
+  const absoluteLiteral = (node, code) => {
+    const value = literal(node)
+    if (typeof value !== 'string' || !isAbsolute(value) || resolve(value) !== value) unsupported(code)
+    return value
+  }
   const visit = node => {
     if (isSeq(node)) { for (const row of node.items) visit(row); return }
     if (!isMap(node)) return
     const id = node.get('id'), name = node.get('name'), config = node.get('config', true)
     if (name === 'cordis:include') unsupported('RESET_PROFILE_INCLUDE_UNSUPPORTED')
+    const attachment = id === 'attachment-local' || name === '@deepseek-ai/dsh-attachment-local'
+    const credentials = ['credentials', 'credentials-local'].includes(id) || name === '@deepseek-ai/dsh-credentials-local'
+    for (const [selected, expected, code] of [[attachment, '@deepseek-ai/dsh-attachment-local', 'RESET_ATTACHMENT_PROVIDER_UNSUPPORTED'], [credentials, '@deepseek-ai/dsh-credentials-local', 'RESET_CREDENTIAL_PROVIDER_UNSUPPORTED']]) {
+      if (selected && (name !== undefined && name !== expected || config !== undefined && !isMap(config))) unsupported(code)
+    }
+    if (typeof name === 'string' && name.startsWith('@deepseek-ai/dsh-attachment-') && name !== '@deepseek-ai/dsh-attachment-local') unsupported('RESET_ATTACHMENT_PROVIDER_UNSUPPORTED')
+    if (typeof name === 'string' && name.startsWith('@deepseek-ai/dsh-credentials-') && name !== '@deepseek-ai/dsh-credentials-local') unsupported('RESET_CREDENTIAL_PROVIDER_UNSUPPORTED')
     if (isMap(config)) {
       const selected = (short, packageName = short) => id === short || name === '@deepseek-ai/dsh-' + packageName
+      if (attachment && config.has('dshHome') && absoluteLiteral(config.get('dshHome', true), 'RESET_ATTACHMENT_PROVIDER_UNSUPPORTED') !== options.attachmentsHome) unsupported('RESET_ATTACHMENT_PROVIDER_UNSUPPORTED')
+      if (credentials) {
+        const dshHome = config.has('dshHome') ? absoluteLiteral(config.get('dshHome', true), 'RESET_CREDENTIAL_PROVIDER_UNSUPPORTED') : undefined
+        const path = config.has('path') ? absoluteLiteral(config.get('path', true), 'RESET_CREDENTIAL_PROVIDER_UNSUPPORTED') : dshHome && join(dshHome, '.credentials.yaml')
+        if (path !== undefined && path !== options.credentials) unsupported('RESET_CREDENTIAL_PROVIDER_UNSUPPORTED')
+      }
       if (selected('session-query-sqlite') && config.has('path') && literal(config.get('path', true)) !== ':memory:') unsupported('RESET_DERIVED_QUERY_INDEX_UNSUPPORTED')
       if (selected('storage-json') && config.has('root') && literal(config.get('root', true)) !== options.storageRoot) unsupported('RESET_DERIVED_PROVIDER_UNSUPPORTED')
       if (selected('storage-domain')) {
@@ -304,12 +322,16 @@ async function validateTree(path) {
 async function resetTemporaryFiles(options, plan) {
   const marker = join(options.home, markerName), epoch = join(options.home, epochName)
   const targets = [...new Set([...options.profiles, options.credentials, marker, epoch])], result = []
+  const protectedPaths = new Set([...targets, options.home, options.sessions, options.attachmentsHome, options.storageRoot, join(options.home, 'state.json'), join(options.home, 'state.lock')])
   const manifestKeys = new Set(['version', 'home', 'options', 'files', 'trees', 'derivedWorkspaceDeletes', 'remoteSessionIds', 'sessionWitnesses', 'envNames', 'attachmentPlan'])
   for (const target of targets) {
+    if (!(await checkedPath(dirname(target), 'directory', true))) continue
     for (const name of await readdir(dirname(target))) {
       const prefix = basename(target) + '.reset-'
       if (!name.startsWith(prefix) || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(name.slice(prefix.length))) continue
-      const path = join(dirname(target), name), stat = await checkedPath(path, 'file'), text = await readFile(path, 'utf8')
+      const path = join(dirname(target), name)
+      if (protectedPaths.has(path)) fail('RESET_PROTECTED_PATH_OVERLAP', path)
+      const stat = await checkedPath(path, 'file'), text = await readFile(path, 'utf8')
       let owned = false
       if (target === marker) {
         try {
