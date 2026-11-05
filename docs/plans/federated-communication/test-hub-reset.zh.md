@@ -104,7 +104,9 @@ node ds-bot/bin/dsbot-reset.mjs --home "$PLUGIN_HOME" --profile "$PROFILE" --cre
 
 执行成功应返回 `erased:true`、`dryRun:false`；`clearLaunchEnvironment` 是还需移除的旧通信变量名。重跑同样的 dry-run，核对 `configurationFiles`、`pairingRecords`、`queueFiles`、`remoteDirectories` 均为 0。`browserCleanupPending:true` 提醒浏览器仍需刷新，不代表所有浏览器已处理。中断后的 `communication-reset.pending.json` 会阻止 Host 恢复旧工作；保持停机，纠正错误后用相同参数和确认词重跑，不手删标记。活动进程、路径/链接异常、格式不支持、Session 归属无法证实时必须停下核对；不要用 `rm -rf bot`、`sessions`、DSH_HOME、用户自己的 `~/.dsh` 或全新数据根替代。命令只认识显式指定的本地 provider，外置文件和其他机器副本须分别处理。
 
-**普通本地 Bot 身份、配置、普通本地聊天/群/记忆、模型凭据、团队工作区保留。** 曾主动复制到普通 Bot 记忆、普通聊天、下载/导出、备份、日志或其他设备的远程内容不能在保留普通数据的同时保证自动识别删除。本文是应用层逻辑删除，不承诺介质级安全擦除。
+**普通本地 Bot 身份、配置、普通本地聊天/群/记忆、模型凭据、团队工作区保留。** 另有一个不能误删的共享存储：已注入模型的联邦图片/文件可能存在 DSH 的共享附件库中，普通聊天与联邦聊天会按相同字节去重。默认本地附件 provider 在其实际 `dshHome/attachments/v1` 存对象、在 `dshHome/cache/attachments/request-images` 存图片请求缓存；此 `dshHome` 也可能被独立配置。上述重置命令不做全库引用分析，**不会删除这些共享附件对象/缓存，不能声称所有远程文件字节已物理擦除**。不要清整个 `attachments` 来代替，否则可能破坏普通聊天。若另需只删联邦独占附件，应先分析所有保留 Session 的附件引用并核实 provider 路径，无法证明独占时先保留并报告。
+
+曾主动复制到普通 Bot 记忆、普通聊天、下载/导出、备份、日志或其他设备的远程内容也不能在保留普通数据的同时保证自动识别删除。本文清除联邦身份、应用状态和专用日志以便从零配对，不承诺介质级安全擦除或删除共享对象中的每个字节。
 
 ## 4. Hub：删旧库并清空旧静态授权
 
