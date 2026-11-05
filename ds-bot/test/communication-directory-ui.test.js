@@ -8,7 +8,7 @@ import { build } from 'esbuild'
 
 const harness = createRequire(join(process.env.DSH_HARNESS, 'package.json'))
 const { JSDOM } = harness('jsdom'), React = harness('react'), { act } = React
-const { outputFiles } = await build({ stdin: { contents: "export * from './communication-profile.js'; export * from './communication-onboarding.js'; export * from './communication-list.js'; export { BotMark } from './mark.js'", resolveDir: fileURLToPath(new URL('../src/client/', import.meta.url)), loader: 'js' },
+const { outputFiles } = await build({ stdin: { contents: "export * from './communication-contacts.js'; export * from './communication-profile.js'; export * from './communication-onboarding.js'; export * from './communication-list.js'; export { BotMark } from './mark.js'", resolveDir: fileURLToPath(new URL('../src/client/', import.meta.url)), loader: 'js' },
   bundle: true, platform: 'browser', format: 'cjs', external: ['react', 'react-dom', '@deepseek-ai/dsh-client-ui-primitives'], write: false })
 
 async function ui(check) {
@@ -250,5 +250,95 @@ test('Hub approval is checked explicitly and invalidated code review cannot subm
     await act(async () => resolveDecode(hub))
     assert.equal([...doc.querySelectorAll('button')].some(node => node.textContent === 'Confirm and request access'), false)
     assert.equal(calls.some(call => call.endpoint === 'join-hub'), false)
+  })
+})
+
+
+test('contact directory keeps stable Human/Bot ownership behind one IP and separates each side of sharing', async () => {
+  await ui(async ({ exports: api, doc, render, edit }) => {
+    const contacts = [
+      { principalId: 'human:local:owner', kind: 'human', displayName: 'Me', homeInstanceId: 'local' },
+      { principalId: 'bot:local:mine', kind: 'bot', displayName: 'My Bot', homeInstanceId: 'local' },
+      { principalId: 'human:a:owner', kind: 'human', displayName: 'Same name', homeInstanceId: 'a', instanceLabel: 'Office A', ipAddress: '192.0.2.1' },
+      { principalId: 'bot:a:one', kind: 'bot', displayName: 'Chief', homeInstanceId: 'a', instanceLabel: 'Office A' },
+      { principalId: 'human:b:owner', kind: 'human', displayName: 'Same name', homeInstanceId: 'b', instanceLabel: 'Office B', ipAddress: '192.0.2.1' },
+      { principalId: 'bot:b:one', kind: 'bot', displayName: 'Chief', homeInstanceId: 'b', instanceLabel: 'Office B' },
+    ]
+    const relations = [{ otherHumanPrincipalId: 'human:a:owner', active: true, botPrincipalIds: ['bot:local:mine'], version: 7 }], sent = []
+    const directory = api.contactDirectory(contacts, relations, 'human:local:owner')
+    assert.deepEqual([...directory.people].map(item => [item.person.principalId, ...item.bots.map(bot => bot.principalId)]), [
+      ['human:a:owner', 'bot:a:one'], ['human:b:owner', 'bot:b:one'],
+    ])
+    await render(React.createElement(api.ContactDirectory, { contacts, relations, humanPrincipalId: 'human:local:owner', instanceId: 'local', request: async () => ({}), onMessage: id => sent.push(id) }))
+    const card = doc.querySelector('[data-contact-id="human:a:owner"]')
+    assert.match(card.textContent, /Office A/)
+    assert.doesNotMatch(card.querySelector('.bt-comm-contact-bots').textContent, /My Bot|Office B/)
+    assert.match(card.querySelector('dl').textContent, /Bots you share with this contactMy Bot/)
+    assert.equal(doc.querySelector('[data-contact-id="human:local:owner"]'), null)
+    await act(async () => card.querySelector('[data-principal-id="bot:a:one"] button').click())
+    assert.deepEqual(sent, ['bot:a:one'])
+    await edit('Find a contact or Bot', 'Office B')
+    assert.equal(doc.querySelectorAll('[data-contact-id]').length, 1)
+    assert.equal(doc.querySelector('[data-contact-id]').dataset.contactId, 'human:b:owner')
+    await edit('Find a contact or Bot', 'No such person')
+    assert.match(doc.querySelector('[role=status]').textContent, /No matching contacts or Bots/)
+    assert.equal(sent.length, 1, 'filtering never creates a conversation')
+  })
+})
+
+test('management defaults to contacts while requests, add forms and publication are separate disclosures', async () => {
+  await ui(async ({ exports: api, doc, render }) => {
+    const calls = [], contacts = [{ principalId: 'human:a:owner', kind: 'human', displayName: 'Alice', homeInstanceId: 'a' }]
+    const request = async body => { calls.push(body.endpoint); return body.endpoint === 'user-code' ? { userCode: 'MY-CODE' } : body.endpoint === 'available-bots' ? { bots: [], publishedBotIds: [] } : body.endpoint === 'contact-requests' ? [{ requestId: 'pending', status: 'pending', direction: 'incoming', senderName: 'Visitor', version: 1 }] : [] }
+    await render(React.createElement(api.ContactManager, { contacts, request, operation: async () => assert.fail('opening is read-only') }))
+    assert.ok(doc.querySelector('[data-contact-id="human:a:owner"]'))
+    const sections = [...doc.querySelectorAll('.bt-comm-contact-section')]
+    assert.equal(sections.length, 3)
+    assert.ok(sections.every(section => !section.open))
+    const pending = sections.find(section => section.querySelector('summary').textContent.startsWith('Contact requests'))
+    assert.equal(pending.querySelector('.bt-comm-count').textContent, '1')
+    await act(async () => pending.querySelector('summary').click())
+    assert.equal(pending.open, true)
+    assert.equal(sections[0].open, false)
+    assert.equal(calls.length, 4)
+  })
+})
+
+test('a contact version conflict reloads terminal requests and relations without replaying the mutation', async () => {
+  await ui(async ({ exports: api, doc, render, click }) => {
+    let resolved = false, reads = 0
+    const mutations = [], request = async body => {
+      reads++
+      if (body.endpoint === 'user-code') return { userCode: 'MY-CODE' }
+      if (body.endpoint === 'available-bots') return { bots: [], publishedBotIds: [] }
+      if (body.endpoint === 'contact-relations') return resolved ? [{ otherHumanPrincipalId: 'human:a:owner', active: true, botPrincipalIds: [], version: 2 }] : []
+      return [{ requestId: 'incoming', direction: 'incoming', senderName: 'Alice', senderPrincipalId: 'human:a:owner', version: resolved ? 2 : 1, status: resolved ? 'accepted' : 'pending' }]
+    }
+    const operation = async (endpoint, body) => { mutations.push({ endpoint, ...body }); resolved = true; throw Object.assign(new Error('conflict'), { code: 'CONTACT_VERSION_CONFLICT' }) }
+    await render(React.createElement(api.ContactManager, { request, operation, contacts: [] }))
+    await click('Accept contact')
+    assert.equal(mutations.length, 1)
+    assert.equal(reads, 8, 'one complete read refresh after the conflict')
+    assert.equal([...doc.querySelectorAll('button')].some(button => button.textContent === 'Accept contact'), false)
+    assert.match(doc.querySelector('.bt-comm-contact-section:nth-of-type(2)').textContent, /accepted/)
+    assert.ok(doc.querySelector('[data-contact-id="human:a:owner"]'))
+    assert.ok(doc.querySelector('[role=alert]'))
+  })
+})
+
+
+test('legacy multi-Human devices follow binary principal ordering and never assign bots by matching labels', async () => {
+  await ui(async ({ exports: api }) => {
+    const people = [
+      { principalId: 'human:legacy:a', kind: 'human', displayName: 'Same', homeInstanceId: 'legacy' },
+      { principalId: 'human:legacy:B', kind: 'human', displayName: 'Same', homeInstanceId: 'legacy' },
+      { principalId: 'bot:legacy:one', kind: 'bot', displayName: 'Same', homeInstanceId: 'legacy' },
+      { principalId: 'bot:unknown:one', kind: 'bot', displayName: 'Same', homeInstanceId: 'unknown' },
+    ]
+    const result = api.contactDirectory(people, [])
+    assert.equal(result.people[0].person.principalId, 'human:legacy:B')
+    assert.equal(result.people[0].bots[0].principalId, 'bot:legacy:one')
+    assert.equal(result.people[1].bots.length, 0)
+    assert.equal(result.otherBots[0].principalId, 'bot:unknown:one')
   })
 })

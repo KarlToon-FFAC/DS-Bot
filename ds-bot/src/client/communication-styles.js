@@ -276,7 +276,7 @@ export const communicationCSS = `
 .bt-comm-thread-popover{position:fixed;width:min(520px,calc(100vw - 16px));height:min(560px,calc(100dvh - 16px));max-height:calc(100dvh - 16px);padding:16px;display:flex;flex-direction:column;gap:8px;box-shadow:0 8px 32px color-mix(in srgb,var(--bt-ink) 16%,transparent)}
 .bt-comm-thread-popover>.bt-comm-thread-close{position:absolute;right:8px;top:8px;width:28px;height:28px;min-height:28px;padding:6px;margin:0;border:0;background:transparent;display:grid;place-items:center}
 .bt-comm-thread-close svg{width:16px;height:16px}
-.bt-comm-thread-popover>h2{padding-right:32px;flex-shrink:0}
+.bt-comm-thread-popover>.bt-comm-thread-heading{padding-right:32px;flex-shrink:0}
 .bt-comm-thread-popover>.bt-comm-thread{overflow:auto;min-height:80px;flex:1}
 .bt-comm-thread-composer{position:relative;border-top:1px solid var(--bt-line);padding-top:8px;flex-shrink:0}
 .bt-comm-thread-composer textarea{resize:vertical;max-height:160px;padding-right:44px}
@@ -301,5 +301,45 @@ export const communicationCSS = `
  .bt-comm-main>footer{width:calc(100% - 24px)}
  .bt-comm-message-actions button{opacity:1}
  .bt-comm-log article[data-self=true]{max-width:94%}
+}
+
+.bt-comm-modal-head{position:sticky;top:-24px;z-index:3;display:flex;align-items:center;justify-content:space-between;gap:12px;margin:-24px -24px 16px;padding:16px 24px;border-bottom:1px solid var(--bt-line);background:var(--bt-card)}
+.bt-comm-modal-head h2{min-width:0;overflow-wrap:anywhere}
+.bt-comm-modal-actions{display:flex;align-items:center;gap:6px;flex:none}
+.bt-comm-frame .bt-comm-modal-actions>button{display:inline-flex;align-items:center;gap:4px;margin:0;min-height:32px;padding:6px 8px}
+.bt-comm-modal-actions svg{width:16px;height:16px}
+.bt-comm-contacts-modal{width:min(680px,100%)}
+.bt-comm-directory-heading{display:flex;align-items:center;gap:8px}
+.bt-comm-count{display:inline-flex;align-items:center;justify-content:center;min-width:20px;padding:2px 6px;border-radius:999px;background:var(--bt-tag-bg);color:var(--bt-tag-ink);font-size:11px;line-height:16px;font-variant-numeric:tabular-nums}
+.bt-comm-contact-card{min-width:0;margin:12px 0;padding:12px;border:1px solid var(--bt-line);border-radius:12px;background:var(--bt-main)}
+.bt-comm-contact-card-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.bt-comm-directory-person{display:inline-flex;align-items:center;gap:8px;min-width:0;overflow-wrap:anywhere}
+.bt-comm-directory-person>.bt-comm-avatar{margin:0;flex:none}
+.bt-comm-directory-person>span:last-child{display:flex;flex-direction:column;gap:2px;min-width:0}
+.bt-comm-directory-person strong{font-size:13px;line-height:18px;font-weight:500}
+.bt-comm-directory-person small{font-size:11px;line-height:16px;color:var(--bt-ink-2)}
+.bt-comm-contact-card h4{font-size:12px;line-height:16px;font-weight:500;margin:16px 0 8px;color:var(--bt-ink-2)}
+.bt-comm-contact-bots{list-style:none;margin:0;padding:0}
+.bt-comm-contact-bots>li{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;min-width:0}
+.bt-comm-frame .bt-comm-contact-card button{margin:0;flex:none;font-size:12px;line-height:16px}
+.bt-comm-contact-info{margin-top:12px;padding-top:8px;border-top:1px solid var(--bt-line)}
+.bt-comm-contact-info summary{font-size:12px;line-height:16px;color:var(--bt-ink-2)}
+.bt-comm-contact-info dl{display:grid;grid-template-columns:minmax(80px,1fr) minmax(0,2fr);gap:8px;font-size:12px;line-height:16px}
+.bt-comm-contact-info dt{color:var(--bt-ink-2)}
+.bt-comm-contact-info dd{margin:0;overflow-wrap:anywhere}
+.bt-comm-bot-identities{list-style:none;padding:0;font-size:12px;line-height:16px;overflow-wrap:anywhere}
+.bt-comm-bot-identities li{margin:8px 0}
+.bt-comm-contact-section{margin-top:12px;padding:8px 0;border-top:1px solid var(--bt-line)}
+.bt-comm-contact-section>summary{padding:6px 0;min-height:32px;font-size:13px;line-height:18px;font-weight:500;cursor:pointer}
+.bt-comm-contact-section>summary .bt-comm-count{margin-left:8px}
+.bt-comm-contact-info>summary{min-height:28px;padding:6px 0;cursor:pointer}
+@media(max-width:600px){
+ .bt-comm-modal-backdrop{padding:12px}
+ .bt-comm-modal{padding:16px;max-height:calc(100dvh - 24px)}
+ .bt-comm-modal-head{top:-16px;margin:-16px -16px 12px;padding:12px 16px;gap:8px}
+ .bt-comm-modal-actions{gap:4px}
+ .bt-comm-contact-info dl{grid-template-columns:minmax(0,1fr)}
+ .bt-comm-contact-info dd{margin-bottom:4px}
+ .bt-comm-thread-popover{max-height:calc(100dvh - 16px)}
 }
 `

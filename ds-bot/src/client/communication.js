@@ -14,7 +14,7 @@ import { CommunicationActivity } from './communication-activity.js'
 import { CommunicationThread, ThreadReplyComposer } from './communication-thread.js'
 import { CommunicationMemory } from './communication-memory.js'
 import { CommunicationMessageActions } from './communication-message-actions.js'
-import { GearIcon, ArrowUpIcon, CloseIcon, InfoIcon, PeopleIcon, ChatsIcon, SearchIcon, PlusIcon, SidebarIcon } from './icons.js'
+import { GearIcon, ArrowUpIcon, CloseIcon, InfoIcon, PeopleIcon, ChatsIcon, SearchIcon, PlusIcon, SidebarIcon, ChevronLeftIcon } from './icons.js'
 import { communicationCSS } from './communication-styles.js'
 import { communicationFailure as friendly, operationOutcomeUncertain } from './communication-errors.js'
 
@@ -176,8 +176,10 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
   const pendingJump = useRef(null), referenceOrder = useRef(0), contextKey = useRef('')
   const [title, setTitle] = useState(''), [invitees, setInvitees] = useState([])
   const [completion, setCompletion] = useState(null), [completionIndex, setCompletionIndex] = useState(0), [composing, setComposing] = useState(false)
-  const chooser = useRef(null), chooserTrigger = useRef(null), previousPanel = useRef('')
-  const [browse, setBrowse] = useState(false), [activePanel, setActivePanel] = useState(''), [inspectedIds, setInspectedIds] = useState([])
+  const chooser = useRef(null), chooserTrigger = useRef(null), previousPanel = useRef(''), panelReturn = useRef('')
+  const [browse, setBrowse] = useState(false), [activePanel, setActivePanel] = useState(''), [panelBack, setPanelBack] = useState(''), [inspectedIds, setInspectedIds] = useState([])
+  const panelShown = useRef({ name: '', version: 0 })
+  if (panelShown.current.name !== activePanel) panelShown.current = { name: activePanel, version: panelShown.current.version + 1 }
   const [sidebarHidden, setSidebarHidden] = useState(() => read(SIDEBAR_HIDDEN, false)), [newMenuOpen, setNewMenuOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState(''), [searchCursor, setSearchCursor] = useState(0)
   const newMenu = useRef(null), newTrigger = useRef(null)
@@ -264,7 +266,9 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
   }, [shown, browse, selected, member?.speakingMode, activePanel, Boolean(completion)])
   useEffect(() => {
     if (!shown || !activePanel) return
-    const target=activePanel==='thread'?(chooser.current?.querySelector('textarea')??chooser.current?.querySelector('button')):chooser.current?.querySelector(['group','search'].includes(activePanel)?'input':'button')
+    const returning = panelReturn.current
+    panelReturn.current = ''
+    const target=(returning ? chooser.current?.querySelector(`[data-open-panel="${returning}"]`) : null) ?? (activePanel==='thread'?(chooser.current?.querySelector('textarea')??chooser.current?.querySelector('button')):chooser.current?.querySelector(['group','search'].includes(activePanel)?'input':'button'))
     target?.focus()
   }, [shown, activePanel])
   useEffect(() => {
@@ -394,7 +398,16 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
   const pendingForConversation = [...operationIds.current.keys()].some(item => { const [operationScope, , values] = JSON.parse(item); return operationScope === scope && (member ? values.conversationId === selected : !values.conversationId) })
   const remoteCount = contacts.filter(contact => contact.homeInstanceId !== state?.instanceId).length
   const inspect = ids => { const authorized = ids.filter(id => currentMembers.some(person => person.principalId === id)); if (authorized.length) { setInspectedIds(authorized); showPanel('participant') } }
-  const showPanel = name => { setNewMenuOpen(false); chooserTrigger.current = newMenuOpen ? newTrigger.current : document.activeElement; if (name === 'search') { setSearchQuery(''); setSearchCursor(0) }; setActivePanel(name) }
+  const showPanel = name => { setPanelBack(''); setNewMenuOpen(false); chooserTrigger.current = newMenuOpen ? newTrigger.current : document.activeElement; if (name === 'search') { setSearchQuery(''); setSearchCursor(0) }; setActivePanel(name) }
+  const messageContact = id => {
+    const context = contextKey.current, version = panelShown.current.version
+    void act(async () => {
+      const value = await operation('dm', { otherPrincipalId: id })
+      if (value.conversationId && context === contextKey.current && panelShown.current.name === 'manage-contacts' && version === panelShown.current.version) {
+        choose(value.conversationId); setActivePanel('')
+      }
+    })
+  }
   const collapseSidebar = value => { setSidebarHidden(value); save(SIDEBAR_HIDDEN, value) }
   const startMenu = () => { collapseSidebar(false); setBrowse(true); setNewMenuOpen(true) }
   const connectionBlocked = state?.error && !['CONNECTION_LOST','REQUEST_TIMEOUT','STORAGE_UNAVAILABLE','BACKPRESSURE','HISTORY_GAP'].includes(state.error)
@@ -434,6 +447,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
       h('div', { className: 'bt-comm-nav-heading' }, h('h2', {title:t('Remote communication')}, t('Remote communication')),
         h('div', { className:'bt-comm-nav-actions' },
           btn('Personal settings', () => showPanel('settings'), { className: 'bt-comm-settings-icon', 'aria-label': t('Personal settings'), title: t('Personal settings'), children: h(GearIcon) }),
+          btn('Contacts', () => showPanel('manage-contacts'), { className: 'bt-comm-settings-icon', 'aria-label': t('Contacts'), title: t('Contacts'), disabled: busy || !team.communicationEnabled, children: h(PeopleIcon) }),
           btn('Search',()=>showPanel('search'),{className:'bt-comm-settings-icon','aria-label':t('Search'),title:t('Search'),children:h(SearchIcon)}),
           h('div',{ref:newMenu,className:'bt-comm-new-menu',onKeyDown:event=>{
             if(!newMenuOpen||!['ArrowDown','ArrowUp','Home','End'].includes(event.key))return
@@ -464,9 +478,13 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
         btn('Restore retained ownership', () => { void act(() => operation('reclaim', { conversationId: item.conversationId, expectedVersion: item.membershipVersion })) }))),
       null),
     activePanel ? h('div', { className: `bt-comm-modal-backdrop${activePanel==='thread'?' bt-comm-thread-backdrop':''}`, onMouseDown: event => { if (event.target === event.currentTarget) { setActivePanel(''); chooserTrigger.current?.focus() } } },
-      h('section', { ref: chooser, className: `bt-comm-modal${activePanel==='thread'?' bt-comm-thread-popover':''}`,style:activePanel==='thread'?threadPosition:undefined, role: 'dialog', 'aria-modal': true, 'aria-label': t(activePanel === 'search' ? 'Search' : activePanel === 'settings' ? 'Personal settings' : activePanel === 'thread' ? 'Message replies' : activePanel === 'activity' ? 'Activity details' : activePanel === 'participant' ? 'Participant information' : activePanel === 'manage-contacts' ? 'Manage contacts' : activePanel === 'profile' ? 'Human profile' : activePanel === 'pairing' ? 'Pairing guide' : activePanel === 'group' ? 'New group' : 'New message') },
-        activePanel==='thread'?btn('Close replies',()=>{setActivePanel('');chooserTrigger.current?.focus()},{className:'bt-comm-thread-close','aria-label':t('Close replies'),title:t('Close replies'),children:h(CloseIcon)}):null,
-        h('h2', null, t(activePanel === 'search' ? 'Search' : activePanel === 'settings' ? 'Personal settings' : activePanel === 'thread' ? 'Message replies' : activePanel === 'activity' ? 'Activity details' : activePanel === 'participant' ? 'Participant information' : activePanel === 'manage-contacts' ? 'Manage contacts' : activePanel === 'profile' ? 'Human profile' : activePanel === 'pairing' ? 'Pairing guide' : activePanel === 'group' ? 'New group' : 'New message')),
+      h('section', { ref: chooser, className: `bt-comm-modal${activePanel==='thread'?' bt-comm-thread-popover':''}${activePanel==='manage-contacts'?' bt-comm-contacts-modal':''}`,style:activePanel==='thread'?threadPosition:undefined, role: 'dialog', 'aria-modal': true, 'aria-label': t(activePanel === 'search' ? 'Search' : activePanel === 'settings' ? 'Personal settings' : activePanel === 'thread' ? 'Message replies' : activePanel === 'activity' ? 'Activity details' : activePanel === 'participant' ? 'Participant information' : activePanel === 'manage-contacts' ? 'Manage contacts' : activePanel === 'profile' ? 'Human profile' : activePanel === 'pairing' ? 'Pairing guide' : activePanel === 'group' ? 'New group' : 'New message') },
+        activePanel==='thread'?h('button',{type:'button',onClick:()=>{setActivePanel('');chooserTrigger.current?.focus()},className:'bt-comm-thread-close','aria-label':t('Close replies'),title:t('Close replies')},h(CloseIcon)):null,
+        h('div', { className: activePanel === 'thread' ? 'bt-comm-thread-heading' : 'bt-comm-modal-head' },
+          h('h2', null, t(activePanel === 'search' ? 'Search' : activePanel === 'settings' ? 'Personal settings' : activePanel === 'thread' ? 'Message replies' : activePanel === 'activity' ? 'Activity details' : activePanel === 'participant' ? 'Participant information' : activePanel === 'manage-contacts' ? 'Manage contacts' : activePanel === 'profile' ? 'Human profile' : activePanel === 'pairing' ? 'Pairing guide' : activePanel === 'group' ? 'New group' : 'New message')),
+          activePanel !== 'thread' ? h('div', { className: 'bt-comm-modal-actions' },
+            panelBack ? h('button', { type: 'button', 'aria-label': t('Back to settings'), onClick: () => { panelReturn.current = activePanel; setActivePanel(panelBack); setPanelBack('') } }, h(ChevronLeftIcon), t('Back')) : null,
+            h('button', { type: 'button', 'aria-label': t('Close dialog'), onClick: () => { setActivePanel(''); setPanelBack(''); chooserTrigger.current?.focus() } }, h(CloseIcon), t('Close'))) : null),
         activePanel === 'search' ? h('div',{className:'bt-comm-search'},
           h('label',{className:'bt-comm-field'},t('Search conversations and contacts'),h('input',{value:searchQuery,role:'combobox','aria-label':t('Search conversations and contacts'),'aria-autocomplete':'list','aria-expanded':true,'aria-controls':'bt-comm-search-results','aria-activedescendant':searchResults.length?`bt-comm-search-${searchIndex}`:undefined,onChange:event=>{setSearchQuery(event.target.value);setSearchCursor(0)},onKeyDown:event=>{
             if(event.nativeEvent.isComposing)return
@@ -479,11 +497,11 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
           state ? h('section', null, h('h3', null, t('Your profile')), h(HumanProfile, { key: `${scope}:${state.humanPrincipalId}`, human: contacts.find(person => person.principalId === state.humanPrincipalId) ?? { principalId: state.humanPrincipalId, displayName: t('You'), kind: 'human' }, request, operation }),
             h('details', null, h('summary', null, t('Device identity')), h('p', null, state.instanceId), h('code', null, state.humanPrincipalId))) : null,
           h(CommunicationMemory, { key: scope, request }),
-          h('section', null, h('h3', null, t('Connection and contacts')), btn('Add a device', () => setActivePanel('pairing')),
-            btn('Manage contacts', () => setActivePanel('manage-contacts'), { disabled: !team.communicationEnabled }))) : activePanel === 'thread' ? member && threadMessageId ? h(Fragment,null,h(CommunicationThread, { key: `view:${contextKey.current}:${threadMessageId}`, member, messageId: threadMessageId, request, canSpeak, onInspect: inspect,
+          h('section', null, h('h3', null, t('Connection and contacts')), btn('Add a device', () => { setPanelBack('settings'); setActivePanel('pairing') }, { 'data-open-panel': 'pairing' }),
+            btn('Manage contacts', () => { setPanelBack('settings'); setActivePanel('manage-contacts') }, { disabled: !team.communicationEnabled, 'data-open-panel': 'manage-contacts' }))) : activePanel === 'thread' ? member && threadMessageId ? h(Fragment,null,h(CommunicationThread, { key: `view:${contextKey.current}:${threadMessageId}`, member, messageId: threadMessageId, request, canSpeak, onInspect: inspect,
           selectedBranch:true,onReply:setThreadReplyTarget }),canSpeak?h(ThreadReplyComposer,{key:`composer:${contextKey.current}:${threadMessageId}`,storageKey:`ds-bot:communication:thread:${contextKey.current}:${threadMessageId}`,member,target:threadReplyTarget,request,onSent:refresh,attachmentsAvailable:state.attachmentsAvailable}):null) : null : activePanel === 'activity' ? h(CommunicationActivity, { state, member, events, outbox: activityOutbox, operations, operationPending: pendingForConversation, pendingAttempt: attempts[key], error, pollError: pollError || (syncError?.conversationId === selected ? syncError.message : ''), friendly, labels, busy,
           onRefresh: () => { void act(refresh) }, onRetry: () => { setActivePanel(''); void send() }, copyDisabled: Boolean(draft.text) || Boolean(attempts[key]) || !member,
-          onCopy: item => { if (draft.text || attempts[key] || !member) return; changeDraft({ text: item.text, mentions: [], manualMentions: [] }); setActivePanel(''); input.current?.focus() } }) : activePanel === 'participant' ? h('div', { className: 'bt-comm-participant-information' }, currentMembers.filter(person => inspectedIds.includes(person.principalId)).map(person => h('section', { key: person.principalId }, personLabel(person), h('p', null, t(roleLabel(person.role ?? 'member'))), h('code', null, person.principalId)))) : activePanel === 'manage-contacts' ? h(ContactManager, { request, operation, contacts }) : activePanel === 'profile' ? h(HumanProfile, { key: scope, human: contacts.find(person => person.principalId === state?.humanPrincipalId) ?? { principalId: state?.humanPrincipalId ?? 'human:local', displayName: t('You'), kind: 'human' }, request, operation }) : activePanel === 'pairing' ? h(AddDevice, { request, displayName: contacts.find(person => person.principalId === state?.humanPrincipalId)?.displayName ?? t('You'), manualGuide: h(PairingGuide, { connectionLabel }) }) : h(Fragment, null,
+          onCopy: item => { if (draft.text || attempts[key] || !member) return; changeDraft({ text: item.text, mentions: [], manualMentions: [] }); setActivePanel(''); input.current?.focus() } }) : activePanel === 'participant' ? h('div', { className: 'bt-comm-participant-information' }, currentMembers.filter(person => inspectedIds.includes(person.principalId)).map(person => h('section', { key: person.principalId }, personLabel(person), h('p', null, t(roleLabel(person.role ?? 'member'))), h('code', null, person.principalId)))) : activePanel === 'manage-contacts' ? h(ContactManager, { key: scope, request, operation, contacts, humanPrincipalId: state?.humanPrincipalId, instanceId: state?.instanceId, onMessage: messageContact, messageBusy: busy }) : activePanel === 'profile' ? h(HumanProfile, { key: scope, human: contacts.find(person => person.principalId === state?.humanPrincipalId) ?? { principalId: state?.humanPrincipalId ?? 'human:local', displayName: t('You'), kind: 'human' }, request, operation }) : activePanel === 'pairing' ? h(AddDevice, { request, displayName: contacts.find(person => person.principalId === state?.humanPrincipalId)?.displayName ?? t('You'), manualGuide: h(PairingGuide, { connectionLabel }) }) : h(Fragment, null,
         activePanel === 'group' ? h('label', { className: 'bt-comm-field' }, t('Group name'), h('input', { value: title, onChange: event => setTitle(event.target.value), 'aria-label': t('Group name') })) : null,
         groupedContacts(contact => activePanel === 'group' ? h('label', { key: contact.principalId, className: 'bt-comm-check' },
           h('input', { type: 'checkbox', checked: invitees.includes(contact.principalId), onChange: event => setInvitees(current => event.target.checked ? [...current, contact.principalId] : current.filter(id => id !== contact.principalId)) }), personLabel(contact)) :

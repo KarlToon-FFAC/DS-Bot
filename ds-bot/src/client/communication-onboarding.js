@@ -1,5 +1,6 @@
 import { createElement as h, Fragment, useEffect, useRef, useState } from 'react'
 import { CommunicationAvatar } from './communication-profile.js'
+import { ContactDirectory } from './communication-contacts.js'
 import { BotMark } from './mark.js'
 import { t } from './i18n.js'
 import { communicationFailure, knownCommunicationFailure } from './communication-errors.js'
@@ -175,7 +176,7 @@ function BotChoices({ bots, selected, onChange, label }) {
     h(BotMark, { bot, size: 24 }), bot.name, h('span', { className: 'bt-comm-reference' }, bot.id))) : h('p', { className: 'bt-comm-reference' }, t('No published Bots')))
 }
 
-export function ContactManager({ request, operation, contacts }) {
+export function ContactManager({ request, operation, contacts, humanPrincipalId, instanceId, onMessage, messageBusy }) {
   const [data, setData] = useState(null), [code, setCode] = useState(''), [userCode, setUserCode] = useState('')
   const [published, setPublished] = useState([]), [share, setShare] = useState([]), [incomingShares, setIncomingShares] = useState({})
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [confirm, setConfirm] = useState('')
@@ -199,21 +200,36 @@ export function ContactManager({ request, operation, contacts }) {
     const token = generation.current
     setBusy(true); setError('')
     try { await work(); if (token === generation.current) await load() }
-    catch (failure) { if (token === generation.current) setError(enrollmentFailure(failure)) }
+    catch (failure) {
+      if (token === generation.current) {
+        setError(enrollmentFailure(failure))
+        if (failure.code === 'CONTACT_VERSION_CONFLICT') {
+          try { await load() } catch { /* Keep the original conflict; never replay the mutation. */ }
+        }
+      }
+    }
     finally { if (token === generation.current) setBusy(false) }
   }
   const available = data?.available ?? { bots: [], publishedBotIds: [] }
   const sharedBots = available.bots.filter(bot => available.publishedBotIds.includes(bot.id))
-  const labelFor = id => contacts.find(person => person.principalId === id)?.displayName ?? id
+  const pending = (data?.requests ?? []).filter(item => item.status === 'pending').length
   return h('div', { className: 'bt-comm-contact-manager' },
     h('button', { type: 'button', disabled: busy, onClick: () => { void run(async () => {}) } }, t('Refresh status')),
+    error ? h('p', { className: 'bt-comm-error', role: 'alert' }, error) : null,
+    h(ContactDirectory, { contacts, relations: data?.relations ?? [], humanPrincipalId, instanceId, request, busy: busy || messageBusy, onMessage, confirm, onRemove: item => {
+      const id = item.otherHumanPrincipalId
+      if (confirm !== id) setConfirm(id)
+      else { setConfirm(''); void run(() => operation('revoke-contact', { otherHumanPrincipalId: id, expectedVersion: item.version })) }
+    } }),
+    h('details', { className: 'bt-comm-contact-section' }, h('summary', null, t('Add a contact')),
     h('h3', null, t('Your user code')), h('p', { className: 'bt-comm-user-code', tabIndex: 0 }, code || t('Loading…')),
     h('p', { className: 'bt-comm-reference' }, t('Share this code with the person you want to add. Both people choose which local Bots to share; none are selected by default.')),
     h('button', { type: 'button', disabled: busy || !code, onClick: () => { if (confirm !== 'rotate') setConfirm('rotate'); else { setConfirm(''); void run(() => operation('rotate-user-code', {})) } } }, t(confirm === 'rotate' ? 'Confirm code rotation' : 'Rotate user code')),
     h('label', { className: 'bt-comm-field' }, t('Other user code'), h('input', { value: userCode, maxLength: 64, 'aria-label': t('Other user code'), onChange: event => setUserCode(event.target.value) })),
     h(BotChoices, { bots: sharedBots, selected: share, onChange: setShare, label: 'Bots to share with this request' }),
     h('button', { type: 'button', disabled: busy || !userCode.trim(), onClick: () => { void run(async () => { await operation('request-contact', { userCode, localBotIds: share }); setUserCode(''); setShare([]) }) } }, t('Request contact')),
-    h('h3', null, t('Contact requests')),
+    ),
+    h('details', { className: 'bt-comm-contact-section' }, h('summary', null, t('Contact requests'), pending ? h('span', { className: 'bt-comm-count', 'aria-label': `${pending} ${t('pending')}` }, pending) : null),
     (data?.requests ?? []).map(item => h('section', { key: item.requestId, className: 'bt-comm-address' },
       h('p', { title: item.senderPrincipalId ?? item.requestId }, item.senderPrincipalId ? h(CommunicationAvatar, { person: contacts.find(person => person.principalId === item.senderPrincipalId) ?? { principalId: item.senderPrincipalId, displayName: item.senderName, kind: 'human' }, request, allowed: contacts.some(person => person.principalId === item.senderPrincipalId) }) : null, item.senderName ?? t('Outgoing request'), ' · ', statusLabel(item.status)),
       item.status === 'pending' && item.direction === 'incoming' ? h(Fragment, null,
@@ -221,12 +237,7 @@ export function ContactManager({ request, operation, contacts }) {
         h('button', { type: 'button', disabled: busy, onClick: () => { void run(() => operation('accept-contact', { requestId: item.requestId, expectedVersion: item.version, localBotIds: incomingShares[item.requestId] ?? [] })) } }, t('Accept contact')),
         h('button', { type: 'button', disabled: busy, onClick: () => { void run(() => operation('reject-contact', { requestId: item.requestId, expectedVersion: item.version })) } }, t('Reject contact'))) :
         item.status === 'pending' ? h('button', { type: 'button', disabled: busy, onClick: () => { void run(() => operation('cancel-contact', { requestId: item.requestId, expectedVersion: item.version })) } }, t('Cancel request')) : null)),
-    h('h3', null, t('Connected contacts')),
-    (data?.relations ?? []).filter(item => item.active).map(item => h('section', { key: item.otherHumanPrincipalId, className: 'bt-comm-address' }, h('p', { title: item.otherHumanPrincipalId }, h(CommunicationAvatar, { person: contacts.find(person => person.principalId === item.otherHumanPrincipalId) ?? { principalId: item.otherHumanPrincipalId, displayName: labelFor(item.otherHumanPrincipalId), kind: 'human' }, request, allowed: contacts.some(person => person.principalId === item.otherHumanPrincipalId) }), labelFor(item.otherHumanPrincipalId)),
-      h('p', { className: 'bt-comm-reference' }, t('Shared Bots'), ': ', item.botPrincipalIds.map(labelFor).join(', ') || t('None')),
-      h('button', { type: 'button', disabled: busy, onClick: () => { const id = item.otherHumanPrincipalId; if (confirm !== id) setConfirm(id); else { setConfirm(''); void run(() => operation('revoke-contact', { otherHumanPrincipalId: id, expectedVersion: item.version })) } } }, t(confirm === item.otherHumanPrincipalId ? 'Confirm contact removal' : 'Remove contact')))),
-    h('details', null, h('summary', null, t('Published Bots')), h(BotChoices, { bots: available.bots, selected: published, onChange: setPublished, label: 'Bots available to contacts' }),
-      h('button', { type: 'button', disabled: busy || JSON.stringify([...published].sort()) === JSON.stringify([...available.publishedBotIds].sort()), 'data-dirty': JSON.stringify([...published].sort()) !== JSON.stringify([...available.publishedBotIds].sort()), onClick: () => { void run(() => operation('publish-bots', { localBotIds: published })) } }, t('Save published Bots'))),
-    h('button', { type: 'button', disabled: busy, onClick: () => { void run(async () => {}) } }, t('Refresh contacts')),
-    error ? h('p', { className: 'bt-comm-error', role: 'alert' }, error) : null)
+    !(data?.requests ?? []).length ? h('p', { className: 'bt-comm-reference' }, t('No contact requests')) : null),
+    h('details', { className: 'bt-comm-contact-section' }, h('summary', null, t('Published Bots')), h(BotChoices, { bots: available.bots, selected: published, onChange: setPublished, label: 'Bots available to contacts' }),
+      h('button', { type: 'button', disabled: busy || JSON.stringify([...published].sort()) === JSON.stringify([...available.publishedBotIds].sort()), 'data-dirty': JSON.stringify([...published].sort()) !== JSON.stringify([...available.publishedBotIds].sort()), onClick: () => { void run(() => operation('publish-bots', { localBotIds: published })) } }, t('Save published Bots'))))
 }

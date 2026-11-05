@@ -205,7 +205,7 @@ test('a host modal above restored remote communication does not compete for focu
 
 test('native toolbar creation submenu supports both actions, keyboard, outside dismissal and return focus', async () => {
   await pane({snapshot:state()},async({doc,dom,panel,click})=>{
-    assert.deepEqual([...doc.querySelectorAll('.bt-comm-nav-actions button')].map(node=>node.getAttribute('aria-label')),['Personal settings','Search','New…','Collapse sidebar'])
+    assert.deepEqual([...doc.querySelectorAll('.bt-comm-nav-actions button')].map(node=>node.getAttribute('aria-label')),['Personal settings','Contacts','Search','New…','Collapse sidebar'])
     assert.equal(doc.querySelector('[role=menuitem]'),null)
     await click('New…')
     const items=[...doc.querySelectorAll('[role=menuitem]')]
@@ -932,7 +932,8 @@ test('canonical started history deduplicates beneath messages and member chips o
     assert.ok(inspector)
     assert.equal(inspector.querySelector('code').textContent, bot.principalId)
     assert.equal(inspector.querySelector('input,select,textarea'), null)
-    assert.equal(inspector.querySelectorAll('button').length, 1)
+    assert.equal(inspector.querySelectorAll('button').length, 2)
+    assert.ok(inspector.querySelector('[aria-label="Close dialog"]'))
     assert.ok(calls.every(body => ['state', 'history', 'read'].includes(body.endpoint)), 'inspection performs no writes or local Bot navigation')
   })
 })
@@ -1083,8 +1084,9 @@ test('publication diagnostics retain real safe errors and refresh local settings
   }},async({doc,click,calls,button})=>{
     await click('Personal settings');await click('Manage contacts')
     await act(async()=>[...doc.querySelectorAll('summary')].find(node=>node.textContent==='Published Bots').click())
-    assert.ok(doc.querySelector('.bt-comm-contact-manager details [data-local-bot-id="one"]'),'local publication state remains readable when Hub contact reads fail')
-    await act(async()=>doc.querySelector('.bt-comm-contact-manager details [data-local-bot-id="one"]').click())
+    const publication = () => [...doc.querySelectorAll('.bt-comm-contact-manager fieldset')].find(node=>node.querySelector('legend').textContent==='Bots available to contacts').querySelector('[data-local-bot-id="one"]')
+    assert.ok(publication(),'local publication state remains readable when Hub contact reads fail')
+    await act(async()=>publication().click())
     await click('Save published Bots')
     assert.match(doc.querySelector('.bt-comm-contact-manager .bt-comm-error').textContent,/CONFIG_EDIT_OVERLAID.*COMMUNICATION_CONFIG_WRITE_FAILED/)
     assert.equal(saves,1);assert.doesNotMatch(doc.querySelector('.bt-comm-contact-manager').textContent,/DO_NOT_DISPLAY_RAW/)
@@ -1092,7 +1094,7 @@ test('publication diagnostics retain real safe errors and refresh local settings
     const refresh=[...doc.querySelectorAll('.bt-comm-contact-manager button')].find(node=>node.textContent==='Refresh status')
     await act(async()=>refresh.click())
     assert.equal(saves,2,'refresh performs reads only')
-    assert.equal(doc.querySelector('.bt-comm-contact-manager details [data-local-bot-id="one"]').checked,true)
+    assert.equal(publication().checked,true)
     assert.equal(button('Save published Bots').disabled,true,'effective config confirms the original save without another write')
     assert.equal(calls.filter(call=>call.endpoint==='publish-bots').length,2)
   })
@@ -1117,4 +1119,56 @@ test('missing secure randomness fails before sending and retains the composer te
   assert.equal(input.value,'synthetic unsent text')
   assert.match(doc.body.textContent,/cannot create secure request identifiers/)
  })
+})
+
+
+test('top Contacts entry opens the directory directly and every management dialog has visible keyboard-safe exits', async () => {
+  const snapshot = { ...state(), contacts: [{ principalId: 'human:b:owner', kind: 'human', displayName: 'Other person', homeInstanceId: 'b' }] }
+  await pane({ snapshot, handle: async body => body.endpoint === 'user-code' ? { userCode: 'MY-CODE' } : body.endpoint === 'available-bots' ? { bots: [], publishedBotIds: [] } : body.endpoint === 'onboarding-storage' ? { enrollments: [] } : [] }, async ({ doc, dom, click, button, calls }) => {
+    const trigger = button('Contacts')
+    await act(async () => trigger.focus())
+    await click('Contacts')
+    assert.ok(doc.querySelector('.bt-comm-directory'))
+    assert.ok(button('Close dialog'))
+    assert.equal(button('Back to settings'), undefined, 'direct entry does not invent an ancestor')
+    await click('Close dialog')
+    assert.equal(doc.querySelector('.bt-comm-modal'), null)
+    assert.equal(doc.activeElement, trigger)
+    await act(async () => button('Personal settings').focus())
+    await click('Personal settings'); await click('Manage contacts')
+    assert.ok(button('Back to settings'))
+    await click('Back to settings')
+    assert.equal(doc.querySelector('.bt-comm-modal').getAttribute('aria-label'), 'Personal settings')
+    assert.equal(doc.activeElement, button('Manage contacts'))
+    await click('Add a device')
+    assert.ok(button('Back to settings')); assert.ok(button('Close dialog'))
+    await click('Back to settings')
+    assert.equal(doc.activeElement, button('Add a device'))
+    await act(async () => doc.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })))
+    assert.equal(doc.querySelector('.bt-comm-modal'), null)
+    assert.equal(doc.activeElement.getAttribute('aria-label'), 'Personal settings')
+    assert.equal(calls.some(call => ['dm', 'join-hub', 'request-contact'].includes(call.endpoint)), false)
+  })
+})
+
+
+test('closing Contacts while a message conversation is opening prevents late navigation and duplicate clicks', async () => {
+  let finish, created = false
+  const person = { principalId: 'human:b:owner', kind: 'human', displayName: 'Other person', homeInstanceId: 'b' }
+  const snapshot = { ...state(), contacts: [person] }
+  await pane({ snapshot, getState: () => ({ ...snapshot, conversations: created ? [{ ...membership, conversationId: 'new-dm', kind: 'dm', title: '', info: { members: [person] } }] : [] }), handle: async body => {
+    if (body.endpoint === 'dm') return new Promise(resolve => { finish = () => { created = true; resolve({ conversationId: 'new-dm' }) } })
+    return body.endpoint === 'user-code' ? { userCode: 'MY-CODE' } : body.endpoint === 'available-bots' ? { bots: [], publishedBotIds: [] } : []
+  } }, async ({ doc, click, calls }) => {
+    await click('Contacts')
+    const send = doc.querySelector('[aria-label="Message Other person"]')
+    await act(async () => send.click())
+    assert.equal(send.disabled, true)
+    await act(async () => send.click())
+    await click('Close dialog')
+    await act(async () => finish())
+    assert.equal(calls.filter(call => call.endpoint === 'dm').length, 1)
+    assert.equal(doc.querySelector('.bt-comm-modal'), null)
+    assert.equal(doc.querySelector('.bt-comm-conversation-row').getAttribute('aria-pressed'), 'false')
+  })
 })
