@@ -89,7 +89,7 @@ test('diagnose distinguishes unknown, cached and synchronized emptiness, scoped 
 })
 
 test('environment metadata distinguishes consumed private host lease from current process presence and invalidation', async () => {
-  const key = 'DSBOT_COMMUNICATION_DIAGNOSTICS_TEST', secret = 'synthetic-private-value'.repeat(3)
+  const key = 'DSBOT_COMMUNICATION_DIAGNOSTICS_TEST', secret = 'test-synthetic-private-value'.repeat(3)
   const { rt, state } = fixture({ enabled: true, credentialEnv: key })
   const env = { [key]: secret }
   state.credentialObserved = true
