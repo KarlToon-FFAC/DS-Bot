@@ -1,0 +1,223 @@
+{
+  "status": "PASS_EXISTING_MATRIX_PENDING_RECOVERY_RPC_WINDOW",
+  "verifiedAt": "2026-11-05T10:34:54.563999+00:00",
+  "testedCommit": "da47b17dd340c099c83c1e65d69bd4d2d2884312",
+  "testedTree": "8d50c4a13e6df07676723fab1851701f4dce5d16",
+  "publishedBase": "d61b42a9d369b097143ad9b767847d8662439bf7",
+  "serialStages": [
+    {
+      "stage": "recovery",
+      "status": "PASS",
+      "completedAt": "2026-11-05T10:19:08Z"
+    },
+    {
+      "stage": "plugin",
+      "status": "PASS",
+      "completedAt": "2026-11-05T10:19:55Z"
+    },
+    {
+      "stage": "lint",
+      "status": "PASS",
+      "completedAt": "2026-11-05T10:19:56Z"
+    },
+    {
+      "stage": "client",
+      "status": "PASS",
+      "completedAt": "2026-11-05T10:19:56Z"
+    },
+    {
+      "stage": "probe",
+      "status": "PASS",
+      "completedAt": "2026-11-05T10:19:56Z"
+    },
+    {
+      "stage": "whitespace",
+      "status": "PASS",
+      "completedAt": "2026-11-05T10:19:56Z"
+    },
+    {
+      "stage": "hub",
+      "status": "PASS",
+      "completedAt": "2026-11-05T10:20:10Z"
+    },
+    {
+      "stage": "behavior",
+      "status": "PASS",
+      "completedAt": "2026-11-05T10:21:17Z"
+    },
+    {
+      "stage": "native",
+      "status": "PASS",
+      "completedAt": "2026-11-05T10:25:36Z"
+    },
+    {
+      "stage": "network",
+      "status": "PASS",
+      "completedAt": "2026-11-05T10:27:48Z"
+    },
+    {
+      "stage": "contact-removal",
+      "status": "PASS",
+      "completedAt": "2026-11-05T10:28:42Z"
+    },
+    {
+      "stage": "hub-lifecycle",
+      "status": "PASS",
+      "completedAt": "2026-11-05T10:29:27Z"
+    },
+    {
+      "stage": "openai-mock",
+      "status": "PASS",
+      "completedAt": "2026-11-05T10:30:40Z"
+    },
+    {
+      "stage": "relationship",
+      "status": "PASS",
+      "completedAt": "2026-11-05T10:31:26Z"
+    },
+    {
+      "stage": "ip-notes",
+      "status": "PASS",
+      "completedAt": "2026-11-05T10:32:07Z"
+    }
+  ],
+  "results": {
+    "plugin": {
+      "total": 1853,
+      "passed": 1849,
+      "failed": 0,
+      "skipped": 4
+    },
+    "hub": {
+      "total": 142,
+      "passed": 142,
+      "failed": 0,
+      "skipped": 0
+    },
+    "behavior": {
+      "passed": 11,
+      "failed": 0
+    },
+    "native": {
+      "passed": 52,
+      "failed": 0
+    },
+    "network": {
+      "passed": 8,
+      "failed": 0
+    },
+    "recovery": {
+      "passed": 7,
+      "failed": 0
+    },
+    "contact-removal": {
+      "passed": 6,
+      "failed": 0
+    },
+    "hub-lifecycle": {
+      "passed": 7,
+      "failed": 0
+    },
+    "openai-mock": {
+      "passed": 7,
+      "failed": 0
+    },
+    "relationship": {
+      "passed": 6,
+      "failed": 0
+    },
+    "ip-notes": {
+      "passed": 3,
+      "failed": 0
+    }
+  },
+  "staticChecks": {
+    "lint": "PASS_WITH_EXISTING_WARNINGS",
+    "generatedClient": "PASS",
+    "probeClient": "PASS",
+    "diffCheck": "PASS"
+  },
+  "ownedCleanup": {
+    "terminalExit": 0,
+    "ownedBenchesStopped": true,
+    "loopbackPortsChecked": 37,
+    "portsStillBound": 0
+  },
+  "sourceFixes": {
+    "newLocalUserIntent": "8de301c",
+    "immediateMemberTargetRefresh": "74cada6",
+    "startupProjectionGate": "544a104"
+  },
+  "independentReview": {
+    "startupProjectionBlockingFindings": 0,
+    "method": "Static review of actual startup and recovery call chain, ownership fences, and new tests; no extra topology started."
+  },
+  "historicalFailuresRetained": [
+    {
+      "evidence": "cloud-ui-ip-integration-evidence.json",
+      "nativeMockPassed": 47,
+      "nativeMockFailed": 5,
+      "cause": "Loopback Mock handoff transport failure; later isolated serial runs passed all52."
+    },
+    {
+      "testedCommit": "74d555f",
+      "behaviorPassed": 8,
+      "behaviorFailed": 1,
+      "behaviorNotRun": 2,
+      "cause": "Immediate mention after rejoin used stale participant cache. The actual product was fixed; the original immediate-send step was not replaced with a test wait."
+    },
+    {
+      "testedCommit": "ceb263d",
+      "recoveryPassed": 4,
+      "recoveryFailed": 1,
+      "recoveryNotRun": 2,
+      "cause": "Interrupted recovery assembled a prompt before first canonical authorization readiness. The original failure ledger remains unchanged; a fresh7-window ledger passes after the projection fix."
+    }
+  ],
+  "pendingRequiredExtension": {
+    "name": "Recovery notice already steered, authorization RPC still awaiting response when exact socket is lost",
+    "testSourceCommit": "6f4412a",
+    "plannedCases": [
+      "reconnect",
+      "revoked",
+      "new-epoch",
+      "user-cancel",
+      "model-error"
+    ],
+    "status": "NOT_RUN_IN_THIS_EVIDENCE",
+    "required": "Run deterministic real DSH/Hub fault window and fix any failure without broadening cancellation, error or membership recovery."
+  },
+  "artifactSha256": {
+    "recovery": "ef00a34822c5c12779699d1148a1fe4609a7b1b2d396b5dd5e2834e3d1895393",
+    "plugin": "7471144966cf9f355af5989b2161a7b3621b74ef9bce0f44509eb4282ca603a0",
+    "lint": "34938033b674e275d4e688d6c2b944b8ddfd986a0337ac284da5bda3a3b2fe53",
+    "client": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "probe": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "whitespace": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "hub": "fc920e905a8730141188e133c98bbbdb95fa58e91b3804bba51aa03907251aed",
+    "behavior": "d065d959eacfb930a5fb323be03308a110f230fc0365d7f82ea84834d7e90878",
+    "native": "422b6ce5495bd6f4d8a6178a2ca5be9c4c4e32b90851acf6a5c3edb3d30cb6dc",
+    "network": "8d237c0a68bae6cb876d47873a693a32ba9d3415ca564e28021dfe6265d521a9",
+    "contact-removal": "42156572178058ee011c24829f6a6422a36e9821a0f35ed7c80595cef2153d1c",
+    "hub-lifecycle": "8150c721b2621b2ddab25ba12d49f9327fdad5d0f55ea8c0ca86491634123485",
+    "openai-mock": "7a65a3a8cd608bceada8b4fb992b4953dcbce4e222bb56c035d72d2106dd4024",
+    "relationship": "fe9c9f0b252e8db8ec6067bfccc50d38ee010e412d22c574d5a6fedaa02d9805",
+    "ip-notes": "95801e477a3ebb1042090e45296cf2b0dd6d40cbf381b30fac1a82e4f5ff6b6e"
+  },
+  "scope": {
+    "onlyMock": true,
+    "realModelCalls": false,
+    "credentialsRequested": false,
+    "credentialsReadOrTransferred": false,
+    "push": false,
+    "actionsTriggered": false,
+    "otherWorktreesModified": false
+  },
+  "limits": [
+    "Skipped tests are not passes.",
+    "This pass covers the finite existing matrix only; the required new prompt-RPC fault window remains pending.",
+    "All network tests ran on same-machine loopback, not physical cross-machine networking.",
+    "Native Windows runtime and independent latest live-DSH browser layout were not verified.",
+    "Real-model soft collaboration behavior and a relationship-memory GUI editor are not established."
+  ]
+}
