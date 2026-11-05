@@ -119,3 +119,26 @@ test('lifecycle diagnostics are bounded and exclude credentials and payloads', a
   assert.equal(client.diagnostics().recentEvents[0].code, 'CONNECTION_LOST')
   client.stop()
 })
+
+test('a delivery paused before storage cannot cross stop into a new pump or clear its owner', async () => {
+  const oldGate = deferred(), newGate = deferred(); let before = false, freshChanging = false, pulls = 0, stored = 0
+  const { client, queue } = fixture({ beforeReceive: async () => { before = true; await oldGate.promise },
+    onChange: async () => { freshChanging = true; await newGate.promise } })
+  Object.assign(queue, { pendingReceipts: () => [], pendingOutbox: () => [], applyMemberships() {}, memberships: () => [], receive() { stored++ } })
+  client.request = async type => type === 'deliveries.pull' ? (++pulls === 1 ? [{ deliveryId: 'old-delivery' }] : []) : {}
+  await client.connect()
+  const old = client.pump()
+  await until(() => before)
+  client.stop()
+  client.credential = { socketFactory: async () => new Socket() }
+  await client.connect()
+  const fresh = client.pump()
+  await until(() => freshChanging)
+  oldGate.resolve()
+  await assert.rejects(old, { code: 'CONNECTION_LOST' })
+  assert.equal(stored, 0)
+  assert.equal(client.pumping, fresh)
+  newGate.resolve(); await fresh
+  assert.equal(client.state, 'ready')
+  client.stop()
+})

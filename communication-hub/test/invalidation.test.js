@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { randomUUID } from 'node:crypto'
+import { generateKeyPairSync, randomUUID, sign } from 'node:crypto'
 import { once } from 'node:events'
 import { WebSocket } from 'ws'
 import { startHub } from '../src/server.js'
+import { enrollmentTranscript } from '../src/management-store.js'
 import { PROTOCOL, CAPABILITIES } from '../src/protocol.js'
 import { CommunicationQueue } from '../../ds-bot/src/host/federation/queue-store.js'
 import { CommunicationTransport } from '../../ds-bot/src/host/federation/transport.js'
@@ -135,4 +136,62 @@ test('message activity wakes the durable pump without invalidating contact-manag
     await until(() => scopes.length > 0)
     assert.deepEqual(scopes, ['messages'])
   } finally { a.close(); await hub.close() }
+})
+
+test('authenticated admin HTTP changes invalidate live WebSocket directory snapshots', async () => {
+  const password = 'synthetic-administrator-password'
+  const hub = await startHub({ databasePath: ':memory:', peers, port: 0, management: { enabled: true, password } })
+  const scopes = [], a = make(hub, 'a', { onInvalidate: scope => scopes.push(scope) })
+  try {
+    await a.client.connect()
+    await until(() => scopes.length > 0)
+    scopes.length = 0
+    const result = await fetch(new URL('/admin/api/rename', hub.managementUrl), { method: 'POST',
+      headers: { authorization: `Bearer ${password}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ instanceId: 'a', label: 'Renamed through administrator UI', expectedNameVersion: 0 }) })
+    assert.equal(result.status, 200)
+    await until(() => scopes.includes('directory'))
+    assert.equal(hub.management.instances().find(instance => instance.instanceId === 'a').label, 'Renamed through administrator UI')
+  } finally { a.close(); await hub.close() }
+})
+
+test('delayed close of an old socket cannot mark its current replacement offline', async () => {
+  const hub = await startHub({ databasePath: ':memory:', peers, port: 0 })
+  const old = make(hub, 'a'), current = make(hub, 'a')
+  try {
+    await old.client.connect(); await current.client.connect()
+    assert.equal(hub.management.instances().find(item => item.instanceId === 'a').connected, true)
+    old.client.stop()
+    await wait(80)
+    assert.equal(hub.management.instances().find(item => item.instanceId === 'a').connected, true)
+    assert.equal(current.client.connected, true)
+    await current.client.request('contacts.list')
+  } finally { old.close(); current.close(); await hub.close() }
+})
+
+test('a new enrollment invalidates management but repeated signed status reads do not', async () => {
+  const hub = await startHub({ databasePath: ':memory:', peers, port: 0, management: { enabled: true, password: 'synthetic-admin-status-password' } })
+  const scopes = [], a = make(hub, 'a', { onInvalidate: scope => scopes.push(scope) }), socket = new WebSocket(hub.url)
+  const pair = generateKeyPairSync('ed25519')
+  const rpc = async (type, payload) => {
+    const response = once(socket, 'message')
+    socket.send(JSON.stringify({ protocol: PROTOCOL, id: randomUUID(), type, payload }))
+    const frame = JSON.parse(String((await response)[0]))
+    assert.equal(frame.ok, true)
+    return frame.value
+  }
+  const proof = async (purpose, input) => {
+    const challenge = await rpc('enrollment.challenge', { purpose, ...input })
+    return rpc('enrollment.prove', { challengeId: challenge.challengeId,
+      signature: sign(null, Buffer.from(enrollmentTranscript(challenge)), pair.privateKey).toString('base64url'), displayName: 'Synthetic pending device' })
+  }
+  try {
+    await once(socket, 'open'); await a.client.connect()
+    await until(() => scopes.length > 0); scopes.length = 0
+    const requested = await proof('join', { publicKey: pair.publicKey.export({ type: 'spki', format: 'pem' }) })
+    await until(() => scopes.includes('directory')); scopes.length = 0
+    for (let n = 0; n < 3; n++) assert.equal((await proof('status', { requestId: requested.requestId })).status, 'pending')
+    await wait(100)
+    assert.deepEqual(scopes, [])
+  } finally { socket.close(); a.close(); await hub.close() }
 })

@@ -14,7 +14,7 @@ const digest = value => createHash('sha256').update(value).digest()
 const invalidatingRoutes = new Set(['principal.register', 'principal.rename', 'principal.publication', 'principal.avatar.chunk',
   'dm.open', 'group.create', 'group.invite', 'group.accept', 'group.remove', 'group.routing', 'group.dissolve',
   'group.policy', 'group.transfer', 'group.reclaim', 'group.configure', 'group.settings', 'message.publish',
-  'principal.profile', 'enrollment.prove', 'contact.code.rotate', 'contact.request', 'contact.accept', 'contact.reject', 'contact.cancel', 'contact.revoke'])
+  'principal.profile', 'contact.code.rotate', 'contact.request', 'contact.accept', 'contact.reject', 'contact.cancel', 'contact.revoke'])
 const routes = {
   'principal.register':'register', 'contacts.list':'contacts', 'dm.open':'createDm', 'group.create':'createGroup',
   'group.invite':'invite', 'group.accept':'accept', 'group.remove':'remove', 'group.routing':'routing', 'group.dissolve':'dissolve',
@@ -116,12 +116,13 @@ export async function startHub({ databasePath, peers, host='127.0.0.1', port=319
         id=identifier(frame.id)
         requireThat(frame.protocol===PROTOCOL,'PROTOCOL_VERSION_UNSUPPORTED')
         requireThat(frame.payload&&typeof frame.payload==='object'&&!Array.isArray(frame.payload),'INVALID_REQUEST')
-        let value
+        let value, enrollmentPurpose
         if(!auth){
           if(frame.type==='enrollment.challenge'){
             requireThat(frame.payload.purpose!=='join'||managementHttp?.enabled,'MANAGEMENT_DISABLED')
             value=management.challenge(socket,frame.payload,request.socket.remoteAddress??'unknown')
           }else if(frame.type==='enrollment.prove'){
+            enrollmentPurpose=management.challenges.get(frame.payload.challengeId)?.purpose
             const proof=management.prove(socket,frame.payload)
             if(proof.instanceId&&proof.label!==undefined){
               value=store.connect(proof.instanceId,proof.label,frame.payload.capabilities)
@@ -158,7 +159,7 @@ export async function startHub({ databasePath, peers, host='127.0.0.1', port=319
           }
         }
         if(frame.type==='message.publish')invalidate('messages')
-        else if(invalidatingRoutes.has(frame.type))changed()
+        else if(invalidatingRoutes.has(frame.type)||['join','cancel','leave'].includes(enrollmentPurpose))changed()
         if(beforeResponse?.({type:frame.type,value,socket})===false)return
         if(auth&&(frame.type==='hello'||frame.type==='enrollment.prove'))value={...value,hubId:management.hubId,...(managementUrl?{managementUrl}:{})}
         requireThat(socket.bufferedAmount<store.limits.maxEnvelopeBytes*4,'BACKPRESSURE')
