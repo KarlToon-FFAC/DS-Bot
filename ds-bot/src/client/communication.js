@@ -21,7 +21,7 @@ import { communicationFailure as friendly, operationOutcomeUncertain } from './c
 const OPEN = 'ds-bot:communication:open', SELECTED = 'ds-bot:communication:selected'
 const SIDEBAR_HIDDEN = 'ds-bot:communication:sidebar-hidden'
 const OPERATION_IDS = 'ds-bot:communication:operation-ids'
-const DRAFTS = 'ds-bot:communication:drafts', HIDDEN = 'ds-bot:communication:hidden', ATTEMPTS = 'ds-bot:communication:attempts'
+const DRAFTS = 'ds-bot:communication:drafts', ATTEMPTS = 'ds-bot:communication:attempts'
 const read = (key, fallback) => { try { return JSON.parse(sessionStorage.getItem(key)) ?? fallback } catch { return fallback } }
 const save = (key, value) => { try { sessionStorage.setItem(key, JSON.stringify(value)) } catch { /* A full browser store must not prevent sending. */ } }
 export async function communicationRequest(body) {
@@ -171,7 +171,6 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
   const [attaching,setAttaching]=useState(false),attachmentFlight=useRef(false)
   const [selected, setSelected] = useState(() => read(SELECTED, null))
   const [drafts, setDrafts] = useState(() => read(DRAFTS, {})), [attempts, setAttempts] = useState(() => read(ATTEMPTS, {}))
-  const [hidden, setHidden] = useState(() => read(HIDDEN, [])), [showHidden, setShowHidden] = useState(false)
   const [page, setPage] = useState(null), [older, setOlder] = useState(null), [reply, setReply] = useState(null)
   const [referenced, setReferenced] = useState(null), [jumpRevision, setJumpRevision] = useState(0)
   const pendingJump = useRef(null), referenceOrder = useRef(0), contextKey = useRef('')
@@ -356,11 +355,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
     changeDraft({ text: '', mentions: [], manualMentions: [], attachments:[] }); setReply(null)
     await refresh(); input.current?.focus()
   })
-  const choose = id => {
-    const next = hidden.filter(item => item !== `${scope}:${id}`)
-    save(HIDDEN, next); setHidden(next); setSelected(id); setBrowse(false); setError('')
-  }
-  const hide = () => { const next = [...new Set([...hidden, key])]; save(HIDDEN, next); setHidden(next); setSelected(null) }
+  const choose = id => { setSelected(id); setBrowse(false); setError('') }
   const openReference = async messageId => {
     const context = contextKey.current, order = ++referenceOrder.current
     try {
@@ -438,7 +433,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
   const wanted = searchQuery.trim().toLocaleLowerCase()
   const searchable = value => String(value ?? '').toLocaleLowerCase().includes(wanted)
   const searchResults = [
-    ...(state?.conversations ?? []).filter(item => (showHidden || !hidden.includes(`${scope}:${item.conversationId}`)) && [conversationTitle(item,state.humanPrincipalId,labels),item.lastMessage?.summary,...(item.info?.members ?? []).map(person=>person.displayName)].some(searchable)).map(item => ({ id:item.conversationId, title:conversationTitle(item,state.humanPrincipalId,labels), preview:item.lastMessage?.summary ?? '', avatar:h(ConversationAvatar,{conversation:item,humanId:state.humanPrincipalId,request,size:24}), run:()=>{setActivePanel('');choose(item.conversationId)} })),
+    ...(state?.conversations ?? []).filter(item => [conversationTitle(item,state.humanPrincipalId,labels),item.lastMessage?.summary,...(item.info?.members ?? []).map(person=>person.displayName)].some(searchable)).map(item => ({ id:item.conversationId, title:conversationTitle(item,state.humanPrincipalId,labels), preview:item.lastMessage?.summary ?? '', avatar:h(ConversationAvatar,{conversation:item,humanId:state.humanPrincipalId,request,size:24}), run:()=>{setActivePanel('');choose(item.conversationId)} })),
     ...contacts.filter(person=>person.principalId !== state?.humanPrincipalId && [labels.get(person.principalId),person.displayName,person.instanceLabel].some(searchable)).map(person=>({ id:person.principalId,title:labels.get(person.principalId) ?? person.displayName,preview:t('New message'),avatar:h(CommunicationAvatar,{person,request,size:24}),run:()=>{void act(async()=>{const value=await operation('dm',{otherPrincipalId:person.principalId});setActivePanel('');choose(value.conversationId)})} })),
   ].slice(0,50)
   const searchIndex = Math.max(0, Math.min(searchCursor, searchResults.length-1))
@@ -469,7 +464,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
         team.communicationEnabled ? btn('Refresh status', () => { void act(refresh) }) : null,
         null),
       h('div', { className: 'bt-comm-section-title' }, t('Conversations'), h('span', null, state?.conversations?.length ?? 0)),
-      h('nav', { 'aria-label': t('Communication conversations') }, (state?.conversations ?? []).filter(item => showHidden || !hidden.includes(`${scope}:${item.conversationId}`)).map(item =>
+      h('nav', { 'aria-label': t('Communication conversations') }, (state?.conversations ?? []).map(item =>
         h(ConversationRow, { key: item.conversationId, conversation: item, humanId: state.humanPrincipalId, labels, request, selected: item.conversationId === selected, onChoose: choose, disabled: busy }))),
       !state?.conversations?.length ? h('p', { className: 'bt-comm-reference' }, t('Your cross-device conversations will appear here.')) : null,
       state?.invites?.length ? h('div', null, h('h3', null, t('Invitations')), state.invites.map(invitation => h('div', { key: invitation.inviteId },
@@ -494,7 +489,6 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
           }})),h('p',{className:'bt-comm-reference'},t('Search current conversations, contacts and recent message summaries.')),
           h('div',{id:'bt-comm-search-results',role:'listbox','aria-label':t('Results')},searchResults.map((item,index)=>btn(item.title,item.run,{key:item.id,id:`bt-comm-search-${index}`,role:'option','aria-selected':index===searchIndex,children:h(Fragment,null,item.avatar,h('span',null,h('strong',null,item.title),h('small',null,item.preview)))}))),
           !searchResults.length?h('p',{role:'status'},t('No matching conversations or contacts.')):null) : activePanel === 'settings' ? h('div', { className: 'bt-comm-personal-settings' },
-          h('label', { className: 'bt-comm-check' }, h('input', { type: 'checkbox', checked: showHidden, onChange: event => setShowHidden(event.target.checked) }), t('Show closed conversations')),
           state ? h('section', null, h('h3', null, t('Your profile')), h(HumanProfile, { key: `${scope}:${state.humanPrincipalId}`, human: contacts.find(person => person.principalId === state.humanPrincipalId) ?? { principalId: state.humanPrincipalId, displayName: t('You'), kind: 'human' }, request, operation }),
             h('details', null, h('summary', null, t('Device identity')), h('p', null, state.instanceId), h('code', null, state.humanPrincipalId))) : null,
           h(CommunicationMemory, { key: scope, request }),
@@ -527,8 +521,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
           else inspect(currentMembers.filter(person => person.principalId !== state.humanPrincipalId).map(person => person.principalId))
         }, { className: 'bt-pill bt-comm-title-pill', children: h(Fragment, null, h(ConversationAvatar, { conversation: member, humanId: state.humanPrincipalId, request, size: 24 }), h('h2', { className: 'bt-pill-name' }, conversationTitle(member, state.humanPrincipalId, labels)), h('span', { 'aria-hidden': true }, '›')) }) : h('h2', null, t('Remote communication'))),
         btn('Activity details', event => showPanel('activity', event.currentTarget), { className: 'bt-comm-icon-button', 'aria-label': t('Activity details'), title: t('Activity details'), children: h(InfoIcon) }),
-        member?.kind === 'group' ? h('span', { className: 'bt-sr' }, `${currentMembers.length} ${t('Members')} · ${t(roleLabel(member.role))} · ${t(member.speakingMode === 'readOnly' ? 'Read only' : 'Can speak')}`) : null,
-        member ? btn('Close on this device', hide, { className: 'bt-comm-icon-button', 'aria-label': t('Close on this device'), title: t('Close on this device'), children: h(CloseIcon) }) : null),
+        member?.kind === 'group' ? h('span', { className: 'bt-sr' }, `${currentMembers.length} ${t('Members')} · ${t(roleLabel(member.role))} · ${t(member.speakingMode === 'readOnly' ? 'Read only' : 'Can speak')}`) : null),
       !member ? h('section', { className: 'bt-comm-empty' },
         h('span', { className: 'bt-comm-empty-symbol', 'aria-hidden': true }, '↔'),
         h('h2', null, t(team.communicationEnabled ? 'Start a conversation across devices' : 'Pair this device to get started')),

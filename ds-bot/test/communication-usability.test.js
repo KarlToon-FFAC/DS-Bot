@@ -12,8 +12,9 @@ const { JSDOM } = harness('jsdom'), React = harness('react'), { act } = React
 const { outputFiles } = await build({ entryPoints: [fileURLToPath(new URL('../src/client/communication.js', import.meta.url))],
   bundle: true, platform: 'browser', format: 'cjs', external: ['react', 'react-dom', '@deepseek-ai/dsh-client-ui-primitives'], write: false })
 
-async function pane({ enabled = true, snapshot, history = [], getState, handleRead = async () => ({}), MarkdownText = ({ text }) => React.createElement('p', null, text), handle = async () => ({}), cryptoSource = { subtle: globalThis.crypto.subtle, getRandomValues: bytes => globalThis.crypto.getRandomValues(bytes) } }, check) {
+async function pane({ enabled = true, snapshot, storage = {}, history = [], getState, handleRead = async () => ({}), MarkdownText = ({ text }) => React.createElement('p', null, text), handle = async () => ({}), cryptoSource = { subtle: globalThis.crypto.subtle, getRandomValues: bytes => globalThis.crypto.getRandomValues(bytes) } }, check) {
   const dom = new JSDOM('<!doctype html><body><textarea id="native">private draft</textarea><div id="root"></div></body>', { url: 'http://127.0.0.1:3138/', pretendToBeVisual: true })
+  for (const [key, value] of Object.entries(storage)) dom.window.sessionStorage.setItem(key, value)
   const saved = Object.fromEntries(['window', 'document', 'navigator', 'HTMLElement', 'IS_REACT_ACT_ENVIRONMENT'].map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]))
   for (const [key, value] of Object.entries({ window: dom.window, document: dom.window.document, navigator: dom.window.navigator, HTMLElement: dom.window.HTMLElement, IS_REACT_ACT_ENVIRONMENT: true })) Object.defineProperty(globalThis, key, { configurable: true, value })
   dom.window.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} })
@@ -225,18 +226,19 @@ test('native toolbar creation submenu supports both actions, keyboard, outside d
 })
 
 test('sidebar restores across empty/chat/narrow navigation and scoped search preserves drafts without sending',async()=>{
-  const snapshot={...state(),conversations:[membership,{...membership,conversationId:'hidden',title:'Hidden group'}]}
-  await pane({snapshot},async({doc,dom,click,edit,calls,remount})=>{
+  const snapshot={...state(),conversations:[membership,{...membership,conversationId:'hidden',title:'Previously closed group'}]}
+  const storage={'ds-bot:communication:hidden':JSON.stringify(['a:hidden'])}
+  await pane({snapshot,storage},async({doc,dom,click,edit,calls,remount})=>{
     await click('Collapse sidebar');assert.equal(doc.querySelector('.bt-comm-frame').dataset.collapsed,'true')
     assert.equal(doc.activeElement.getAttribute('aria-label'),'Expand sidebar')
     await remount();assert.equal(doc.querySelector('.bt-comm-frame').dataset.collapsed,'true')
     await click('Expand sidebar');assert.equal(doc.querySelector('.bt-comm-frame').dataset.collapsed,'false')
-    await click('Hidden group');await click('Close on this device')
+    assert.ok(doc.querySelector('nav button[data-conversation-id=hidden]'))
     await click('Shared group');await edit(doc.querySelector('textarea[aria-label="Communication message"]'),'Keep this draft')
     await click('Collapse sidebar')
     await act(async()=>doc.activeElement.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'k',ctrlKey:true,bubbles:true})))
     assert.ok(doc.querySelector('.bt-comm-modal[aria-label="Search"]'))
-    assert.doesNotMatch(doc.querySelector('.bt-comm-search').textContent,/Hidden group/)
+    assert.match(doc.querySelector('.bt-comm-search').textContent,/Previously closed group/)
     const search=doc.querySelector('input[aria-label="Search conversations and contacts"]')
     await edit(search,'no-match');await act(async()=>{for(const key of ['End','Enter'])search.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key,bubbles:true}))})
     assert.match(doc.querySelector('.bt-comm-search').textContent,/No matching/)
@@ -248,6 +250,45 @@ test('sidebar restores across empty/chat/narrow navigation and scoped search pre
     assert.equal(doc.querySelector('.bt-comm-frame').dataset.browse,'true')
   })
 })
+
+for (const hiddenValue of [JSON.stringify(['a:group', 'a:dm', 'hub-one:a:group', 'hub-two:a:group', 'a:departed']), '{invalid', JSON.stringify({ group: true })]) {
+  test(`all authorized groups and DMs ignore legacy close state without deleting saved data (${hiddenValue})`, async () => {
+    const dm = { ...membership, conversationId: 'dm', kind: 'dm', title: 'Direct conversation' }
+    const snapshot = { ...state(), conversations: [membership, dm] }
+    const draft = JSON.stringify({ 'a:group': { text: 'Keep my saved draft', mentions: [] }, 'other:private': { text: 'Other Hub draft', mentions: [] } })
+    const attempts = JSON.stringify({ 'other:private': { endpoint: 'send', messageId: 'original-unsent-id', text: 'Keep original intent' } })
+    const storage = { 'ds-bot:communication:hidden': hiddenValue, 'ds-bot:communication:drafts': draft, 'ds-bot:communication:attempts': attempts }
+    await pane({ snapshot, storage }, async ({ doc, dom, click, edit, remount, calls }) => {
+      const ids = () => [...doc.querySelectorAll('nav [data-conversation-id]')].map(node => node.dataset.conversationId)
+      assert.deepEqual(ids(), ['group', 'dm'])
+      assert.equal(doc.querySelector('.bt-comm-section-title span').textContent, '2')
+      await click('Shared group')
+      assert.equal(doc.querySelector('textarea[aria-label="Communication message"]').value, 'Keep my saved draft')
+      assert.equal(doc.querySelector('button[aria-label="Close on this device"]'), null)
+      await act(async () => doc.querySelector('nav [data-conversation-id=dm]').click())
+      assert.equal(doc.querySelector('button[aria-label="Close on this device"]'), null)
+      await click('Search')
+      await edit(doc.querySelector('input[aria-label="Search conversations and contacts"]'), 'Shared')
+      await act(async () => doc.querySelector('input[aria-label="Search conversations and contacts"]').dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })))
+      assert.equal(doc.querySelector('textarea[aria-label="Communication message"]').value, 'Keep my saved draft')
+      await remount()
+      assert.deepEqual(ids(), ['group', 'dm'])
+      assert.equal(doc.querySelector('textarea[aria-label="Communication message"]').value, 'Keep my saved draft')
+      for (const [key, value] of Object.entries(storage)) assert.equal(dom.window.sessionStorage.getItem(key), value, key)
+      assert.equal(calls.some(call => !['state', 'history', 'read', 'avatar'].includes(call.endpoint)), false, 'restoration performs no membership or message mutation')
+      snapshot.hubId = 'hub-one'; snapshot.queueScope = 'isolated'
+      snapshot.conversations = [{ ...membership, title: 'Current Hub group' }]
+      await click('Refresh status')
+      assert.deepEqual(ids(), ['group'])
+      assert.equal(doc.querySelector('nav [data-conversation-id=group]').textContent, 'Current Hub group')
+      snapshot.hubId = 'hub-two'; snapshot.conversations = []
+      await click('Refresh status')
+      assert.deepEqual(ids(), [], 'legacy close records cannot fabricate membership after authorization or Hub changes')
+      assert.match(doc.querySelector('.bt-comm-empty').textContent, /Start a conversation/)
+      for (const [key, value] of Object.entries(storage)) assert.equal(dom.window.sessionStorage.getItem(key), value, key)
+    })
+  })
+}
 
 test('uncertain enrollment restores its saved request, exposes safe diagnostics and never automatically resubmits', async () => {
   const hub = { hubId: 'onboarding-test', url: 'wss://hub.example.test/communication' }, storage = { defaultProvider: 'test', encryptedByDefault: false }
@@ -297,23 +338,21 @@ test('an unreadable local request after an ambiguous join keeps submission block
   })
 })
 
-test('personal gear owns profile, closed visibility, identity and connection settings; closing discards an unsaved profile', async () => {
+test('personal gear owns profile, identity and connection settings without conversation visibility controls', async () => {
   const snapshot = { ...state(), conversations: [membership] }
   await pane({ snapshot }, async ({ doc, click, edit, calls }) => {
     assert.equal(doc.querySelectorAll('.bt-comm-nav-heading button[aria-label="Personal settings"]').length, 1)
     assert.doesNotMatch(doc.querySelector('.bt-comm-nav').textContent, /Human profile|Show closed conversations|Add a device|Manage contacts/)
     await click('Personal settings')
     const modal = doc.querySelector('.bt-comm-personal-settings')
-    assert.match(modal.textContent, /Show closed conversations.*Your profile.*Device identity.*Connection and contacts/s)
+    assert.match(modal.textContent, /Your profile.*Device identity.*Connection and contacts/s)
+    assert.doesNotMatch(modal.textContent, /Show closed conversations|Hide closed conversations/)
     await edit(modal.querySelector('input[aria-label="Human name"]'), 'Uncommitted profile')
     await click('Cancel'); await click('Personal settings')
     assert.notEqual(doc.querySelector('input[aria-label="Human name"]').value, 'Uncommitted profile')
     assert.equal(calls.some(call => call.endpoint === 'profile-human'), false)
-    await click('Cancel'); await click('Shared group'); await click('Close on this device')
-    assert.equal(doc.querySelector('nav button[data-conversation-id="group"]'), null)
-    await click('Personal settings')
-    await act(async () => doc.querySelector('.bt-comm-personal-settings input[type=checkbox]').click())
-    await click('Cancel')
+    await click('Cancel'); await click('Shared group')
+    assert.equal(doc.querySelector('button[aria-label="Close on this device"]'), null)
     assert.ok(doc.querySelector('nav button[data-conversation-id="group"]'))
   })
 })

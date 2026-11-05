@@ -320,9 +320,10 @@ not publish them in logs or shared artifacts. An avatar or matching display name
 never authenticates a principal or expands access. The Host handles bounded image
 transfer internally; CLI callers do not send Hub chunks or read stored credentials.
 
-Closing/reopening a conversation and showing hidden conversations are local GUI
-preferences, not remote mutations; `conversations` still exposes the authorized
-canonical memberships. CLI failures go to stderr, never into conversation history.
+The remote GUI always lists every authorized canonical conversation, including
+those previously closed on this device. There is no local close/hide preference.
+`conversations` exposes the same authorized canonical memberships. CLI failures
+go to stderr, never into conversation history.
 If `members` or another operation returns `UNKNOWN_OPERATION`/`UNKNOWN_ENDPOINT`,
 update the local host and paired Hub to compatible revisions. Existing capability
 flags alone do not prove atomic settings support. Do not infer success, substitute
@@ -590,8 +591,7 @@ GUI: choose View replies on a group message to open its independent reply chain.
 Reply there returns to the normal composer with that exact source message; closing
 or viewing a chain never sends anything. Read-only members may view authorized
 chains but have no composer or Reply controls. Personal settings (profile/avatar,
-closed-conversation visibility, device identity, connection and contacts) are under
-the sidebar gear. Message diagnostics remain in the explicit Activity details view.
+device identity, connection and contacts) are under the sidebar gear. Message diagnostics remain in the explicit Activity details view.
 
 CLI: `dsbot-remote thread` reads `{ "conversationId": "...", "messageId": "...",
 "membershipEpoch": "...", "limit": 50 }`. Continue with `after: nextAfter` and the

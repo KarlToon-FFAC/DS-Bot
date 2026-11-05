@@ -359,8 +359,6 @@ var ZH = {
   "Back to local chats": "返回本地对话",
   "Offline · sends stay queued": "离线 · 消息保留在发送队列",
   "Communication conversations": "通信会话",
-  "Hide closed conversations": "隐藏已关闭的会话",
-  "Show closed conversations": "显示已关闭的会话",
   "Contacts": "联系人",
   "Create communication group": "新建通信群",
   "Create and invite": "创建并邀请",
@@ -369,7 +367,6 @@ var ZH = {
   "Operation failed": "操作失败",
   "Operation queued": "操作已排队",
   "Choose a contact or conversation": "选择联系人或会话",
-  "Close on this device": "仅在本机关闭",
   "Group members and receiving rules": "群成员与收件规则",
   "Group manager": "群管理者",
   "Invite participant": "邀请成员",
@@ -23109,7 +23106,7 @@ var import_react_dom11 = require("react-dom");
 var OPEN = "ds-bot:communication:open", SELECTED = "ds-bot:communication:selected";
 var SIDEBAR_HIDDEN = "ds-bot:communication:sidebar-hidden";
 var OPERATION_IDS = "ds-bot:communication:operation-ids";
-var DRAFTS = "ds-bot:communication:drafts", HIDDEN = "ds-bot:communication:hidden", ATTEMPTS = "ds-bot:communication:attempts";
+var DRAFTS = "ds-bot:communication:drafts", ATTEMPTS = "ds-bot:communication:attempts";
 var read = (key, fallback) => {
   try {
     return JSON.parse(sessionStorage.getItem(key)) ?? fallback;
@@ -23384,7 +23381,6 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
   const [attaching, setAttaching] = (0, import_react63.useState)(false), attachmentFlight = (0, import_react63.useRef)(false);
   const [selected, setSelected] = (0, import_react63.useState)(() => read(SELECTED, null));
   const [drafts, setDrafts] = (0, import_react63.useState)(() => read(DRAFTS, {})), [attempts, setAttempts] = (0, import_react63.useState)(() => read(ATTEMPTS, {}));
-  const [hidden, setHidden] = (0, import_react63.useState)(() => read(HIDDEN, [])), [showHidden, setShowHidden] = (0, import_react63.useState)(false);
   const [page, setPage] = (0, import_react63.useState)(null), [older, setOlder] = (0, import_react63.useState)(null), [reply, setReply] = (0, import_react63.useState)(null);
   const [referenced, setReferenced] = (0, import_react63.useState)(null), [jumpRevision, setJumpRevision] = (0, import_react63.useState)(0);
   const pendingJump = (0, import_react63.useRef)(null), referenceOrder = (0, import_react63.useRef)(0), contextKey = (0, import_react63.useRef)("");
@@ -23702,18 +23698,9 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
     input.current?.focus();
   });
   const choose = (id) => {
-    const next = hidden.filter((item) => item !== `${scope}:${id}`);
-    save(HIDDEN, next);
-    setHidden(next);
     setSelected(id);
     setBrowse(false);
     setError("");
-  };
-  const hide = () => {
-    const next = [.../* @__PURE__ */ new Set([...hidden, key])];
-    save(HIDDEN, next);
-    setHidden(next);
-    setSelected(null);
   };
   const openReference = async (messageId) => {
     const context = contextKey.current, order = ++referenceOrder.current;
@@ -23852,7 +23839,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
   const wanted = searchQuery.trim().toLocaleLowerCase();
   const searchable = (value) => String(value ?? "").toLocaleLowerCase().includes(wanted);
   const searchResults = [
-    ...(state?.conversations ?? []).filter((item) => (showHidden || !hidden.includes(`${scope}:${item.conversationId}`)) && [conversationTitle(item, state.humanPrincipalId, labels), item.lastMessage?.summary, ...(item.info?.members ?? []).map((person) => person.displayName)].some(searchable)).map((item) => ({ id: item.conversationId, title: conversationTitle(item, state.humanPrincipalId, labels), preview: item.lastMessage?.summary ?? "", avatar: (0, import_react63.createElement)(ConversationAvatar, { conversation: item, humanId: state.humanPrincipalId, request, size: 24 }), run: () => {
+    ...(state?.conversations ?? []).filter((item) => [conversationTitle(item, state.humanPrincipalId, labels), item.lastMessage?.summary, ...(item.info?.members ?? []).map((person) => person.displayName)].some(searchable)).map((item) => ({ id: item.conversationId, title: conversationTitle(item, state.humanPrincipalId, labels), preview: item.lastMessage?.summary ?? "", avatar: (0, import_react63.createElement)(ConversationAvatar, { conversation: item, humanId: state.humanPrincipalId, request, size: 24 }), run: () => {
       setActivePanel("");
       choose(item.conversationId);
     } })),
@@ -23923,7 +23910,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
         null
       ),
       (0, import_react63.createElement)("div", { className: "bt-comm-section-title" }, t("Conversations"), (0, import_react63.createElement)("span", null, state?.conversations?.length ?? 0)),
-      (0, import_react63.createElement)("nav", { "aria-label": t("Communication conversations") }, (state?.conversations ?? []).filter((item) => showHidden || !hidden.includes(`${scope}:${item.conversationId}`)).map((item) => (0, import_react63.createElement)(ConversationRow, { key: item.conversationId, conversation: item, humanId: state.humanPrincipalId, labels, request, selected: item.conversationId === selected, onChoose: choose, disabled: busy }))),
+      (0, import_react63.createElement)("nav", { "aria-label": t("Communication conversations") }, (state?.conversations ?? []).map((item) => (0, import_react63.createElement)(ConversationRow, { key: item.conversationId, conversation: item, humanId: state.humanPrincipalId, labels, request, selected: item.conversationId === selected, onChoose: choose, disabled: busy }))),
       !state?.conversations?.length ? (0, import_react63.createElement)("p", { className: "bt-comm-reference" }, t("Your cross-device conversations will appear here.")) : null,
       state?.invites?.length ? (0, import_react63.createElement)("div", null, (0, import_react63.createElement)("h3", null, t("Invitations")), state.invites.map((invitation) => (0, import_react63.createElement)(
         "div",
@@ -24001,7 +23988,6 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
         ) : activePanel === "settings" ? (0, import_react63.createElement)(
           "div",
           { className: "bt-comm-personal-settings" },
-          (0, import_react63.createElement)("label", { className: "bt-comm-check" }, (0, import_react63.createElement)("input", { type: "checkbox", checked: showHidden, onChange: (event) => setShowHidden(event.target.checked) }), t("Show closed conversations")),
           state ? (0, import_react63.createElement)(
             "section",
             null,
@@ -24125,8 +24111,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
           else inspect(currentMembers.filter((person) => person.principalId !== state.humanPrincipalId).map((person) => person.principalId));
         }, { className: "bt-pill bt-comm-title-pill", children: (0, import_react63.createElement)(import_react63.Fragment, null, (0, import_react63.createElement)(ConversationAvatar, { conversation: member, humanId: state.humanPrincipalId, request, size: 24 }), (0, import_react63.createElement)("h2", { className: "bt-pill-name" }, conversationTitle(member, state.humanPrincipalId, labels)), (0, import_react63.createElement)("span", { "aria-hidden": true }, "›")) }) : (0, import_react63.createElement)("h2", null, t("Remote communication"))),
         btn("Activity details", (event) => showPanel("activity", event.currentTarget), { className: "bt-comm-icon-button", "aria-label": t("Activity details"), title: t("Activity details"), children: (0, import_react63.createElement)(InfoIcon) }),
-        member?.kind === "group" ? (0, import_react63.createElement)("span", { className: "bt-sr" }, `${currentMembers.length} ${t("Members")} · ${t(roleLabel(member.role))} · ${t(member.speakingMode === "readOnly" ? "Read only" : "Can speak")}`) : null,
-        member ? btn("Close on this device", hide, { className: "bt-comm-icon-button", "aria-label": t("Close on this device"), title: t("Close on this device"), children: (0, import_react63.createElement)(CloseIcon) }) : null
+        member?.kind === "group" ? (0, import_react63.createElement)("span", { className: "bt-sr" }, `${currentMembers.length} ${t("Members")} · ${t(roleLabel(member.role))} · ${t(member.speakingMode === "readOnly" ? "Read only" : "Can speak")}`) : null
       ),
       !member ? (0, import_react63.createElement)(
         "section",

@@ -52,10 +52,11 @@ administrator actions use a separate operator CLI/site and private credential
 input, never password arguments or Bot prompts. A Bot cannot borrow the local
 Human or admin identity. The operation matrix must state these distinctions.
 
-Browser drafts, pending operation IDs and closed-conversation choices must be
-namespaced as well. The legacy queue may retain its existing keys for compatible
-draft recovery; new Hub queues use Hub-qualified keys. Avatar caches must clear
-and fence in-flight results across Hub changes, even for identical claimed
+Browser drafts and pending operation IDs must be namespaced as well. The GUI
+always lists every authorized remote conversation; legacy browser close/hide
+choices are ignored without deleting saved data. The legacy queue may retain its
+existing keys for compatible draft recovery; new Hub queues use Hub-qualified
+keys. Avatar caches must clear and fence in-flight results across Hub changes, even for identical claimed
 principal IDs and image revisions. No old Session or pending callback may send
 into the newly selected Hub.
 
