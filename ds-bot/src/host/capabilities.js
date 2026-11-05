@@ -135,6 +135,9 @@ export function install(rt) {
   const capabilitySave = async (body, options = {}) => {
     await rt.load()
     writeCheck()
+    // Internal learning performs its compare-and-set after the last load and
+    // immediately before synchronous mutation. Public JSON cannot supply this.
+    options.assertCurrent?.(own(library(),String(body?.name??'')))
     const item = itemInput(body ?? {}, options)
     await rt.save()
     return item
@@ -468,7 +471,7 @@ export function install(rt) {
     }
   }
 
-  async function capabilityEndpoint(endpoint, body = {}) {
+  async function capabilityEndpoint(endpoint, body = {}, options = {}) {
     if (endpoint === 'capability-save') return capabilitySave(body, { ui: true })
     if (endpoint === 'capability-delete') return capabilityDelete(body.name, { ui: true })
     if (endpoint === 'capability-approve') {
@@ -484,6 +487,7 @@ export function install(rt) {
     if (endpoint === 'bot-capability') {
       await rt.load()
       writeCheck()
+      options.assertCurrent?.()
       const bot = rt.botOf(String(body.botId ?? ''))
       if (!bot) throw new Error('Unknown Bot')
       const name = String(body.name ?? '')

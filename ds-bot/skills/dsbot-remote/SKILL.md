@@ -30,6 +30,44 @@ never a cookie/password argument. No operation silently retries a mutation.
 | Contact consent/user codes | `user-code`, `rotate-user-code`, `request-contact`, `contact-requests`, `contact-relations`, `accept-contact`, `reject-contact`, `cancel-contact`, `revoke-contact` | Human/operator consent required; no automatic acceptance by Bots |
 | Hub join/trust/status | `decode-hub-code`, `join-hub`, `update-hub-trust`, `hub-join-status`, `cancel-hub-join`, `onboarding-storage` | Human/operator only; Hub administrator must approve enrollment |
 | Hub local lifecycle | `disconnect-hub`, `switch-hub`, `resume-hub` | Human/operator only; one active Hub and isolated retained queues |
+| Permanent Hub access and local forgetting | `leave-hub`, `hub-leave-status`, `forget-hub` | Explicit Human/operator delegation and confirmations; never borrow credentials; group owners transfer or dissolve first |
+
+### Leave, remove and forget
+
+`disconnect-hub` is only a local pause. `leave-hub` requires `hubId`, exact
+`confirmedUrl` and `confirmLeave:true`. It signs a purpose-bound proof with the
+saved device key and revokes server access and all its group memberships. It
+retains history and refuses departure while any device participant owns an open
+group. Transfer ownership to another device or dissolve those groups first.
+An uncertain response must be reconciled with `hub-leave-status` using the same
+Hub ID/address; do not generate a replacement identity or resend a join.
+The status proof also works after administrator removal. Old Hubs lacking these
+proof purposes require upgrading; never bypass authentication.
+
+`forget-hub` requires exact `hubId`/`confirmedUrl`, `confirmForget:true`, and an
+explicit `deleteLocalHistory` boolean. It requires approved devices to have
+confirmed revoked access; pending requests must be cancelled first. It deletes
+only this Hub's configuration, signing-key record and scoped CA trust. By default
+keep history (`deleteLocalHistory:false`). Permanent message/cache deletion
+additionally requires `deleteLocalHistory:true,confirmDeleteLocalHistory:true`.
+This cleanup covers the remote communication queue and its cached message/files,
+not DSH model-session journals or browser-local drafts. The result reports
+`cleanupScope` and `modelSessionHistoryRetained`; do not claim total local erasure.
+Explain the consequences to the user before supplying these confirmations.
+Retained archives cannot be attached to a newly generated device identity;
+re-enrollment uses a fresh key/user code and requires administrator approval.
+Other Hub records and queues are preserved. There is no automatic retry.
+
+Hub administrators use the independent management page's Remove device action or
+`dsbot-hub-admin revoke` (private administrator authentication, not CLI arguments).
+Removal retains principal/message rows but frees live directory capacity. Existing
+owners are retained as inactive owners: groups remain safe/frozen until an
+administrator explicitly repairs that same device and its owner reclaims it.
+Administrator repair cannot exceed active-principal capacity. Permanent removal
+does not silently transfer ownership or grant group rights to other members.
+After explicit repair, `hub-leave-status` can clear the local departed fence
+only after a fresh same-key signed proof. The profile remains paused until a
+separate confirmed `resume-hub`; old group rights stay removed.
 | Hub administration | Separate `npm run admin --prefix communication-hub -- <operation>` | Requires separately delegated Hub administrator credentials; group roles cannot supply this authority |
 
 ### Disconnect, select and return to a Hub

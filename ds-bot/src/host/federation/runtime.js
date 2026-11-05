@@ -689,6 +689,11 @@ export class CommunicationRuntime {
     if (this.lastError === 'BACKPRESSURE' && this.queue.pendingAi().length < this.queue.maxPending) this.lastError = null
   }
   async close() {
+    if(this.closing)return this.closing
+    this.closing=this.closeOwned()
+    return this.closing
+  }
+  async closeOwned() {
     this.closed = true
     this.transport.stop()
     await this.transport.opening?.catch(() => {})

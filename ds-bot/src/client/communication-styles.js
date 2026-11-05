@@ -34,8 +34,8 @@ export const communicationCSS = `
 .bt-comm-frame h2{font-size:15px;line-height:20px;margin:0;font-weight:600}
 .bt-comm-frame h3{font-size:13px;margin:8px 0}
 .bt-comm-frame p{margin:6px 0;overflow-wrap:anywhere}
-.bt-comm-frame button{min-height:32px;border:1px solid var(--bt-line);border-radius:8px;background:var(--bt-card);color:var(--bt-ink);padding:6px 10px;font:inherit;text-align:left;cursor:pointer;transition:background .12s}
-.bt-comm-frame button:hover{background:var(--bt-hover)}
+.bt-comm-frame button{min-height:32px;border:1px solid var(--bt-line);border-radius:8px;background:var(--bt-card);color:var(--bt-ink);padding:6px 10px;font:inherit;text-align:left;cursor:pointer;touch-action:manipulation;transition:background-color .12s,color .12s,border-color .12s,opacity .12s,scale var(--bt-tap-duration,0ms) var(--bt-tap-easing,linear)}
+.bt-comm-frame button:hover:not(:disabled):not([aria-disabled=true]){background:var(--bt-hover)}
 .bt-comm-frame button:disabled{opacity:.4;cursor:default}
 .bt-comm-frame :is(button,input,textarea,select,summary):focus-visible{outline:2px solid var(--bt-accent);outline-offset:2px}
 .bt-comm-frame :is(input:not([type=checkbox]),textarea,select){width:100%;min-width:0;border:1px solid var(--bt-line);border-radius:8px;padding:8px;background:var(--bt-card);color:var(--bt-ink);font:13px/18px var(--bt-font)}
@@ -264,7 +264,32 @@ export const communicationCSS = `
 .bt-comm-frame footer:focus-within{border-color:var(--bt-ink-3)}
 .bt-comm-main footer>.bt-comm-send{position:absolute;right:8px;bottom:8px;width:32px;height:32px;min-height:32px;border:0;border-radius:50%;padding:8px;display:grid;place-items:center;background:var(--bt-accent);color:var(--bt-accent-ink)}
 .bt-comm-completion{position:absolute;bottom:calc(100% + 8px);left:0;width:min(420px,100%);box-shadow:0 4px 20px color-mix(in srgb,var(--bt-ink) 10%,transparent)}
+.bt-comm-message-actions .bt-tool{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;padding:5px;border-radius:8px}
+.bt-comm-message-actions .bt-tool svg{width:16px;height:16px}
+.bt-comm-message-actions .bt-tool:hover{background:var(--bt-hover)}
+.bt-comm-thread article:is(:hover,:focus-within) .bt-comm-message-actions button{opacity:1}
+.bt-comm-frame button:active:not(:disabled):not([aria-disabled=true]){background:var(--bt-active);scale:.96}
+.bt-comm-frame button[aria-pressed=true]:hover:not(:disabled),.bt-comm-frame button[aria-expanded=true]:hover:not(:disabled){background:var(--bt-active)}
+.bt-comm-frame button:is(:disabled,[aria-disabled=true]){cursor:default;scale:1;opacity:.4}
+.bt-comm-frame button:focus-visible{outline:2px solid var(--bt-accent);outline-offset:2px}
+.bt-comm-thread-backdrop{background:transparent;display:block}
+.bt-comm-thread-popover{position:fixed;width:min(520px,calc(100vw - 16px));height:min(560px,calc(100dvh - 16px));max-height:calc(100dvh - 16px);padding:16px;display:flex;flex-direction:column;gap:8px;box-shadow:0 8px 32px color-mix(in srgb,var(--bt-ink) 16%,transparent)}
+.bt-comm-thread-popover>.bt-comm-thread-close{position:absolute;right:8px;top:8px;width:28px;height:28px;min-height:28px;padding:6px;margin:0;border:0;background:transparent;display:grid;place-items:center}
+.bt-comm-thread-close svg{width:16px;height:16px}
+.bt-comm-thread-popover>h2{padding-right:32px;flex-shrink:0}
+.bt-comm-thread-popover>.bt-comm-thread{overflow:auto;min-height:80px;flex:1}
+.bt-comm-thread-composer{position:relative;border-top:1px solid var(--bt-line);padding-top:8px;flex-shrink:0}
+.bt-comm-thread-composer textarea{resize:vertical;max-height:160px;padding-right:44px}
+.bt-comm-thread-composer>.bt-comm-send{position:absolute;right:6px;bottom:6px;width:32px;height:32px;padding:8px;border:0;border-radius:50%;display:grid;place-items:center;background:var(--bt-accent);color:var(--bt-accent-ink)}
+.bt-comm-thread-composer .bt-comm-completion{z-index:2}
+.bt-comm-thread-send-error{font-size:12px;color:var(--bt-danger);padding-right:36px}
+.bt-comm-frame .bt-comm-danger:hover:not(:disabled){background:color-mix(in srgb,var(--bt-danger) 10%,var(--bt-card))}
+.bt-comm-frame .bt-comm-danger:active:not(:disabled){background:color-mix(in srgb,var(--bt-danger) 18%,var(--bt-card))}
+.bt-comm-frame :is(.bt-comm-primary,.bt-comm-send):hover:not(:disabled){background:color-mix(in srgb,var(--bt-accent) 88%,var(--bt-main));color:var(--bt-accent-ink)}
+.bt-comm-frame :is(.bt-comm-primary,.bt-comm-send):active:not(:disabled){background:color-mix(in srgb,var(--bt-accent) 76%,var(--bt-main))}
+@media(prefers-reduced-motion:reduce){.bt-comm-frame button{transition:none}.bt-comm-frame button:active:not(:disabled){scale:1}}
 @media(hover:none){.bt-comm-message-actions button{opacity:1}}
+@media(pointer:coarse){.bt-comm-message-actions .bt-tool{width:40px;height:40px;min-height:40px;padding:11px}}
 @media(max-width:760px){
  .bt-comm-frame{grid-template-columns:minmax(0,1fr)}
  .bt-comm-nav{padding:12px}

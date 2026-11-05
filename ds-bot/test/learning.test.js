@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -89,6 +89,7 @@ function start({ replies = [], config = {}, history = {}, seed = TEAM, learningS
   }
   const settings = {
     memoryReviewDelayMs: 60_000,
+    learningAutoApply: false,
     ...config,
     learningTimes: { minTurnMs: 0, idleMs: 0, intervalMs: 0, tickMs: 10, ...config.learningTimes },
   }
@@ -151,6 +152,237 @@ function projectFolder(t, { git = true, agents = '# Project\n- Existing rule\n' 
 const agentsEdit = JSON.stringify({
   action: 'edit',
   edits: [{ op: 'add', after: '- Existing rule', text: '- Keep the report concise.', why: 'The user corrected the report format more than once.' }],
+})
+
+const automaticConfig = { learningAutoApply:true, learningTimes:{tickMs:100_000} }
+
+test('new validated skills automatically create, attach and update by default without a proposal card',async t=>{
+ const history={b2:[...ownChat]}
+ const update=JSON.stringify({...JSON.parse(createReply),action:'update',content:'Run the release checks and verify their output.'})
+ const runtime=await startRuntime({history,replies:[createReply,update],config:{...automaticConfig,learningAutoApply:undefined}})
+ t.after(()=>runtime.stop())
+ await finishTurn(runtime.ctx);await runtime.rt.learningRun()
+ assert.ok(runtime.teamState().capabilities.items['release-checks'])
+ assert.ok(runtime.teamState().bots.b2.capabilities.includes('release-checks'))
+ assert.deepEqual(runtime.learningState().learned.b2,['release-checks'])
+ assert.equal(Object.keys(runtime.learningState().proposals).length,0)
+ addNextTurn(history);await finishTurn(runtime.ctx);await runtime.rt.learningRun()
+ assert.equal(runtime.teamState().capabilities.items['release-checks'].content,JSON.parse(update).content)
+ assert.equal(Object.keys(runtime.learningState().proposals).length,0)
+})
+
+test('automatic AGENTS applies exact checked edits and creates a new file only in a project',async t=>{
+ for(const fresh of [false,true]){
+  const folder=projectFolder(t,{agents:fresh?null:undefined})
+  const seed=structuredClone(TEAM);seed.bots.b2.workDir=folder
+  const reply=fresh?JSON.stringify({action:'edit',edits:[{op:'add',after:'',text:'# Project\n- Verify the result.',why:'Repeated user correction.'}]}):agentsEdit
+  const runtime=await startRuntime({seed,replies:[noneReply,reply],config:automaticConfig})
+  t.after(()=>runtime.stop())
+  await finishTurn(runtime.ctx);await runtime.rt.learningRun()
+  assert.match(readFileSync(join(folder,'AGENTS.md'),'utf8'),fresh?/Verify the result/:/Keep the report concise/)
+  assert.equal(Object.keys(runtime.learningState().proposals).length,0)
+  assert.deepEqual(readdirSync(folder).filter(name=>name.endsWith('.tmp')),[])
+ }
+})
+
+test('manual mode leaves both kinds pending and a policy switched off during review never auto-applies',async t=>{
+ const folder=projectFolder(t),seed=structuredClone(TEAM);seed.bots.b2.workDir=folder
+ const runtime=await startRuntime({seed,replies:[createReply,agentsEdit],config:{...automaticConfig,learningAutoApply:false}})
+ t.after(()=>runtime.stop())
+ await finishTurn(runtime.ctx);await runtime.rt.learningRun()
+ assert.equal(Object.keys(runtime.learningState().proposals).length,2)
+ assert.equal(runtime.teamState().capabilities.items['release-checks'],undefined)
+ assert.equal(readFileSync(join(folder,'AGENTS.md'),'utf8'),'# Project\n- Existing rule\n')
+ const switched=await startRuntime({replies:[createReply],config:{...automaticConfig}})
+ t.after(()=>switched.stop())
+ const shot=switched.rt.botShot
+ switched.rt.botShot=async(...args)=>{const reply=await shot(...args);switched.rt.config.learningAutoApply=false;return reply}
+ await finishTurn(switched.ctx);await switched.rt.learningRun()
+ assert.equal(switched.teamState().capabilities.items['release-checks'],undefined)
+ assert.equal(Object.keys(switched.learningState().proposals).length,1)
+})
+
+test('automatic mode never approves old persisted cards on upgrade',async t=>{
+ const old={id:'old',kind:'skill',botId:'b2',at:1,...JSON.parse(createReply)}
+ const runtime=await startRuntime({learningSeed:{proposals:{old}},config:automaticConfig})
+ t.after(()=>runtime.stop())
+ await finishTurn(runtime.ctx);await runtime.rt.learningRun()
+ assert.equal(runtime.teamState().capabilities.items['release-checks'],undefined)
+ assert.equal(Object.keys(runtime.learningState().proposals).length,1)
+ assert.equal(runtime.requests.length,0)
+})
+
+test('automatic skill validation refuses path-like names and secret content without weakening capability rules',async t=>{
+ for(const proposal of [{...JSON.parse(createReply),name:'../outside'},{...JSON.parse(createReply),content:'Password is hunter2'}]){
+  const runtime=await startRuntime({replies:[JSON.stringify(proposal)],config:automaticConfig})
+  t.after(()=>runtime.stop())
+  await finishTurn(runtime.ctx);await runtime.rt.learningRun()
+  assert.deepEqual(runtime.teamState().bots.b2.capabilities,[])
+  assert.equal(Object.keys(runtime.teamState().capabilities.items).length,0)
+  assert.equal(Object.keys(runtime.learningState().proposals).length,0)
+ }
+})
+
+test('a skill created concurrently before the atomic save is preserved and automatic failure stays reviewable',async t=>{
+ const runtime=await startRuntime({replies:[createReply],config:automaticConfig})
+ t.after(()=>runtime.stop())
+ const save=runtime.rt.capabilitySave;let raced=false
+ runtime.rt.capabilitySave=async(body,options)=>{
+  if(options?.assertCurrent&&!raced){raced=true;await save({...body,content:'User-authored concurrent skill.'},{ui:true})}
+  return save(body,options)
+ }
+ await finishTurn(runtime.ctx);await runtime.rt.learningRun()
+ assert.equal(runtime.teamState().capabilities.items['release-checks'].content,'User-authored concurrent skill.')
+ assert.deepEqual(runtime.teamState().bots.b2.capabilities,[])
+ const proposal=Object.values(runtime.learningState().proposals)[0]
+ assert.equal(proposal.autoApplyFailed,true)
+ assert.equal((await runtime.call('learning-answer',{id:proposal.id,approve:false})).value.applied,false)
+})
+
+test('automatic AGENTS preserves a concurrent editor change and rejects a linked file before model review',async t=>{
+ const folder=projectFolder(t),seed=structuredClone(TEAM);seed.bots.b2.workDir=folder
+ const runtime=await startRuntime({seed,replies:[noneReply,agentsEdit],config:automaticConfig})
+ t.after(()=>runtime.stop())
+ const shot=runtime.rt.botShot
+ runtime.rt.botShot=async(...args)=>{const reply=await shot(...args);if(args[1].includes('AGENTS.md'))writeFileSync(join(folder,'AGENTS.md'),'# Concurrent editor\n');return reply}
+ await finishTurn(runtime.ctx);await runtime.rt.learningRun()
+ assert.equal(readFileSync(join(folder,'AGENTS.md'),'utf8'),'# Concurrent editor\n')
+ assert.equal(Object.values(runtime.learningState().proposals)[0].autoApplyFailed,true)
+ const linkedFolder=projectFolder(t,{agents:null}),target=join(linkedFolder,'keep.txt')
+ writeFileSync(target,'# Private linked file\n');linkSync(target,join(linkedFolder,'AGENTS.md'))
+ const linkedSeed=structuredClone(TEAM);linkedSeed.bots.b2.workDir=linkedFolder
+ const linked=await startRuntime({seed:linkedSeed,replies:[noneReply,agentsEdit],config:automaticConfig})
+ t.after(()=>linked.stop())
+ await finishTurn(linked.ctx);await linked.rt.learningRun()
+ assert.equal(linked.requests.length,1,'linked AGENTS contents never reach the review model')
+ assert.equal(readFileSync(target,'utf8'),'# Private linked file\n')
+ assert.equal(Object.keys(linked.learningState().proposals).length,0)
+})
+
+test('global learning, memory and AGENTS switches still take precedence over automatic approval',async t=>{
+ for(const off of [{learning:false},{memory:false}]){
+  const runtime=await startRuntime({replies:[createReply],config:{...automaticConfig,...off}})
+  t.after(()=>runtime.stop())
+  await finishTurn(runtime.ctx);assert.equal(await runtime.rt.learningRun(),0)
+  assert.equal(runtime.requests.length,0)
+ }
+ const folder=projectFolder(t),seed=structuredClone(TEAM);seed.bots.b2.workDir=folder
+ const runtime=await startRuntime({seed,replies:[createReply,agentsEdit],config:{...automaticConfig,agentsMd:false}})
+ t.after(()=>runtime.stop())
+ await finishTurn(runtime.ctx);await runtime.rt.learningRun()
+ assert.ok(runtime.teamState().capabilities.items['release-checks'])
+ assert.equal(readFileSync(join(folder,'AGENTS.md'),'utf8'),'# Project\n- Existing rule\n')
+ assert.equal(runtime.requests.length,1)
+})
+
+test('automatic skill save rechecks opt-out and writer ownership after asynchronous work',async t=>{
+ for(const change of ['policy','writer']){
+  const runtime=await startRuntime({replies:[createReply],config:{...automaticConfig}})
+  t.after(()=>runtime.stop())
+  const save=runtime.rt.capabilitySave
+  runtime.rt.capabilitySave=async(...args)=>{
+   if(change==='policy')runtime.rt.config.learningAutoApply=false
+   else runtime.rt.readOnly=()=> 'Another host owns this team'
+   return save(...args)
+  }
+  await finishTurn(runtime.ctx);await runtime.rt.learningRun()
+  assert.equal(runtime.teamState().capabilities.items['release-checks'],undefined)
+  assert.equal(Object.values(runtime.learningState().proposals)[0].autoApplyFailed,true)
+ }
+})
+
+test('automatic learning refuses both targets until the proposal checkpoint is durable',async t=>{
+ for(const kind of ['skill','agents']){
+  const folder=projectFolder(t),seed=structuredClone(TEAM);seed.bots.b2.workDir=folder
+  const runtime=await startRuntime({seed,replies:kind==='skill'?[createReply,noneReply]:[noneReply,agentsEdit],config:automaticConfig})
+  t.after(()=>runtime.stop())
+  mkdirSync(join(runtime.home,'learning'),{recursive:true})
+  const blocked=`${runtime.learningPath}.${process.pid}.tmp`
+  mkdirSync(blocked)
+  await finishTurn(runtime.ctx);await runtime.rt.learningRun()
+  assert.equal(runtime.teamState().capabilities.items['release-checks'],undefined)
+  assert.equal(readFileSync(join(folder,'AGENTS.md'),'utf8'),'# Project\n- Existing rule\n')
+  const proposal=(await runtime.call('state')).value.learning.b2[0]
+  assert.equal(proposal.kind,kind);assert.equal(proposal.autoApplyFailed,true)
+  rmSync(blocked,{recursive:true})
+  await runtime.rt.learningRun()
+  assert.equal(runtime.teamState().capabilities.items['release-checks'],undefined,'repairing storage cannot silently approve a failed card')
+  assert.equal((await runtime.call('learning-answer',{id:proposal.id,approve:false})).ok,true)
+  assert.deepEqual(runtime.learningState().proposals,{})
+ }
+})
+
+test('a policy switched off immediately before attachment preserves the saved Skill for explicit recovery',async t=>{
+ const runtime=await startRuntime({replies:[createReply],config:{...automaticConfig}})
+ t.after(()=>runtime.stop())
+ const endpoint=runtime.rt.capabilityEndpoint
+ runtime.rt.capabilityEndpoint=async(...args)=>{
+  if(args[0]==='bot-capability')runtime.rt.config.learningAutoApply=false
+  return endpoint(...args)
+ }
+ await finishTurn(runtime.ctx);await runtime.rt.learningRun()
+ const proposal=Object.values(runtime.learningState().proposals)[0]
+ assert.equal(proposal.saved,true);assert.equal(proposal.autoApplyFailed,true)
+ assert.ok(runtime.teamState().capabilities.items['release-checks'])
+ assert.equal(runtime.teamState().bots.b2.capabilities.includes('release-checks'),false)
+ const recovered=await runtime.call('learning-answer',{id:proposal.id,approve:true})
+ assert.equal(recovered.ok,true)
+ assert.equal(runtime.teamState().bots.b2.capabilities.includes('release-checks'),true)
+})
+
+test('AGENTS atomic replacement rechecks switches and writer ownership after asynchronous file validation',async t=>{
+ for(const change of ['policy','writer','agents','learning','memory']){
+  const folder=projectFolder(t),seed=structuredClone(TEAM);seed.bots.b2.workDir=folder
+  const runtime=await startRuntime({seed,replies:[noneReply,agentsEdit],config:{...automaticConfig}})
+  t.after(()=>runtime.stop())
+  const workFolder=runtime.rt.workFolder
+  runtime.rt.workFolder=async(...args)=>{
+   const result=await workFolder(...args)
+   if(readdirSync(folder).some(name=>name.endsWith('.tmp'))){
+    if(change==='writer')runtime.rt.readOnly=()=> 'Another host owns this team'
+    else runtime.rt.config[{policy:'learningAutoApply',agents:'agentsMd',learning:'learning',memory:'memory'}[change]]=false
+   }
+   return result
+  }
+  await finishTurn(runtime.ctx);await runtime.rt.learningRun()
+  assert.equal(readFileSync(join(folder,'AGENTS.md'),'utf8'),'# Project\n- Existing rule\n')
+  assert.equal(Object.values(runtime.learningState().proposals)[0].autoApplyFailed,true)
+  assert.deepEqual(readdirSync(folder).filter(name=>name.endsWith('.tmp')),[])
+ }
+})
+
+test('automatic AGENTS review rejects a protected working folder',async t=>{
+ const folder=projectFolder(t),seed=structuredClone(TEAM);seed.bots.b2.workDir=folder
+ const runtime=await startRuntime({seed,replies:[noneReply,agentsEdit],config:automaticConfig})
+ t.after(()=>runtime.stop())
+ runtime.rt.workFolder=async()=>{throw new Error('Protected DSH folder')}
+ await finishTurn(runtime.ctx);await runtime.rt.learningRun()
+ assert.equal(runtime.requests.length,1)
+ assert.equal(readFileSync(join(folder,'AGENTS.md'),'utf8'),'# Project\n- Existing rule\n')
+})
+
+test('even a Main Bot cannot automatically rewrite another Bots skill through a stale learned marker',async t=>{
+ const seed=structuredClone(TEAM);seed.mainBotIds.push('b2');seed.bots.b2.capabilities=['release-checks']
+ seed.capabilities.items['release-checks']={...JSON.parse(createReply),kind:'skill',createdBy:'m1'}
+ const update=JSON.stringify({...JSON.parse(createReply),action:'update',content:'New learned rule.'})
+ const runtime=await startRuntime({seed,learningSeed:{learned:{b2:['release-checks']}},replies:[update],config:automaticConfig})
+ t.after(()=>runtime.stop())
+ await finishTurn(runtime.ctx);await runtime.rt.learningRun()
+ assert.equal(runtime.teamState().capabilities.items['release-checks'].content,JSON.parse(createReply).content)
+ assert.equal(Object.values(runtime.learningState().proposals)[0].autoApplyFailed,true)
+})
+
+test('duplicate learning answers serialize and apply a proposal once',async t=>{
+ const runtime=await startRuntime({replies:[createReply],config:{learningTimes:{tickMs:100_000}}})
+ t.after(()=>runtime.stop())
+ await finishTurn(runtime.ctx);await runtime.rt.learningRun()
+ const id=Object.keys(runtime.learningState().proposals)[0]
+ let saves=0;const save=runtime.rt.capabilitySave
+ runtime.rt.capabilitySave=(...args)=>{saves++;return save(...args)}
+ const results=await Promise.all([runtime.call('learning-answer',{id,approve:true}),runtime.call('learning-answer',{id,approve:true})])
+ assert.equal(results.filter(result=>result.ok).length,1)
+ assert.equal(saves,1)
+ assert.equal(Object.keys(runtime.learningState().proposals).length,0)
 })
 
 test('agentsProblem validates edit safety and whole-line matches', () => {

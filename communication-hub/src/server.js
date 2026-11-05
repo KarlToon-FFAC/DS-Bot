@@ -115,6 +115,9 @@ export async function startHub({ databasePath, peers, host='127.0.0.1', port=319
         const response=JSON.stringify({id,ok:true,value})
         requireThat(Buffer.byteLength(response)<=store.limits.maxEnvelopeBytes,'PAYLOAD_TOO_LARGE')
         socket.send(response)
+        if(frame.type==='enrollment.prove'&&value?.left===true){
+          for(const [peer,id] of identities)if(id===value.instanceId)peer.close(1008,'Trust revoked')
+        }
       }catch(error){
         const known=error instanceof CommunicationError
         if(socket.readyState===1)socket.send(JSON.stringify({id,ok:false,error:{code:known?error.code:'STORAGE_UNAVAILABLE',message:known?error.message:'Communication request could not be committed',...(known&&error.details?{details:error.details}:{})}}))

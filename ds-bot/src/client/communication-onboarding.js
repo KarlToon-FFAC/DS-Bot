@@ -64,6 +64,7 @@ export function AddDevice({ request, manualGuide, displayName = 'Human' }) {
   const [absentHub, setAbsentHub] = useState(null)
   const [uncertainHub, setUncertainHub] = useState(null)
   const [selectedHub,setSelectedHub] = useState(null),[resumeConfirmed,setResumeConfirmed]=useState({})
+  const [lifecycle,setLifecycle]=useState(null),[deleteHistory,setDeleteHistory]=useState(false)
   const generation = useRef(0)
   useEffect(() => {
     let active = true
@@ -94,7 +95,7 @@ export function AddDevice({ request, manualGuide, displayName = 'Human' }) {
     const value = await request({ endpoint: 'onboarding-storage' })
     if (token !== generation.current) return
     setStorage(value.storage ?? storage)
-    setSelectedHub(value.selectedHub??selectedHub)
+    setSelectedHub(value.selectedHub??null)
     if (hub) setUncertainHub(current => current === hub.hubId ? null : current)
     if (value.enrollments) setEnrollments(value.enrollments)
     else if (value.hubId) update(value)
@@ -138,10 +139,14 @@ export function AddDevice({ request, manualGuide, displayName = 'Human' }) {
         h('button',{type:'button',disabled:busy||!resumeConfirmed.legacy,onClick:()=>{void run(async token=>{await request({endpoint:'resume-hub',confirmedUrl:selectedHub.url,confirmResume:true,...(selectedHub.hubId?{hubId:selectedHub.hubId}:{})});setResumeConfirmed({});await refreshStorage(token)})}},t('Resume this Hub')))):null,
     enrollments.map(item => h('section', { key: item.hubId, className: 'bt-comm-address' }, h('p', null, h('code', null, item.hubId), ' · ', statusLabel(item.status)), h('p', { className: 'bt-comm-reference' }, item.url),
       item.requestId ? h('p', { className: 'bt-comm-reference' }, t('Request ID'), ': ', h('code', null, item.requestId)) : null,
-      item.paused?h('p',{role:'status'},t('Paused. Identity, trust and Hub history are retained separately.')):item.status === 'approved' ? h('p', { role: 'status' }, t('Approved. The device configuration is saved through the app and will reload. Existing settings are preserved.')) : null,
+      item.departed?h('p',{role:'status'},t('Access revoked. History is retained; this device cannot resume.')):item.paused?h('p',{role:'status'},t('Paused. Identity, trust and Hub history are retained separately.')):item.status === 'approved' ? h('p', { role: 'status' }, t('Approved. The device configuration is saved through the app and will reload. Existing settings are preserved.')) : null,
+      item.status==='approved'?h(Fragment,null,
+        !item.departed?h('button',{type:'button',disabled:busy,onClick:()=>setLifecycle({kind:'leave',item})},t('Leave this Hub')):null,
+        h('button',{type:'button',disabled:busy,onClick:()=>{void run(async token=>{await request({endpoint:'hub-leave-status',hubId:item.hubId,confirmedUrl:item.url});await refreshStorage(token)})}},t('Check revoked access'))):null,
+      h('button',{type:'button',disabled:busy,onClick:()=>{setDeleteHistory(false);setLifecycle({kind:'forget',item})}},t('Forget this Hub')),
       selectedHub?.hubId!==item.hubId?h('button',{type:'button',disabled:busy,onClick:()=>{void run(token=>select(item,token))}},t('Select this Hub')):null,
       selectedHub?.hubId===item.hubId&&selectedHub.enabled?h('button',{type:'button',disabled:busy,onClick:()=>{void run(async token=>{await request({endpoint:'disconnect-hub',hubId:item.hubId});if(token===generation.current)await refreshStorage(token)})}},t('Disconnect this Hub')):null,
-      selectedHub?.hubId===item.hubId&&item.paused&&item.status==='approved'?h(Fragment,null,
+      selectedHub?.hubId===item.hubId&&item.paused&&item.status==='approved'&&!item.departed?h(Fragment,null,
         h('label',{className:'bt-comm-check'},h('input',{type:'checkbox',checked:Boolean(resumeConfirmed[item.hubId]),onChange:event=>setResumeConfirmed(current=>({...current,[item.hubId]:event.target.checked}))}),t('Resume retained pending messages and work after the Hub checks authorization.')),
         h('button',{type:'button',disabled:busy||!resumeConfirmed[item.hubId],onClick:()=>{void run(async token=>{const value=await request({endpoint:'resume-hub',hubId:item.hubId,confirmedUrl:item.url,confirmResume:true});if(token===generation.current){update(value);setResumeConfirmed({});await refreshStorage(token)}})}},t('Resume this Hub'))):null,
       item.requestId ? h('button', { type: 'button', disabled: busy||Boolean(selectedHub?.hubId&&selectedHub.hubId!==item.hubId), onClick: () => { void run(async token => {
@@ -149,6 +154,17 @@ export function AddDevice({ request, manualGuide, displayName = 'Human' }) {
         catch (failure) { if (token === generation.current && failure.code === 'JOIN_NOT_FOUND') setAbsentHub(item.hubId); throw failure }
       }) } }, t('Check approval')) : h('p', { role: 'status' }, t('Device identity is saved locally. No request ID exists yet; access has not been requested from the Hub.')),
       item.requestId && ['prepared', 'pending'].includes(item.status) ? h('button', { type: 'button', disabled: busy, onClick: () => { void run(async token => { const value = await request({ endpoint: 'cancel-hub-join', hubId: item.hubId }); if (token === generation.current) update(value) }) } }, t('Cancel request')) : null)),
+    lifecycle?h('section',{className:'bt-comm-address',role:'alertdialog','aria-label':t(lifecycle.kind==='leave'?'Leave this Hub':'Forget this Hub')},
+      h('h3',null,t(lifecycle.kind==='leave'?'Leave this Hub':'Forget this Hub')),
+      h('code',null,lifecycle.item.hubId),h('p',null,lifecycle.item.url),
+      h('p',null,t(lifecycle.kind==='leave'?'Revoke server access and group memberships. Chat history stays. Transfer or dissolve groups owned by this device first.':'Delete this Hub configuration, device key and saved CA trust. Leave or cancel pending approval first. Other Hubs are unaffected. Retained history cannot be attached to a new identity.')),
+      lifecycle.kind==='forget'?h('label',{className:'bt-comm-check'},h('input',{type:'checkbox',checked:deleteHistory,onChange:event=>setDeleteHistory(event.target.checked)}),t('Also permanently delete this Hub communication queue and cached files. DSH session journals and browser drafts are retained.')):null,
+      h('button',{type:'button',disabled:busy,onClick:()=>{void run(async token=>{
+        const item=lifecycle.item
+        await request(lifecycle.kind==='leave'?{endpoint:'leave-hub',hubId:item.hubId,confirmedUrl:item.url,confirmLeave:true}:{endpoint:'forget-hub',hubId:item.hubId,confirmedUrl:item.url,confirmForget:true,deleteLocalHistory:deleteHistory,...(deleteHistory?{confirmDeleteLocalHistory:true}:{})})
+        if(token===generation.current){setLifecycle(null);await refreshStorage(token)}
+      })}},t(lifecycle.kind==='leave'?'Confirm leaving':'Confirm forgetting')),
+      h('button',{type:'button',disabled:busy,onClick:()=>setLifecycle(null)},t('Cancel'))):null,
     h('details', { className: 'bt-comm-manual-guide' }, h('summary', null, t('Manual configuration guide')), manualGuide),
     error ? h('p', { className: 'bt-comm-error', role: 'alert' }, error) : null)
 }

@@ -21,7 +21,7 @@ async function pane({ enabled = true, snapshot, history = [], getState, handleRe
   const mod = { exports: {} }
   runInNewContext(outputFiles[0].text, { module: mod, exports: mod.exports,
     require: id => id === 'react' ? React : id === 'react-dom' ? harness('react-dom') : { MarkdownText },
-    window: dom.window, document: dom.window.document, sessionStorage: dom.window.sessionStorage, localStorage: dom.window.localStorage,
+    window: dom.window, document: dom.window.document, navigator:dom.window.navigator, sessionStorage: dom.window.sessionStorage, localStorage: dom.window.localStorage,
     setTimeout, clearTimeout, crypto: globalThis.crypto, URL, AbortSignal, requestAnimationFrame: dom.window.requestAnimationFrame, cancelAnimationFrame: dom.window.cancelAnimationFrame })
   const panel = createSource(true), roster = createSource({ communicationEnabled: enabled }), surface = createSource({ mode: 'bot' }), calls = []
   const request = async body => {
@@ -64,6 +64,29 @@ async function pane({ enabled = true, snapshot, history = [], getState, handleRe
 const membership = { conversationId: 'group', title: 'Shared group', kind: 'group', role: 'owner', speakingMode: 'speak', membershipEpoch: 'epoch', membershipVersion: 1,
   ownerPrincipalId: 'human:a:owner', joinSeq: 1, watermark: 1, info: { members: [{ principalId: 'human:a:owner', displayName: 'Owner', kind: 'human', role: 'owner', speakingMode: 'speak' }] } }
 const state = () => ({ connected: true, instanceId: 'a', humanPrincipalId: 'human:a:owner', contacts: [], conversations: [], invites: [], outbox: [], errors: [] })
+
+test('a departed device can reconcile administrator repair without reconnecting and forgetting names the exact cleanup scope',async()=>{
+ let departed=true
+ const hub={hubId:'saved-hub',url:'wss://synthetic.example.test/communication',status:'approved',paused:true,requestId:'saved-request',instanceId:'saved-instance'}
+ await pane({snapshot:state(),handle:async body=>{
+  if(body.endpoint==='onboarding-storage')return {selectedHub:{hubId:hub.hubId,url:hub.url,enabled:false},enrollments:[{...hub,departed}]}
+  if(body.endpoint==='hub-leave-status'){departed=false;return {hubId:hub.hubId,left:false}}
+  return {}
+ }},async({doc,click,calls,button})=>{
+  await click('Personal settings');await click('Add a device')
+  assert.ok(button('Check revoked access'))
+  assert.equal(button('Resume this Hub'),undefined)
+  await click('Check revoked access')
+  assert.ok(button('Resume this Hub'))
+  assert.equal(calls.some(call=>['resume-hub','join-hub','switch-hub'].includes(call.endpoint)),false)
+  await click('Forget this Hub')
+  const confirmation=doc.querySelector('[role=alertdialog]')
+  assert.match(confirmation.textContent,/communication queue and cached files/)
+  assert.match(confirmation.textContent,/DSH session journals and browser drafts are retained/)
+  assert.equal(confirmation.querySelector('input[type=checkbox]').checked,false,'history/cache removal requires a separate explicit choice')
+  assert.equal(calls.some(call=>call.endpoint==='forget-hub'),false)
+ })
+})
 
 test('picked files can be sent without text using one stable request and clear only after acknowledgement',async()=>{
  const snapshot={...state(),attachmentsAvailable:true,conversations:[membership]}
@@ -295,34 +318,82 @@ test('personal gear owns profile, closed visibility, identity and connection set
   })
 })
 
-test('reply chains render nested branches separately, preserve exact reply intents and offer no read-only send controls', async () => {
+test('floating replies show chronological messages without repeated quotes and preserve reply targets and read-only controls', async () => {
   const snapshot = { ...state(), conversations: [{ ...membership }] }
-  const events = ['Root', 'Child', 'Deep reply', 'Another branch'].map((text, i) => ({ type: 'message', conversationSeq: i + 1, serverAcceptedAt: '2026-11-04T00:00:00Z', message: { messageId: `m${i}`, author: membership.info.members[0], content: { text }, mentions: [], replyToMessageId: i ? i === 2 ? 'm1' : 'm0' : null } }))
+  const events = ['Root', 'Child', 'Another branch', 'Late deep reply'].map((text, i) => ({ type: 'message', conversationSeq: i + 1, serverAcceptedAt: '2026-11-04T00:00:00Z', message: { messageId: `m${i}`, author: membership.info.members[0], content: { text }, mentions: [], replyToMessageId: i === 3 ? 'm1' : i ? 'm0' : null } }))
   await pane({ snapshot, history: events, handle: async body => body.endpoint === 'thread' ? { conversationId: 'group', membershipEpoch: 'epoch', messageId: body.messageId, rootMessageId: 'm0', watermark: 4, events, hasMore: false } : {} }, async ({ doc, click, edit, calls }) => {
     await click('Shared group')
     await click('View replies')
     assert.equal(doc.querySelectorAll('.bt-comm-thread-log article').length, 4)
-    assert.equal(doc.querySelector('[data-thread-message-id="m2"]').style.getPropertyValue('--reply-depth'), '2')
-    assert.match(doc.querySelector('[data-thread-message-id="m2"] .bt-comm-thread-parent').textContent, /Child/)
-    assert.equal(doc.querySelectorAll('.bt-comm-thread-branches').length,2)
-    const collapse=doc.querySelector('[data-thread-message-id="m1"] button[aria-expanded]')
-    await act(async()=>collapse.click())
-    assert.equal(doc.querySelector('[data-thread-message-id="m2"]'),null)
-    assert.ok(doc.querySelector('[data-thread-message-id="m3"]'),'sibling branch stays visible')
-    await act(async()=>collapse.click())
-    assert.ok(doc.querySelector('[data-thread-message-id="m2"]'))
-    await act(async () => doc.querySelector('[data-thread-message-id="m2"] button').click())
-    await edit(doc.querySelector('footer textarea'), 'Continue this exact reply')
-    await click('Send message')
+    assert.deepEqual([...doc.querySelectorAll('.bt-comm-thread-log article')].map(node=>node.dataset.threadMessageId),['m0','m1','m2','m3'])
+    assert.equal(doc.querySelector('.bt-comm-thread-parent'),null)
+    assert.equal(doc.querySelector('.bt-comm-thread-branches'),null)
+    assert.equal(events[3].message.replyToMessageId,'m1','display flattening retains canonical reply relationships')
+    assert.ok(doc.querySelector('.bt-comm-log [data-message-id="m3"] .bt-comm-message-bubble'),'main conversation remains intact')
+    await act(async () => doc.querySelector('[data-thread-message-id="m2"] button[aria-label="Reply"]').click())
+    await edit(doc.querySelector('.bt-comm-thread-composer textarea'), 'Continue this exact reply')
+    await click('Send reply')
     assert.equal(calls.find(call => call.endpoint === 'send').replyToMessageId, 'm2')
+    await click('Close replies')
     snapshot.conversations[0].speakingMode = 'readOnly'; await click('Refresh status')
     assert.equal(doc.querySelector('footer'), null)
-    assert.equal(doc.querySelector('.bt-comm-log button')?.textContent, 'View replies')
+    assert.ok(doc.querySelector('.bt-comm-log button[aria-label="View replies"]'))
+    assert.ok(doc.querySelector('.bt-comm-log button[aria-label="Copy"]'))
+    assert.equal(doc.querySelector('.bt-comm-log button[aria-label="Reply"]'), null)
     await click('View replies')
-    assert.equal([...doc.querySelectorAll('.bt-comm-thread button')].filter(button=>button.textContent==='Reply').length, 0)
+    assert.equal(doc.querySelector('.bt-comm-thread button[aria-label="Reply"]'), null)
     assert.equal(doc.querySelectorAll('.bt-comm-thread-log article').length, 4)
     assert.equal(calls.filter(call => call.endpoint === 'send').length, 1)
   })
+})
+
+test('message hover icons copy without sending and open only the selected branch with its own reply composer',async()=>{
+ const events=['Root','Selected branch','Child','Unrelated sibling'].map((text,i)=>({type:'message',conversationSeq:i+1,serverAcceptedAt:'2026-11-04T00:00:00Z',message:{messageId:`m${i}`,author:membership.info.members[0],content:{text},mentions:[],replyToMessageId:i===2?'m1':i?'m0':null}}))
+ let copied=''
+ await pane({snapshot:{...state(),conversations:[membership]},history:events,handle:async body=>body.endpoint==='thread'?{conversationId:'group',membershipEpoch:'epoch',messageId:body.messageId,rootMessageId:'m0',watermark:4,events,hasMore:false}:{}},async({dom,doc,click,edit,calls})=>{
+  Object.defineProperty(dom.window.navigator,'clipboard',{value:{writeText:async value=>{copied=value}}})
+  await click('Shared group')
+  await edit(doc.querySelector('footer textarea'),'Keep my main draft')
+  const selected=doc.querySelector('[data-message-id="m1"]')
+  await act(async()=>selected.querySelector('button[aria-label="Copy"]').click())
+  assert.equal(copied,'Selected branch');assert.ok(selected.querySelector('button[aria-label="Copied"]'))
+  assert.equal(calls.some(call=>call.endpoint==='send'),false)
+  const trigger=selected.querySelector('button[aria-label="Reply"]')
+  await act(async()=>trigger.click())
+  const popup=doc.querySelector('.bt-comm-thread-popover');assert.equal(popup.getAttribute('role'),'dialog')
+  assert.equal(doc.querySelectorAll('.bt-comm-thread-log article').length,2)
+  assert.equal(doc.querySelector('[data-thread-message-id="m0"]'),null)
+  assert.equal(doc.querySelector('[data-thread-message-id="m3"]'),null)
+  await edit(popup.querySelector('textarea'),'Reply from the floating window')
+  await click('Send reply')
+  const send=calls.find(call=>call.endpoint==='send')
+  assert.equal(send.replyToMessageId,'m1');assert.equal(send.text,'Reply from the floating window')
+  assert.equal(doc.querySelector('footer textarea').value,'Keep my main draft')
+  await click('Close replies')
+  assert.equal(doc.querySelector('.bt-comm-thread-popover'),null);assert.equal(doc.activeElement,trigger)
+ })
+})
+
+test('an uncertain floating reply keeps its original identity across close/reopen and a terminal denial unlocks editing',async()=>{
+ const event={type:'message',conversationSeq:1,serverAcceptedAt:'2026-11-04T00:00:00Z',message:{messageId:'root',author:membership.info.members[0],content:{text:'Reply target'},mentions:[],replyToMessageId:null}}
+ let attempts=0
+ await pane({snapshot:{...state(),conversations:[membership]},history:[event],handle:async body=>{
+  if(body.endpoint==='thread')return {conversationId:'group',membershipEpoch:'epoch',messageId:'root',rootMessageId:'root',watermark:1,events:[event],hasMore:false}
+  if(body.endpoint==='send'){attempts++;throw Object.assign(new Error('Synthetic failure'),{code:attempts===1?'REQUEST_TIMEOUT':'FORBIDDEN'})}
+  return {}
+ }},async({doc,click,edit,calls})=>{
+  await click('Shared group');await click('Reply')
+  await edit(doc.querySelector('.bt-comm-thread-composer textarea'),'One logical reply')
+  await click('Send reply')
+  const first=calls.find(call=>call.endpoint==='send')
+  assert.equal(doc.querySelector('.bt-comm-thread-composer textarea').disabled,true)
+  await click('Close replies');await click('Reply');await click('Retry same send')
+  const sends=calls.filter(call=>call.endpoint==='send');assert.equal(sends.length,2)
+  assert.deepEqual(sends[1],first)
+  assert.equal(doc.querySelector('.bt-comm-thread-composer textarea').disabled,false)
+  assert.equal(doc.querySelector('.bt-comm-thread-composer textarea').value,'One logical reply')
+  assert.equal(doc.querySelector('.bt-comm-log').textContent.includes('Synthetic failure'),false)
+ })
 })
 
 test('late thread responses cannot survive a selected conversation change or membership revocation', async () => {

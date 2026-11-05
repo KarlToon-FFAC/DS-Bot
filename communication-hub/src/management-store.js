@@ -50,7 +50,7 @@ export class HubManagement {
   peer(instanceId) { return this.db.prepare('SELECT * FROM hub_enrolled_peers WHERE instance_id=?').get(instanceId) }
   challenge(binding, input, address = 'local') {
     this.cleanup(); this.rate('challenge:global', 300); this.rate(`challenge:${address}`, 30)
-    requireThat(['join', 'status', 'cancel', 'login'].includes(input.purpose), 'INVALID_REQUEST')
+    requireThat(['join', 'status', 'cancel', 'login', 'leave', 'leave-status'].includes(input.purpose), 'INVALID_REQUEST')
     requireThat(this.challenges.size < 512, 'JOIN_LIMIT')
     let publicKey, requestId, instanceId, authRevision
     if (input.purpose === 'join') {
@@ -61,10 +61,10 @@ export class HubManagement {
       publicKey = key.export({ type: 'spki', format: 'pem' }).toString()
       requireThat(!this.db.prepare('SELECT 1 FROM hub_enrolled_peers WHERE public_key=?').get(publicKey), 'ALREADY_ENROLLED')
       requestId = randomUUID()
-    } else if (input.purpose === 'login') {
+    } else if (['login','leave','leave-status'].includes(input.purpose)) {
       instanceId = identifier(input.instanceId)
       const peer = this.peer(instanceId)
-      requireThat(peer && this.db.prepare('SELECT trusted FROM instances WHERE id=?').get(instanceId)?.trusted === 1, 'UNAUTHENTICATED')
+      requireThat(peer && (input.purpose!=='login'||this.db.prepare('SELECT trusted FROM instances WHERE id=?').get(instanceId)?.trusted === 1), 'UNAUTHENTICATED')
       publicKey = peer.public_key
       authRevision = peer.revision
     } else {
@@ -86,10 +86,19 @@ export class HubManagement {
     requireThat(typeof input.signature === 'string' && input.signature.length <= 128 && /^[A-Za-z0-9_-]+$/.test(input.signature), 'UNAUTHENTICATED')
     requireThat(verify(null, Buffer.from(enrollmentTranscript(item)), item.publicKey, Buffer.from(input.signature, 'base64url')), 'UNAUTHENTICATED')
     this.cleanup()
-    if (item.purpose === 'login') {
+    if (['login','leave','leave-status'].includes(item.purpose)) {
       const peer = this.peer(item.instanceId)
       requireThat(peer?.public_key === item.publicKey && peer.revision === item.authRevision, 'UNAUTHENTICATED')
       const row = this.db.prepare('SELECT label,trusted FROM instances WHERE id=?').get(item.instanceId)
+      if(item.purpose!=='login'){
+        requireThat(row,'UNAUTHENTICATED')
+        if(item.purpose==='leave'&&row.trusted===1){
+          requireThat(!this.db.prepare('SELECT 1 FROM conversations c JOIN principals p ON p.id=c.owner_id WHERE p.instance_id=? AND c.closed=0').get(item.instanceId),'OWNER_TRANSFER_REQUIRED')
+          this.revoke(item.instanceId)
+          this.audit('instance.leave',item.instanceId)
+        }
+        return {instanceId:item.instanceId,left:item.purpose==='leave'||row.trusted===0}
+      }
       requireThat(row?.trusted === 1, 'UNAUTHENTICATED')
       return { instanceId: item.instanceId, label: row.label }
     }
@@ -125,7 +134,7 @@ export class HubManagement {
         this.audit('join.reject', row.id); return { requestId: row.id, status: 'rejected' }
       }
       const id = randomUUID()
-      requireThat(this.db.prepare('SELECT count(*) n FROM principals').get().n < this.store.limits.maxPrincipals, 'DIRECTORY_FULL')
+      requireThat(this.store.activePrincipalCount() < this.store.limits.maxPrincipals, 'DIRECTORY_FULL')
       requireThat(!this.db.prepare('SELECT 1 FROM hub_enrolled_peers WHERE public_key=?').get(row.public_key), 'ALREADY_ENROLLED')
       this.db.prepare('INSERT INTO instances(id,label) VALUES (?,?)').run(id, row.label)
       this.db.prepare('INSERT INTO hub_enrolled_peers(instance_id,public_key) VALUES (?,?)').run(id, row.public_key)
@@ -162,6 +171,8 @@ export class HubManagement {
     return this.store.transaction(() => {
       const row = this.db.prepare('SELECT i.trusted,i.pairing_revision,p.revision FROM instances i JOIN hub_enrolled_peers p ON p.instance_id=i.id WHERE i.id=?').get(input.instanceId)
       requireThat(row && row.trusted === 0 && row.revision === input.expectedRevision && row.pairing_revision === input.expectedRevision, 'PAIRING_REVISION_CONFLICT')
+      const ownCount=this.db.prepare('SELECT count(*) n FROM principals WHERE instance_id=?').get(input.instanceId).n
+      requireThat(this.store.activePrincipalCount()+ownCount<=this.store.limits.maxPrincipals,'DIRECTORY_FULL')
       // Same update as configurePeer, inside this transaction's revision CAS.
       // Authentication retains the previously proved key; no membership is restored.
       this.db.prepare('UPDATE instances SET trusted=1,epoch=epoch+1,pairing_revision=pairing_revision+1 WHERE id=?').run(input.instanceId)

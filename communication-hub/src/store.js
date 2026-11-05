@@ -77,6 +77,9 @@ export class HubStore {
     })
   }
   close() { this.db.close() }
+  activePrincipalCount(excludingInstance) {
+    return this.db.prepare('SELECT count(*) n FROM principals p JOIN instances i ON i.id=p.instance_id WHERE i.trusted=1 AND (? IS NULL OR i.id<>?)').get(excludingInstance??null,excludingInstance??null).n
+  }
   transaction(work) {
     this.db.exec('BEGIN IMMEDIATE')
     try { const result = work(); this.beforeCommit?.(); this.db.exec('COMMIT'); return result }
@@ -107,6 +110,8 @@ export class HubStore {
       requireThat(!old||revision>=old.pairing_revision,'STALE_PAIRING_REVISION')
       if(!old)this.db.prepare('INSERT INTO instances(id,label,pairing_revision) VALUES (?,?,?)').run(instanceId,String(label??instanceId).slice(0,256),revision)
       else if(revision>old.pairing_revision){
+        const ownCount=this.db.prepare('SELECT count(*) n FROM principals WHERE instance_id=?').get(instanceId).n
+        requireThat(this.activePrincipalCount(instanceId)+ownCount<=this.limits.maxPrincipals,'DIRECTORY_FULL')
         const named=this.db.prepare('SELECT label FROM hub_instance_names WHERE instance_id=?').get(instanceId)
         this.db.prepare('UPDATE instances SET trusted=1,epoch=epoch+1,pairing_revision=?,label=? WHERE id=?').run(revision,named?.label??String(label??instanceId).slice(0,256),instanceId)
       }
@@ -134,7 +139,7 @@ export class HubStore {
       requireThat(existing || kind !== 'human' || !this.db.prepare("SELECT 1 FROM principals WHERE instance_id=? AND kind='human'").get(auth.instanceId),'HUMAN_ALREADY_REGISTERED')
       const defaultName=displayName
       displayName=this.db.prepare('SELECT display_name FROM principal_preferences WHERE principal_id=?').get(principalId)?.display_name??displayName
-      requireThat(existing||this.db.prepare('SELECT count(*) count FROM principals').get().count<this.limits.maxPrincipals,'DIRECTORY_FULL')
+      requireThat(existing||this.activePrincipalCount()<this.limits.maxPrincipals,'DIRECTORY_FULL')
       this.db.prepare('INSERT INTO principals VALUES (?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name').run(principalId,auth.instanceId,kind,localId,displayName)
       if(kind==='bot')this.db.prepare('INSERT INTO principal_publication VALUES (?,1) ON CONFLICT(principal_id) DO UPDATE SET published=1').run(principalId)
       this.db.prepare('INSERT INTO principal_profiles VALUES (?,?) ON CONFLICT(principal_id) DO UPDATE SET default_name=excluded.default_name').run(principalId,defaultName)
@@ -552,7 +557,9 @@ export class HubStore {
     })
   }
   revokeInstance(instanceId) {
+    identifier(instanceId)
     return this.transaction(()=>{
+      requireThat(this.db.prepare('SELECT 1 FROM instances WHERE id=?').get(instanceId),'INSTANCE_NOT_FOUND')
       this.db.prepare('UPDATE instances SET trusted=0 WHERE id=?').run(instanceId)
       const members=this.db.prepare('SELECT m.* FROM memberships m JOIN principals p ON p.id=m.principal_id WHERE p.instance_id=? AND m.active=1').all(instanceId)
       for(const member of members){

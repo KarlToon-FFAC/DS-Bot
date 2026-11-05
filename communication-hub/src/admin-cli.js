@@ -11,7 +11,8 @@ export const help=operation=>JSON.stringify({name:'dsbot-hub-admin',usage:'npm r
  authority:'Explicit Hub administrator/operator only. Bots gain no administrator rights from a group role. Never automatically approve unknown devices.',
  authentication:'Provide DSBOT_HUB_ADMIN_PASSWORD privately in the process environment and DSBOT_HUB_ADMIN_URL as the exact trusted HTTP-loopback/HTTPS admin origin. No credential arguments or config files. Optional DSBOT_HUB_ADMIN_CA_FILE contains public PEM CA certificates only.',
  operations:operation&&fields[operation]?{[operation]:fields[operation]}:fields,
- safety:'No discovery, redirects, TLS bypass or automatic retry. Reconcile state after an uncertain mutation. Approval/rejection and rename/repair require the observed version.'},null,2)
+ safety:'No discovery, redirects, TLS bypass or automatic retry. Reconcile state after an uncertain mutation. Approval/rejection and rename/repair require the observed version.',
+ lifecycle:'revoke removes device access and active group memberships, revokes unfinished delivery, retains history/principal rows and releases live-principal quota. An inactive owner remains the original owner; other members gain no rights. Explicit repair restores only that same proved device key, is capacity-checked and does not restore group membership. Never hard-delete historical identities to make room.'},null,2)
 export function prepare(operation,input={}){
  if(!Object.hasOwn(fields,operation))fail('UNKNOWN_OPERATION')
  if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).some(key=>!fields[operation].includes(key)))fail('INVALID_REQUEST')

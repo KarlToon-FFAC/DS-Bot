@@ -176,6 +176,7 @@ export function install(rt) {
         const enrollmentActions = { 'decode-hub-code': 'decode-hub-code', 'join-hub': 'join', 'hub-join-status': 'status', 'cancel-hub-join': 'cancel', 'onboarding-storage': 'storage',
           'available-bots': 'available-bots', 'publish-bots': 'publish-bots', 'update-hub-trust': 'update-hub-trust',
           'disconnect-hub':'disconnect-hub','switch-hub':'switch-hub','resume-hub':'resume-hub',
+          'leave-hub':'leave-hub','hub-leave-status':'hub-leave-status','forget-hub':'forget-hub',
           'user-code': 'user-code', 'rotate-user-code': 'rotate-user-code', 'request-contact': 'contact-request', 'contact-requests': 'contact-requests',
           'contact-relations': 'contact-relations', 'accept-contact': 'contact-accept', 'reject-contact': 'contact-reject', 'cancel-contact': 'contact-cancel', 'revoke-contact': 'contact-revoke' }
         if (Object.hasOwn(enrollmentActions, body.endpoint)) {

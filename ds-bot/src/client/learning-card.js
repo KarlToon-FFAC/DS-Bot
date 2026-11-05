@@ -40,6 +40,7 @@ function ProposalCard({ proposal, initialError = '', onFailure, onResolved, acti
       h(ProposalHead, { titleId, icon: PencilIcon, title: t('AGENTS.md update') }),
       h(FileBox, { name: 'AGENTS.md', path: proposal.folder, state: proposal.exists === false ? 'Added' : 'Modified', blocks }),
       proposal.edits.map((edit, index) => edit.why ? h('p', { className: 'bt-learning-why', key: index }, edit.why) : null),
+      proposal.autoApplyFailed ? h('p',{className:'bt-learning-why',role:'status'},t('Automatic application stopped. Review or discard this suggestion.')) : null,
       error ? h('div', { className: 'bt-learning-error', role: 'alert' }, error) : null,
       h(ProposalFoot, { busy, answer }))
   }
@@ -48,6 +49,7 @@ function ProposalCard({ proposal, initialError = '', onFailure, onResolved, acti
     h(ProposalHead, { titleId, title: proposal.name, kind: t(update ? 'Skill update' : 'New skill'), detail: proposal.description, oldDetail }),
     h(FileBox, { name: 'SKILL.md', path: `skills/${proposal.name}`, state: update ? 'Updated' : 'Added', blocks: [rows] }),
     proposal.why ? h('p', { className: 'bt-learning-why' }, proposal.why) : null,
+    proposal.autoApplyFailed ? h('p',{className:'bt-learning-why',role:'status'},t('Automatic application stopped. Review or discard this suggestion.')) : null,
     error ? h('div', { className: 'bt-learning-error', role: 'alert' }, error) : null,
     h(ProposalFoot, { busy, answer }))
 }

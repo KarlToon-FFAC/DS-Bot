@@ -2,7 +2,8 @@ import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, sig
 import { lookup } from 'node:dns/promises'
 import { BlockList, isIP } from 'node:net'
 import { existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { lstat, realpath, rm } from 'node:fs/promises'
+import { join, resolve, dirname } from 'node:path'
 import { credentialKey, parseCredentialKey } from '@deepseek-ai/dsh-credentials'
 import { scopedTrust, verifyHubCode } from './hub-trust.js'
 import { communicationCapabilities } from './transport.js'
@@ -95,6 +96,7 @@ const credentialsOf = ctx => {
     describeRecord: key => phase('COMMUNICATION_CREDENTIAL_DESCRIBE_FAILED', () => credentials.describeRecord(key)),
     modifyRecord: (key, mutate) => phase('COMMUNICATION_CREDENTIAL_WRITE_FAILED', () => credentials.modifyRecord(key, mutate)),
     listRecords: typeof credentials.listRecords === 'function' ? () => phase('COMMUNICATION_CREDENTIAL_LIST_FAILED', () => credentials.listRecords()) : undefined,
+    deleteRecord: typeof credentials.deleteRecord === 'function' ? key => phase('COMMUNICATION_CREDENTIAL_DELETE_FAILED', () => credentials.deleteRecord(key)) : undefined,
   }
 }
 const contextOf = value => value.ctx ?? value
@@ -106,9 +108,10 @@ function checkedRecord(record, hub, { instanceId } = {}) {
   return value
 }
 const namespace = hubId => 'hub-' + createHash('sha256').update(hubId).digest('hex').slice(0,32)
+const identityNamespace = (hubId,publicKey) => namespace(hubId)+'-'+createHash('sha256').update(publicKey).digest('hex').slice(0,16)
 const checkedScope = record => {
   const scope = record.queueScope ?? 'legacy'
-  if (scope !== 'legacy' && scope !== namespace(record.hubId)) fail('COMMUNICATION_CREDENTIAL_MISMATCH')
+  if (scope !== 'legacy' && scope !== namespace(record.hubId) && scope !== identityNamespace(record.hubId,record.publicKey)) fail('COMMUNICATION_CREDENTIAL_MISMATCH')
   return scope
 }
 const publicConfiguration = value => Object.fromEntries(['enabled','hubId','url','instanceId','credentialKey','credentialEnv','humanDisplayName','publishedBotIds','autoAcceptBotInvites','pollMs','contextHistoryBytes','rotateTokens','maxPending'].filter(key=>value?.[key]!==undefined).map(key=>[key,value[key]]))
@@ -233,7 +236,7 @@ export async function openEnrollmentSocket(url, options = {}) {
 
 export const communicationStorageStatus = Object.freeze({ kind: 'dsh-credential-record', defaultProvider: 'owner-acl-plaintext',
   encryptedByDefault: false, agentIsolation: false, explanation: 'The default DSH provider stores plaintext protected by your OS account permissions. Tools running as the same OS user can read it. Other providers may offer different protection.' })
-const safeStatus = record => ({ hubId: record.hubId, url: record.url, paused: record.paused === true || record.requiresResume === true, ...(record.trust ? { trustFingerprint: record.trust.fingerprint } : {}), requestId: record.requestId ?? null,
+const safeStatus = record => ({ hubId: record.hubId, url: record.url, departed:record.departed===true, paused: record.paused === true || record.requiresResume === true, ...(record.trust ? { trustFingerprint: record.trust.fingerprint } : {}), requestId: record.requestId ?? null,
   instanceId: record.instanceId ?? null, status: record.status, displayName: record.displayName, credentialKey: communicationCredentialKey(record.hubId), storage: communicationStorageStatus })
 const operation = value => { if (!identifier(value)) fail('OPERATION_ID_REQUIRED'); return value }
 const version = value => { if (!Number.isSafeInteger(value) || value < 1) fail('INVALID_REQUEST'); return value }
@@ -259,6 +262,8 @@ export class CommunicationOnboarding {
     if (action === 'disconnect-hub') return this.disconnect(input)
     if (action === 'switch-hub') return this.selectHub(input)
     if (action === 'resume-hub') return this.resumeHub(input)
+    if (action === 'leave-hub' || action === 'hub-leave-status') return this.leaveHub(input,action==='hub-leave-status')
+    if (action === 'forget-hub') return this.forgetHub(input)
     if (action === 'update-hub-trust') return this.updateTrust(input)
     if (action === 'status' || action === 'cancel') return this.enrollment(action, input)
     if (action === 'storage') return this.storage(input)
@@ -301,16 +306,20 @@ export class CommunicationOnboarding {
     return { publishedBotIds: ids, reloadRequired: true }
   }
   async storage(input) {
-    const hubId = input.hubId ?? this.rt.config.communication?.hubId
-    if (!hubId) {
+    const hubId = input.hubId
+    if (hubId === undefined) {
       const credentials = credentialsOf(this.ctx), enrollments = []
+      const active=this.rt.config.communication??{}, keys=new Set()
+      if(identifier(active.hubId))keys.add(communicationCredentialKey(active.hubId))
       if (credentials.listRecords) for (const entry of await credentials.listRecords()) {
         if (entry.kind !== 'grant' || !/^ds-bot\/communication-[a-f0-9]{32}$/.test(entry.key)) continue
-        const record = await credentials.readRecord(entry.key), value = record?.payload
-        if (record?.kind !== 'grant' || value?.type !== RECORD_TYPE || !identifier(value.hubId) || communicationCredentialKey(value.hubId) !== entry.key) continue
+        keys.add(entry.key)
+      }
+      for(const key of keys){
+        const record = await credentials.readRecord(key), value = record?.payload
+        if (record?.kind !== 'grant' || value?.type !== RECORD_TYPE || !identifier(value.hubId) || communicationCredentialKey(value.hubId) !== key) continue
         enrollments.push(safeStatus(value))
       }
-      const active=this.rt.config.communication??{}
       return { configured: enrollments.length > 0, storage: communicationStorageStatus, selectedHubId:active.hubId??null,
         selectedHub:active.url?{hubId:active.hubId??null,url:active.url,enabled:active.enabled===true,legacy:!active.credentialKey}:null,enrollments }
     }
@@ -334,6 +343,7 @@ export class CommunicationOnboarding {
   }
   async pauseCurrent(expected) {
     const old=publicConfiguration(this.rt.config.communication??{}),selected=selection(old),{editor,entry}=this.editor()
+    const communication=this.rt.communication
     if(expected!==undefined&&old.hubId!==expected)fail('HUB_SELECTION_CHANGED')
     if(old.credentialKey){
       const credentials=credentialsOf(this.ctx),hub={hubId:old.hubId,url:old.url}
@@ -343,7 +353,7 @@ export class CommunicationOnboarding {
           savedConfiguration:old.enabled||!record.savedConfiguration?old:record.savedConfiguration}}
       })
     }
-    this.rt.communication?.transport?.stop()
+    if(communication?.settings?.hubId===old.hubId&&communication.settings?.url===old.url)communication.transport?.stop()
     await phase('COMMUNICATION_CONFIG_WRITE_FAILED',()=>editor.edit(entry,current=>{
       if(selection(current.communication)!==selected)fail('HUB_SELECTION_CHANGED')
       return {...current,communication:{...current.communication,enabled:false}}
@@ -364,12 +374,16 @@ export class CommunicationOnboarding {
     const decoded=input.hubCode?decodeHubCode(input.hubCode,{allowLoopback:this.allowLoopback}):null
     const hubId=decoded?.hubId??input.hubId,key=communicationCredentialKey(hubId)
     let stored=await credentials.readRecord(key)
+    if(!decoded&&!stored)fail('JOIN_NOT_SUBMITTED')
     const hub=decoded??{hubId,url:stored?.payload?.url}
     validateHubUrl(hub.url,{allowLoopback:this.allowLoopback})
     const previous=stored?checkedRecord(stored,hub):null,trust=decoded?.trust??previous?.trust
     if(input.confirmedHubId!==hubId||input.confirmedUrl!==hub.url||trust&&input.confirmedTrustFingerprint!==trust.fingerprint)fail('HUB_CONFIRMATION_REQUIRED')
     if(previous&&decoded?.trust&&previous.trust?.fingerprint!==decoded.trust.fingerprint)fail('HUB_TRUST_UPDATE_REQUIRED')
-    if(old.hubId===hubId&&old.url===hub.url)return {...safeStatus(previous),selected:true}
+    if(old.hubId===hubId&&old.url===hub.url){
+      if(!previous)fail('JOIN_NOT_SUBMITTED')
+      return {...safeStatus(previous),selected:true}
+    }
     if(previous&&!previous.queueScope&&this.rt.home&&existsSync(join(this.rt.home,'communication.sqlite')))fail('LEGACY_HUB_PROFILE_UNBOUND')
     const {editor,entry}=this.editor()
     if(!stored){
@@ -378,7 +392,7 @@ export class CommunicationOnboarding {
       await credentials.modifyRecord(key,current=>{
         if(current){checkedRecord(current,hub);return undefined}
         const pair=generateKeyPairSync('ed25519',{publicKeyEncoding:{type:'spki',format:'pem'},privateKeyEncoding:{type:'pkcs8',format:'pem'}})
-        return {kind:'grant',payload:{type:RECORD_TYPE,version:3,hubId,url:hub.url,...pair,queueScope:namespace(hubId),paused:true,requiresResume:true,
+        return {kind:'grant',payload:{type:RECORD_TYPE,version:3,hubId,url:hub.url,...pair,queueScope:identityNamespace(hubId,pair.publicKey),paused:true,requiresResume:true,
           ...(trust?{trust}:{}),displayName:input.displayName.trim(),status:'prepared',createdAt:Date.now()}}
       })
     }
@@ -417,6 +431,7 @@ export class CommunicationOnboarding {
     const status=await this.enrollment('status',{hubId:hub.hubId})
     if(status.status!=='approved')fail('COMMUNICATION_NOT_APPROVED')
     const record=checkedRecord(await credentials.readRecord(key),hub)
+    if(record.departed)fail('HUB_LEFT')
     const socket=await phase('ENROLLMENT_CONNECT_FAILED',()=>this.connect(hub.url,{allowLoopback:this.allowLoopback,hubId:hub.hubId,trust:record.trust}))
     try{
       const challenge=checkChallenge(await socket.request('enrollment.challenge',{purpose:'login',instanceId:record.instanceId,publicKey:record.publicKey}),{hubId:hub.hubId,purpose:'login',instanceId:record.instanceId})
@@ -430,6 +445,91 @@ export class CommunicationOnboarding {
     if(comm&&!comm.closed&&comm.settings?.hubId===hub.hubId&&!comm.transport.running)comm.transport.start({pollMs:comm.settings.pollMs??500})
     return {...status,paused:false}
   }
+  async leaveHub(input,statusOnly=false) {
+    const key=communicationCredentialKey(input.hubId),credentials=credentialsOf(this.ctx)
+    const stored=await credentials.readRecord(key),hub={hubId:input.hubId,url:stored?.payload?.url}
+    const record=checkedRecord(stored,hub)
+    validateHubUrl(hub.url,{allowLoopback:this.allowLoopback})
+    if(input.confirmedUrl!==hub.url||!statusOnly&&input.confirmLeave!==true)fail('HUB_LEAVE_CONFIRMATION_REQUIRED')
+    if(!identifier(record.instanceId)||record.status!=='approved')fail('COMMUNICATION_NOT_APPROVED')
+    if(!statusOnly&&this.rt.config.communication?.hubId===hub.hubId)await this.pauseCurrent(hub.hubId)
+    const purpose=statusOnly?'leave-status':'leave'
+    const socket=await phase('ENROLLMENT_CONNECT_FAILED',()=>this.connect(hub.url,{allowLoopback:this.allowLoopback,hubId:hub.hubId,trust:record.trust}))
+    try{
+      const challenge=checkChallenge(await phase('ENROLLMENT_CHALLENGE_FAILED',()=>socket.request('enrollment.challenge',{purpose,instanceId:record.instanceId})),{hubId:hub.hubId,purpose,instanceId:record.instanceId})
+      const result=await phase('ENROLLMENT_PROOF_FAILED',()=>socket.request('enrollment.prove',{challengeId:challenge.challengeId,signature:signature(record,challenge)}))
+      if(result?.instanceId!==record.instanceId||typeof result.left!=='boolean')fail('INVALID_ENROLLMENT_RESPONSE')
+      if(result.left){
+        if(statusOnly&&this.rt.config.communication?.hubId===hub.hubId)await this.pauseCurrent(hub.hubId)
+        await this.update(key,hub,value=>{
+          if(value.publicKey!==record.publicKey||value.instanceId!==record.instanceId)fail('COMMUNICATION_PAIRING_CONFLICT')
+          return {...value,departed:true,paused:true,requiresResume:true}
+        })
+      }else if(statusOnly&&record.departed){
+        // An administrator may deliberately restore this exact proved key.
+        // Observing that repair clears the local fence but never resumes work.
+        await this.update(key,hub,value=>{
+          if(value.publicKey!==record.publicKey||value.instanceId!==record.instanceId)fail('COMMUNICATION_PAIRING_CONFLICT')
+          return {...value,departed:false,paused:true,requiresResume:true}
+        })
+      }
+      return {hubId:hub.hubId,instanceId:record.instanceId,left:result.left,historyRetained:true}
+    }finally{socket.close()}
+  }
+  async forgetHub(input) {
+    if(input.confirmForget!==true||typeof input.deleteLocalHistory!=='boolean'||input.deleteLocalHistory&&input.confirmDeleteLocalHistory!==true)fail('HUB_FORGET_CONFIRMATION_REQUIRED')
+    const credentials=credentialsOf(this.ctx),key=communicationCredentialKey(input.hubId)
+    if(!credentials.deleteRecord)fail('CREDENTIAL_DELETE_UNAVAILABLE')
+    const stored=await credentials.readRecord(key),hub={hubId:input.hubId,url:stored?.payload?.url}
+    const record=checkedRecord(stored,hub),scope=checkedScope(record)
+    if(input.confirmedUrl!==hub.url)fail('HUB_CONFIRMATION_REQUIRED')
+    if(record.status==='approved'&&!record.departed)fail('HUB_LEAVE_REQUIRED')
+    if(record.status==='pending'||record.status==='prepared'&&record.requestId)fail('HUB_CANCEL_REQUIRED')
+    const selected=this.rt.config.communication?.hubId===hub.hubId,expected=selection(this.rt.config.communication)
+    const assertIdentity=async()=>{
+      if(this.rt.readOnly?.()!==undefined)fail('COMMUNICATION_READ_ONLY')
+      const latest=checkedRecord(await credentials.readRecord(key),hub)
+      if(latest.publicKey!==record.publicKey||latest.instanceId!==record.instanceId||checkedScope(latest)!==scope)fail('COMMUNICATION_PAIRING_CONFLICT')
+      return latest
+    }
+    await assertIdentity()
+    if(selected){
+      await this.pauseCurrent(hub.hubId)
+      if(selection(this.rt.config.communication)!==expected)fail('HUB_SELECTION_CHANGED')
+      // Flush and close before deleting queue files. close is idempotent because
+      // normal configuration reload will also dispose the previous runtime.
+      if(this.rt.communication?.settings?.hubId===hub.hubId)await this.rt.communication.close?.()
+      const {editor,entry}=this.editor()
+      await phase('COMMUNICATION_CONFIG_WRITE_FAILED',()=>editor.edit(entry,current=>{
+        if(selection(current.communication)!==expected)fail('HUB_SELECTION_CHANGED')
+        const next={...current};delete next.communication;return next
+      }))
+    }
+    if(input.deleteLocalHistory){
+      if(scope==='legacy'&&!selected&&this.rt.config.communication?.url)fail('LEGACY_HUB_PROFILE_UNBOUND')
+      if(typeof this.rt.home!=='string')fail('COMMUNICATION_STORAGE_UNAVAILABLE')
+      const home=await realpath(this.rt.home)
+      const targets=scope==='legacy'?['communication.sqlite','communication.sqlite-wal','communication.sqlite-shm'].map(name=>join(home,name)):[join(home,'communication-hubs',scope)]
+      for(const path of targets){
+        await assertIdentity()
+        if(this.rt.config.communication?.hubId===hub.hubId)fail('HUB_SELECTION_CHANGED')
+        const expectedParent=scope==='legacy'?home:join(home,'communication-hubs')
+        if(dirname(resolve(path))!==expectedParent)fail('COMMUNICATION_CREDENTIAL_MISMATCH')
+        let info
+        try{info=await lstat(path)}catch(error){if(error.code==='ENOENT')continue;throw error}
+        if(info.isSymbolicLink()||scope==='legacy'&&!info.isFile()||scope!=='legacy'&&!info.isDirectory()||await realpath(expectedParent)!==expectedParent)fail('COMMUNICATION_CREDENTIAL_MISMATCH')
+        await phase('COMMUNICATION_CACHE_DELETE_FAILED',()=>rm(path,{recursive:scope!=='legacy',force:false}))
+      }
+    }else if(scope==='legacy'&&this.rt.home){
+      // Ensure a later enrollment cannot bind the retained legacy database.
+      const {mkdir}=await import('node:fs/promises')
+      await mkdir(join(this.rt.home,'communication-hubs'),{recursive:true})
+    }
+    await assertIdentity()
+    await credentials.deleteRecord(key)
+    return {hubId:hub.hubId,forgotten:true,historyRetained:!input.deleteLocalHistory,
+      cleanupScope:'remote-communication-queue',modelSessionHistoryRetained:true,serverAccessRevoked:record.departed===true}
+  }
   async join(input) {
     const hub = decodeHubCode(input.hubCode, { allowLoopback: this.allowLoopback })
     if (input.confirmedHubId !== hub.hubId || input.confirmedUrl !== hub.url) fail('HUB_CONFIRMATION_REQUIRED')
@@ -438,6 +538,7 @@ export class CommunicationOnboarding {
     const key = communicationCredentialKey(hub.hubId), credentials = credentialsOf(this.ctx)
     const existing = await credentials.readRecord(key)
     const previous = existing ? checkedRecord(existing, hub) : null
+    if(previous?.departed)fail('HUB_LEFT')
     if (hub.trust && previous && previous.trust?.fingerprint !== hub.trust.fingerprint) fail('HUB_TRUST_UPDATE_REQUIRED')
     this.conflict(hub, previous?.instanceId)
     if(previous?.paused&&previous.status!=='approved')await this.update(key,hub,value=>({...value,paused:false,requiresResume:false}))
@@ -450,7 +551,7 @@ export class CommunicationOnboarding {
     await credentials.modifyRecord(key, current => {
       if (current) { checkedRecord(current, hub); return undefined }
       const pair = generateKeyPairSync('ed25519', { publicKeyEncoding: { type: 'spki', format: 'pem' }, privateKeyEncoding: { type: 'pkcs8', format: 'pem' } })
-      const queueScope = this.rt.home && existsSync(join(this.rt.home,'communication.sqlite')) ? namespace(hub.hubId) : 'legacy'
+      const queueScope = this.rt.home && (existsSync(join(this.rt.home,'communication.sqlite'))||existsSync(join(this.rt.home,'communication-hubs'))) ? identityNamespace(hub.hubId,pair.publicKey) : 'legacy'
       return { kind: 'grant', payload: { type: RECORD_TYPE, version: 3, queueScope, paused:false, hubId: hub.hubId, url: hub.url,
         publicKey: pair.publicKey, privateKey: pair.privateKey, ...(hub.trust ? { trust: hub.trust } : {}), displayName: input.displayName.trim(), status: 'prepared', createdAt: Date.now() } }
     })

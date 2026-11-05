@@ -47,6 +47,43 @@ test('enrollment proves possession, binds purpose/socket, consumes challenges an
   assert.equal(m.joins()[0].status, 'expired')
 })
 
+test('signed self-departure is purpose-bound, owner-safe, repeatable and status remains provable after revocation',t=>{
+ const {store,m}=fixture(t),a=enroll(m),b=enroll(m)
+ const group=store.createGroup(a.auth,{principalId:a.principalId,title:'Synthetic owned group',operationId:randomUUID()})
+ let socket={},challenge=m.challenge(socket,{purpose:'leave',instanceId:a.auth.instanceId})
+ assert.throws(()=>m.prove(socket,proof(b.key,challenge)),{code:'UNAUTHENTICATED'})
+ socket={};challenge=m.challenge(socket,{purpose:'leave',instanceId:a.auth.instanceId})
+ assert.throws(()=>m.prove(socket,proof(a.key,challenge)),{code:'OWNER_TRANSFER_REQUIRED'})
+ const membership=store.db.prepare('SELECT epoch FROM memberships WHERE conversation_id=? AND principal_id=?').get(group.conversationId,a.principalId)
+ store.dissolve(a.auth,{principalId:a.principalId,conversationId:group.conversationId,membershipEpoch:membership.epoch,operationId:randomUUID()})
+ socket={};challenge=m.challenge(socket,{purpose:'leave',instanceId:a.auth.instanceId})
+ assert.deepEqual(m.prove(socket,proof(a.key,challenge)),{instanceId:a.auth.instanceId,left:true})
+ assert.throws(()=>store.check(a.auth),{code:'UNAUTHENTICATED'})
+ assert.throws(()=>m.challenge({}, {purpose:'login',instanceId:a.auth.instanceId}),{code:'UNAUTHENTICATED'})
+ for(const purpose of ['leave-status','leave']){
+  socket={};challenge=m.challenge(socket,{purpose,instanceId:a.auth.instanceId})
+  assert.equal(m.prove(socket,proof(a.key,challenge)).left,true)
+ }
+ assert.ok(store.db.prepare('SELECT 1 FROM principals WHERE id=?').get(a.principalId),'retain historical identity')
+ assert.ok(store.db.prepare('SELECT 1 FROM conversations WHERE id=?').get(group.conversationId),'retain historical group')
+})
+
+test('revoked identities release live capacity without deleting history and repair cannot exceed it',t=>{
+ const {store,m}=fixture(t);store.limits.maxPrincipals=1
+ const a=enroll(m)
+ m.revoke(a.auth.instanceId)
+ assert.equal(store.activePrincipalCount(),0)
+ const b=enroll(m)
+ assert.equal(store.activePrincipalCount(),1)
+ assert.equal(store.db.prepare('SELECT count(*) n FROM principals').get().n,2)
+ assert.throws(()=>m.repair({instanceId:a.auth.instanceId,expectedRevision:1}),{code:'DIRECTORY_FULL'})
+ assert.throws(()=>store.configurePeer(a.auth.instanceId,'Original device',2),{code:'DIRECTORY_FULL'})
+ m.revoke(b.auth.instanceId)
+ m.repair({instanceId:a.auth.instanceId,expectedRevision:1})
+ assert.equal(store.activePrincipalCount(),1)
+ assert.equal(store.db.prepare('SELECT count(*) n FROM principals').get().n,2)
+})
+
 test('approval assigns stable Human, user code and persistent dynamic peer; revoked login cannot reconnect', t => {
   const dir = mkdtempSync(join(tmpdir(), 'dsbot-management-'))
   let store = new HubStore(join(dir, 'hub.sqlite')), m = new HubManagement(store), device = enroll(m)

@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict'
 import {test} from 'node:test'
-import {mkdtempSync,rmSync} from 'node:fs'
+import {mkdtempSync,rmSync,writeFileSync,readFileSync,existsSync,mkdirSync,symlinkSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {dirname,join,resolve,basename} from 'node:path'
-import {randomUUID,verify} from 'node:crypto'
+import {randomUUID,verify,createHash} from 'node:crypto'
 import {CommunicationOnboarding,communicationCredentialKey,communicationQueueSettings,communicationAuthentication,enrollmentSigningText} from '../src/host/federation/onboarding.js'
 import {CommunicationQueue} from '../src/host/federation/queue-store.js'
 
@@ -16,7 +16,7 @@ function fixture(t){
  t.after(()=>{assert.equal(dirname(resolve(home)),resolve(tmpdir()));assert.ok(basename(home).startsWith('dsbot-hub-profile-'));rmSync(home,{recursive:true,force:true})})
  const records=new Map(),writes=[],network=[]
  let failEdit=false,changeSelection=false,stops=0,starts=0,revoked=false
- const credentials={readRecord:async key=>clone(records.get(key)),listRecords:async()=>[...records].map(([key,record])=>({key,kind:record.kind})),describeRecord:async key=>({configured:records.has(key),writable:true}),modifyRecord:async(key,mutate)=>{const next=await mutate(clone(records.get(key)));if(next!==undefined)records.set(key,clone(next))}}
+ const credentials={deleteRecord:async key=>{records.delete(key)},readRecord:async key=>clone(records.get(key)),listRecords:async()=>[...records].map(([key,record])=>({key,kind:record.kind})),describeRecord:async key=>({configured:records.has(key),writable:true}),modifyRecord:async(key,mutate)=>{const next=await mutate(clone(records.get(key)));if(next!==undefined)records.set(key,clone(next))}}
  const rt={home,config:{},botOf:()=>({}),ctx:{credentials,configEditor:{entries:()=>[{options:{name:'ds-bot'}}],edit:async(_entry,mutate)=>{
   if(failEdit)throw Object.assign(Error('synthetic edit failure'),{code:'STORAGE_UNAVAILABLE'})
   if(changeSelection)rt.config.communication={...rt.config.communication,hubId:'concurrent-Hub'}
@@ -28,11 +28,12 @@ function fixture(t){
   return {close(){},request:async(type,input)=>{
    network.push({hubId:hub.hubId,type})
    if(type==='enrollment.challenge'){
-    if(revoked&&input.purpose!=='join')throw Object.assign(Error('synthetic revoke'),{code:'UNAUTHENTICATED'})
-    challenge={hubId:hub.hubId,purpose:input.purpose,challengeId:randomUUID(),nonce:'N'.repeat(32),expiresAt:Date.now()+30000,...(input.purpose==='login'?{instanceId:input.instanceId}:{requestId:input.requestId??randomUUID()})};return challenge
+    if(revoked&&!['join','leave','leave-status'].includes(input.purpose))throw Object.assign(Error('synthetic revoke'),{code:'UNAUTHENTICATED'})
+    challenge={hubId:hub.hubId,purpose:input.purpose,challengeId:randomUUID(),nonce:'N'.repeat(32),expiresAt:Date.now()+30000,...(['login','leave','leave-status'].includes(input.purpose)?{instanceId:input.instanceId}:{requestId:input.requestId??randomUUID()})};return challenge
    }
    const record=records.get(communicationCredentialKey(hub.hubId)).payload
    assert.equal(verify(null,Buffer.from(enrollmentSigningText(challenge)),record.publicKey,Buffer.from(input.signature,'base64url')),true)
+   if(['leave','leave-status'].includes(challenge.purpose)){if(challenge.purpose==='leave')revoked=true;return {instanceId:challenge.instanceId,left:revoked}}
    return {hubId:hub.hubId,requestId:challenge.requestId,status:'approved',instanceId:'shared-instance'}
   }}
  }
@@ -74,6 +75,46 @@ test('one active Hub retains distinct queues, keys and outbox across same-Hub re
  assert.equal(restored.dataPath,original.dataPath)
  const retained=new CommunicationQueue(restored.dataPath,{instanceId:first.instanceId});assert.equal(retained.pendingOutbox()[0].id,'retained-operation');retained.close()
  assert.equal(f.network.filter(item=>item.hubId===a.hubId&&item.type==='enrollment.prove').length,6,'A joins once; status and fresh login proofs reconcile the same saved identity')
+})
+
+test('storage without Hub ID always lists selected state, so selecting the joined Hub is a local idempotent no-op',async t=>{
+ const f=fixture(t),a=hubs[0]
+ await f.api.handle('join',joinInput(a),human);f.activate()
+ for(const paused of [false,true]){
+  if(paused)await f.api.handle('disconnect-hub',{hubId:a.hubId},human)
+  f.restart()
+  const view=await f.api.handle('storage',{},human)
+  assert.equal(view.selectedHub.hubId,a.hubId)
+  assert.equal(view.selectedHub.enabled,!paused)
+  assert.equal(view.enrollments.length,1)
+  assert.equal(view.enrollments[0].paused,paused)
+  const before=[f.writes.length,f.network.length],key=f.records.get(communicationCredentialKey(a.hubId)).payload.publicKey
+  const result=await f.api.handle('switch-hub',{hubId:a.hubId,expectedCurrentHubId:view.selectedHub.hubId,confirmedHubId:a.hubId,confirmedUrl:a.url},human)
+  assert.equal(result.selected,true)
+  assert.deepEqual([f.writes.length,f.network.length],before,'no request, reconnect or config rewrite on same-Hub selection')
+  assert.equal(f.records.get(communicationCredentialKey(a.hubId)).payload.publicKey,key)
+ }
+ delete f.rt.ctx.credentials.listRecords
+ const fallback=await f.api.handle('storage',{},human)
+ assert.equal(fallback.enrollments.length,1,'older providers can read the selected record without listing')
+ assert.equal(fallback.selectedHub.hubId,a.hubId)
+ const single=await f.api.handle('storage',{hubId:a.hubId},human)
+ assert.equal(single.hubId,a.hubId);assert.equal(single.enrollments,undefined)
+ assert.ok(!JSON.stringify(fallback).includes('PRIVATE KEY'))
+})
+
+test('missing saved identity and stale UI selection give explicit errors without joining or generating keys',async t=>{
+ const f=fixture(t),a=hubs[0]
+ await f.api.handle('join',joinInput(a),human)
+ await assert.rejects(f.api.handle('switch-hub',{hubId:a.hubId,confirmedHubId:a.hubId,confirmedUrl:a.url},human),{code:'HUB_SELECTION_CHANGED'})
+ f.records.clear()
+ const before=[f.writes.length,f.network.length]
+ await assert.rejects(f.api.handle('switch-hub',{hubId:a.hubId,confirmedHubId:a.hubId,confirmedUrl:a.url,expectedCurrentHubId:a.hubId},human),{code:'JOIN_NOT_SUBMITTED'})
+ await assert.rejects(f.api.handle('switch-hub',{...joinInput(a),expectedCurrentHubId:a.hubId},human),{code:'JOIN_NOT_SUBMITTED'})
+ assert.equal(f.records.size,0)
+ assert.deepEqual([f.writes.length,f.network.length],before)
+ const view=await f.api.handle('storage',{},human)
+ assert.equal(view.selectedHub.hubId,a.hubId);assert.deepEqual(view.enrollments,[])
 })
 
 test('edit interruption leaves a durable pause; explicit resume recovers and revocation is not silently repaired',async t=>{
@@ -118,6 +159,130 @@ test('interrupted resume requires explicit reconciliation and status cannot fini
  await f.api.handle('resume-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmResume:true},human)
  assert.equal(f.records.get(communicationCredentialKey(a.hubId)).payload.requiresResume,false)
  assert.equal(f.rt.config.communication.enabled,true)
+})
+
+test('signed leave, revoked-status reconciliation and forgetting separate access from retained history',async t=>{
+ const f=fixture(t),a=hubs[0]
+ await f.api.handle('join',joinInput(a),human);f.activate()
+ const oldKey=f.records.get(communicationCredentialKey(a.hubId)).payload.publicKey
+ writeFileSync(join(f.rt.home,'communication.sqlite'),'retained synthetic history')
+ await assert.rejects(f.api.handle('leave-hub',{hubId:a.hubId,confirmedUrl:a.url},human),{code:'HUB_LEAVE_CONFIRMATION_REQUIRED'})
+ await assert.rejects(f.api.handle('forget-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmForget:true,deleteLocalHistory:false},human),{code:'HUB_LEAVE_REQUIRED'})
+ const left=await f.api.handle('leave-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmLeave:true},human)
+ assert.equal(left.left,true);assert.equal(f.rt.config.communication.enabled,false)
+ assert.equal(f.records.get(communicationCredentialKey(a.hubId)).payload.departed,true)
+ f.restart()
+ const status=await f.api.handle('hub-leave-status',{hubId:a.hubId,confirmedUrl:a.url},human)
+ assert.equal(status.left,true)
+ await assert.rejects(f.api.handle('join',joinInput(a),human),{code:'HUB_LEFT'})
+ await assert.rejects(f.api.handle('forget-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmForget:true,deleteLocalHistory:true},human),{code:'HUB_FORGET_CONFIRMATION_REQUIRED'})
+ const forgotten=await f.api.handle('forget-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmForget:true,deleteLocalHistory:false},human)
+ assert.equal(forgotten.historyRetained,true);assert.equal(f.rt.config.communication,undefined)
+ assert.equal(f.records.size,0)
+ assert.equal(readFileSync(join(f.rt.home,'communication.sqlite'),'utf8'),'retained synthetic history')
+ f.revoked=false
+ await f.api.handle('join',joinInput(a),human)
+ assert.notEqual(f.records.get(communicationCredentialKey(a.hubId)).payload.publicKey,oldKey)
+ const settings=await communicationQueueSettings(f.rt,communicationCredentialKey(a.hubId),f.rt.config.communication)
+ assert.notEqual(settings.dataPath,join(f.rt.home,'communication.sqlite'),'new identity cannot attach the archived queue')
+})
+
+test('forgetting one inactive Hub deletes only its scoped cache and leaves the active Hub and key alone',async t=>{
+ const f=fixture(t),[a,b]=hubs
+ await f.api.handle('join',joinInput(a),human)
+ await f.api.handle('switch-hub',{...joinInput(b),expectedCurrentHubId:a.hubId},human)
+ await f.api.handle('join',joinInput(b),human)
+ const settings=await communicationQueueSettings(f.rt,communicationCredentialKey(b.hubId),f.rt.config.communication)
+ const queue=new CommunicationQueue(settings.dataPath,{instanceId:'shared-instance'});queue.close()
+ await f.api.handle('leave-hub',{hubId:b.hubId,confirmedUrl:b.url,confirmLeave:true},human)
+ await f.api.handle('switch-hub',{hubId:a.hubId,confirmedHubId:a.hubId,confirmedUrl:a.url,expectedCurrentHubId:b.hubId},human)
+ const config=clone(f.rt.config),key=f.records.get(communicationCredentialKey(a.hubId)).payload.publicKey
+ const result=await f.api.handle('forget-hub',{hubId:b.hubId,confirmedUrl:b.url,confirmForget:true,deleteLocalHistory:true,confirmDeleteLocalHistory:true},human)
+ assert.equal(result.historyRetained,false);assert.equal(existsSync(settings.dataPath),false)
+ assert.deepEqual(f.rt.config,config);assert.equal(f.records.get(communicationCredentialKey(a.hubId)).payload.publicKey,key)
+ assert.equal(f.records.has(communicationCredentialKey(b.hubId)),false)
+})
+
+test('signed status after explicit administrator repair clears only the departed fence and still requires resume',async t=>{
+ const f=fixture(t),a=hubs[0]
+ await f.api.handle('join',joinInput(a),human);f.activate()
+ await f.api.handle('leave-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmLeave:true},human)
+ const key=f.records.get(communicationCredentialKey(a.hubId)).payload.publicKey
+ f.revoked=false;f.restart()
+ const before=f.writes.length
+ assert.equal((await f.api.handle('hub-leave-status',{hubId:a.hubId,confirmedUrl:a.url},human)).left,false)
+ const record=f.records.get(communicationCredentialKey(a.hubId)).payload
+ assert.equal(record.departed,false);assert.equal(record.paused,true);assert.equal(record.requiresResume,true)
+ assert.equal(f.writes.length,before,'status cannot activate the paused configuration')
+ await assert.rejects(f.api.handle('forget-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmForget:true,deleteLocalHistory:false},human),{code:'HUB_LEAVE_REQUIRED'})
+ await f.api.handle('resume-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmResume:true},human)
+ assert.equal(f.rt.config.communication.enabled,true)
+ assert.equal(f.records.get(communicationCredentialKey(a.hubId)).payload.publicKey,key)
+})
+
+test('forget rejects a concurrent Hub selection without clearing the other configuration or deleting history',async t=>{
+ const f=fixture(t),[a,b]=hubs
+ await f.api.handle('join',joinInput(a),human);f.activate()
+ f.records.get(communicationCredentialKey(a.hubId)).payload.departed=true
+ const original=join(f.rt.home,'communication.sqlite');writeFileSync(original,'keep history')
+ f.rt.communication.close=async()=>{f.rt.config.communication={...b,enabled:false,instanceId:'other-instance',credentialKey:communicationCredentialKey(b.hubId)}}
+ await assert.rejects(f.api.handle('forget-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmForget:true,deleteLocalHistory:true,confirmDeleteLocalHistory:true},human),{code:'HUB_SELECTION_CHANGED'})
+ assert.equal(f.rt.config.communication.hubId,b.hubId)
+ assert.equal(readFileSync(original,'utf8'),'keep history')
+ assert.equal(f.records.size,1)
+})
+
+test('forget refuses linked cache roots and linked parents without following them or deleting the identity',async t=>{
+ for(const linkParent of [false,true]){
+  const f=fixture(t),a=hubs[0]
+  await f.api.handle('join',joinInput(a),human)
+  const record=f.records.get(communicationCredentialKey(a.hubId));record.payload.departed=true
+  const scope='hub-'+createHash('sha256').update(a.hubId).digest('hex').slice(0,32)
+  record.payload.queueScope=scope
+  const outside=mkdtempSync(join(tmpdir(),'dsbot-cache-link-target-'))
+  t.after(()=>{assert.equal(dirname(resolve(outside)),resolve(tmpdir()));assert.ok(basename(outside).startsWith('dsbot-cache-link-target-'));rmSync(outside,{recursive:true,force:true})})
+  const parent=join(f.rt.home,'communication-hubs'),target=join(outside,scope)
+  mkdirSync(target);writeFileSync(join(target,'keep.txt'),'untouched')
+  if(linkParent)symlinkSync(outside,parent,'junction')
+  else{mkdirSync(parent);symlinkSync(target,join(parent,scope),'junction')}
+  await assert.rejects(f.api.handle('forget-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmForget:true,deleteLocalHistory:true,confirmDeleteLocalHistory:true},human),{code:'COMMUNICATION_CREDENTIAL_MISMATCH'})
+  assert.equal(readFileSync(join(target,'keep.txt'),'utf8'),'untouched')
+  assert.equal(f.records.size,1)
+ }
+})
+
+test('forget checks key replacement before deleting files and preserves an interrupted credential deletion for explicit retry',async t=>{
+ const f=fixture(t),a=hubs[0]
+ await f.api.handle('join',joinInput(a),human);f.activate()
+ f.records.get(communicationCredentialKey(a.hubId)).payload.departed=true
+ const original=join(f.rt.home,'communication.sqlite');writeFileSync(original,'keep history')
+ f.rt.communication.close=async()=>{f.records.get(communicationCredentialKey(a.hubId)).payload.publicKey='synthetic-concurrently-replaced-key'}
+ await assert.rejects(f.api.handle('forget-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmForget:true,deleteLocalHistory:true,confirmDeleteLocalHistory:true},human),{code:'COMMUNICATION_PAIRING_CONFLICT'})
+ assert.equal(readFileSync(original,'utf8'),'keep history');assert.equal(f.records.size,1)
+ const other=fixture(t)
+ await other.api.handle('join',joinInput(a),human)
+ other.records.get(communicationCredentialKey(a.hubId)).payload.departed=true
+ const remove=other.rt.ctx.credentials.deleteRecord
+ other.rt.ctx.credentials.deleteRecord=async()=>{throw Error('synthetic provider failure')}
+ const input={hubId:a.hubId,confirmedUrl:a.url,confirmForget:true,deleteLocalHistory:false}
+ await assert.rejects(other.api.handle('forget-hub',input,human),{code:'COMMUNICATION_CREDENTIAL_DELETE_FAILED'})
+ assert.equal(other.records.size,1)
+ other.rt.ctx.credentials.deleteRecord=remove
+ assert.equal((await other.api.handle('forget-hub',input,human)).forgotten,true)
+ assert.equal(other.records.size,0)
+})
+
+test('forget refuses pending requests, absent deletion support, forged authority and unsafe queue scope',async t=>{
+ const f=fixture(t),a=hubs[0];await f.api.handle('join',joinInput(a),human)
+ const input={hubId:a.hubId,confirmedUrl:a.url,confirmForget:true,deleteLocalHistory:true,confirmDeleteLocalHistory:true}
+ await assert.rejects(f.api.handle('forget-hub',input,{human:true,agent:{}}),{code:'HUMAN_REQUIRED'})
+ const record=f.records.get(communicationCredentialKey(a.hubId));record.payload.status='pending'
+ await assert.rejects(f.api.handle('forget-hub',input,human),{code:'HUB_CANCEL_REQUIRED'})
+ record.payload.status='approved';record.payload.departed=true;record.payload.queueScope='../../elsewhere'
+ await assert.rejects(f.api.handle('forget-hub',input,human),{code:'COMMUNICATION_CREDENTIAL_MISMATCH'})
+ delete record.payload.queueScope;delete f.rt.ctx.credentials.deleteRecord
+ await assert.rejects(f.api.handle('forget-hub',input,human),{code:'CREDENTIAL_DELETE_UNAVAILABLE'})
+ assert.equal(f.records.size,1)
 })
 
 test('legacy static pairing can pause/resume its exact address but cannot be guessed into another Hub',async t=>{

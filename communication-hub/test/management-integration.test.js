@@ -19,6 +19,7 @@ async function client(url) {
   socket.on('close', () => { for (const call of calls.values()) { clearTimeout(call.timer); call.reject(new Error('CONNECTION_LOST')) }; calls.clear() })
   await new Promise((resolve, reject) => { socket.once('open', resolve); socket.once('error', reject) })
   return { close: () => socket.terminate(), request: (type, payload) => new Promise((resolve, reject) => {
+    if(socket.readyState!==WebSocket.OPEN){reject(new Error('CONNECTION_LOST'));return}
     const id = randomUUID(), timer = setTimeout(() => { calls.delete(id); reject(new Error('TIMEOUT')) }, 3000)
     calls.set(id, { resolve, reject, timer }); socket.send(JSON.stringify({ protocol: PROTOCOL, id, type, payload }))
   }) }
@@ -64,6 +65,62 @@ test('actual HTTP approval, signed socket login, Human assignment and scoped con
   assert.equal((await a.signed.request('contacts.list', {})).length, 2)
   assert.ok((await a.signed.request('dm.open', { principalId: a.human, otherPrincipalId: b.human, operationId: randomUUID() })).conversationId)
   await assert.rejects(a.signed.request('contacts.list', { principalId: b.human }), { code: 'AUTHOR_MISMATCH' })
+})
+
+test('real socket departure survives a lost response, preserves history and releases only live quota',async t=>{
+  let loseLeaveResponse=true
+  const hub=await startHub({databasePath:':memory:',peers:[],port:0,limits:{maxPrincipals:2},management:{enabled:true,password:'mock-lifecycle-administrator'},
+    beforeResponse:({type,value,socket})=>{
+      if(type==='enrollment.prove'&&value?.left&&loseLeaveResponse){loseLeaveResponse=false;socket.terminate();return false}
+    }})
+  t.after(()=>hub.close())
+  const origin=`http://127.0.0.1:${hub.port}`
+  const login=await fetch(origin+'/admin/api/login',{method:'POST',headers:{origin,'content-type':'application/json'},body:JSON.stringify({password:'mock-lifecycle-administrator'})})
+  const {csrf}=await login.json(),cookie=login.headers.getSetCookie()[0].split(';')[0]
+  const admin=async(action,input={})=>{
+    const response=await fetch(origin+'/admin/api/'+action,{method:'POST',headers:{origin,cookie,'x-csrf-token':csrf,'content-type':'application/json'},body:JSON.stringify(input)})
+    const result=await response.json()
+    if(!result.ok)throw Object.assign(Error(result.error.code),{code:result.error.code})
+    return result.value
+  }
+  const enroll=async label=>{
+    const pair=generateKeyPairSync('ed25519'),socket=await client(hub.url);t.after(socket.close)
+    const publicKey=pair.publicKey.export({format:'pem',type:'spki'})
+    const challenge=await socket.request('enrollment.challenge',{purpose:'join',publicKey})
+    const request=await socket.request('enrollment.prove',{challengeId:challenge.challengeId,signature:sign(null,Buffer.from(enrollmentTranscript(challenge)),pair.privateKey).toString('base64url'),displayName:label})
+    const approved=await admin('decide',{requestId:request.requestId,expectedVersion:1,action:'approve'})
+    return {pair,instanceId:approved.instanceId,human:`human:${approved.instanceId}:local-user`}
+  }
+  const prove=async(device,purpose,key=device.pair)=>{
+    const socket=await client(hub.url);t.after(socket.close)
+    const challenge=await socket.request('enrollment.challenge',{purpose,instanceId:device.instanceId})
+    const value=await socket.request('enrollment.prove',{challengeId:challenge.challengeId,signature:sign(null,Buffer.from(enrollmentTranscript(challenge)),key.privateKey).toString('base64url'),...(purpose==='login'?{capabilities:CAPABILITIES}:{})})
+    return {socket,value}
+  }
+  const a=await enroll('Synthetic A'),b=await enroll('Synthetic B')
+  await assert.rejects(admin('revoke',{instanceId:'no-such-instance'}),{code:'INSTANCE_NOT_FOUND'})
+  const active=await prove(a,'login')
+  const group=await active.socket.request('group.create',{principalId:a.human,title:'Retained owner group',operationId:randomUUID()})
+  await assert.rejects(prove(a,'leave',b.pair),{code:'UNAUTHENTICATED'})
+  await assert.rejects(prove(a,'leave'),{code:'OWNER_TRANSFER_REQUIRED'})
+  const membership=hub.store.db.prepare('SELECT epoch FROM memberships WHERE conversation_id=? AND principal_id=?').get(group.conversationId,a.human)
+  await active.socket.request('group.dissolve',{principalId:a.human,conversationId:group.conversationId,membershipEpoch:membership.epoch,operationId:randomUUID()})
+  await assert.rejects(prove(a,'leave'),/CONNECTION_LOST/)
+  assert.equal((await prove(a,'leave-status')).value.left,true,'read-only signed proof reconciles the committed departure')
+  await assert.rejects(active.socket.request('contacts.list',{}),error=>error.code==='UNAUTHENTICATED'||error.message==='CONNECTION_LOST')
+  await assert.rejects(prove(a,'login'),{code:'UNAUTHENTICATED'})
+  const c=await enroll('Synthetic C')
+  assert.equal(hub.store.activePrincipalCount(),2)
+  assert.equal(hub.store.db.prepare('SELECT count(*) n FROM principals').get().n,3,'historical identities survive capacity release')
+  assert.ok(hub.store.db.prepare('SELECT 1 FROM conversations WHERE id=?').get(group.conversationId))
+  await assert.rejects(admin('repair',{instanceId:a.instanceId,expectedRevision:1}),{code:'DIRECTORY_FULL'})
+  const denied=await fetch(origin+'/admin/api/revoke',{method:'POST',headers:{origin,'content-type':'application/json'},body:JSON.stringify({instanceId:b.instanceId})})
+  assert.equal(denied.status,401,'a normal device has no administrator removal authority')
+  await admin('revoke',{instanceId:c.instanceId})
+  await admin('repair',{instanceId:a.instanceId,expectedRevision:1})
+  assert.equal((await prove(a,'leave-status')).value.left,false,'same-key administrator repair is separately provable')
+  await prove(a,'login')
+  assert.equal(hub.store.db.prepare('SELECT active FROM memberships WHERE conversation_id=? AND principal_id=?').get(group.conversationId,a.human).active,0,'repair does not restore old group rights')
 })
 
 test('native password form supports browser autofill, safe session reload, logout and revocation',async t=>{

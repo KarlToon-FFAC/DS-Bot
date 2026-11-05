@@ -7,6 +7,11 @@
 
 # DS Bot
 
+New DS-Bot learning suggestions for its own Skills and project AGENTS.md apply
+automatically after validation. Set plugin option `learningAutoApply: false` to
+keep manual review. Existing pending cards and other tool approvals are unchanged.
+See [learning policy and limits](docs/plans/learning-auto-apply.md).
+
 Remote communication in this branch provides authenticated contacts, private
 chats and groups between independently paired instances. The toolbar's + opens
 private/group pickers; personal settings contains pairing and profile controls.
