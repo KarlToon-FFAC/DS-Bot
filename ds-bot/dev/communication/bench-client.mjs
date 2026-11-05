@@ -1,8 +1,14 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
+import { communicationError } from '../../src/shared/communication-diagnostics.js'
 
 export const repo = resolve(import.meta.dirname, '../../..')
+export function benchResponseValue(data) {
+  if (data?.ok === true) return data.value
+  const { code } = communicationError(data?.error)
+  throw Object.assign(new Error(code), { code })
+}
 export function modelCalls(name) {
   try { return readFileSync(join(repo, `.dsh-test-${name}`, 'mock.jsonl'), 'utf8').split('\n').filter(Boolean).length } catch (error) {
     if (error.code === 'ENOENT') return 0
@@ -22,8 +28,7 @@ export async function benchClient(name, port) {
       body: JSON.stringify(body), signal: AbortSignal.timeout(60000),
     })
     const data = await result.json()
-    assert.equal(data.ok, true, data.error?.message ?? data.error)
-    return data.value
+    return benchResponseValue(data)
   }
   const team = await request('/api/bot', { endpoint: 'state' })
   const api = body => request('/api/communication-probe', body)

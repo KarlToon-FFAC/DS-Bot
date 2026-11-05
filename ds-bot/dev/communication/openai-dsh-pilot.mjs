@@ -115,7 +115,7 @@ export async function runDshPilot({mode,credential}={}){
     result.stage='group';save()
     const group=await topology.group(`OpenAI synthetic group ${runId}`,[b.human,b.bot],{allowSpeaking:false})
     const beforeDenied=result.requests
-    await assert.rejects(topology.send(b,group,'read-only synthetic send must fail'),/SPEAKING_FORBIDDEN/)
+    await assert.rejects(topology.send(b,group,'read-only synthetic send must fail'),{code:'SPEAKING_FORBIDDEN'})
     assert.equal(result.requests,beforeDenied);record('read-only-server-denial-without-model')
     const groupInput=await topology.send(a,group,'CHAIN_REQUEST_GROUP. This exact mention authorizes one reply only. Reply exactly CHAIN_GROUP_ACK.',[b.bot])
     await wait(()=>topology.hasText(a,group,replies[1]),'actual passive-group model final')
