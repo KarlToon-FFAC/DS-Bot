@@ -51,6 +51,7 @@ export class CommunicationRuntime {
     this.scoped = new WeakSet()
     this.disposers = []
     this.contacts = []
+    this.managementRevision = 0
     this.deliveryStates = new Map()
     this.statusOffset = 0
     this.conversations = new Map()
@@ -66,7 +67,9 @@ export class CommunicationRuntime {
         conversationId: delivery.conversationId, messageId: delivery.messageId, deliveryId: delivery.deliveryId }),
       afterReceive: delivery => this.ctx.parallel('ds-bot/communication-checkpoint', { point: 'after-receive',
         conversationId: delivery.conversationId, messageId: delivery.messageId, deliveryId: delivery.deliveryId }),
+      onInvalidate: scope => { if (scope !== 'messages') this.managementRevision += 1 },
       onConnect: async welcome => {
+        this.managementRevision += 1
         await this.registerLocalIdentities()
         if (welcome?.capabilities?.includes('principal-publication')) {
           await this.transport.request('principal.publication', { principalIds: [...this.bots.values()].map(bot => bot.principalId) })
@@ -76,8 +79,9 @@ export class CommunicationRuntime {
         this.transportError = null
       },
       onChange: async () => {
-        this.everReconciled = true
-        this.contacts = await this.transport.request('contacts.list')
+        const contacts = await this.transport.request('contacts.list')
+        if (JSON.stringify(contacts) !== JSON.stringify(this.contacts)) this.managementRevision += 1
+        this.contacts = contacts
         for (const principal of this.bots.values()) {
           const name = this.rt.botOf(principal.localRef)?.name
           if (!name || name === principal.displayName) continue
@@ -112,6 +116,7 @@ export class CommunicationRuntime {
         if (settings.autoAcceptBotInvites) await this.acceptBotInvites()
         this.processing = this.processing.catch(() => {}).then(() => this.process())
         await this.processing
+        this.everReconciled = true
         this.transportError = null
       },
       onError: error => { this.transportError = error.code; if (error.code === 'UNAUTHENTICATED') onAuthenticationFailure?.() },
@@ -524,6 +529,7 @@ export class CommunicationRuntime {
     return { enabled: true, connected: this.transport.connected, reloadRequired: false, listState: !this.transport.lastSynchronizedAt ? 'not-synchronized' : this.transport.connected ? 'authorized-snapshot' : 'cached-snapshot', reconciled: this.everReconciled, instanceId: this.queue.instanceId, humanPrincipalId: this.human.principalId,
       hubUrl: this.settings.url, hubId: this.settings.hubId ?? this.transport.welcome?.hubId ?? null, queueScope:this.settings.queueScope??'legacy',
       attachmentsAvailable: this.transport.welcome?.capabilities?.includes(ATTACHMENT_CAPABILITY) === true,
+      managementRevision: this.managementRevision ?? 0, transport: this.transport.diagnostics?.() ?? null,
       managementUrl, managementAvailable: managementUrl !== null,
       lastConnectedAt: this.lastConnectedAt ?? null, error: this.transportError ?? this.lastError ?? null, avatarError: this.avatarError ?? null, contacts: this.contacts,
       limits: this.queue.limits, addressNotes: this.queue.addressNotes(), addressNotesScope: addressNotesScope(this),
@@ -846,9 +852,10 @@ export class CommunicationRuntime {
   }
   async closeOwned() {
     this.closed = true
+    const opening = this.transport.opening, pumping = this.transport.pumping
     this.transport.stop()
-    await this.transport.opening?.catch(() => {})
-    await this.transport.pumping?.catch(() => {})
+    await opening?.catch(() => {})
+    await pumping?.catch(() => {})
     await this.processing.catch(() => {})
     await this.workEvents?.catch(() => {})
     this.transport.credential = undefined

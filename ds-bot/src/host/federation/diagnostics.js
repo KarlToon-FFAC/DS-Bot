@@ -76,6 +76,7 @@ export async function diagnoseCommunication(rt, state, { sessionId, agent } = {}
       actualServedNames: null, scopeRefresh: rt.teamToolScopeStatus?.(sessionId) ?? null,
       why: 'Tools are scoped to each Session and may be filtered by its preset or host. The registry is not proof of model-facing presentation: PTC mode accepts only run_code as a native call and can reject direct calls to registered tools as UNKNOWN_TOOL. Configuration reload replaces plugin scopes. Only currently advertised tools are callable; diagnostics cannot prove a model saw a schema. Remote Sessions deliberately exclude local management and execution.',
       nextActions: ['If a tool is absent or reported unknown, inspect the current tool list, run diagnose in your own local Bot chat and refresh after reload. Never bypass the isolated remote preset or fall back to Human credentials for a Bot send.'] },
+    transport: comm?.transport?.diagnostics?.() ?? null,
     synchronization: { reconciled, initialSyncComplete: listsKnown, inProgress: Boolean(comm?.transport?.pumping), lastCompletedAt: comm?.transport?.lastSynchronizedAt ?? null,
       lastConnectedAt: comm?.lastConnectedAt ?? null, transportRunning: comm?.transport?.running ?? false },
     tls: { required: applied.url ? safeUrl(applied.url)?.startsWith('wss:') ?? null : null,

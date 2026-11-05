@@ -9,6 +9,12 @@ import { CommunicationError, PROTOCOL, identifier, requireThat } from './protoco
 
 const loopback = host => ['127.0.0.1','::1'].includes(host)
 const digest = value => createHash('sha256').update(value).digest()
+// Hints never carry conversation IDs, membership data or content. All reads still
+// pass through the authenticated RPC routes and durable per-membership cursors.
+const invalidatingRoutes = new Set(['principal.register', 'principal.rename', 'principal.publication', 'principal.avatar.chunk',
+  'dm.open', 'group.create', 'group.invite', 'group.accept', 'group.remove', 'group.routing', 'group.dissolve',
+  'group.policy', 'group.transfer', 'group.reclaim', 'group.configure', 'group.settings', 'message.publish',
+  'principal.profile', 'enrollment.prove', 'contact.code.rotate', 'contact.request', 'contact.accept', 'contact.reject', 'contact.cancel', 'contact.revoke'])
 const routes = {
   'principal.register':'register', 'contacts.list':'contacts', 'dm.open':'createDm', 'group.create':'createGroup',
   'group.invite':'invite', 'group.accept':'accept', 'group.remove':'remove', 'group.routing':'routing', 'group.dissolve':'dissolve',
@@ -19,9 +25,10 @@ const routes = {
   'principal.publication':'syncPublication',
 }
 
-export async function startHub({ databasePath, peers, host='127.0.0.1', port=3190, tls, limits, management:managementOptions, beforeCommit, beforeRequest, beforeResponse }={}) {
+export async function startHub({ databasePath, peers, host='127.0.0.1', port=3190, tls, limits, management:managementOptions, beforeCommit, beforeRequest, beforeResponse, heartbeatMs=30000 }={}) {
   requireThat(loopback(host)||tls?.key&&tls?.cert,'TLS_REQUIRED','Non-loopback listeners require TLS')
   requireThat(Number.isInteger(port)&&port>=0&&port<=65535,'INVALID_CONFIG')
+  requireThat(Number.isSafeInteger(heartbeatMs)&&heartbeatMs>=10,'INVALID_CONFIG')
   const allowed=new Map()
   for(const peer of peers??[]){
     identifier(peer.instanceId)
@@ -52,14 +59,52 @@ export async function startHub({ databasePath, peers, host='127.0.0.1', port=319
   })
   const sockets=new WebSocketServer({server,path:'/communication',maxPayload:store.limits.maxEnvelopeBytes,perMessageDeflate:false})
   const connections=new Set()
+  const alive=new WeakSet()
+  const heartbeat=setInterval(()=>{
+    for(const socket of connections){
+      if(!alive.has(socket)){socket.terminate();continue}
+      alive.delete(socket)
+      if(socket.readyState===1)socket.ping()
+    }
+  },heartbeatMs)
+  heartbeat.unref()
   const identities=new Map()
+  const subscribers=new Map()
+  const authenticated=new Map()
+  management.isInstanceConnected=instanceId=>{
+    for(const [socket,auth] of authenticated){
+      if(auth.instanceId!==instanceId||socket.readyState!==1)continue
+      try{store.check(auth);return true}catch{/* Stale epochs are never online. */}
+    }
+    return false
+  }
+  store.isInstanceConnected=management.isInstanceConnected
+  let invalidationTimer, directoryDirty=false, closing=false
+  const invalidate=(scope='directory')=>{
+    if(closing)return
+    if(scope!=='messages')directoryDirty=true
+    if(invalidationTimer)return
+    invalidationTimer=setTimeout(()=>{
+      invalidationTimer=null
+      const scope=directoryDirty?'directory':'messages'
+      directoryDirty=false
+      for(const [socket,auth] of subscribers){
+        if(socket.readyState!==1||socket.bufferedAmount>=store.limits.maxEnvelopeBytes)continue
+        try{store.check(auth);socket.send(JSON.stringify({protocol:PROTOCOL,type:'state.invalidate',scope}))}catch{/* Revoked peers receive no hints. */}
+      }
+    },50)
+    invalidationTimer.unref()
+  }
+  const changed=()=>{if(managementHttp?.changed)managementHttp.changed();else invalidate()}
   sockets.on('connection',(socket,request)=>{
     if(connections.size>=64){socket.close(1013,'Connection capacity reached');return}
     connections.add(socket)
+    alive.add(socket)
+    socket.on('pong',()=>alive.add(socket))
     let auth=null
     const deadline=setTimeout(()=>socket.close(1008,'Authentication required'),5000)
     deadline.unref()
-    socket.on('close',()=>{clearTimeout(deadline);connections.delete(socket);identities.delete(socket);management.forget(socket)})
+    socket.on('close',()=>{clearTimeout(deadline);connections.delete(socket);identities.delete(socket);management.forget(socket);subscribers.delete(socket);authenticated.delete(socket);if(auth)changed()})
     socket.on('error',()=>{})
     socket.on('message',(data,isBinary)=>{
       let id=null
@@ -92,7 +137,10 @@ export async function startHub({ databasePath, peers, host='127.0.0.1', port=319
           if(auth){
           store.observeAddress(auth,(request.socket.remoteAddress??'unknown').replace(/^::ffff:/,''))
           identities.set(socket,auth.instanceId)
+          authenticated.set(socket,{...auth})
+          if(frame.payload.capabilities?.includes('state-invalidation'))subscribers.set(socket,{...auth})
           clearTimeout(deadline)
+          changed()
           }
         }else{
           requireThat(allowed.has(auth.instanceId)||management.peer(auth.instanceId),'UNAUTHENTICATED')
@@ -109,6 +157,8 @@ export async function startHub({ databasePath, peers, host='127.0.0.1', port=319
           value=store[method](auth,frame.payload)
           }
         }
+        if(frame.type==='message.publish')invalidate('messages')
+        else if(invalidatingRoutes.has(frame.type))changed()
         if(beforeResponse?.({type:frame.type,value,socket})===false)return
         if(auth&&(frame.type==='hello'||frame.type==='enrollment.prove'))value={...value,hubId:management.hubId,...(managementUrl?{managementUrl}:{})}
         requireThat(socket.bufferedAmount<store.limits.maxEnvelopeBytes*4,'BACKPRESSURE')
@@ -127,20 +177,20 @@ export async function startHub({ databasePath, peers, host='127.0.0.1', port=319
   })
   try{
     await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(port,host,resolve)})
-  }catch(error){sockets.close();store.close();throw error}
+  }catch(error){clearInterval(heartbeat);sockets.close();store.close();throw error}
   const address=server.address()
   const url=`${tls?'wss':'ws'}://${host.includes(':')?`[${host}]`:host}:${address.port}/communication`
-  const revoke=instanceId=>{allowed.delete(instanceId);const value=store.revokeInstance(instanceId);for(const [socket,id] of identities)if(id===instanceId)socket.close(1008,'Trust revoked');return value}
+  const revoke=instanceId=>{allowed.delete(instanceId);const value=store.revokeInstance(instanceId);for(const [socket,id] of identities)if(id===instanceId)socket.close(1008,'Trust revoked');changed();return value}
   if(managementOptions?.enabled){
     try{
       management.url??=url
       if(pairingTrust)management.info()
       const origin=managementOptions.origin??new URL(management.url.replace(/^ws/,'http')).origin
-      managementHttp=createManagementHttp(management,{password:managementOptions.password,origin,onRevoke:revoke})
+      managementHttp=createManagementHttp(management,{password:managementOptions.password,origin,onRevoke:revoke,onChange:invalidate})
       if(managementHttp.enabled)managementUrl=`${origin}/admin/`
-    }catch(error){for(const socket of connections)socket.terminate();await new Promise(resolve=>sockets.close(resolve));await new Promise(resolve=>server.close(resolve));store.close();throw error}
+    }catch(error){clearInterval(heartbeat);closing=true;clearTimeout(invalidationTimer);for(const socket of connections)socket.terminate();await new Promise(resolve=>sockets.close(resolve));await new Promise(resolve=>server.close(resolve));store.close();throw error}
   }
   return {store,management,host,port:address.port,url,managementUrl,
     revoke,
-    async close(){managementHttp?.close();for(const socket of connections)socket.terminate();await new Promise(resolve=>sockets.close(resolve));await new Promise(resolve=>server.close(resolve));store.close()}}
+    async close(){closing=true;clearInterval(heartbeat);clearTimeout(invalidationTimer);managementHttp?.close();for(const socket of connections)socket.terminate();await new Promise(resolve=>sockets.close(resolve));await new Promise(resolve=>server.close(resolve));store.close()}}
 }

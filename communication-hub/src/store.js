@@ -155,7 +155,7 @@ export class HubStore {
   contacts(auth,input={}) {
     this.check(auth)
     if(input.principalId!==undefined)this.principal(auth,input.principalId)
-    const rows=this.db.prepare("SELECT p.id principalId,p.instance_id homeInstanceId,p.kind,coalesce(n.display_name,p.name) displayName,i.label instanceLabel,a.address ipAddress FROM principals p JOIN instances i ON i.id=p.instance_id LEFT JOIN instance_addresses a ON a.instance_id=i.id LEFT JOIN principal_preferences n ON n.principal_id=p.id LEFT JOIN principal_publication pub ON pub.principal_id=p.id WHERE i.trusted=1 AND (p.kind<>'bot' OR coalesce(pub.published,1)=1) ORDER BY p.id").all().map(person=>({...person,avatar:this.avatarOf(person.principalId)}))
+    const rows=this.db.prepare("SELECT p.id principalId,p.instance_id homeInstanceId,p.kind,coalesce(n.display_name,p.name) displayName,i.label instanceLabel,a.address ipAddress FROM principals p JOIN instances i ON i.id=p.instance_id LEFT JOIN instance_addresses a ON a.instance_id=i.id LEFT JOIN principal_preferences n ON n.principal_id=p.id LEFT JOIN principal_publication pub ON pub.principal_id=p.id WHERE i.trusted=1 AND (p.kind<>'bot' OR coalesce(pub.published,1)=1) ORDER BY p.id").all().map(person=>({...person,avatar:this.avatarOf(person.principalId),connected:this.isInstanceConnected?.(person.homeInstanceId)===true}))
     return this.directoryFilter?this.directoryFilter(auth,rows,input.principalId):rows
   }
   isPublished(principalId) {

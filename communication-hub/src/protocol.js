@@ -3,7 +3,7 @@ import { normalizeAttachments, ATTACHMENT_CAPABILITY } from './attachments.js'
 
 export const PROTOCOL = 'dsbot-communication/1'
 export const CAPABILITIES = ['text', 'markdown', 'mentions', 'group', 'dm', 'reply', 'history', 'group-policy', 'membership-epoch', 'explicit-bot-activation', 'bot-input-updates']
-export const HUB_CAPABILITIES = [...CAPABILITIES, 'bounded-bot-collaboration', 'principal-avatars', 'principal-publication', 'bot-work-events', ATTACHMENT_CAPABILITY]
+export const HUB_CAPABILITIES = [...CAPABILITIES, 'bounded-bot-collaboration', 'principal-avatars', 'principal-publication', 'bot-work-events', 'state-invalidation', ATTACHMENT_CAPABILITY]
 export const DEFAULT_LIMITS = { maxTextBytes: 65536, maxEnvelopeBytes: 131072, maxMembers: 64, maxPendingDeliveries: 10000,
   maxPrincipals: 64, maxMembershipsPerInstance: 64, maxPendingInvitesPerInstance: 64, maxCausalDepth: 8, maxAiDeliveriesPerRoot: 32 }
 

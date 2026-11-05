@@ -146,7 +146,7 @@ export class HubManagement {
       return { requestId: row.id, status: 'approved', instanceId: id }
     })
   }
-  instances() { return this.db.prepare('SELECT i.id instanceId,i.label,i.trusted,i.pairing_revision pairingRevision,p.revision,coalesce(n.version,0) nameVersion FROM instances i LEFT JOIN hub_enrolled_peers p ON p.instance_id=i.id LEFT JOIN hub_instance_names n ON n.instance_id=i.id ORDER BY i.id').all() }
+  instances() { return this.db.prepare('SELECT i.id instanceId,i.label,i.trusted,i.pairing_revision pairingRevision,p.revision,coalesce(n.version,0) nameVersion FROM instances i LEFT JOIN hub_enrolled_peers p ON p.instance_id=i.id LEFT JOIN hub_instance_names n ON n.instance_id=i.id ORDER BY i.id').all().map(instance => ({ ...instance, connected: this.isInstanceConnected?.(instance.instanceId) === true })) }
   rename(input) {
     requireThat(input && typeof input === 'object' && !Array.isArray(input) && Object.keys(input).every(key => ['instanceId', 'label', 'expectedNameVersion'].includes(key)), 'INVALID_REQUEST')
     identifier(input.instanceId)
