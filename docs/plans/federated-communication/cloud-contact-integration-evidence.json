@@ -1,0 +1,130 @@
+{
+  "status": "LOCAL_INTEGRATION_WITH_DSH_STARTUP_VALIDATION_BLOCKED",
+  "verifiedAt": "2026-11-05T07:59:01.848328+00:00",
+  "integrationBase": "8899ea5889af53430793f59d7667d7e9fc66de57",
+  "commits": {
+    "duplicateRequestSource": "a85f9708a98c5c4d553213c23d50580fab64a69c",
+    "duplicateRequestCherryPick": "d46fc91b4284a941441d74fa28f6bee84fbc04b9",
+    "contactUiSource": "1453482de8d3df2eff2b66f0e1e42f9f910b7106",
+    "contactUiCherryPick": "9f42503",
+    "visibilityFix": "3c1b134"
+  },
+  "duplicateRequestStage": {
+    "commit": "d46fc91",
+    "pluginTests": {
+      "total": 1725,
+      "passed": 1721,
+      "skipped": 4,
+      "failed": 0
+    },
+    "hubTests": {
+      "total": 117,
+      "passed": 117,
+      "failed": 0
+    },
+    "openaiMockChain": {
+      "status": "PASS_MOCK_DSH_HUB",
+      "cases": 7,
+      "loopbackRequests": 6,
+      "externalRequests": 0
+    },
+    "relationshipMock": {
+      "passed": 5,
+      "failed": 0
+    },
+    "trackedSourceScan": {
+      "files": 830,
+      "mustFix": 0
+    },
+    "independentReview": {
+      "blockingFindings": 0,
+      "unitTestsPassed": 86
+    }
+  },
+  "contactUiStage": {
+    "commit": "9f42503",
+    "pluginTests": {
+      "total": 1731,
+      "passed": 1727,
+      "skipped": 4,
+      "failed": 0
+    },
+    "clientRebuilt": true,
+    "lint": "PASS_WITH_EXISTING_WARNINGS",
+    "generatedClient": "PASS",
+    "probeClient": "PASS"
+  },
+  "visibilityFixStage": {
+    "commit": "3c1b134",
+    "directoryAndUsabilityTests": {
+      "total": 66,
+      "passed": 66,
+      "failed": 0
+    },
+    "newCases": 4,
+    "coverage": "Panel visibility and Bot-mode changes, both before and after a pending Contacts Message response; original selection/dialog preserved without duplicate mutation.",
+    "independentReview": {
+      "blockingFindings": 0
+    },
+    "lint": "PASS_WITH_EXISTING_WARNINGS",
+    "generatedClient": "PASS",
+    "probeClient": "PASS",
+    "diffCheck": "PASS"
+  },
+  "postUiDshAttempts": [
+    {
+      "command": "node dev/communication/relationship-memory-acceptance.mjs",
+      "status": "FAIL_AT_STARTUP",
+      "casesPassed": 0,
+      "error": "relationships-a74d89a1-b start: BENCH_START_TIMEOUT",
+      "newCombinedCase": "contact-reconsent-excludes-old-DM-memory-and-queued-send",
+      "combinedCaseVerified": false
+    },
+    {
+      "command": "node dev/communication/openai-dsh-pilot.mjs --mock",
+      "status": "STOPPED",
+      "casesPassed": 0,
+      "requests": 0,
+      "error": "INTEGRATION_ASSERTION_FAILED"
+    }
+  ],
+  "startupDiagnosis": {
+    "loadAverageObserved": [
+      17.48,
+      10.28,
+      6.21
+    ],
+    "availableMemoryApproxGb": 7.2,
+    "readiness": "A ready marker present; B web.log/web.err/mock.err empty in both isolated topologies.",
+    "cause": "Not established. Cloud workload contention was observed; no EPERM/EADDRINUSE/error text was present in those worker logs.",
+    "pidNamespace": "All launch/verification/cleanup happened inside each original exec lifecycle. Cross-exec /proc observations cannot establish worker liveness or ownership.",
+    "cleanup": "Both test commands reached finally cleanup and exited; no unknown or other-task process was terminated."
+  },
+  "pendingValidation": [
+    "Serial rerun of both DSH Mock integration scripts after resources are available.",
+    "Full plugin regression after the visibility fix, deferred to avoid extra cloud load.",
+    "Chromium pixel/layout and real-browser interaction checks remain blocked by the recorded sandbox EPERM; no alternative route was attempted.",
+    "Native Windows and physical cross-machine regression were not run."
+  ],
+  "sourceHashes": {
+    "communication-hub/src/management-store.js": "4514008febb355cc27eb8d4da786e7a9f57cd9981771179e24834894424c6fb7",
+    "ds-bot/src/client/communication.js": "0d7c97ac6c7ecc9f3c72ae75ec50345d5acb0e1a1d346247369aa789bbf481f6",
+    "ds-bot/client.js": "5dd95ef6784396812203614cec9fd7dac04292512893827ca87f445285f4acdc",
+    "ds-bot/test/communication-usability.test.js": "46d0417e72884aa8b4046f086b8161643db8b549aaeb03787aaf85a1ec449e6c",
+    "ds-bot/dev/communication/relationship-memory-acceptance.mjs": "24a691216ec3c3e66d4012fda07aa27484e6cdca8ec978759461fe9b7b78f167"
+  },
+  "scope": {
+    "onlyMock": true,
+    "realModelCalls": false,
+    "credentialsRequested": false,
+    "credentialsReadOrTransferred": false,
+    "push": false,
+    "actionsTriggered": false,
+    "otherWorktreesModified": false
+  },
+  "limits": [
+    "Skipped tests are not passes.",
+    "Earlier-stage full passes do not establish the final combined tree passed all tests.",
+    "A Mock pass does not establish real-model compliance."
+  ]
+}

@@ -75,6 +75,36 @@ try {
   assert.equal((await recall(b, group)).entries.some(entry => entry.text === profile), true)
   record('rejoin-excludes-old-epoch-retains-explicit-profile')
 
+  const consent = async () => {
+    const { userCode } = await b.api({ endpoint: 'user-code' })
+    const request = await topology.operation(a, 'request-contact', { userCode, localBotIds: [a.botId] })
+    const incoming = (await b.api({ endpoint: 'contact-requests' })).find(item => item.requestId === request.requestId)
+    assert.equal(incoming.status, 'pending')
+    await topology.operation(b, 'accept-contact', { requestId: request.requestId, expectedVersion: incoming.version, localBotIds: [b.botId] })
+    return (await a.api({ endpoint: 'contact-relations' })).find(item => item.otherHumanPrincipalId === b.human && item.active)
+  }
+  const relation = await consent()
+  assert.ok(relation)
+  const dm = (await topology.operation(a, 'dm', { otherPrincipalId: b.bot })).conversationId
+  const dmFact = `DM-only collaboration fact ${nonce}`
+  await command(a, b, dm, 'SAVE', { conversationId: dm, subjectKind: 'contact', subjectPrincipalId: a.human, topic: 'expertise', text: dmFact })
+  assert.ok((await recall(b, dm)).entries.some(item => item.text === dmFact))
+  const oldDmEpoch = epoch(b, dm)
+  await topology.hub('arm', { point: 'deny-publish', principalId: a.human })
+  const stale = await topology.send(a, dm, `COMM-ECHO stale-consent-${nonce}`)
+  await until(async () => (await a.api({ endpoint: 'state' })).outbox.some(item => item.id === stale.messageId && item.state === 'pending'), 'old DM intent durably queued')
+  await topology.operation(a, 'revoke-contact', { otherHumanPrincipalId: b.human, expectedVersion: relation.version })
+  await consent()
+  await topology.hub('clear')
+  await until(async () => (await a.api({ endpoint: 'state' })).outbox.some(item => item.id === stale.messageId && item.state === 'failed' && ['MEMBERSHIP_REVOKED', 'CONTACT_REQUIRED', 'NOT_A_MEMBER'].includes(item.error)), 'old consent-epoch DM intent rejected')
+  assert.ok(!(await topology.hub('stats')).messages.some(item => item.id === stale.messageId))
+  assert.equal((await topology.operation(a, 'dm', { otherPrincipalId: b.bot })).conversationId, dm)
+  await until(() => epoch(b, dm) && epoch(b, dm) !== oldDmEpoch, 'fresh DM membership epoch')
+  assert.equal((await recall(b, dm)).entries.some(item => item.text === dmFact), false)
+  assert.equal((await recall(b, dm)).entries.some(item => item.text === profile), true)
+  assert.match((await command(a, b, dm, 'PROMPT', dmFact)).response, /ABSENT$/)
+  record('contact-reconsent-excludes-old-DM-memory-and-queued-send')
+
   const log = readFileSync(join(b.home, 'mock.jsonl'), 'utf8').split('\n').filter(Boolean).map(JSON.parse)
   const scoped = log.filter(call => call.communicationBoundary?.isolated)
   assert.ok(scoped.some(call => call.toolNames?.includes('remember_communication_relationship')))
