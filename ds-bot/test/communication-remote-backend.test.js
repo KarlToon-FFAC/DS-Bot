@@ -57,6 +57,7 @@ test('reconciliation loads Bot-only participants without exposing that conversat
       assert.fail(`Unexpected request: ${type}`)
     }
     runtime.process = async () => {}
+    runtime.transport.connected = true
     await runtime.transport.onChange()
     assert.deepEqual(calls[1], { type: 'conversation.members', payload: { conversationId: 'bot-only', principalId, membershipEpoch: 'epoch' } })
     assert.equal(runtime.conversations.get('bot-only').members[0].principalId, principalId)

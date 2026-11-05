@@ -121,6 +121,8 @@ test('successful synchronization clears recovered transport errors while preserv
       ctx: { on: () => () => {}, systemPrompt: { section: () => () => {} } } },
     { url: 'ws://127.0.0.1:3190/communication', instanceId: 'a', dataPath: ':memory:', publishedBotIds: [] }, 'synthetic', [])
     runtime.process = async () => {}
+    runtime.transport.connected = true
+    runtime.queue.applyMemberships({ memberships: [], invites: [] })
     runtime.transport.request = async type => {
       if (type === 'contacts.list') return []
       assert.fail(`Unexpected request: ${type}`)

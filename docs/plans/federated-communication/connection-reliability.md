@@ -138,3 +138,26 @@ remain rejected, and `@all` still requires the local membership/version projecti
 to match rather than expanding through an unresolved synchronization gap.
 `communication-target-refresh.test.js` covers these cases with disposable SQLite,
 including actual Hub acceptance followed immediately by the sender's first send.
+
+## First synchronization and interrupted work
+
+Canonical authorization readiness is not the same as completion of the first
+processing cycle. After authenticated contacts, membership projections and
+status reads succeed, the runtime records a projection token bound to the current
+socket and generation, with the queue still authorized. That token lets initial
+recovery assemble its original member-scoped prompt inside `process()`. Setting
+only `everReconciled` after `process()` creates a dependency cycle: recovery needs
+`member()` before processing can complete, and a prompt failure can consume the
+once-only interrupted-turn recovery attempt without a model request.
+
+The UI's historical `everReconciled` marker still changes only after processing
+returns successfully on that same authorized connection. An early read failure
+cannot mark an empty initial list synchronized. A queued recovery checks the
+projection again before entering processing; a disconnected/replaced connection
+cannot lend it a newer socket's authority or finish the old synchronization.
+`communication-startup-projection.test.js` constructs the actual runtime and
+exercises its original interrupted-input recovery and relationship-context prompt
+gate, initial RPC failures, repeated recovery deduplication, explicit cancelled
+or errored turns, and both queued and in-flight connection invalidation. It does
+not change the interrupted-turn classifier, re-admit the original input, retry
+error turns, or clear the durable/once-only recovery safeguards.

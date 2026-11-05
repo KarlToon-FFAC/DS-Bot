@@ -79,6 +79,7 @@ export class CommunicationRuntime {
         this.transportError = null
       },
       onChange: async () => {
+        const generation = this.transport.generation, socket = this.transport.socket
         const contacts = await this.transport.request('contacts.list')
         if (JSON.stringify(contacts) !== JSON.stringify(this.contacts)) this.managementRevision += 1
         this.contacts = contacts
@@ -113,9 +114,18 @@ export class CommunicationRuntime {
           catch (error) { if (!['NOT_A_MEMBER', 'MEMBERSHIP_REVOKED', 'FORBIDDEN'].includes(error.code)) throw error; this.deliveryStates.delete(item.id) }
         }
         this.statusOffset += 5
+        if (this.closed || !this.transport.connected || this.transport.generation !== generation || this.transport.socket !== socket) fail('CONNECTION_LOST')
+        if (!this.queue.authorized) fail('COMMUNICATION_AUTHORIZATION_UNKNOWN')
+        // Recovery assembles prompts inside process(). Its current canonical scope
+        // must be usable before that work can finish the first synchronization.
+        this.authorizedProjection = { generation, socket }
         if (settings.autoAcceptBotInvites) await this.acceptBotInvites()
-        this.processing = this.processing.catch(() => {}).then(() => this.process())
+        const assertProjection = () => {
+          if (this.transport.generation !== generation || this.transport.socket !== socket || !this.hasAuthorizedProjection()) fail('CONNECTION_LOST')
+        }
+        this.processing = this.processing.catch(() => {}).then(() => { assertProjection(); return this.process() })
         await this.processing
+        assertProjection()
         this.everReconciled = true
         this.transportError = null
       },
@@ -184,8 +194,13 @@ export class CommunicationRuntime {
     const input = deliveries.at(-1)
     return { sourceKey, causationDeliveryId: input.deliveryId, replyToMessageId: input.messageId }
   }
+  hasAuthorizedProjection() {
+    const projection = this.authorizedProjection
+    return Boolean(projection && !this.closed && this.transport?.connected && this.queue.authorized
+      && projection.generation === this.transport.generation && projection.socket === this.transport.socket)
+  }
   member(principalId, conversationId, epoch) {
-    if (!this.everReconciled) fail('AUTHORIZATION_PENDING')
+    if (!this.everReconciled && !CommunicationRuntime.prototype.hasAuthorizedProjection.call(this)) fail('AUTHORIZATION_PENDING')
     const member = this.queue.memberships().find(item => item.principalId === principalId && item.conversationId === conversationId)
     if (!member) fail('NOT_A_MEMBER')
     if (epoch !== undefined && member.membershipEpoch !== epoch) fail('MEMBERSHIP_REVOKED')
