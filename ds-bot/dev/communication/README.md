@@ -1,4 +1,47 @@
-# Native Windows communication API bench
+# Isolated communication API bench
+
+## Cross-platform launcher
+
+`node dev/communication/bench.mjs start|stop|status <name> <web-port> <mock-port>`
+preserves the existing `bench.ps1` path on Windows and uses a dedicated Node
+supervisor on Linux. `LocalTopology` selects this launcher automatically. Other
+platforms currently fail explicitly. Linux requires the standard util-linux
+`/usr/bin/flock` command and does not require PowerShell.
+
+For a separate Mock-only cloud rehearsal, run in `ds-bot/` after `npm ci`,
+`npm run harness`, and `npm ci --prefix ../communication-hub`:
+
+```sh
+node dev/communication/bench.mjs start cloud-smoke 3131 8831
+node dev/communication/bench.mjs status cloud-smoke 3131 8831
+node dev/communication/bench.mjs stop cloud-smoke 3131 8831
+```
+
+Linux writes only `.dsh-test-<name>/`, retains data on stop, and identifies owned
+processes by executable, script, scope and Linux process birth time. A dedicated
+supervisor stops both workers on owner loss, child loss or the bounded lifetime.
+An OS-held lock prevents concurrent starters from sharing one test home, including
+after a stale manifest or an interrupted run. Lock files are retained rather than
+unlinked, avoiding inode-replacement races. It does not stop unrelated Node
+processes. Child environments contain only the
+required runtime and synthetic fixture settings; ambient provider credentials
+and Node preload options are not inherited. The Mock never receives pairing or
+OpenAI guard credentials. Launch tokens remain in the private isolated log.
+
+This prepares local Linux execution only. Windows DPAPI records are not imported.
+Do not reset or copy completed real-test ledgers, run an old real pilot again,
+or put an API key in chat, source, arguments or a profile. A future cloud real
+run still needs a supported secure input channel, a newly authorized run/budget,
+current price verification and official OpenAI network access. The production
+model remains exactly `gpt-6-luna`; ordinary benches remain Mock-only.
+
+The cloud preparation synchronizes the test guard with the current scoped
+communication tools added since its earlier pilot. A Linux full-chain Mock run
+passed seven checks with six loopback requests and no external model calls.
+This verifies the Linux DSH/Hub chain with synthetic responses, not real-model
+behavior, different-machine networking or native Windows application behavior.
+
+## Native Windows bench and prior acceptance
 
 This bench includes P0–P4 production acceptance and the subsequent group-policy
 and privacy tests. They run real independent DSH Web hosts and deterministic

@@ -19,7 +19,7 @@ export class LocalTopology {
   }
   async bench(peer,action,extra={}){
     await new Promise((resolve,reject)=>{
-      const child=spawn('powershell.exe',['-NoProfile','-File',join(import.meta.dirname,'bench.ps1'),'-Action',action,'-Name',peer.name,'-WebPort',String(peer.web),'-MockPort',String(peer.mock)],{windowsHide:true,stdio:['ignore','pipe','pipe'],env:{...process.env,...extra}})
+      const child=spawn(process.execPath,[join(import.meta.dirname,'bench.mjs'),action,peer.name,String(peer.web),String(peer.mock)],{windowsHide:true,stdio:['ignore','pipe','pipe'],env:{...process.env,...extra}})
       let error='';child.stdout.on('data',()=>{});child.stderr.on('data',data=>{error+=data});child.once('error',reject)
       child.once('exit',code=>code===0?resolve():reject(new Error(`${peer.name} ${action}: ${error.slice(0,1000)}`)))
     })

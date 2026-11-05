@@ -15,7 +15,8 @@ const integer = (value, minimum, maximum) => Number.isSafeInteger(value) && valu
 const MODEL_TOOLS = new Set(['list_contacts','list_communication_conversations','send_contact_message','read_communication_history',
   'invite_communication_member','leave_communication_group','remove_communication_member','set_communication_receiving_rule',
   'end_communication_group','set_communication_member_policy','transfer_communication_ownership',
-  'read_communication_members','read_communication_reference','configure_communication_group','save_communication_group_settings'])
+  'read_communication_members','read_communication_reference','configure_communication_group','save_communication_group_settings',
+  'read_communication_attachment','read_communication_thread','set_communication_reply_targets','update_communication_handoff'])
 
 export function budgetPolicy(options = {}) {
   const policy = { model: OPENAI_MODEL, origin: OPENAI_ORIGIN, serviceTier: 'default', maxRequests: options.maxRequests ?? 8,
