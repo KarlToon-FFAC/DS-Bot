@@ -244,17 +244,19 @@ test('export source mapping, complete outbox and cursor commit together and reus
 })
 
 test('future database schema versions are refused before migration and existing records remain intact',()=>{
-  const root=directory(),path=join(root,'future.sqlite')
-  const future=new DatabaseSync(path)
-  future.exec("PRAGMA user_version=5; CREATE TABLE marker(value TEXT); INSERT INTO marker VALUES ('keep');")
-  future.close()
+  const root=directory()
   try{
-    assert.throws(()=>new HubStore(path),{code:'SCHEMA_VERSION_UNSUPPORTED'})
-    assert.throws(()=>new CommunicationQueue(path,{instanceId:'a'}),{code:'SCHEMA_VERSION_UNSUPPORTED'})
-    const checked=new DatabaseSync(path)
-    assert.equal(checked.prepare('SELECT value FROM marker').get().value,'keep')
-    assert.equal(checked.prepare('PRAGMA user_version').get().user_version,5)
-    checked.close()
+    for(const [name,version,load] of [['hub',5,path=>new HubStore(path)],['client',6,path=>new CommunicationQueue(path,{instanceId:'a'})]]){
+      const path=join(root,`${name}-future.sqlite`),future=new DatabaseSync(path)
+      future.exec(`PRAGMA user_version=${version}; CREATE TABLE marker(value TEXT); INSERT INTO marker VALUES ('keep');`)
+      future.close()
+      assert.throws(()=>load(path),{code:'SCHEMA_VERSION_UNSUPPORTED'})
+      const checked=new DatabaseSync(path)
+      try{
+        assert.equal(checked.prepare('SELECT value FROM marker').get().value,'keep')
+        assert.equal(checked.prepare('PRAGMA user_version').get().user_version,version)
+      }finally{checked.close()}
+    }
   }finally{cleanDirectory(root)}
 })
 
