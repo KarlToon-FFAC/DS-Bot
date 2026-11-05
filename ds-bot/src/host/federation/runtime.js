@@ -13,6 +13,7 @@ import { startedSources } from './work-events.js'
 import { conversationSummary, safeManagementUrl } from './conversation-summary.js'
 import { splitRef } from '../text.js'
 import { communicationPrompt } from './prompt.js'
+import { RelationshipMemory, relationshipMemoryContext } from './relationship-memory.js'
 import { OUTSIDE_CONVERSATION_TOOLS } from './tool-scope.js'
 import { COMMUNICATION_PRESET, hasCommunicationPreset, communicationInputs, sourceDelivery, legacySessionSettled, isCommunicationContext } from './session-scope.js'
 
@@ -34,6 +35,7 @@ export class CommunicationRuntime {
     this.ctx = rt.ctx
     this.settings = settings
     this.queue = new CommunicationQueue(settings.dataPath ?? join(rt.home, 'communication.sqlite'), { instanceId: settings.instanceId, maxPending: settings.maxPending ?? 1000 })
+    this.relationships = new RelationshipMemory(this.queue, settings)
     try { this.human = this.queue.localPrincipal('human', 'local-user', settings.humanDisplayName ?? 'You', settings.credentialKey ? 'local-user' : undefined) }
     catch (error) { this.queue.close(); throw error }
     this.bots = new Map()
@@ -177,10 +179,58 @@ export class CommunicationRuntime {
   localMemoryFor(binding) {
     return this.settings.localMemory !== false ? this.rt.communicationMemory?.(binding.localBotRef) ?? '' : ''
   }
+  relationshipMemoryFor(binding) {
+    const member = this.queue.memberships().find(item => item.principalId === binding.recipientPrincipalId
+      && item.conversationId === binding.conversationId && item.membershipEpoch === binding.membershipEpoch)
+    const info = this.relationshipContexts?.get(binding.id)
+    if (!this.transport.connected || !member || !info || info.membershipVersion !== member.membershipVersion) return { entries: [], participants: [], refreshRequired: true }
+    return relationshipMemoryContext(this.relationships, binding, info)
+  }
+  promptFor(binding) {
+    const bot = this.rt.botOf(binding.localBotRef)
+    const member = this.queue.memberships().find(item => item.conversationId === binding.conversationId
+      && item.principalId === binding.recipientPrincipalId && item.membershipEpoch === binding.membershipEpoch)
+    return communicationPrompt(bot, binding, member, { ...(this.relationshipContexts?.get(binding.id) ?? this.conversations.get(binding.conversationId)),
+      localUserPrincipalId: this.human.principalId, localMemory: this.localMemoryFor(binding), relationshipMemory: this.relationshipMemoryFor(binding) })
+  }
+  async relationshipContext(principalId, input) {
+    if (!this.transport.connected) fail('COMMUNICATION_AUTHORIZATION_UNKNOWN')
+    const member = this.member(principalId, input.conversationId, input.membershipEpoch)
+    const info = await this.members(principalId, { ...input, membershipEpoch: member.membershipEpoch })
+    return { binding: { recipientPrincipalId: principalId, conversationId: input.conversationId, membershipEpoch: member.membershipEpoch }, info }
+  }
+  async readRelationships(principalId, input) {
+    if (Object.keys(input).some(key => !['conversationId','membershipEpoch'].includes(key))) fail('INVALID_RELATIONSHIP_MEMORY')
+    const { binding, info } = await this.relationshipContext(principalId, input)
+    return { entries: this.relationships.read(binding, info) }
+  }
+  async rememberRelationship(principalId, input) {
+    const { binding, info } = await this.relationshipContext(principalId, input)
+    const event = this.queue.reference(binding.conversationId, principalId, binding.membershipEpoch, input.sourceMessageId)
+    return this.relationships.remember(binding, info, input, event)
+  }
+  async manageRelationships(action, input) {
+    if (Object.keys(input).some(key => !['endpoint','localBotId','conversationId','membershipEpoch','subjectKind','subjectPrincipalId','topic','text','shareAcrossConversations','id'].includes(key))) fail('INVALID_RELATIONSHIP_MEMORY')
+    if (input.conversationId === undefined && input.membershipEpoch !== undefined) fail('INVALID_RELATIONSHIP_MEMORY')
+    if (input.conversationId !== undefined && typeof input.membershipEpoch !== 'string') fail('MEMBERSHIP_EPOCH_REQUIRED')
+    const principal = this.bots.get(input.localBotId)
+    if (!principal || !this.rt.botOf(input.localBotId)) fail('BOT_NOT_PUBLISHED')
+    let binding = { recipientPrincipalId: principal.principalId }, info = { members: this.contacts }
+    if (input.conversationId !== undefined) ({ binding, info } = await this.relationshipContext(principal.principalId, input))
+    else if (action === 'save-relationship-memory' && input.subjectKind === 'contact') {
+      if (!this.transport.connected) fail('COMMUNICATION_AUTHORIZATION_UNKNOWN')
+      info = { members: await this.transport.request('contacts.list', { principalId: principal.principalId }) }
+    }
+    if (action === 'relationship-memory') return { entries: this.relationships.read(binding, info) }
+    if (action === 'forget-relationship-memory') return this.relationships.forget(binding, input.id)
+    if (action !== 'save-relationship-memory') fail('UNKNOWN_OPERATION')
+    return this.relationships.seed(binding, info, input, this.human.principalId)
+  }
   installHooks() {
     this.workInputs ??= new Map()
     this.workSteps ??= new Map()
     this.workEvents ??= Promise.resolve()
+    this.relationshipContexts ??= new Map()
     this.disposers.push(this.ctx.on('agent/created', ({ agent }) => { if (this.owners.has(agent.id)) this.scope(agent) }))
     const recordWork = (sessionId, owner, event, staged) => {
       this.workEvents = this.workEvents.catch(() => {}).then(async () => {
@@ -233,10 +283,7 @@ export class CommunicationRuntime {
       text: context => {
         const binding = this.owners.get(context?.agent?.id)
         if (!binding) return ''
-        const bot = this.rt.botOf(binding.localBotRef)
-        const member = this.queue.memberships().find(item => item.conversationId === binding.conversationId && item.principalId === binding.recipientPrincipalId && item.membershipEpoch === binding.membershipEpoch)
-        return communicationPrompt(bot, binding, member, { ...this.conversations.get(binding.conversationId), localUserPrincipalId: this.human.principalId,
-          localMemory: this.localMemoryFor(binding) })
+        return this.promptFor(binding)
       } }))
   }
   scope(agent) {
@@ -246,10 +293,20 @@ export class CommunicationRuntime {
     for (const tool of tools) this.disposers.push(agent.ctx.tools.register(tool))
     this.disposers.push(agent.ctx.on('system-prompt/assemble', async (_assembly, _context, next) => {
       await this.isolateWorkspace(agent)
+      let freshPrompt
+      if (this.relationships) {
+        const binding = this.owners.get(agent.id)
+        const { info } = await this.relationshipContext(binding.recipientPrincipalId, { conversationId: binding.conversationId, membershipEpoch: binding.membershipEpoch })
+        this.relationshipContexts.set(binding.id, info)
+        freshPrompt = this.promptFor(binding)
+      }
       const assembled = await next()
       return { ...assembled, tools: assembled.tools.filter(tool => communicationNames.has(tool.name)),
         sections: assembled.sections.filter(section => ['deployment:persona-prefix', 'ds-bot-communication'].includes(section.name)
-          || section.name.startsWith('tool:') && communicationNames.has(section.name.slice(5))) }
+          || section.name.startsWith('tool:') && communicationNames.has(section.name.slice(5)))
+          // Section functions ran before this async waterfall: replace their old
+          // text only after the exact actor's fresh member read has completed.
+          .map(section => freshPrompt !== undefined && section.name === 'ds-bot-communication' ? { ...section, text: freshPrompt } : section) }
     }))
     this.disposers.push(agent.ctx.on('tools/execute', async (exec, next) => {
       if (!communicationNames.has(exec.name)) fail('COMMUNICATION_TOOL_NOT_ALLOWED')

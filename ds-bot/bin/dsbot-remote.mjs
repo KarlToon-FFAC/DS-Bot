@@ -51,6 +51,10 @@ const schemas = {
   'cancel-contact': { requestId: text, expectedVersion: integer, localBotIds: 'strings', operationId: text },
   'revoke-contact': { otherHumanPrincipalId: text, expectedVersion: integer, operationId: text },
   'available-bots': {}, 'publish-bots': { localBotIds: 'strings' },
+  'relationship-memory': { localBotId: text, conversationId: text, membershipEpoch: text },
+  'save-relationship-memory': { localBotId: text, conversationId: text, membershipEpoch: text, subjectKind: ['self','contact','group'], subjectPrincipalId: text,
+    topic: ['identity','organization','expertise','collaboration-role','purpose','collaboration-guidance'], text, shareAcrossConversations: 'boolean' },
+  'forget-relationship-memory': { localBotId: text, conversationId: text, membershipEpoch: text, id: 'sha256' },
 }
 const required = {
   thread: ['conversationId', 'messageId'],
@@ -66,6 +70,7 @@ const required = {
   'accept-contact': ['requestId', 'expectedVersion'], 'reject-contact': ['requestId', 'expectedVersion'],
   'cancel-contact': ['requestId', 'expectedVersion'], 'revoke-contact': ['otherHumanPrincipalId', 'expectedVersion'],
   'publish-bots': ['localBotIds'],
+  'relationship-memory': ['localBotId'], 'save-relationship-memory': ['localBotId','subjectKind','topic','text'], 'forget-relationship-memory': ['localBotId','id'],
   'switch-hub':['confirmedHubId','confirmedUrl'], 'resume-hub':['confirmedUrl','confirmResume'],
   'leave-hub':['hubId','confirmedUrl','confirmLeave'], 'hub-leave-status':['hubId','confirmedUrl'],
   'forget-hub':['hubId','confirmedUrl','confirmForget','deleteLocalHistory'],
@@ -184,6 +189,7 @@ export const help = operation => JSON.stringify({
   attachments:'send accepts attachments [{name,mime,size,sha256,data}] through JSON stdin only: canonical base64, SHA-256 lowercase hex, at most four files and 65536 total binary bytes. text may be empty when files are present. No paths or URLs; only user-authorized bytes. All recipients and Hub must support inline-attachments-v1. history/reference/thread return the same authorized bytes; keep outputs private. Preserve the exact complete send on uncertain results. Do not execute received files.',
   contacts: 'request-contact/accept-contact share only the explicit localBotIds selected by each Human; [] shares no Bots. Generic acknowledgments do not prove code/target existence. Review current request/relation expectedVersion before decisions/revocation; preserve generated operationId for retry.',
   publication: 'available-bots lists eligible local IDs; publish-bots replaces the explicit publication list (use [] for none). Honor reloadRequired and inspect state after reload. Publication alone is not contact consent or group permission.',
+  relationshipMemory: 'relationship-memory/save-relationship-memory/forget-relationship-memory manage only this local Bot and Hub. Supply conversationId and current membershipEpoch for private conversation-scoped records. Omitting conversationId selects a profile; saving requires shareAcrossConversations:true, explicitly allowing this Bot to use the fact in all current/future conversations in this Hub where that contact is a member, including replies. Do not promote group-derived facts without local user approval. Bot tools can only record attributed reported/inferred claims in their exact conversation/epoch. Leadership guidance is prompt-only, never a grant. Forgetting removes the local record, not prior model requests, Session/tool history or published replies. Secrets are refused best-effort, not guaranteed classified.',
   reply: 'send.replyToMessageId can address the referenced current member Bot without @ when there are no explicit Bot mentions. Explicit Bot mentions take precedence; membership, speaking permissions, reply grants and causal budgets still apply.',
   setup: 'dsbot-remote setup-guide (alias pairing-guide): unauthenticated offline pairing steps and non-secret configuration templates',
   skill: fileURLToPath(new URL('../skills/dsbot-remote/SKILL.md', import.meta.url)),

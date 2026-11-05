@@ -130,6 +130,19 @@ function decide(body) {
     const communicationResults = isResults(last) && blocks.findLastIndex(block => block.type === 'tool_result')
       > blocks.findLastIndex(block => block.type === 'text' && block.text.includes('[Communication delivery]'))
     const current = textOf(last?.content)
+    const relationshipInput = textOf(messages.findLast(message => message.role === 'user' && textOf(message.content).includes('[Communication delivery]'))?.content)
+    const relationship = /^COMM-RELATIONSHIP (SAVE|READ|PROMPT) (\S+) (.+)$/m.exec(relationshipInput.split('Current message:\n').at(-1))
+    if (relationship) {
+      const [, action, tag, value] = relationship
+      if (action === 'PROMPT') return [text(`Relationship prompt ${tag} ${system.includes(value) ? 'PRESENT' : 'ABSENT'}`)]
+      if (communicationResults) {
+        const result = blocks.filter(block => block.type === 'tool_result').map(block => textOf(block.content)).join('\n')
+        return [text(action === 'SAVE' ? `Relationship saved ${tag}` : `Relationship recalled ${tag} ${result}`)]
+      }
+      const args = JSON.parse(value)
+      return [tool(action === 'SAVE' ? 'remember_communication_relationship' : 'read_communication_relationships',
+        { ...args, ...(action === 'SAVE' ? { sourceMessageId: /Message ID: ([^\n]+)/.exec(relationshipInput)?.[1] } : {}) })]
+    }
     const receiptCommand=/^COMM-RECEIPT (\S+) (\S+) (\S+)$/m.exec(textOf(messages.findLast(message=>message.role==='user'&&textOf(message.content).includes('[Communication delivery]'))?.content))
     if(receiptCommand)return communicationResults?[text('Sent @CollabB, status pending. Internal tool receipt.')]:[tool('send_contact_message',{conversationId:receiptCommand[1],activationTargets:[receiptCommand[2]],text:`COMM-COLLAB DONE ${receiptCommand[3]} @CollabB`})]
     const recovering = current.startsWith('[Local transport recovery notice]')

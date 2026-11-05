@@ -197,7 +197,7 @@ test('staged reply targets survive process queue reopen and remain bound to the 
     queue.db.exec('PRAGMA user_version=2')
     queue.close();queue=new CommunicationQueue(path,{instanceId:'a'})
     assert.deepEqual(queue.replyTargets('binding','delivery'),['bot:b:two'])
-    assert.equal(queue.db.prepare('PRAGMA user_version').get().user_version,4)
+    assert.equal(queue.db.prepare('PRAGMA user_version').get().user_version,5)
     assert.deepEqual(queue.replyTargets('binding','new-input'),[])
     assert.throws(()=>queue.replyTargets('new-binding','delivery'),{code:'CONVERSATION_SCOPE_MISMATCH'})
   }finally{queue.close();rmSync(dir,{recursive:true,force:true})}
