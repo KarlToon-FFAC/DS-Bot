@@ -1,3 +1,4 @@
+import { useLiveRefresh } from './communication-live.js'
 import { randomId } from './random-id.js'
 import { createElement as h, useEffect, useRef, useState } from 'react'
 import { t } from './i18n.js'
@@ -13,12 +14,14 @@ import { ArrowUpIcon, PlusIcon, CloseIcon } from './icons.js'
 // or changes the Bot causal budget. Reply uses the existing composer intent.
 export function CommunicationThread({ member, messageId, request, canSpeak, onReply, onInspect, selectedBranch = false }) {
   const [page, setPage] = useState(null), [error, setError] = useState(false), [loading, setLoading] = useState(false)
-  const [collapsed, setCollapsed] = useState(new Set())
+  const [collapsed, setCollapsed] = useState(new Set()), [recovery, setRecovery] = useState(0)
+  const failedRead = useRef(false)
   const order = useRef(0), current = useRef(null)
   current.current = page
   const members = member.info?.members ?? [], labels = contactLabels(members)
   useEffect(() => {
     const token = ++order.current
+    failedRead.current = false
     setPage(null); setCollapsed(new Set()); setError(false); setLoading(true)
     void request({ endpoint: 'thread', conversationId: member.conversationId, membershipEpoch: member.membershipEpoch, messageId }).then(async value => {
       if (selectedBranch && !value.events?.some(event => event.message?.messageId === messageId)) {
@@ -26,9 +29,10 @@ export function CommunicationThread({ member, messageId, request, canSpeak, onRe
         if (selected.message?.messageId === messageId) value = { ...value, events: [...(value.events??[]), selected] }
       }
       if (token === order.current && value.conversationId === member.conversationId && value.membershipEpoch === member.membershipEpoch && value.messageId === messageId) setPage(value)
-    }).catch(() => { if (token === order.current) { setPage(null); setError(true) } }).finally(() => { if (token === order.current) setLoading(false) })
+    }).catch(() => { if (token === order.current) { failedRead.current = true; setPage(null); setError(true) } }).finally(() => { if (token === order.current) setLoading(false) })
     return () => { order.current += 1 }
-  }, [member.conversationId, member.membershipEpoch, member.watermark, messageId, request, selectedBranch])
+  }, [member.conversationId, member.membershipEpoch, member.watermark, messageId, request, selectedBranch, recovery])
+  useLiveRefresh(async () => { if (failedRead.current) { failedRead.current = false; setRecovery(value => value + 1) } }, () => {}, request)
   const more = async () => {
     if (loading || !page?.hasMore) return
     const token = ++order.current, base = page
@@ -36,7 +40,7 @@ export function CommunicationThread({ member, messageId, request, canSpeak, onRe
     try {
       const value = await request({ endpoint: 'thread', conversationId: member.conversationId, membershipEpoch: member.membershipEpoch, messageId, after: page.nextAfter, watermark: page.watermark })
       if (token === order.current && current.current === base && value.conversationId === member.conversationId && value.membershipEpoch === member.membershipEpoch && value.rootMessageId === base.rootMessageId && value.watermark === base.watermark) setPage({ ...value, events: [...new Map([...base.events, ...value.events].map(event => [event.message.messageId,event])).values()] })
-    } catch { if (token === order.current) { setPage(null); setError(true) } }
+    } catch { if (token === order.current) { failedRead.current = true; setPage(null); setError(true) } }
     finally { if (token === order.current) setLoading(false) }
   }
   const messages = new Map((page?.events ?? []).map(event => [event.message.messageId, event.message]))
@@ -80,7 +84,7 @@ export function CommunicationThread({ member, messageId, request, canSpeak, onRe
     h('p', { className: 'bt-comm-reference' }, t(canSpeak ? 'Replies stay in this conversation. Select Reply to continue an exact message.' : 'Replies stay in this conversation.')),
     page?.earlierUnavailable ? h('p', { role: 'status' }, t('Earlier context is outside your authorized history.')) : null,
     loading ? h('p', { role: 'status' }, t('Loading replies…')) : null,
-    error ? h('p', { role: 'status' }, t('This reply chain is unavailable. Reopen it after synchronization.')) : null,
+    error ? h('p', { role: 'status' }, t('This reply chain is unavailable. Updates will retry automatically.')) : null,
     h('div', { className: 'bt-comm-thread-log', role: 'log', 'aria-label': t('Message replies') },
       h('ol', { className: 'bt-comm-thread-roots' }, roots.map(event => renderBranch(event)))),
     page?.hasMore ? h('button', { type: 'button', disabled: loading, onClick: () => { void more() } }, t('Load more replies')) : null)

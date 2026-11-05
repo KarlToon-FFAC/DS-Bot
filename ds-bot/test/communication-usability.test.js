@@ -39,6 +39,7 @@ async function pane({ enabled = true, snapshot, storage = {}, history = [], getS
     if (!button(label) && ['New group','New message'].includes(label)) await act(async()=>button('New…').click())
     assert.ok(button(label), `button: ${label}`); await act(async () => button(label).click())
   }
+  const autoRefresh = async () => act(async () => { dom.window.dispatchEvent(new dom.window.Event('focus')); await new Promise(resolve => setTimeout(resolve, 600)) })
   const edit = async (node, value) => {
     await act(async () => {
       const type = node.tagName === 'SELECT' ? dom.window.HTMLSelectElement : node.tagName === 'TEXTAREA' ? dom.window.HTMLTextAreaElement : dom.window.HTMLInputElement
@@ -48,7 +49,7 @@ async function pane({ enabled = true, snapshot, storage = {}, history = [], getS
   }
   try {
     await act(async () => root.render(React.createElement(mod.exports.CommunicationSurface, { roster, surface, panel, request })))
-    await check({ dom, doc, panel, surface, calls, button, click, edit, remount: async () => {
+    await check({ dom, doc, panel, surface, calls, button, click, edit, autoRefresh, remount: async () => {
       await act(async () => root.unmount())
       root = createRoot(dom.window.document.getElementById('root'))
       await act(async () => root.render(React.createElement(mod.exports.CommunicationSurface, { roster, surface, panel, request })))
@@ -67,17 +68,17 @@ const membership = { conversationId: 'group', title: 'Shared group', kind: 'grou
 const state = () => ({ connected: true, instanceId: 'a', humanPrincipalId: 'human:a:owner', contacts: [], conversations: [], invites: [], outbox: [], errors: [] })
 
 test('a departed device can reconcile administrator repair without reconnecting and forgetting names the exact cleanup scope',async()=>{
- let departed=true
+ let departed=true, repaired=false
  const hub={hubId:'saved-hub',url:'wss://synthetic.example.test/communication',status:'approved',paused:true,requestId:'saved-request',instanceId:'saved-instance'}
  await pane({snapshot:state(),handle:async body=>{
   if(body.endpoint==='onboarding-storage')return {selectedHub:{hubId:hub.hubId,url:hub.url,enabled:false},enrollments:[{...hub,departed}]}
-  if(body.endpoint==='hub-leave-status'){departed=false;return {hubId:hub.hubId,left:false}}
+  if(body.endpoint==='hub-leave-status'){if(repaired)departed=false;return {hubId:hub.hubId,left:departed}}
   return {}
- }},async({doc,click,calls,button})=>{
-  await click('Personal settings');await click('Add a device')
-  assert.ok(button('Check revoked access'))
+ }},async({ autoRefresh,doc,click,calls,button})=>{
+  await click('Personal settings');await click('Join Hub')
+  assert.equal(button('Check revoked access'),undefined)
   assert.equal(button('Resume this Hub'),undefined)
-  await click('Check revoked access')
+  repaired=true;await autoRefresh()
   assert.ok(button('Resume this Hub'))
   assert.equal(calls.some(call=>['resume-hub','join-hub','switch-hub'].includes(call.endpoint)),false)
   await click('Forget this Hub')
@@ -140,15 +141,15 @@ test('remote file paste and drop stay in this composer without bubbling into loc
 test('switching Hubs with colliding conversation identity cannot display old history or reuse its draft',async()=>{
  let snapshot={...state(),hubId:'hub-a',queueScope:'hub-a',conversations:[membership]},release
  const event={type:'message',conversationSeq:1,serverAcceptedAt:'2026-11-04T00:00:00Z',message:{messageId:'old',author:membership.info.members[0],content:{text:'Only Hub A secret'},mentions:[]}}
- await pane({getState:()=>snapshot,history:()=>snapshot.hubId==='hub-a'?[event]:new Promise(resolve=>{release=resolve})},async({doc,click,edit})=>{
+ await pane({getState:()=>snapshot,history:()=>snapshot.hubId==='hub-a'?[event]:new Promise(resolve=>{release=resolve})},async({ autoRefresh,doc,click,edit})=>{
   await click('Shared group');assert.match(doc.querySelector('.bt-comm-log').textContent,/Only Hub A/)
   await edit(doc.querySelector('textarea[aria-label="Communication message"]'),'Hub A private draft')
   snapshot={...snapshot,hubId:'hub-b',queueScope:'hub-b'}
-  await click('Refresh status')
+  await autoRefresh()
   assert.doesNotMatch(doc.querySelector('.bt-comm-log').textContent,/Only Hub A/)
   assert.equal(doc.querySelector('textarea[aria-label="Communication message"]').value,'')
   await act(async()=>release([]))
-  snapshot={...snapshot,hubId:'hub-a',queueScope:'hub-a'};await click('Refresh status')
+  snapshot={...snapshot,hubId:'hub-a',queueScope:'hub-a'};await autoRefresh()
   assert.equal(doc.querySelector('textarea[aria-label="Communication message"]').value,'Hub A private draft')
  })
 })
@@ -180,7 +181,7 @@ test('signed Hub review confirms exact scoped fingerprint and trust update never
     if (body.endpoint === 'update-hub-trust') { assert.equal(body.confirmedTrustFingerprint, hub.trustFingerprint); assert.equal(body.confirmedHubId, hub.hubId); assert.equal(body.confirmedUrl, hub.url); return saved }
     assert.fail(`Unexpected endpoint ${body.endpoint}`)
   } }, async ({ doc, click, edit, calls }) => {
-    await click('Personal settings'); await click('Add a device')
+    await click('Personal settings'); await click('Join Hub')
     await edit(doc.querySelector('textarea[aria-label="Hub code"]'), 'synthetic-v2-code')
     await click('Review Hub')
     assert.match(doc.querySelector('.bt-comm-onboarding').textContent, /trusted channel/)
@@ -258,7 +259,7 @@ for (const hiddenValue of [JSON.stringify(['a:group', 'a:dm', 'hub-one:a:group',
     const draft = JSON.stringify({ 'a:group': { text: 'Keep my saved draft', mentions: [] }, 'other:private': { text: 'Other Hub draft', mentions: [] } })
     const attempts = JSON.stringify({ 'other:private': { endpoint: 'send', messageId: 'original-unsent-id', text: 'Keep original intent' } })
     const storage = { 'ds-bot:communication:hidden': hiddenValue, 'ds-bot:communication:drafts': draft, 'ds-bot:communication:attempts': attempts }
-    await pane({ snapshot, storage }, async ({ doc, dom, click, edit, remount, calls }) => {
+    await pane({ snapshot, storage }, async ({ autoRefresh, doc, dom, click, edit, remount, calls }) => {
       const ids = () => [...doc.querySelectorAll('nav [data-conversation-id]')].map(node => node.dataset.conversationId)
       assert.deepEqual(ids(), ['group', 'dm'])
       assert.equal(doc.querySelector('.bt-comm-section-title span').textContent, '2')
@@ -278,11 +279,11 @@ for (const hiddenValue of [JSON.stringify(['a:group', 'a:dm', 'hub-one:a:group',
       assert.equal(calls.some(call => !['state', 'history', 'read', 'avatar'].includes(call.endpoint)), false, 'restoration performs no membership or message mutation')
       snapshot.hubId = 'hub-one'; snapshot.queueScope = 'isolated'
       snapshot.conversations = [{ ...membership, title: 'Current Hub group' }]
-      await click('Refresh status')
+      await autoRefresh()
       assert.deepEqual(ids(), ['group'])
       assert.equal(doc.querySelector('nav [data-conversation-id=group]').textContent, 'Current Hub group')
       snapshot.hubId = 'hub-two'; snapshot.conversations = []
-      await click('Refresh status')
+      await autoRefresh()
       assert.deepEqual(ids(), [], 'legacy close records cannot fabricate membership after authorization or Hub changes')
       assert.match(doc.querySelector('.bt-comm-empty').textContent, /Start a conversation/)
       for (const [key, value] of Object.entries(storage)) assert.equal(dom.window.sessionStorage.getItem(key), value, key)
@@ -299,8 +300,8 @@ test('uncertain enrollment restores its saved request, exposes safe diagnostics 
     if (body.endpoint === 'join-hub') { saved = { ...hub, requestId: 'same-request', status: 'prepared' }; throw Object.assign(new Error('DO_NOT_DISPLAY_RAW_FAILURE'), { code: 'CONNECTION_LOST', phase: 'ENROLLMENT_PROOF_FAILED' }) }
     if (body.endpoint === 'hub-join-status') { if (absent) throw Object.assign(new Error('not found'), { code: 'JOIN_NOT_FOUND' }); saved.status = 'pending'; return saved }
     assert.fail('Unexpected endpoint')
-  } }, async ({ doc, click, edit, calls, button }) => {
-    await click('Personal settings'); await click('Add a device')
+  } }, async ({ autoRefresh, doc, click, edit, calls, button }) => {
+    await click('Personal settings'); await click('Join Hub')
     await edit(doc.querySelector('[aria-label="Hub code"]'), 'synthetic-public-hub-code'); await click('Review Hub')
     assert.match(doc.querySelector('.bt-comm-onboarding').textContent, /does not test network access or submit/)
     await click('Confirm and request access')
@@ -309,10 +310,10 @@ test('uncertain enrollment restores its saved request, exposes safe diagnostics 
     assert.doesNotMatch(doc.querySelector('.bt-comm-error').textContent, /DO_NOT_DISPLAY_RAW_FAILURE/)
     assert.equal(button('Confirm and request access').disabled, true)
     assert.equal(calls.filter(call => call.endpoint === 'hub-join-status').length, 0)
-    await click('Refresh saved request'); await click('Check approval')
+    await autoRefresh()
     assert.equal(calls.filter(call => call.endpoint === 'join-hub').length, 1)
     assert.match(doc.querySelector('.bt-comm-onboarding').textContent, /pending/)
-    absent = true; await click('Check approval')
+    absent = true; await autoRefresh()
     assert.equal(button('Confirm and request access').disabled, false, 'explicit not-found status permits an explicit retry')
     assert.equal(calls.filter(call => call.endpoint === 'join-hub').length, 1)
   })
@@ -326,13 +327,13 @@ test('an unreadable local request after an ambiguous join keeps submission block
     if (body.endpoint === 'decode-hub-code') return hub
     if (body.endpoint === 'join-hub') throw Object.assign(new Error('DO_NOT_DISPLAY_JOIN_FAILURE'), { phase: 'COMMUNICATION_CREDENTIAL_WRITE_FAILED' })
     assert.fail('Unexpected endpoint')
-  } }, async ({ doc, click, edit, button, calls }) => {
-    await click('Personal settings'); await click('Add a device')
+  } }, async ({ autoRefresh, doc, click, edit, button, calls }) => {
+    await click('Personal settings'); await click('Join Hub')
     await edit(doc.querySelector('[aria-label="Hub code"]'), 'synthetic-public-hub-code'); await click('Review Hub'); await click('Confirm and request access')
     assert.match(doc.querySelector('.bt-comm-error').textContent, /COMMUNICATION_CREDENTIAL_WRITE_FAILED/)
     assert.doesNotMatch(doc.querySelector('.bt-comm-error').textContent, /DO_NOT_DISPLAY/)
     assert.equal(button('Confirm and request access').disabled, true)
-    await click('Refresh saved request')
+    await autoRefresh()
     assert.equal(button('Confirm and request access').disabled, false)
     assert.equal(calls.filter(call => call.endpoint === 'join-hub').length, 1)
   })
@@ -345,7 +346,7 @@ test('personal gear owns profile, identity and connection settings without conve
     assert.doesNotMatch(doc.querySelector('.bt-comm-nav').textContent, /Human profile|Show closed conversations|Add a device|Manage contacts/)
     await click('Personal settings')
     const modal = doc.querySelector('.bt-comm-personal-settings')
-    assert.match(modal.textContent, /Your profile.*Device identity.*Connection and contacts/s)
+    assert.match(modal.textContent, /Your profile.*Device identity.*Hub connection/s)
     assert.doesNotMatch(modal.textContent, /Show closed conversations|Hide closed conversations/)
     await edit(modal.querySelector('input[aria-label="Human name"]'), 'Uncommitted profile')
     await click('Cancel'); await click('Personal settings')
@@ -360,7 +361,7 @@ test('personal gear owns profile, identity and connection settings without conve
 test('floating replies show chronological messages without repeated quotes and preserve reply targets and read-only controls', async () => {
   const snapshot = { ...state(), conversations: [{ ...membership }] }
   const events = ['Root', 'Child', 'Another branch', 'Late deep reply'].map((text, i) => ({ type: 'message', conversationSeq: i + 1, serverAcceptedAt: '2026-11-04T00:00:00Z', message: { messageId: `m${i}`, author: membership.info.members[0], content: { text }, mentions: [], replyToMessageId: i === 3 ? 'm1' : i ? 'm0' : null } }))
-  await pane({ snapshot, history: events, handle: async body => body.endpoint === 'thread' ? { conversationId: 'group', membershipEpoch: 'epoch', messageId: body.messageId, rootMessageId: 'm0', watermark: 4, events, hasMore: false } : {} }, async ({ doc, click, edit, calls }) => {
+  await pane({ snapshot, history: events, handle: async body => body.endpoint === 'thread' ? { conversationId: 'group', membershipEpoch: 'epoch', messageId: body.messageId, rootMessageId: 'm0', watermark: 4, events, hasMore: false } : {} }, async ({ autoRefresh, doc, click, edit, calls }) => {
     await click('Shared group')
     await click('View replies')
     assert.equal(doc.querySelectorAll('.bt-comm-thread-log article').length, 4)
@@ -374,7 +375,7 @@ test('floating replies show chronological messages without repeated quotes and p
     await click('Send reply')
     assert.equal(calls.find(call => call.endpoint === 'send').replyToMessageId, 'm2')
     await click('Close replies')
-    snapshot.conversations[0].speakingMode = 'readOnly'; await click('Refresh status')
+    snapshot.conversations[0].speakingMode = 'readOnly'; await autoRefresh()
     assert.equal(doc.querySelector('footer'), null)
     assert.ok(doc.querySelector('.bt-comm-log button[aria-label="View replies"]'))
     assert.ok(doc.querySelector('.bt-comm-log button[aria-label="Copy"]'))
@@ -439,12 +440,12 @@ test('late thread responses cannot survive a selected conversation change or mem
   const snapshot = { ...state(), conversations: [{ ...membership }, { ...membership, conversationId: 'other', title: 'Other group', membershipEpoch: 'other' }] }
   const event = { type: 'message', conversationSeq: 1, serverAcceptedAt: '2026-11-04T00:00:00Z', message: { messageId: 'late', author: membership.info.members[0], content: { text: 'Thread canary' }, mentions: [] } }
   let release
-  await pane({ snapshot, history: [event], handle: body => body.endpoint === 'thread' ? new Promise(resolve => { release = resolve }) : {} }, async ({ doc, click }) => {
+  await pane({ snapshot, history: [event], handle: body => body.endpoint === 'thread' ? new Promise(resolve => { release = resolve }) : {} }, async ({ autoRefresh, doc, click }) => {
     await click('Shared group'); await click('View replies')
     await click('Cancel'); await click('Other group')
     await act(async () => release({ conversationId: 'group', membershipEpoch: 'epoch', messageId: 'late', rootMessageId: 'late', events: [event] }))
     assert.equal(doc.querySelector('.bt-comm-thread'), null)
-    snapshot.conversations = []; await click('Refresh status')
+    snapshot.conversations = []; await autoRefresh()
     assert.equal(doc.querySelector('footer'), null)
     assert.equal(doc.querySelector('.bt-comm-thread'), null)
   })
@@ -493,7 +494,7 @@ test('partial invitations preserve the created group and never create another gr
 test('connection recovery refreshes status without resending failures and navigation preserves the draft', async () => {
   const snapshot = state(); snapshot.conversations = [membership]; snapshot.connected = false; snapshot.error = 'UNAUTHENTICATED'
   snapshot.outbox = [{ type: 'message.publish', id: 'failed', conversationId: 'group', state: 'failed', text: 'Original denied message', error: 'SPEAKING_FORBIDDEN' }]
-  await pane({ snapshot }, async ({ doc, dom, panel, click, edit, calls }) => {
+  await pane({ snapshot }, async ({ autoRefresh, doc, dom, panel, click, edit, calls }) => {
     await click('Shared group')
     assert.match(doc.querySelector('.bt-comm-connection').textContent, /Offline/)
     assert.doesNotMatch(doc.querySelector('.bt-comm-connection').textContent, /Reconnecting to Hub/)
@@ -516,7 +517,7 @@ test('connection recovery refreshes status without resending failures and naviga
     await act(async () => memberSettings.querySelector('summary').click())
     await click('Close member settings')
     assert.equal(doc.activeElement, doc.querySelector('.bt-comm-title-pill'))
-    await click('Refresh status')
+    await autoRefresh()
     assert.equal(calls.filter(call => call.endpoint === 'send').length, 0)
     assert.equal(doc.querySelector('textarea[aria-label="Communication message"]').value, 'Preserved draft')
     assert.equal(doc.querySelector('.bt-comm-status-help'), null)
@@ -610,7 +611,7 @@ test('pairing guide is available before and after configuration and never perfor
   for (const enabled of [false, true]) {
     await pane({ enabled, snapshot: state(), handle: async body => { if(body.endpoint==='memory-settings')return {localMemory:true};assert.equal(body.endpoint, 'onboarding-storage'); return { storage: { defaultProvider: 'owner-acl-plaintext', encryptedByDefault: false, agentIsolation: false }, enrollments: [] } } }, async ({ doc, dom, calls, click, panel }) => {
       await click('Personal settings')
-      await click('Add a device')
+      await click('Join Hub')
       const guide = doc.querySelector('.bt-comm-modal[aria-label="Pairing guide"]')
       assert.ok(guide)
       assert.match(guide.textContent, /Hub owner must authorize each device.*restart the Hub/)
@@ -797,12 +798,12 @@ test('one dirty Save atomically submits the drawer draft and closing discards un
 
 test('concurrent polling and a stale save retain edits until the drawer is closed and reopened', async () => {
   const snapshot = state(); snapshot.conversations = [{ ...membership }]
-  await pane({ snapshot, handle: async body => { assert.equal(body.expectedVersion, 1); throw Object.assign(new Error('stale'), { code: 'GROUP_VERSION_CONFLICT' }) } }, async ({ doc, click, edit }) => {
+  await pane({ snapshot, handle: async body => { assert.equal(body.expectedVersion, 1); throw Object.assign(new Error('stale'), { code: 'GROUP_VERSION_CONFLICT' }) } }, async ({ autoRefresh, doc, click, edit }) => {
     await click('Shared group')
     await act(async () => doc.querySelector('.bt-comm-members summary').click())
     await edit(doc.querySelector('input[aria-label="Group name"]'), 'Local draft')
     snapshot.conversations = [{ ...membership, title: 'Elsewhere', membershipVersion: 2 }]
-    await click('Refresh status')
+    await autoRefresh()
     assert.equal(doc.querySelector('input[aria-label="Group name"]').value, 'Local draft')
     await click('Save')
     assert.equal(doc.querySelector('input[aria-label="Group name"]').value, 'Local draft')
@@ -844,7 +845,7 @@ test('an uncertain settings save preserves newer edits and retries the same payl
 test('late settings responses cannot overwrite another group or a reopened drawer', async () => {
   const snapshot = state(); snapshot.conversations = [{ ...membership }, { ...membership, conversationId: 'other', title: 'Other group' }]
   let release
-  await pane({ snapshot, handle: async body => new Promise(resolve => { release = () => { snapshot.conversations[0] = { ...membership, title: body.title, membershipVersion: 2 }; resolve({ updated: true, conversationId: 'group', membershipVersion: 2 }) } }) }, async ({ doc, click, edit }) => {
+  await pane({ snapshot, handle: async body => new Promise(resolve => { release = () => { snapshot.conversations[0] = { ...membership, title: body.title, membershipVersion: 2 }; resolve({ updated: true, conversationId: 'group', membershipVersion: 2 }) } }) }, async ({ autoRefresh, doc, click, edit }) => {
     await click('Shared group')
     await act(async () => doc.querySelector('.bt-comm-members summary').click())
     await edit(doc.querySelector('input[aria-label="Group name"]'), 'Submitted')
@@ -857,7 +858,7 @@ test('late settings responses cannot overwrite another group or a reopened drawe
     await click('Other group')
     await act(async () => doc.querySelector('.bt-comm-members summary').click())
     await edit(doc.querySelector('input[aria-label="Group name"]'), 'Other local edit')
-    await click('Refresh status')
+    await autoRefresh()
     assert.equal(doc.querySelector('input[aria-label="Group name"]').value, 'Other local edit')
   })
 })
@@ -890,7 +891,7 @@ test('reference previews use authorized short Unicode text and jump once without
   const snapshot = state(); snapshot.conversations = [{ ...membership, watermark: 2 }]
   const source = { type: 'message', eventId: 'source-event', conversationSeq: 1, serverAcceptedAt: '2026-11-04T00:00:00Z', message: { messageId: 'source', author: { principalId: 'human:b:source', displayName: 'Source author' }, content: { text: '😀'.repeat(180) }, mentions: [] } }
   const reply = { ...source, eventId: 'reply-event', conversationSeq: 2, message: { messageId: 'reply', author: { principalId: 'human:a:owner' }, content: { text: 'A reply' }, mentions: [], replyToMessageId: 'source' } }
-  await pane({ snapshot, history: [source, reply], handle: async body => { assert.equal(body.endpoint, 'reference'); assert.equal(body.conversationId, 'group'); return source } }, async ({ doc, dom, click }) => {
+  await pane({ snapshot, history: [source, reply], handle: async body => { assert.equal(body.endpoint, 'reference'); assert.equal(body.conversationId, 'group'); return source } }, async ({ autoRefresh, doc, dom, click }) => {
     let jumps = 0
     dom.window.HTMLElement.prototype.scrollIntoView = function () { if (this.dataset.messageId === 'source') jumps += 1 }
     await click('Shared group')
@@ -909,7 +910,7 @@ test('reference previews use authorized short Unicode text and jump once without
     log.scrollTop = 123
     await act(async () => log.dispatchEvent(new dom.window.Event('scroll', { bubbles: true })))
     snapshot.conversations[0] = { ...snapshot.conversations[0], watermark: 3 }
-    await click('Refresh status')
+    await autoRefresh()
     assert.equal(jumps, 1)
     assert.equal(log.scrollTop, 123)
     await act(async () => doc.body.dispatchEvent(new dom.window.Event('pointerdown', { bubbles: true })))
@@ -1061,7 +1062,7 @@ test('Hub management is independent and has no entry in client settings or pairi
       assert.equal(doc.querySelector('a.bt-comm-admin-link'), null)
       await click('Personal settings')
       assert.doesNotMatch(doc.querySelector('.bt-comm-personal-settings').textContent, /Open Hub management|Hub management/)
-      await click('Add a device')
+      await click('Join Hub')
       assert.ok(doc.querySelector('[role=dialog][aria-label="Pairing guide"]'))
       assert.equal(doc.querySelector('a.bt-comm-admin-link'), null, 'no WSS-derived guessed management link in the guide')
     })
@@ -1072,14 +1073,14 @@ test('background authorization failures stay quiet and revoked membership clears
   const snapshot = { ...state(), conversations: [{ ...membership, speakingMode: 'readOnly' }] }
   let deny = false
   const event = { type: 'message', conversationSeq: 1, serverAcceptedAt: '2026-11-04T00:00:00.000Z', message: { messageId: 'private-history', author: membership.info.members[0], content: { text: 'Previously authorized history' }, mentions: [] } }
-  await pane({ snapshot, history: async () => { if (deny) throw Object.assign(new Error('persistent background denial'), { code: 'FORBIDDEN' }); return [event] } }, async ({ doc, click, calls }) => {
+  await pane({ snapshot, history: async () => { if (deny) throw Object.assign(new Error('persistent background denial'), { code: 'FORBIDDEN' }); return [event] } }, async ({ autoRefresh, doc, click, calls }) => {
     await click('Shared group')
     assert.match(doc.querySelector('.bt-comm-log').textContent, /Previously authorized history/)
     assert.equal(doc.querySelector('.bt-comm-toast'), null, 'ordinary read-only membership has no error toast')
     deny = true
     for (let index = 0; index < 3; index++) {
       snapshot.conversations[0].watermark += 1
-      await click('Refresh status')
+      await autoRefresh()
       assert.equal(doc.querySelector('.bt-comm-toast'), null, 'persistent history rejection never replays a user notification')
       assert.doesNotMatch(doc.querySelector('.bt-comm-log').textContent, /Previously authorized history/)
     }
@@ -1087,7 +1088,7 @@ test('background authorization failures stay quiet and revoked membership clears
     assert.match(doc.querySelector('.bt-comm-activity').textContent, /permission for this group operation/)
     await click('Cancel')
     snapshot.conversations = []
-    await click('Refresh status')
+    await autoRefresh()
     assert.equal(doc.querySelector('.bt-comm-main textarea'), null)
     assert.equal(doc.querySelector('.bt-comm-log article'), null)
     assert.doesNotMatch(doc.querySelector('.bt-comm-main').textContent, /Previously authorized history/)
@@ -1120,8 +1121,8 @@ test('publication diagnostics retain real safe errors and refresh local settings
       published=[...body.localBotIds];throw new TypeError('DO_NOT_DISPLAY_RAW_AFTER_SAVE')
     }
     assert.fail('Unexpected endpoint '+body.endpoint)
-  }},async({doc,click,calls,button})=>{
-    await click('Personal settings');await click('Manage contacts')
+  }},async({ autoRefresh,doc,click,calls,button})=>{
+    await click('Contacts')
     await act(async()=>[...doc.querySelectorAll('summary')].find(node=>node.textContent==='Published Bots').click())
     const publication = () => [...doc.querySelectorAll('.bt-comm-contact-manager fieldset')].find(node=>node.querySelector('legend').textContent==='Bots available to contacts').querySelector('[data-local-bot-id="one"]')
     assert.ok(publication(),'local publication state remains readable when Hub contact reads fail')
@@ -1130,8 +1131,7 @@ test('publication diagnostics retain real safe errors and refresh local settings
     assert.match(doc.querySelector('.bt-comm-contact-manager .bt-comm-error').textContent,/CONFIG_EDIT_OVERLAID.*COMMUNICATION_CONFIG_WRITE_FAILED/)
     assert.equal(saves,1);assert.doesNotMatch(doc.querySelector('.bt-comm-contact-manager').textContent,/DO_NOT_DISPLAY_RAW/)
     mode='ack-lost';await click('Save published Bots');assert.equal(saves,2)
-    const refresh=[...doc.querySelectorAll('.bt-comm-contact-manager button')].find(node=>node.textContent==='Refresh status')
-    await act(async()=>refresh.click())
+    await autoRefresh()
     assert.equal(saves,2,'refresh performs reads only')
     assert.equal(publication().checked,true)
     assert.equal(button('Save published Bots').disabled,true,'effective config confirms the original save without another write')
@@ -1142,7 +1142,7 @@ test('publication diagnostics retain real safe errors and refresh local settings
 // Every pane test above also runs without randomUUID, matching ordinary LAN HTTP.
 test('legacy storage does not offer selecting the current Hub or infer its connection state',async()=>{
  await pane({snapshot:state(),handle:async body=>body.endpoint==='onboarding-storage'?{configured:true,hubId:'old-hub',url:'wss://synthetic.example.test/communication',status:'approved'}:{}},async({click,button,calls})=>{
-  await click('Personal settings');await click('Add a device')
+  await click('Personal settings');await click('Join Hub')
   assert.equal(button('Select this Hub'),undefined)
   assert.equal(button('Disconnect this Hub'),undefined)
   assert.equal(button('Resume this Hub'),undefined)
@@ -1174,15 +1174,14 @@ test('top Contacts entry opens the directory directly and every management dialo
     assert.equal(doc.querySelector('.bt-comm-modal'), null)
     assert.equal(doc.activeElement, trigger)
     // Assistive-technology activation need not focus its target first.
-    await click('Personal settings'); await click('Manage contacts')
-    assert.ok(button('Back to settings'))
-    await click('Back to settings')
-    assert.equal(doc.querySelector('.bt-comm-modal').getAttribute('aria-label'), 'Personal settings')
-    assert.equal(doc.activeElement, button('Manage contacts'))
-    await click('Add a device')
+    await click('Personal settings')
+    assert.equal(button('Manage contacts'), undefined, 'Contacts has one dedicated toolbar entry')
+    assert.equal(button('Add a device'), undefined)
+    assert.equal(button('Refresh status'), undefined)
+    await click('Join Hub')
     assert.ok(button('Back to settings')); assert.ok(button('Close dialog'))
     await click('Back to settings')
-    assert.equal(doc.activeElement, button('Add a device'))
+    assert.equal(doc.activeElement, button('Join Hub'))
     await act(async () => doc.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })))
     assert.equal(doc.querySelector('.bt-comm-modal'), null)
     assert.equal(doc.activeElement.getAttribute('aria-label'), 'Personal settings')
@@ -1232,5 +1231,62 @@ for (const hiddenBy of ['panel', 'mode']) for (const reopenFirst of [false, true
     assert.equal(doc.querySelector('[data-conversation-id="group"]').getAttribute('aria-pressed'), 'true')
     assert.equal(doc.querySelector('[data-conversation-id="new-dm"]').getAttribute('aria-pressed'), 'false')
     assert.equal(doc.querySelector('.bt-comm-modal').getAttribute('aria-label'), 'Manage contacts')
+  })
+})
+
+test('failed reply reads recover automatically at an unchanged watermark without sending or reopening', async () => {
+  const event = { type: 'message', conversationSeq: 1, serverAcceptedAt: '2026-11-04T00:00:00Z', message: { messageId: 'root', author: membership.info.members[0], content: { text: 'Synthetic reply root' }, mentions: [] } }
+  let fail = true
+  await pane({ snapshot: { ...state(), conversations: [membership] }, history: [event], handle: async body => {
+    assert.equal(body.endpoint, 'thread')
+    if (fail) throw Object.assign(Error('DO_NOT_DISPLAY_RAW_NETWORK_FAILURE'), { code: 'REQUEST_TIMEOUT' })
+    return { conversationId: 'group', membershipEpoch: 'epoch', messageId: 'root', rootMessageId: 'root', watermark: 1, events: [event], hasMore: false }
+  } }, async ({ doc, click, calls, autoRefresh }) => {
+    await click('Shared group'); await click('View replies')
+    assert.match(doc.querySelector('.bt-comm-thread').textContent, /unavailable.*retry automatically/)
+    assert.doesNotMatch(doc.body.textContent, /DO_NOT_DISPLAY_RAW/)
+    fail = false; await autoRefresh()
+    assert.match(doc.querySelector('.bt-comm-thread-log').textContent, /Synthetic reply root/)
+    assert.equal(calls.filter(call => call.endpoint === 'thread').length, 2)
+    assert.equal(calls.some(call => ['send', 'retry', 'accept'].includes(call.endpoint)), false)
+  })
+})
+
+test('automatic main-state failures announce stale status and recover without refresh controls or draft loss', async () => {
+  const snapshot = { ...state(), conversations: [membership] }
+  let fail = false
+  await pane({ snapshot, getState: () => { if (fail) throw Object.assign(Error('DO_NOT_DISPLAY_RAW_STATUS_FAILURE'), { code: 'CONNECTION_LOST' }); return snapshot } }, async ({ doc, click, edit, calls, autoRefresh, button }) => {
+    await click('Shared group'); await edit(doc.querySelector('footer textarea'), 'Preserve my draft')
+    fail = true; await autoRefresh()
+    assert.match(doc.querySelector('aside').textContent, /Status may be out of date/)
+    assert.equal(doc.querySelector('[data-connected]').dataset.connected, 'false')
+    assert.equal(button('Refresh status'), undefined)
+    fail = false; await autoRefresh()
+    assert.equal(doc.querySelector('[data-connected]').dataset.connected, 'true')
+    assert.doesNotMatch(doc.querySelector('aside').textContent, /Status may be out of date/)
+    assert.equal(doc.querySelector('footer textarea').value, 'Preserve my draft')
+    await click('Activity details')
+    assert.equal(button('Refresh status'), undefined)
+    assert.equal(calls.some(call => ['send', 'retry'].includes(call.endpoint)), false)
+  })
+})
+
+test('personal memory settings update and recover automatically without writing preferences', async () => {
+  let localMemory = true, fail = false
+  await pane({ snapshot: state(), handle: async body => {
+    assert.equal(body.endpoint, 'memory-settings')
+    if (fail) throw Object.assign(Error('Synthetic read failure'), { code: 'CONNECTION_LOST' })
+    return { localMemory }
+  } }, async ({ doc, click, calls, autoRefresh }) => {
+    await click('Personal settings')
+    const field = () => doc.querySelector('.bt-comm-personal-settings input[type=checkbox]')
+    assert.equal(field().checked, true)
+    localMemory = false; await autoRefresh()
+    assert.equal(field().checked, false)
+    fail = true; await autoRefresh()
+    assert.match(doc.querySelector('.bt-comm-personal-settings').textContent, /Status may be out of date/)
+    fail = false; await autoRefresh()
+    assert.doesNotMatch(doc.querySelector('.bt-comm-personal-settings').textContent, /Status may be out of date/)
+    assert.equal(calls.some(call => call.endpoint === 'set-memory-settings'), false)
   })
 })

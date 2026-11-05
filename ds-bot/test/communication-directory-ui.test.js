@@ -229,20 +229,20 @@ test('contact rejection, cancellation, code rotation and revocation stay explici
   })
 })
 
-test('Hub approval is checked explicitly and invalidated code review cannot submit an older decoded Hub', async () => {
+test('Hub approval updates automatically and invalidated code review cannot submit an older decoded Hub', async () => {
   await ui(async ({ exports: api, doc, render, click, edit }) => {
     const hub = { hubId: 'pending-hub', url: 'wss://hub.example.test/communication', status: 'pending', requestId: 'pending-request' }, calls = []
     let resolveDecode
     const request = async body => {
       calls.push(body)
       if (body.endpoint === 'onboarding-storage') return { enrollments: [hub], storage: { defaultProvider: 'owner-acl-plaintext' } }
-      if (body.endpoint === 'hub-join-status') return { ...hub, status: 'approved' }
+      if (body.endpoint === 'hub-join-status') { hub.status = 'approved'; return { ...hub } }
       if (body.endpoint === 'decode-hub-code') return new Promise(resolve => { resolveDecode = resolve })
       throw new Error('Unexpected endpoint')
     }
     await render(React.createElement(api.AddDevice, { request }))
-    assert.equal(calls.some(call => call.endpoint === 'hub-join-status'), false)
-    await click('Check approval')
+    assert.equal(calls.filter(call => call.endpoint === 'hub-join-status').length, 1)
+    assert.equal([...doc.querySelectorAll('button')].some(node => /Refresh|Check approval|Check revoked access/.test(node.textContent)), false)
     assert.match(doc.body.textContent, /Saved approval. This is not a live connection check/)
     await edit('Hub code', 'first-code')
     await click('Review Hub')
@@ -474,7 +474,7 @@ test('pending saved enrollment checks approval automatically but paused and neve
     const request = async body => {
       calls.push(body)
       if (body.endpoint === 'onboarding-storage') return { enrollments: [{ ...pending, status: approved ? 'approved' : 'pending' },
-        { hubId: 'paused', requestId: 'paused-request', status: 'pending', paused: true }, { hubId: 'unsubmitted', status: 'prepared' }], selectedHub: { hubId: 'pending' } }
+        { hubId: 'paused', requestId: 'paused-request', status: 'pending', paused: true }, { hubId: 'unsubmitted', status: 'prepared' }], selectedHub: { hubId: 'pending', enabled: approved } }
       assert.equal(body.endpoint, 'hub-join-status'); assert.equal(body.hubId, 'pending'); approved = true
       return { ...pending, status: 'approved' }
     }

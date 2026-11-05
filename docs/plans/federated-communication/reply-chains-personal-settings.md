@@ -40,10 +40,12 @@ only through the explicit Activity details dialog.
 
 One gear at the sidebar's upper right owns personal settings: local closed-list
 visibility, own name/avatar/reset, device identity, Hub enrollment/manual setup,
-Hub management link and contacts. The contact manager also owns user-code
+Hub management link. The dedicated contact manager owns user-code
 rotation, contact requests/decisions/revocation and Bot publication scopes.
-Group-specific member/title/receiving rules stay in the group panel. Refresh,
-new chat and new group are actions rather than personal configuration. Chinese
+Group-specific member/title/receiving rules stay in the group panel. New chat
+and new group remain actions rather than personal configuration. The dedicated
+Contacts toolbar action replaces the repeated settings entry, and live state
+updates replace the manual refresh controls; see refresh-navigation.md. Chinese
 interface copy uses 本人/用户/人; stable Human IDs, API/CLI names and stored display
 names are preserved. Closing an unsaved profile discards its draft as before.
 

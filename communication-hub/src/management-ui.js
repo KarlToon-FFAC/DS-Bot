@@ -2,7 +2,7 @@ import { managementCSS } from './management-style.js'
 
 export const managementPage = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DS-Bot Hub</title>
 <style>${managementCSS}</style>
-<main><header class="hub-header"><span class="hub-mark" aria-hidden="true">↔</span><h1>DS-Bot Hub</h1></header><p class="intro">Approve only devices whose fingerprint you have checked with their owner. Device names are unverified.</p><section id="login"><h2>Administrator sign in</h2><form id="sign-in" method="post" action="/admin/login" autocomplete="on"><label>Username <input name="username" value="admin" autocomplete="username" readonly></label><label>Password <input id="password" name="password" type="password" autocomplete="current-password" placeholder="Administrator password" required></label><button type="submit">Sign in</button></form><p>Your browser can remember this password in its password manager. DS-Bot does not save it in browser storage. Use only a trusted HTTPS address.</p></section><p id="error" role="status"></p><div id="content" hidden><p id="live-status" role="status"></p><button id="refresh">Refresh</button><button id="logout">Sign out</button><button id="revoke-sessions">Sign out all sessions</button><section class="hub-code"><h2>Hub code</h2><button id="copy-code" type="button" disabled>Copy Hub code</button><details><summary>Show code and trust details</summary><p>Give this code only through a trusted channel. A v2 code includes public CA trust bound to this Hub; do not accept a code from an unverified connection. New devices still need approval.</p><code id="code"></code></details></section><section><h2>Device requests</h2><div id="requests"></div></section><section><h2>Devices</h2><div id="instances"></div></section></div></main><script src="/admin/app.js" defer></script></html>`
+<main><header class="hub-header"><span class="hub-mark" aria-hidden="true">↔</span><h1>DS-Bot Hub</h1></header><p class="intro">Approve only devices whose fingerprint you have checked with their owner. Device names are unverified.</p><section id="login"><h2>Administrator sign in</h2><form id="sign-in" method="post" action="/admin/login" autocomplete="on"><label>Username <input name="username" value="admin" autocomplete="username" readonly></label><label>Password <input id="password" name="password" type="password" autocomplete="current-password" placeholder="Administrator password" required></label><button type="submit">Sign in</button></form><p>Your browser can remember this password in its password manager. DS-Bot does not save it in browser storage. Use only a trusted HTTPS address.</p></section><p id="error" role="status"></p><div id="content" hidden><p id="live-status" role="status"></p><button id="logout">Sign out</button><button id="revoke-sessions">Sign out all sessions</button><section class="hub-code"><h2>Hub code</h2><button id="copy-code" type="button" disabled>Copy Hub code</button><details><summary>Show code and trust details</summary><p>Give this code only through a trusted channel. A v2 code includes public CA trust bound to this Hub; do not accept a code from an unverified connection. New devices still need approval.</p><code id="code"></code></details></section><section><h2>Device requests</h2><div id="requests"></div></section><section><h2>Devices</h2><div id="instances"></div></section></div></main><script src="/admin/app.js" defer></script></html>`
 export const managementScript = `
 let csrf, revision = '', refreshFlight, refreshAgain = false, watchTimer, watchController, watchEpoch = 0, failures = 0;
 const $ = id => document.getElementById(id);
@@ -14,7 +14,7 @@ async function api(action, input = {}, signal) {
   if (!r.ok || !value.ok) throw Error(value.error?.code || 'REQUEST_FAILED');
   return value;
 }
-function error(e) { if (e.message === 'DEVICE_DELETE_GROUPS_CHANGED') { $('error').textContent = 'Owned groups changed. Refresh and review the deletion again. No data was deleted.'; return; } $('error').textContent = e.message === 'INSTANCE_NAME_VERSION_CONFLICT' ? 'Device name changed elsewhere. Refresh before editing again.' : e.message; }
+function error(e) { if (e.message === 'DEVICE_DELETE_GROUPS_CHANGED') { $('error').textContent = 'Owned groups changed. Current status updates automatically; review the deletion again. No data was deleted.'; return; } $('error').textContent = e.message === 'INSTANCE_NAME_VERSION_CONFLICT' ? 'Device name changed elsewhere. Current status updates automatically; review it before editing again.' : e.message; }
 function text(tag, value) { const e = document.createElement(tag); e.textContent = value; return e; }
 function button(label, run) {
   const b = text('button', label);
@@ -104,7 +104,7 @@ function resume() {
     } catch(e) {
       if (epoch !== watchEpoch) return;
       if (e.message === 'UNAUTHENTICATED') { csrf = undefined; $('content').hidden = true; $('login').hidden = false; error(Error('Sign in again to see current Hub status.')); return; }
-      $('live-status').textContent = 'Status may be out of date. Reconnecting…';
+      $('live-status').textContent = 'Status may be out of date. Reconnecting… ' + (/^[A-Z][A-Z0-9_]{0,63}$/.test(e.message) ? '[' + e.message + ']' : 'Could not read Hub status.');
       for (const node of document.querySelectorAll('.instance-connection')) node.textContent = 'Connection status unavailable';
       delay = Math.min(30000, 1000 * 2 ** Math.min(failures++, 5)) * (0.8 + Math.random() * 0.4);
     }
@@ -113,7 +113,6 @@ function resume() {
   void watch();
 }
 $('copy-code').onclick = async () => { try { await navigator.clipboard.writeText($('code').textContent); $('error').textContent = 'Hub code copied. Share it only through a trusted channel.'; } catch { $('error').textContent = 'Copy is unavailable in this browser. Expand the code and copy it manually.'; } };
-$('refresh').onclick = () => { $('error').textContent = ''; void refresh().catch(error); };
 $('logout').onclick = async () => { pause(); try { await api('logout'); } finally { csrf = undefined; location.reload(); } };
 $('revoke-sessions').onclick = async () => { pause(); try { await api('sessions/revoke'); } finally { csrf = undefined; location.reload(); } };
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') pause(); else resume(); });

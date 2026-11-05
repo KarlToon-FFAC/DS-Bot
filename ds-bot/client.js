@@ -124,7 +124,7 @@ var ZH = {
   "Confirming a new Hub selection or join creates its own device key. Disconnecting retains that key and Hub data; it does not revoke membership on the server. The default credential store is plaintext protected by your OS account permissions, not encrypted against the same user.": "确认选择或加入新 Hub 时会创建独立设备密钥。断开会保留密钥和该 Hub 的数据，不撤销服务端成员身份。默认凭据存储由系统账户权限保护，不能隔离同一用户下的程序。",
   "Legacy shared-secret pairing cannot be safely assigned to another Hub. Keep this data and enroll through a separate profile first.": "旧式共享密钥配对无法安全归入另一个 Hub。请保留数据，先使用独立配置重新加入。",
   "This Hub is paused locally. Its identity and queued work are retained; explicitly resume it in pairing settings.": "此 Hub 已在本地暂停，身份和待处理工作仍保留。请在配对设置中明确恢复。",
-  "The selected Hub changed. Refresh saved Hubs before continuing; no identity should be reused blindly.": "所选 Hub 已变化，请刷新已保存的 Hub 后继续，不要盲目复用身份。",
+  "The selected Hub changed. Review saved Hubs before continuing; no identity should be reused blindly.": "所选 Hub 已变化，请核对已保存的 Hub 后继续，不要盲目复用身份。",
   "Confirm that retained pending messages and work may resume before reconnecting this Hub.": "重新连接前，请确认恢复该 Hub 保留的待发消息和工作。",
   "Select this saved Hub first. Only one Hub can be active at a time.": "请先选择此已保存的 Hub，同时只能启用一个 Hub。",
   "This old enrollment has no proven queue binding. Its history was preserved; use a separate profile rather than guessing ownership.": "此旧配对没有可证明的队列归属。历史已保留，请使用独立配置，避免猜测数据归属。",
@@ -147,11 +147,11 @@ var ZH = {
   "The stored communication database requires a different application version. Preserve the data and check the matching Hub/client versions.": "通信数据库与当前程序版本不匹配，请保留数据并核对 Hub 与客户端版本。",
   "This runtime lacks a required Node built-in module. Use the supported Node and DSH versions.": "运行时缺少必要的 Node 内置模块，请使用受支持的 Node 与 DSH 版本。",
   "Update this device and the Hub together: explicit Bot activation is required. Queued intents are retained.": "请将本实例和 Hub 一起升级，以支持结构化 Bot 唤醒。队列中的原始操作会保留。",
-  "The Hub connection was lost. Refresh status before retrying the same operation; it may already be committed.": "Hub 连接已断开。操作可能已完成，请先刷新状态；重试须沿用原操作。",
-  "The Hub response timed out. Refresh status before retrying the same operation; it may already be committed.": "等待 Hub 响应超时。操作可能已完成，请先刷新状态；重试须沿用原操作。",
+  "The Hub connection was lost. Check current status before retrying the same operation; it may already be committed.": "Hub 连接已断开。操作可能已完成，请先核对当前状态；重试须沿用原操作。",
+  "The Hub response timed out. Check current status before retrying the same operation; it may already be committed.": "等待 Hub 响应超时。操作可能已完成，请先核对当前状态；重试须沿用原操作。",
   "The Hub temporarily cannot store this operation. Its original request ID is retained.": "Hub 暂时无法保存操作，已保留原请求编号。",
   "The Hub is busy. Its original request ID is retained.": "Hub 繁忙，已保留原请求编号。",
-  "Remote communication is not ready. Check connection status and refresh without repeating the operation.": "远程通信尚未就绪，请检查连接并刷新状态，不要重复提交操作。",
+  "Remote communication is not ready. Wait for connection status to update without repeating the operation.": "远程通信尚未就绪，请等待连接状态更新，不要重复提交操作。",
   "This profile has no active Hub configuration. Check the approved device profile.": "当前资料没有生效的 Hub 配置，请核对已批准设备使用的资料。",
   "The instance credential provider is unavailable. Restart with the intended private credential source; do not send its value.": "实例凭据提供器不可用。请使用原定的私密凭据来源重启，不要发送凭据值。",
   "This DSH version has no supported configuration editor. Check the installed DSH version.": "此 DSH 版本缺少受支持的配置编辑器，请核对安装版本。",
@@ -199,14 +199,14 @@ var ZH = {
   "Personal settings": "个人设置",
   "Your profile": "本人资料",
   "Device identity": "设备身份",
-  "Connection and contacts": "连接与联系人",
+  "Hub connection": "Hub 连接",
   "Message replies": "回复链",
   "View replies": "查看回复链",
   "Load more replies": "加载更多回复",
   "Loading replies…": "正在加载回复…",
   "Replies stay in this conversation. Select Reply to continue an exact message.": "这里只显示当前会话中的同一回复链。选择“回复”可继续回复某条消息。",
   "Earlier context is outside your authorized history.": "更早的上下文不在你有权查看的历史范围内。",
-  "This reply chain is unavailable. Reopen it after synchronization.": "此回复链暂不可用，请在同步后重新打开。",
+  "This reply chain is unavailable. Updates will retry automatically.": "此回复链暂不可用，将自动重试更新。",
   "Activity details": "活动详情",
   "Hub management": "Hub 管理",
   "Open setup guide": "打开配置指南",
@@ -296,7 +296,7 @@ var ZH = {
   "Both Bot modes may @mention current group Bots in an authorized final reply. Reply-only Bots cannot initiate messages or send proactively with tools. Active Bots may also initiate with tools. Bot delegation chains stop at the server’s finite limit.": "两种 Bot 模式都可在获准的最终回复中 @当前群内 Bot。被动回复 Bot 不能主动发起消息或使用工具主动发送；主动 Bot 也可通过工具发起消息。Bot 委派链达到服务端的有限额度后会停止。",
   "An operation is not confirmed. Check status, then retry the same action.": "有操作尚未确认。请核对状态，再重试同一操作。",
   "Remove mention": "取消点名",
-  "Add a device": "添加设备",
+  "Join Hub": "加入 Hub",
   "Pairing guide": "设备接入引导",
   "Close guide": "关闭引导",
   "Hub configuration example": "Hub 配置示例",
@@ -360,7 +360,7 @@ var ZH = {
   "Reply-only Bots respond to admitted messages. Bots allowed to speak may also initiate messages.": "被动回复的 Bot 仅回应获准收取的消息，允许发言的 Bot 也可主动发送。",
   "Queued messages send automatically when the connection returns.": "已排队的消息会在连接恢复后自动发送。",
   "Waiting for the Hub": "等待通信服务",
-  "The action could not be confirmed. Refresh status before trying again.": "暂时无法确认操作结果，请刷新状态后再试。",
+  "The action could not be confirmed. Check current status before trying again.": "暂时无法确认操作结果，请核对当前状态后再试。",
   "The Hub rejected this device. Ask the Hub owner to check its pairing.": "通信服务拒绝了本机，请管理者检查配对配置。",
   "This device was unpaired. Ask the Hub owner to pair it again.": "本机配对已撤销，请管理者重新配对。",
   "Membership is still syncing. Wait briefly, then retry the same request.": "成员列表仍在同步。请稍候，并重试原请求。",
@@ -426,7 +426,7 @@ var ZH = {
   "Only text and Markdown are supported.": "仅支持文本与 Markdown。",
   "The send queue is full. Wait for the connection to recover.": "发送队列已满，请等待连接恢复。",
   "You are no longer a member of this conversation.": "你已不再是此会话的成员。",
-  "Your membership changed. Refresh the conversation.": "成员资格已变更，请刷新会话。",
+  "Your membership changed. Check the current conversation.": "成员资格已变更，请检查当前会话。",
   "You do not have permission for this group operation.": "你没有执行此群操作的权限。",
   "That message is not an authorized reply target in this conversation.": "无法引用此会话中未获授权的消息。",
   "The conversation is waiting for a connection.": "会话正在等待连接。",
@@ -21434,7 +21434,7 @@ var communicationDescriptions = {
   CREDENTIAL_DELETE_UNAVAILABLE: "This credential provider does not support deleting records. No credentials were forgotten.",
   COMMUNICATION_CREDENTIAL_DELETE_FAILED: "Local credentials could not be deleted. Preserve the saved identity and check its status before retrying.",
   COMMUNICATION_CACHE_DELETE_FAILED: "Local history cleanup was interrupted. Access remains revoked; check retained files before retrying.",
-  HUB_SELECTION_CHANGED: "The selected Hub changed. Refresh saved Hubs before continuing; no identity should be reused blindly.",
+  HUB_SELECTION_CHANGED: "The selected Hub changed. Review saved Hubs before continuing; no identity should be reused blindly.",
   HUB_RESUME_CONFIRMATION_REQUIRED: "Confirm that retained pending messages and work may resume before reconnecting this Hub.",
   HUB_NOT_SELECTED: "Select this saved Hub first. Only one Hub can be active at a time.",
   LEGACY_HUB_SWITCH_REQUIRES_REENROLLMENT: "Legacy shared-secret pairing cannot be assigned to another Hub. For a clean test start, stop the Host and run dsbot-reset to erase all local federation state, then request access with the new Hub code.",
@@ -21459,7 +21459,7 @@ var communicationDescriptions = {
   UNSUPPORTED_CONTENT: "Only text and Markdown are supported.",
   OUTBOX_FULL: "The send queue is full. Wait for the connection to recover.",
   NOT_A_MEMBER: "You are no longer a member of this conversation.",
-  MEMBERSHIP_REVOKED: "Your membership changed. Refresh the conversation.",
+  MEMBERSHIP_REVOKED: "Your membership changed. Check the current conversation.",
   FORBIDDEN: "You do not have permission for this group operation.",
   INVALID_REPLY_TARGET: "That message is not an authorized reply target in this conversation.",
   REFERENCE_NOT_AVAILABLE: "The referenced message is outside your authorized history.",
@@ -21480,11 +21480,11 @@ var communicationDescriptions = {
   UNSUPPORTED_CAPABILITY: "This device and the Hub use incompatible versions. Update them to the same revision.",
   BOUNDED_COLLABORATION_REQUIRED: "Upgrade the Hub to support bounded Bot collaboration. Your queued messages are retained.",
   EXPLICIT_ACTIVATION_REQUIRED: "Update this device and the Hub together: explicit Bot activation is required. Queued intents are retained.",
-  CONNECTION_LOST: "The Hub connection was lost. Refresh status before retrying the same operation; it may already be committed.",
-  REQUEST_TIMEOUT: "The Hub response timed out. Refresh status before retrying the same operation; it may already be committed.",
+  CONNECTION_LOST: "The Hub connection was lost. Check current status before retrying the same operation; it may already be committed.",
+  REQUEST_TIMEOUT: "The Hub response timed out. Check current status before retrying the same operation; it may already be committed.",
   STORAGE_UNAVAILABLE: "The Hub temporarily cannot store this operation. Its original request ID is retained.",
   BACKPRESSURE: "The Hub is busy. Its original request ID is retained.",
-  COMMUNICATION_UNAVAILABLE: "Remote communication is not ready. Check connection status and refresh without repeating the operation.",
+  COMMUNICATION_UNAVAILABLE: "Remote communication is not ready. Wait for connection status to update without repeating the operation.",
   COMMUNICATION_NOT_CONFIGURED: "This profile has no active Hub configuration. Check the approved device profile.",
   CREDENTIAL_UNAVAILABLE: "The instance credential provider is unavailable. Restart with the intended private credential source; do not send its value.",
   COMMUNICATION_PRESET_UNAVAILABLE: "This DSH runtime lacks the required isolated communication preset API. Check the supported DSH version.",
@@ -21499,20 +21499,20 @@ var communicationDescriptions = {
   COMMUNICATION_CONFIG_WRITE_FAILED: "The configuration save could not be confirmed. Refresh the published Bot selection before applying again.",
   TLS_REQUIRED: "This Hub address requires a secure connection. Ask the Hub owner for its trusted WSS address.",
   UNKNOWN_TOOL: "This tool is unavailable through the current call surface. Check current Session scope, configuration reload and native/PTC presentation. A registered tool may require the approved run_code SDK transport in PTC mode; never bypass scope or permissions.",
-  BOT_NOT_PUBLISHED: "The executing local Bot is not published to this Hub. In Remote communication > Personal settings > Published Bots, select this Bot and save. Wait for the configuration reload, then check diagnose before retrying. Publishing another Bot does not publish this one.",
+  BOT_NOT_PUBLISHED: "The executing local Bot is not published to this Hub. In Remote communication > Contacts > Published Bots, select this Bot and save. Wait for the configuration reload, then check diagnose before retrying. Publishing another Bot does not publish this one.",
   LOCAL_USER_SESSION_REQUIRED: "Open your own local Bot chat to inspect or manage this instance. Local diagnostics and management are unavailable in group and remote Sessions.",
   LOCAL_USER_AUTHORIZATION_REQUIRED: "This management action requires a current direct request in your own local Bot chat. Remote messages, handoffs and schedules cannot authorize it.",
   LOCAL_MANAGEMENT_REJECTED: "The local user rejected this management change. Ask again only if they request it.",
   LOCAL_MANAGEMENT_CANCELLED: "The local management action was cancelled. Check current status before requesting another change.",
   LOCAL_MANAGEMENT_APPROVAL_UNAVAILABLE: "Native approval is unavailable. No management change was authorized.",
   PUBLICATION_CHANGED: "The published Bot selection changed while approval was pending. Review the current list and request approval for the intended selection.",
-  CONTACT_VERSION_CONFLICT: "The contact request or relation changed. Refresh its current status before deciding again.",
+  CONTACT_VERSION_CONFLICT: "The contact request or relation changed. Review its current status before deciding again.",
   OPERATION_ID_CONFLICT: "This operation ID was already used for different input. Reconcile the original action before creating another request.",
   CONTACT_LIMIT: "The pending contact request limit was reached. Review existing requests or wait for expiry.",
-  CONTACT_UNAVAILABLE: "This contact is unavailable in the current authorized view. Refresh status before retrying.",
+  CONTACT_UNAVAILABLE: "This contact is unavailable in the current authorized view. Check current status before retrying.",
   JOIN_ALREADY_PENDING: "A join request is already pending for this device. Check its saved status before submitting another.",
   JOIN_LIMIT: "The join request limit was reached. Review pending requests with the Hub owner before retrying.",
-  JOIN_VERSION_CONFLICT: "The join request changed. Refresh its current status before deciding again.",
+  JOIN_VERSION_CONFLICT: "The join request changed. Review its current status before deciding again.",
   RATE_LIMITED: "Too many requests were made. Wait before explicitly retrying the same action.",
   INVALID_RELATIONSHIP_MEMORY: "The relationship fact has invalid fields or scope. Use the exact current conversation and supported fields.",
   MEMBERSHIP_EPOCH_REQUIRED: "This conversation action requires the exact current membership epoch. Refresh its current authorized state first.",
@@ -21532,7 +21532,7 @@ var communicationDescriptions = {
 var details = {
   BOT_NOT_PUBLISHED: {
     why: "Communication sends authenticate the executing Bot, not another published Bot or the local Human. This Bot has no loaded publication entry.",
-    nextActions: ["In Remote communication > Personal settings > Published Bots, select the executing local Bot and save.", "Allow the configuration reload, then run communication_diagnose in the same local Bot chat. Confirm loaded publication and Hub connection before sending."]
+    nextActions: ["In Remote communication > Contacts > Published Bots, select the executing local Bot and save.", "Allow the configuration reload, then run communication_diagnose in the same local Bot chat. Confirm loaded publication and Hub connection before sending."]
   },
   COMMUNICATION_NOT_CONFIGURED: {
     why: "Remote communication is disabled in the currently loaded plugin configuration.",
@@ -21741,7 +21741,7 @@ function communicationError(error, { bot, reloadRequired = false } = {}) {
 
 // src/client/communication-errors.js
 var knownCommunicationFailure = (error) => Object.hasOwn(communicationDescriptions, error?.code ?? "");
-var communicationFailure = (error) => knownCommunicationFailure(error) ? t(communicationDescriptions[error.code]) + ` [${error.code}]` : t("The action could not be confirmed. Refresh status before trying again.");
+var communicationFailure = (error) => knownCommunicationFailure(error) ? t(communicationDescriptions[error.code]) + ` [${error.code}]` : t("The action could not be confirmed. Check current status before trying again.");
 var definitive = /* @__PURE__ */ new Set([
   "INSTANCE_AUTHENTICATION_REQUIRED",
   "AMBIGUOUS_MENTION",
@@ -22013,13 +22013,38 @@ function AddDevice({ request, manualGuide, displayName = "Human", revision }) {
   useLiveRefresh(async () => {
     if (working.current) return;
     const token = generation.current;
-    await refreshStorage(token);
-    const pending = enrollments.filter((item) => item.requestId && ["prepared", "pending"].includes(item.status) && !item.paused && !item.departed && (!selectedHub?.hubId || selectedHub.hubId === item.hubId));
-    for (const item of pending) {
+    const saved = await refreshStorage(token).catch((failure2) => {
+      if (token === generation.current) throw failure2;
+      return null;
+    });
+    if (!saved || token !== generation.current || working.current) return;
+    const checks = saved.enrollments.filter((item) => item.requestId && (["prepared", "pending"].includes(item.status) || item.status === "approved" && saved.selectedHub?.enabled !== true) && !item.paused && !item.departed && (!saved.selectedHub?.hubId || saved.selectedHub.hubId === item.hubId));
+    let failure;
+    for (const item of checks) {
       if (token !== generation.current || working.current) return;
-      const value = await request({ endpoint: "hub-join-status", hubId: item.hubId });
-      if (token === generation.current && !working.current) update(value);
+      try {
+        const value = await request({ endpoint: "hub-join-status", hubId: item.hubId });
+        if (token === generation.current && !working.current) {
+          update(value);
+          setAbsentHub((current) => current === item.hubId ? null : current);
+        }
+      } catch (error2) {
+        if (token === generation.current && error2.code === "JOIN_NOT_FOUND") setAbsentHub(item.hubId);
+        failure ??= error2;
+      }
     }
+    for (const item of saved.enrollments.filter((item2) => item2.status === "approved" && item2.instanceId)) {
+      if (token !== generation.current || working.current) return;
+      try {
+        await request({ endpoint: "hub-leave-status", hubId: item.hubId, confirmedUrl: item.url });
+      } catch (error2) {
+        failure ??= error2;
+      }
+    }
+    if (checks.length || saved.enrollments.some((item) => item.status === "approved" && item.instanceId)) await refreshStorage(token).catch((error2) => {
+      if (token === generation.current) throw error2;
+    });
+    if (failure && token === generation.current && !working.current) throw failure;
     if (token === generation.current) setLiveError("");
   }, (failure) => setLiveError(enrollmentFailure(failure)), request, revision);
   const run2 = async (work) => {
@@ -22051,10 +22076,12 @@ function AddDevice({ request, manualGuide, displayName = "Human", revision }) {
     const value = await request({ endpoint: "onboarding-storage" });
     if (token !== generation.current || order !== loadOrder.current) return;
     setStorage(value.storage ?? storage);
-    setSelectedHub(value.selectedHub ?? (value.configured && value.hubId ? { hubId: value.hubId, url: value.url } : null));
+    const selected = value.selectedHub ?? (value.configured && value.hubId ? { hubId: value.hubId, url: value.url } : null);
+    setSelectedHub(selected);
     if (hub) setUncertainHub((current) => current === hub.hubId ? null : current);
     if (value.enrollments) setEnrollments(value.enrollments);
     else if (value.hubId) update(value);
+    return { selectedHub: selected, enrollments: value.enrollments ?? (value.hubId ? [value] : []) };
   };
   const existingRequest = hub && enrollments.some((item) => item.hubId === hub.hubId && item.requestId && ["prepared", "pending", "approved"].includes(item.status)) && absentHub !== hub.hubId;
   const differentHub = Boolean(hub && selectedHub?.url && (selectedHub.hubId !== hub.hubId || selectedHub.url !== hub.url));
@@ -22123,9 +22150,6 @@ function AddDevice({ request, manualGuide, displayName = "Human", revision }) {
         });
       } }, t("Update this Hub CA trust")) : null
     ) : null,
-    (0, import_react57.createElement)("button", { type: "button", disabled: busy, onClick: () => {
-      void run2((token) => refreshStorage(token));
-    } }, t("Refresh saved request")),
     (0, import_react57.createElement)("p", { className: "bt-comm-storage-note" }, t("Confirming a new Hub selection or join creates its own device key. Disconnecting retains that key and Hub data; it does not revoke membership on the server. The default credential store is plaintext protected by your OS account permissions, not encrypted against the same user.")),
     storage ? (0, import_react57.createElement)("p", { className: "bt-comm-reference" }, t("Credential storage"), ": ", storage.defaultProvider, " · ", t(storage.encryptedByDefault ? "Encrypted by provider" : "Not encrypted by default")) : null,
     selectedHub?.legacy ? (0, import_react57.createElement)(
@@ -22159,17 +22183,7 @@ function AddDevice({ request, manualGuide, displayName = "Human", revision }) {
       (0, import_react57.createElement)("p", { className: "bt-comm-reference" }, item.url),
       item.requestId ? (0, import_react57.createElement)("p", { className: "bt-comm-reference" }, t("Request ID"), ": ", (0, import_react57.createElement)("code", null, item.requestId)) : null,
       item.departed ? (0, import_react57.createElement)("p", { role: "status" }, t("Access revoked. History is retained; this device cannot resume.")) : item.paused ? (0, import_react57.createElement)("p", { role: "status" }, t("Paused. Identity, trust and Hub history are retained separately.")) : item.status === "approved" ? (0, import_react57.createElement)("p", { role: "status" }, t("Saved approval. This is not a live connection check. The device configuration is saved through the app; current connection status is shown separately.")) : null,
-      item.status === "approved" ? (0, import_react57.createElement)(
-        import_react57.Fragment,
-        null,
-        !item.departed ? (0, import_react57.createElement)("button", { type: "button", disabled: busy, onClick: () => setLifecycle({ kind: "leave", item }) }, t("Leave this Hub")) : null,
-        (0, import_react57.createElement)("button", { type: "button", disabled: busy, onClick: () => {
-          void run2(async (token) => {
-            await request({ endpoint: "hub-leave-status", hubId: item.hubId, confirmedUrl: item.url });
-            await refreshStorage(token);
-          });
-        } }, t("Check revoked access"))
-      ) : null,
+      item.status === "approved" && !item.departed ? (0, import_react57.createElement)("button", { type: "button", disabled: busy, onClick: () => setLifecycle({ kind: "leave", item }) }, t("Leave this Hub")) : null,
       (0, import_react57.createElement)("button", { type: "button", disabled: busy, onClick: () => {
         setDeleteHistory(false);
         setLifecycle({ kind: "forget", item });
@@ -22198,17 +22212,7 @@ function AddDevice({ request, manualGuide, displayName = "Human", revision }) {
           });
         } }, t("Resume this Hub"))
       ) : null,
-      item.requestId ? (0, import_react57.createElement)("button", { type: "button", disabled: busy || Boolean(selectedHub?.hubId && selectedHub.hubId !== item.hubId), onClick: () => {
-        void run2(async (token) => {
-          try {
-            const value = await request({ endpoint: "hub-join-status", hubId: item.hubId });
-            if (token === generation.current) update(value);
-          } catch (failure) {
-            if (token === generation.current && failure.code === "JOIN_NOT_FOUND") setAbsentHub(item.hubId);
-            throw failure;
-          }
-        });
-      } }, t("Check approval")) : (0, import_react57.createElement)("p", { role: "status" }, t("Device identity is saved locally. No request ID exists yet; access has not been requested from the Hub.")),
+      !item.requestId ? (0, import_react57.createElement)("p", { role: "status" }, t("Device identity is saved locally. No request ID exists yet; access has not been requested from the Hub.")) : null,
       item.requestId && ["prepared", "pending"].includes(item.status) ? (0, import_react57.createElement)("button", { type: "button", disabled: busy, onClick: () => {
         void run2(async (token) => {
           const value = await request({ endpoint: "cancel-hub-join", hubId: item.hubId });
@@ -22315,10 +22319,6 @@ function ContactManager({ request, operation, contacts, humanPrincipalId, instan
   return (0, import_react57.createElement)(
     "div",
     { className: "bt-comm-contact-manager" },
-    (0, import_react57.createElement)("button", { type: "button", disabled: busy, onClick: () => {
-      void run2(async () => {
-      });
-    } }, t("Refresh status")),
     liveError ? (0, import_react57.createElement)("p", { className: "bt-comm-reference", role: "status" }, t("Status may be out of date."), " ", liveError) : null,
     error ? (0, import_react57.createElement)("p", { className: "bt-comm-error", role: "alert" }, error) : null,
     (0, import_react57.createElement)(ContactDirectory, { contacts, relations: data?.relations ?? [], humanPrincipalId, instanceId, request, addressNotes, connectionKnown: liveError ? false : connectionKnown, busy: busy || messageBusy, onMessage, confirm, onRemove: (item) => {
@@ -22609,7 +22609,7 @@ ${conversation.conversationId}`,
 
 // src/client/communication-activity.js
 var import_react61 = require("react");
-function CommunicationActivity({ state, member, events, outbox, operations, operationPending, pendingAttempt, error, pollError, friendly, labels, onRefresh, onRetry, onCopy, copyDisabled, busy }) {
+function CommunicationActivity({ state, member, events, outbox, operations, operationPending, pendingAttempt, error, pollError, friendly, labels, onRetry, onCopy, copyDisabled, busy }) {
   const failures = (state?.errors ?? []).filter((item) => !member || item.conversationId === member.conversationId);
   const exports = (state?.exportFailures ?? []).filter((item) => !member || item.conversationId === member.conversationId);
   const stops = collaborationStops(events, outbox);
@@ -22618,7 +22618,6 @@ function CommunicationActivity({ state, member, events, outbox, operations, oper
     "div",
     { className: "bt-comm-activity" },
     member ? (0, import_react61.createElement)("p", { className: "bt-comm-reference" }, member.title ?? t("Private conversation")) : null,
-    (0, import_react61.createElement)("button", { type: "button", disabled: busy, onClick: onRefresh }, t("Refresh status")),
     error ? notice(error) : null,
     state?.error ? notice(friendly({ code: state.error })) : null,
     pollError ? notice(pollError) : null,
@@ -22687,12 +22686,14 @@ function CommunicationMessageActions({ message, onReply, onThread, children }) {
 var import_react63 = require("react");
 function CommunicationThread({ member, messageId, request, canSpeak, onReply, onInspect, selectedBranch = false }) {
   const [page, setPage] = (0, import_react63.useState)(null), [error, setError] = (0, import_react63.useState)(false), [loading, setLoading] = (0, import_react63.useState)(false);
-  const [collapsed, setCollapsed] = (0, import_react63.useState)(/* @__PURE__ */ new Set());
+  const [collapsed, setCollapsed] = (0, import_react63.useState)(/* @__PURE__ */ new Set()), [recovery, setRecovery] = (0, import_react63.useState)(0);
+  const failedRead = (0, import_react63.useRef)(false);
   const order = (0, import_react63.useRef)(0), current = (0, import_react63.useRef)(null);
   current.current = page;
   const members = member.info?.members ?? [], labels = contactLabels(members);
   (0, import_react63.useEffect)(() => {
     const token = ++order.current;
+    failedRead.current = false;
     setPage(null);
     setCollapsed(/* @__PURE__ */ new Set());
     setError(false);
@@ -22705,6 +22706,7 @@ function CommunicationThread({ member, messageId, request, canSpeak, onReply, on
       if (token === order.current && value.conversationId === member.conversationId && value.membershipEpoch === member.membershipEpoch && value.messageId === messageId) setPage(value);
     }).catch(() => {
       if (token === order.current) {
+        failedRead.current = true;
         setPage(null);
         setError(true);
       }
@@ -22714,7 +22716,14 @@ function CommunicationThread({ member, messageId, request, canSpeak, onReply, on
     return () => {
       order.current += 1;
     };
-  }, [member.conversationId, member.membershipEpoch, member.watermark, messageId, request, selectedBranch]);
+  }, [member.conversationId, member.membershipEpoch, member.watermark, messageId, request, selectedBranch, recovery]);
+  useLiveRefresh(async () => {
+    if (failedRead.current) {
+      failedRead.current = false;
+      setRecovery((value) => value + 1);
+    }
+  }, () => {
+  }, request);
   const more = async () => {
     if (loading || !page?.hasMore) return;
     const token = ++order.current, base = page;
@@ -22725,6 +22734,7 @@ function CommunicationThread({ member, messageId, request, canSpeak, onReply, on
       if (token === order.current && current.current === base && value.conversationId === member.conversationId && value.membershipEpoch === member.membershipEpoch && value.rootMessageId === base.rootMessageId && value.watermark === base.watermark) setPage({ ...value, events: [...new Map([...base.events, ...value.events].map((event) => [event.message.messageId, event])).values()] });
     } catch {
       if (token === order.current) {
+        failedRead.current = true;
         setPage(null);
         setError(true);
       }
@@ -22791,7 +22801,7 @@ function CommunicationThread({ member, messageId, request, canSpeak, onReply, on
     (0, import_react63.createElement)("p", { className: "bt-comm-reference" }, t(canSpeak ? "Replies stay in this conversation. Select Reply to continue an exact message." : "Replies stay in this conversation.")),
     page?.earlierUnavailable ? (0, import_react63.createElement)("p", { role: "status" }, t("Earlier context is outside your authorized history.")) : null,
     loading ? (0, import_react63.createElement)("p", { role: "status" }, t("Loading replies…")) : null,
-    error ? (0, import_react63.createElement)("p", { role: "status" }, t("This reply chain is unavailable. Reopen it after synchronization.")) : null,
+    error ? (0, import_react63.createElement)("p", { role: "status" }, t("This reply chain is unavailable. Updates will retry automatically.")) : null,
     (0, import_react63.createElement)(
       "div",
       { className: "bt-comm-thread-log", role: "log", "aria-label": t("Message replies") },
@@ -22986,34 +22996,47 @@ function ThreadReplyComposer({ storageKey, member, target, request, onSent, atta
 
 // src/client/communication-memory.js
 var import_react64 = require("react");
-function CommunicationMemory({ request }) {
+function CommunicationMemory({ request, revision }) {
   const [value, setValue] = (0, import_react64.useState)(null);
   const [busy, setBusy] = (0, import_react64.useState)(false);
   const [error, setError] = (0, import_react64.useState)("");
-  const [saved, setSaved] = (0, import_react64.useState)(false);
-  (0, import_react64.useEffect)(() => {
-    let active = true;
-    request({ endpoint: "memory-settings" }).then((result) => {
-      if (active) setValue(result.localMemory);
-    }).catch((failure) => {
-      if (active) setError(communicationFailure(failure));
-    });
-    return () => {
-      active = false;
-    };
+  const [saved, setSaved] = (0, import_react64.useState)(false), [liveError, setLiveError] = (0, import_react64.useState)("");
+  const generation = (0, import_react64.useRef)(0), working = (0, import_react64.useRef)(false);
+  (0, import_react64.useEffect)(() => () => {
+    generation.current += 1;
   }, [request]);
+  useLiveRefresh(async () => {
+    if (working.current) return;
+    const token = generation.current;
+    try {
+      const result = await request({ endpoint: "memory-settings" });
+      if (token === generation.current) {
+        setValue(result.localMemory);
+        setLiveError("");
+      }
+    } catch (failure) {
+      if (token === generation.current) throw failure;
+    }
+  }, (failure) => setLiveError(communicationFailure(failure)), request, revision);
   const save2 = async (next) => {
+    if (working.current) return;
+    working.current = true;
+    const token = ++generation.current;
     setBusy(true);
     setError("");
     setSaved(false);
     try {
       await request({ endpoint: "set-memory-settings", localMemory: next });
-      setValue(next);
-      setSaved(true);
+      if (token === generation.current) {
+        setValue(next);
+        setSaved(true);
+        setLiveError("");
+      }
     } catch (failure) {
-      setError(communicationFailure(failure));
+      if (token === generation.current) setError(communicationFailure(failure));
     } finally {
-      setBusy(false);
+      working.current = false;
+      if (token === generation.current) setBusy(false);
     }
   };
   return (0, import_react64.createElement)(
@@ -23030,6 +23053,7 @@ function CommunicationMemory({ request }) {
     }), t("Allow each Bot to use its own local memory")),
     (0, import_react64.createElement)("p", null, t("Enabled by default for this Hub. Selected entries from each Bot’s own main memory are sent to its configured model service. Replies may share relevant facts with everyone in the conversation. Other chats, topic files and other Bots’ memory are not included.")),
     (0, import_react64.createElement)("p", null, t("Turning this off stops new memory reads after configuration reload. It does not erase existing model context, saved session records or messages already shared. Existing conversations and recovery may still contain earlier facts.")),
+    liveError ? (0, import_react64.createElement)("p", { role: "status" }, t("Status may be out of date."), " ", liveError) : null,
     saved ? (0, import_react64.createElement)("p", { role: "status" }, t("Saved. The configuration will reload.")) : null,
     error ? (0, import_react64.createElement)("p", { role: "alert" }, error) : null
   );
@@ -24224,10 +24248,8 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
         { className: "bt-comm-connection", "aria-label": t("Connection status") },
         (0, import_react65.createElement)("p", { className: "bt-comm-connection-label", role: "status", "data-connected": Boolean(state?.connected && !pollError) }, (0, import_react65.createElement)("span", { className: "bt-comm-dot", "aria-hidden": true }), t(connectionLabel)),
         state ? (0, import_react65.createElement)("p", { className: "bt-comm-reference bt-comm-connection-details" }, `${state.instanceId} · ${t("Remote contacts")}: ${remoteCount}`) : null,
+        pollError ? (0, import_react65.createElement)("p", { className: "bt-comm-reference", role: "status" }, t("Status may be out of date."), " ", pollError) : null,
         team.communicationEnabled && !state?.connected && !connectionBlocked ? (0, import_react65.createElement)("p", { className: "bt-comm-reference" }, t("Queued messages send automatically when the connection returns.")) : null,
-        team.communicationEnabled ? btn("Refresh status", () => {
-          void act(refresh);
-        }) : null,
         null
       ),
       (0, import_react65.createElement)("div", { className: "bt-comm-section-title" }, t("Conversations"), (0, import_react65.createElement)("span", null, state?.conversations?.length ?? 0)),
@@ -24308,20 +24330,11 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
             (0, import_react65.createElement)(HumanProfile, { key: `${scope}:${state.humanPrincipalId}`, human: contacts.find((person) => person.principalId === state.humanPrincipalId) ?? { principalId: state.humanPrincipalId, displayName: t("You"), kind: "human" }, request, operation }),
             (0, import_react65.createElement)("details", null, (0, import_react65.createElement)("summary", null, t("Device identity")), (0, import_react65.createElement)("p", null, state.instanceId), (0, import_react65.createElement)("code", null, state.humanPrincipalId))
           ) : null,
-          (0, import_react65.createElement)(CommunicationMemory, { key: scope, request }),
-          (0, import_react65.createElement)(
-            "section",
-            null,
-            (0, import_react65.createElement)("h3", null, t("Connection and contacts")),
-            btn("Add a device", () => {
-              setPanelBack("settings");
-              setActivePanel("pairing");
-            }, { "data-open-panel": "pairing" }),
-            btn("Manage contacts", () => {
-              setPanelBack("settings");
-              setActivePanel("manage-contacts");
-            }, { disabled: !team.communicationEnabled, "data-open-panel": "manage-contacts" })
-          )
+          (0, import_react65.createElement)(CommunicationMemory, { key: scope, request, revision: state?.managementRevision }),
+          (0, import_react65.createElement)("section", null, (0, import_react65.createElement)("h3", null, t("Hub connection")), btn("Join Hub", () => {
+            setPanelBack("settings");
+            setActivePanel("pairing");
+          }, { "data-open-panel": "pairing" }))
         ) : activePanel === "thread" ? member && threadMessageId ? (0, import_react65.createElement)(import_react65.Fragment, null, (0, import_react65.createElement)(CommunicationThread, {
           key: `view:${contextKey.current}:${threadMessageId}`,
           member,
@@ -24344,9 +24357,6 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
           friendly: communicationFailure,
           labels,
           busy,
-          onRefresh: () => {
-            void act(refresh);
-          },
           onRetry: () => {
             setActivePanel("");
             void send();

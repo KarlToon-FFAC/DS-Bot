@@ -4,14 +4,13 @@ import { collaborationStops, deliveryPhase } from './communication-model.js'
 
 // Diagnostic records remain available on request, scoped to their conversation.
 // Opening this view never resends, clears or rewrites the durable outbox.
-export function CommunicationActivity({ state, member, events, outbox, operations, operationPending, pendingAttempt, error, pollError, friendly, labels, onRefresh, onRetry, onCopy, copyDisabled, busy }) {
+export function CommunicationActivity({ state, member, events, outbox, operations, operationPending, pendingAttempt, error, pollError, friendly, labels, onRetry, onCopy, copyDisabled, busy }) {
   const failures = (state?.errors ?? []).filter(item => !member || item.conversationId === member.conversationId)
   const exports = (state?.exportFailures ?? []).filter(item => !member || item.conversationId === member.conversationId)
   const stops = collaborationStops(events, outbox)
   const notice = value => h('p', { role: 'status' }, t(value))
   return h('div', { className: 'bt-comm-activity' },
     member ? h('p', { className: 'bt-comm-reference' }, member.title ?? t('Private conversation')) : null,
-    h('button', { type: 'button', disabled: busy, onClick: onRefresh }, t('Refresh status')),
     error ? notice(error) : null, state?.error ? notice(friendly({ code: state.error })) : null, pollError ? notice(pollError) : null,
     pendingAttempt ? h('section', null, notice('Send not confirmed. Retry the same message to avoid sending it twice.'), h('button', { type: 'button', onClick: onRetry, disabled: busy }, t('Retry same send'))) : null,
     operationPending ? notice('An operation is not confirmed. Check status, then retry the same action.') : null,

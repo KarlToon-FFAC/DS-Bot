@@ -74,15 +74,29 @@ export function AddDevice({ request, manualGuide, displayName = 'Human', revisio
   useLiveRefresh(async () => {
     if (working.current) return
     const token = generation.current
-    await refreshStorage(token)
-    // Only check a request the user already submitted. Never join, resume a paused
-    // identity, rotate trust, or recreate credentials in a background refresh.
-    const pending = enrollments.filter(item => item.requestId && ['prepared', 'pending'].includes(item.status) && !item.paused && !item.departed && (!selectedHub?.hubId || selectedHub.hubId === item.hubId))
-    for (const item of pending) {
+    const saved = await refreshStorage(token).catch(failure => { if (token === generation.current) throw failure; return null })
+    if (!saved || token !== generation.current || working.current) return
+    // Reconcile only saved identities. These checks never submit a join, resume
+    // retained work, rotate trust or replace credentials after an uncertain result.
+    const checks = saved.enrollments.filter(item => item.requestId && (['prepared', 'pending'].includes(item.status) || item.status === 'approved' && saved.selectedHub?.enabled !== true) && !item.paused && !item.departed && (!saved.selectedHub?.hubId || saved.selectedHub.hubId === item.hubId))
+    let failure
+    for (const item of checks) {
       if (token !== generation.current || working.current) return
-      const value = await request({ endpoint: 'hub-join-status', hubId: item.hubId })
-      if (token === generation.current && !working.current) update(value)
+      try {
+        const value = await request({ endpoint: 'hub-join-status', hubId: item.hubId })
+        if (token === generation.current && !working.current) { update(value); setAbsentHub(current => current === item.hubId ? null : current) }
+      } catch (error) {
+        if (token === generation.current && error.code === 'JOIN_NOT_FOUND') setAbsentHub(item.hubId)
+        failure ??= error
+      }
     }
+    for (const item of saved.enrollments.filter(item => item.status === 'approved' && item.instanceId)) {
+      if (token !== generation.current || working.current) return
+      try { await request({ endpoint: 'hub-leave-status', hubId: item.hubId, confirmedUrl: item.url }) }
+      catch (error) { failure ??= error }
+    }
+    if (checks.length || saved.enrollments.some(item => item.status === 'approved' && item.instanceId)) await refreshStorage(token).catch(error => { if (token === generation.current) throw error })
+    if (failure && token === generation.current && !working.current) throw failure
     if (token === generation.current) setLiveError('')
   }, failure => setLiveError(enrollmentFailure(failure)), request, revision)
   const run = async work => {
@@ -106,10 +120,12 @@ export function AddDevice({ request, manualGuide, displayName = 'Human', revisio
     const value = await request({ endpoint: 'onboarding-storage' })
     if (token !== generation.current || order !== loadOrder.current) return
     setStorage(value.storage ?? storage)
-    setSelectedHub(value.selectedHub ?? (value.configured && value.hubId ? {hubId:value.hubId,url:value.url} : null))
+    const selected = value.selectedHub ?? (value.configured && value.hubId ? {hubId:value.hubId,url:value.url} : null)
+    setSelectedHub(selected)
     if (hub) setUncertainHub(current => current === hub.hubId ? null : current)
     if (value.enrollments) setEnrollments(value.enrollments)
     else if (value.hubId) update(value)
+    return { selectedHub: selected, enrollments: value.enrollments ?? (value.hubId ? [value] : []) }
   }
   const existingRequest = hub && enrollments.some(item => item.hubId === hub.hubId && item.requestId && ['prepared', 'pending', 'approved'].includes(item.status)) && absentHub !== hub.hubId
   const differentHub=Boolean(hub&&selectedHub?.url&&(selectedHub.hubId!==hub.hubId||selectedHub.url!==hub.url))
@@ -140,7 +156,6 @@ export function AddDevice({ request, manualGuide, displayName = 'Human', revisio
         const value = await request({ endpoint: 'update-hub-trust', hubCode: code, confirmedHubId: hub.hubId, confirmedUrl: hub.url, confirmedTrustFingerprint: hub.trustFingerprint })
         if (token === generation.current) update(value)
       }) } }, t('Update this Hub CA trust')) : null) : null,
-    h('button', { type: 'button', disabled: busy, onClick: () => { void run(token => refreshStorage(token)) } }, t('Refresh saved request')),
     h('p', { className: 'bt-comm-storage-note' }, t('Confirming a new Hub selection or join creates its own device key. Disconnecting retains that key and Hub data; it does not revoke membership on the server. The default credential store is plaintext protected by your OS account permissions, not encrypted against the same user.')),
     storage ? h('p', { className: 'bt-comm-reference' }, t('Credential storage'), ': ', storage.defaultProvider, ' · ', t(storage.encryptedByDefault ? 'Encrypted by provider' : 'Not encrypted by default')) : null,
     selectedHub?.legacy?h('section',{className:'bt-comm-address'},h('h3',null,t('Current Hub')),h('code',null,selectedHub.url),
@@ -151,19 +166,14 @@ export function AddDevice({ request, manualGuide, displayName = 'Human', revisio
     enrollments.map(item => h('section', { key: item.hubId, className: 'bt-comm-address' }, h('p', null, h('code', null, item.hubId), ' · ', statusLabel(item.status)), h('p', { className: 'bt-comm-reference' }, item.url),
       item.requestId ? h('p', { className: 'bt-comm-reference' }, t('Request ID'), ': ', h('code', null, item.requestId)) : null,
       item.departed?h('p',{role:'status'},t('Access revoked. History is retained; this device cannot resume.')):item.paused?h('p',{role:'status'},t('Paused. Identity, trust and Hub history are retained separately.')):item.status === 'approved' ? h('p', { role: 'status' }, t('Saved approval. This is not a live connection check. The device configuration is saved through the app; current connection status is shown separately.')) : null,
-      item.status==='approved'?h(Fragment,null,
-        !item.departed?h('button',{type:'button',disabled:busy,onClick:()=>setLifecycle({kind:'leave',item})},t('Leave this Hub')):null,
-        h('button',{type:'button',disabled:busy,onClick:()=>{void run(async token=>{await request({endpoint:'hub-leave-status',hubId:item.hubId,confirmedUrl:item.url});await refreshStorage(token)})}},t('Check revoked access'))):null,
+      item.status==='approved'&&!item.departed?h('button',{type:'button',disabled:busy,onClick:()=>setLifecycle({kind:'leave',item})},t('Leave this Hub')):null,
       h('button',{type:'button',disabled:busy,onClick:()=>{setDeleteHistory(false);setLifecycle({kind:'forget',item})}},t('Forget this Hub')),
       selectedHub?.hubId!==item.hubId?h('button',{type:'button',disabled:busy,onClick:()=>{void run(token=>select(item,token))}},t('Select this Hub')):null,
       selectedHub?.hubId===item.hubId&&selectedHub.enabled?h('button',{type:'button',disabled:busy,onClick:()=>{void run(async token=>{await request({endpoint:'disconnect-hub',hubId:item.hubId});if(token===generation.current)await refreshStorage(token)})}},t('Disconnect this Hub')):null,
       selectedHub?.hubId===item.hubId&&item.paused&&item.status==='approved'&&!item.departed?h(Fragment,null,
         h('label',{className:'bt-comm-check'},h('input',{type:'checkbox',checked:Boolean(resumeConfirmed[item.hubId]),onChange:event=>setResumeConfirmed(current=>({...current,[item.hubId]:event.target.checked}))}),t('Resume retained pending messages and work after the Hub checks authorization.')),
         h('button',{type:'button',disabled:busy||!resumeConfirmed[item.hubId],onClick:()=>{void run(async token=>{const value=await request({endpoint:'resume-hub',hubId:item.hubId,confirmedUrl:item.url,confirmResume:true});if(token===generation.current){update(value);setResumeConfirmed({});await refreshStorage(token)}})}},t('Resume this Hub'))):null,
-      item.requestId ? h('button', { type: 'button', disabled: busy||Boolean(selectedHub?.hubId&&selectedHub.hubId!==item.hubId), onClick: () => { void run(async token => {
-        try { const value = await request({ endpoint: 'hub-join-status', hubId: item.hubId }); if (token === generation.current) update(value) }
-        catch (failure) { if (token === generation.current && failure.code === 'JOIN_NOT_FOUND') setAbsentHub(item.hubId); throw failure }
-      }) } }, t('Check approval')) : h('p', { role: 'status' }, t('Device identity is saved locally. No request ID exists yet; access has not been requested from the Hub.')),
+      !item.requestId ? h('p', { role: 'status' }, t('Device identity is saved locally. No request ID exists yet; access has not been requested from the Hub.')) : null,
       item.requestId && ['prepared', 'pending'].includes(item.status) ? h('button', { type: 'button', disabled: busy, onClick: () => { void run(async token => { const value = await request({ endpoint: 'cancel-hub-join', hubId: item.hubId }); if (token === generation.current) update(value) }) } }, t('Cancel request')) : null)),
     lifecycle?h('section',{className:'bt-comm-address',role:'alertdialog','aria-label':t(lifecycle.kind==='leave'?'Leave this Hub':'Forget this Hub')},
       h('h3',null,t(lifecycle.kind==='leave'?'Leave this Hub':'Forget this Hub')),
@@ -228,7 +238,6 @@ export function ContactManager({ request, operation, contacts, humanPrincipalId,
   const sharedBots = available.bots.filter(bot => available.publishedBotIds.includes(bot.id))
   const pending = (data?.requests ?? []).filter(item => item.status === 'pending').length
   return h('div', { className: 'bt-comm-contact-manager' },
-    h('button', { type: 'button', disabled: busy, onClick: () => { void run(async () => {}) } }, t('Refresh status')),
     liveError ? h('p', { className: 'bt-comm-reference', role: 'status' }, t('Status may be out of date.'), ' ', liveError) : null,
     error ? h('p', { className: 'bt-comm-error', role: 'alert' }, error) : null,
     h(ContactDirectory, { contacts, relations: data?.relations ?? [], humanPrincipalId, instanceId, request, addressNotes, connectionKnown: liveError ? false : connectionKnown, busy: busy || messageBusy, onMessage, confirm, onRemove: item => {

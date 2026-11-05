@@ -2,7 +2,8 @@
 
 The Remote communication toolbar now has a dedicated Contacts button. It opens
 the contact directory directly instead of requiring Personal settings first.
-The existing settings entry remains available.
+Personal settings no longer repeats this entry. Its device enrollment action is
+Join Hub (加入 Hub); Back returns to that exact launching control.
 
 ## Directory behavior
 

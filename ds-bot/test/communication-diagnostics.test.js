@@ -22,7 +22,7 @@ test('structured errors identify the unpublished actor and give safe why, next a
   const error = communicationError({ code: 'BOT_NOT_PUBLISHED', message: 'SECRET', cause: { privateKey: 'SECRET' } }, { bot: { id: 'local-bot', name: 'Local Helper' } })
   assert.equal(error.subject.localBotId, 'local-bot')
   assert.match(error.why, /executing Bot/)
-  assert.match(error.nextActions.join(' '), /Personal settings > Published Bots/)
+  assert.match(error.nextActions.join(' '), /Contacts > Published Bots/)
   assert.match(error.nextActions.join(' '), /reload/)
   assert.ok(error.docsHint)
   assert.doesNotMatch(JSON.stringify(error), /SECRET/)

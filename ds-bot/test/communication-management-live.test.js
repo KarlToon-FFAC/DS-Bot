@@ -30,6 +30,7 @@ test('Hub admin applies change hints automatically, preserves name drafts/focus/
   try {
     await drain()
     assert.equal(doc.getElementById('content').hidden, false)
+    assert.equal(doc.getElementById('refresh'), null)
     const input = doc.querySelector('[aria-label="Instance name (one)"]')
     input.value = 'Unsaved draft'; input.focus()
     value.instances[0] = { ...value.instances[0], label: 'External name', nameVersion: 1, connected: false }; revision = 'synthetic:2'
@@ -86,7 +87,7 @@ test('Hub admin transient failures mark cached connectivity unknown and focus fu
     setTimeout, clearTimeout, AbortController, AbortSignal, Math })
   try {
     await drain()
-    assert.match(dom.window.document.getElementById('live-status').textContent, /out of date/)
+    assert.match(dom.window.document.getElementById('live-status').textContent, /out of date.*Could not read Hub status/)
     assert.equal(dom.window.document.querySelector('.instance-connection').textContent, 'Connection status unavailable')
     dom.window.dispatchEvent(new dom.window.Event('focus')); await drain()
     assert.equal(dom.window.document.querySelector('.instance-connection').textContent, 'Disconnected from Hub')

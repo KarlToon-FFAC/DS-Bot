@@ -5,7 +5,7 @@ import { communicationDescriptions as descriptions } from '../shared/communicati
 export const knownCommunicationFailure = error => Object.hasOwn(descriptions, error?.code ?? '')
 export const communicationFailure = error => knownCommunicationFailure(error)
   ? t(descriptions[error.code]) + ` [${error.code}]`
-  : t('The action could not be confirmed. Refresh status before trying again.')
+  : t('The action could not be confirmed. Check current status before trying again.')
 
 // Only explicit precondition/authorization rejections release an intent ID.
 const definitive = new Set(['INSTANCE_AUTHENTICATION_REQUIRED','AMBIGUOUS_MENTION','UNKNOWN_MENTION','PAYLOAD_TOO_LARGE','UNSUPPORTED_CONTENT',
