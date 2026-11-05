@@ -24,12 +24,13 @@
 
 保留一份仅含路径、代码版本、启动方式的操作清单。不输出完整配置、`.credentials.yaml`、`.env`、私钥、cookie 或消息正文。
 
-### 客户端四类路径
+### 客户端五类路径
 
 1. **DSH_HOME**：app 设置 → General → Locations 的实际数据位置。`start.ps1 -DataRoot R` 使用 `R/data`。安装版可能由 `DS_BOT_HOME` 覆盖，不能根据 `%APPDATA%`、`~/.dsh` 或示例猜。
 2. **插件 home**：实际 `id: bot` 配置的 `home`；未覆盖时为 `<DSH_HOME>/bot`。它不是整个 DSH_HOME。
 3. **生效 profile/覆盖层**：app 普通 profile 为 `<DSH_HOME>/profiles/ds-bot/cordis.patch.yml`。自建启动器还可能通过 `patchFiles` 加载覆盖文件，例如测试启动器的 `<DSH_HOME>/bench.patch.yml`。逐一核对实际启动代码，所有会重新注入 `id: bot/config/communication` 的文件都传入 `--profile`，该参数可重复。
 4. **凭据及 Session provider 路径**：默认本地凭据文件为 `<DSH_HOME>/.credentials.yaml`，可由 `@deepseek-ai/dsh-credentials-local` 的 `path` 覆盖。Session 路径取 `@deepseek-ai/dsh-session-persistence-jsonl` 的实际 `root`，不能只凭 `sessions` 名字猜。自定义 provider 不适用本地文件清理命令，需先确认其专用删除办法；不能绕过检查并声称清零。
+5. **附件 provider home**：`@deepseek-ai/dsh-attachment-local` 实际生效的 `dshHome`，默认跟随 DSH_HOME，但可以被独立覆盖。将这个 home 传给 `--attachments-home`，不是传 `attachments/v1` 子目录。还要核实该附件库的所有 Session 引用均在传入的 Session root 内；若其他 profile/root 共用附件库，不能在漏扫它们时判定对象独占。
 
 仅列出 profile 文件路径的只读命令，不会打印内容：
 
@@ -77,9 +78,10 @@ $PluginHome = 'D:\REPLACE\actual-data-location\bot'
 $Profile = 'D:\REPLACE\actual-data-location\profiles\ds-bot\cordis.patch.yml'
 $Credentials = 'D:\REPLACE\actual-credentials.yaml'
 $Sessions = 'D:\REPLACE\actual-session-jsonl-root'
-node.exe ds-bot/bin/dsbot-reset.mjs --home $PluginHome --profile $Profile --credentials $Credentials --sessions $Sessions
+$AttachmentsHome = 'D:\REPLACE\actual-attachment-provider-home'
+node.exe ds-bot/bin/dsbot-reset.mjs --home $PluginHome --profile $Profile --credentials $Credentials --sessions $Sessions --attachments-home $AttachmentsHome
 # 核对成功后，使用完全相同路径执行。若有覆盖层，在两条命令中均加 --profile 'D:\actual\overlay.yml'。
-node.exe ds-bot/bin/dsbot-reset.mjs --home $PluginHome --profile $Profile --credentials $Credentials --sessions $Sessions --confirm ERASE-ALL-FEDERATION-DATA
+node.exe ds-bot/bin/dsbot-reset.mjs --home $PluginHome --profile $Profile --credentials $Credentials --sessions $Sessions --attachments-home $AttachmentsHome --confirm ERASE-ALL-FEDERATION-DATA
 ```
 
 ```bash
@@ -87,9 +89,10 @@ PLUGIN_HOME='/REPLACE/actual-data-location/bot'
 PROFILE='/REPLACE/actual-data-location/profiles/ds-bot/cordis.patch.yml'
 CREDENTIALS='/REPLACE/actual-credentials.yaml'
 SESSIONS='/REPLACE/actual-session-jsonl-root'
-node ds-bot/bin/dsbot-reset.mjs --home "$PLUGIN_HOME" --profile "$PROFILE" --credentials "$CREDENTIALS" --sessions "$SESSIONS"
+ATTACHMENTS_HOME='/REPLACE/actual-attachment-provider-home'
+node ds-bot/bin/dsbot-reset.mjs --home "$PLUGIN_HOME" --profile "$PROFILE" --credentials "$CREDENTIALS" --sessions "$SESSIONS" --attachments-home "$ATTACHMENTS_HOME"
 # 核对成功后，使用完全相同路径执行。若有覆盖层，在两条命令中均加 --profile '/actual/overlay.yml'。
-node ds-bot/bin/dsbot-reset.mjs --home "$PLUGIN_HOME" --profile "$PROFILE" --credentials "$CREDENTIALS" --sessions "$SESSIONS" --confirm ERASE-ALL-FEDERATION-DATA
+node ds-bot/bin/dsbot-reset.mjs --home "$PLUGIN_HOME" --profile "$PROFILE" --credentials "$CREDENTIALS" --sessions "$SESSIONS" --attachments-home "$ATTACHMENTS_HOME" --confirm ERASE-ALL-FEDERATION-DATA
 ```
 
 预期删除范围：
@@ -98,15 +101,16 @@ node ds-bot/bin/dsbot-reset.mjs --home "$PLUGIN_HOME" --profile "$PROFILE" --cre
 - 凭据 provider 中匹配 `ds-bot/communication-<32位小写十六进制>` 的联邦记录，包括私钥、旧 Hub/CA 信任、待审批、暂停、恢复及离开状态。仅额外删除旧配置精确引用的通信 `credentialEnv` ref，保留模型等其他 `refs` 和所有非联邦记录，不删除整个凭据文件。
 - `<插件 home>/communication.sqlite` 及其 sidecar；`communication-hubs/` 中通过验证的所有通信作用域。包括所有 Hub，而不是只清当前选中项。其联系人投影、群成员、消息/事件、收发箱、游标、回执、去重、Session 绑定、关系记忆和待恢复工作全部丢失。
 - 通信绑定对应的专用 `communication-workspaces/<binding.id>`，以及由 Session ID、cwd 和通信绑定共同验证的远程 Session 日志目录。需删该 Session 的**所有历史格式世代**，不只是当前 `session.vN`，否则旧日志仍可被重新发现。普通本地 Bot/群 Session 不在此范围。
+- 默认本地附件 provider 中，经全部 Session 历史世代引用分析确认的联邦独占图片/文件对象和文件别名，以及可再生的图片请求缓存。普通本地聊天仍引用的相同字节作为普通聊天数据保留，不再保留其联邦 Session 引用。路径、引用范围或对象归属无法证明时拒绝清理并报告未完成，不能默认留着联邦独占对象后报成功。
 - 新的空通信重置标记使新版客户端清除当前 origin 的 `ds-bot:communication:*` 浏览器项，包括草稿、未决发送、操作 ID、thread intent、选择/隐藏状态。每个用过的浏览器 profile、origin、标签页都要重新打开/刷新同一新 Host 才能处理其存储；关闭不用的旧标签页。其他站点、登录和非通信存储保持不变。旧浏览器副本没有自动远程擦除保证。
 
 另外从**实际启动来源**移除旧通信共享密钥注入：读取旧配置引用的精确 `credentialEnv` 名称，旧默认名为 `DSBOT_COMMUNICATION_CREDENTIAL`；检查原服务环境、启动脚本、项目/数据根 `.env`，只删除该项，不输出其值。退出旧 Host 会清掉其内存中的 legacy credential lease，不存在一个需要手删的通用 lease 文件。不要删除整个 `.env`、模型 API key 或所有 `DSBOT_*`。
 
 执行成功应返回 `erased:true`、`dryRun:false`；`clearLaunchEnvironment` 是还需移除的旧通信变量名。重跑同样的 dry-run，核对 `configurationFiles`、`pairingRecords`、`queueFiles`、`remoteDirectories` 均为 0。`browserCleanupPending:true` 提醒浏览器仍需刷新，不代表所有浏览器已处理。中断后的 `communication-reset.pending.json` 会阻止 Host 恢复旧工作；保持停机，纠正错误后用相同参数和确认词重跑，不手删标记。活动进程、路径/链接异常、格式不支持、Session 归属无法证实时必须停下核对；不要用 `rm -rf bot`、`sessions`、DSH_HOME、用户自己的 `~/.dsh` 或全新数据根替代。命令只认识显式指定的本地 provider，外置文件和其他机器副本须分别处理。
 
-**普通本地 Bot 身份、配置、普通本地聊天/群/记忆、模型凭据、团队工作区保留。** 另有一个不能误删的共享存储：已注入模型的联邦图片/文件可能存在 DSH 的共享附件库中，普通聊天与联邦聊天会按相同字节去重。默认本地附件 provider 在其实际 `dshHome/attachments/v1` 存对象、在 `dshHome/cache/attachments/request-images` 存图片请求缓存；此 `dshHome` 也可能被独立配置。上述重置命令不做全库引用分析，**不会删除这些共享附件对象/缓存，不能声称所有远程文件字节已物理擦除**。不要清整个 `attachments` 来代替，否则可能破坏普通聊天。若另需只删联邦独占附件，应先分析所有保留 Session 的附件引用并核实 provider 路径，无法证明独占时先保留并报告。
+**普通本地 Bot 身份、配置、普通本地聊天/群/记忆、模型凭据、团队工作区保留。** 共享附件必须按引用清理，不能删整个 `attachments` 损坏普通聊天，也不能把远程独占文件留在共享库里就称为完成。默认 provider 的对象位于其实际 `dshHome/attachments/v1`，请求图片缓存位于 `dshHome/cache/attachments/request-images`；自定义 backend、多个未覆盖的 Session root、损坏/未知日志或无法确认归属的孤儿对象都应明确报告具体残留与阻塞，**完整重置未完成**。配对已能重新申请不等于所有清理完成。
 
-曾主动复制到普通 Bot 记忆、普通聊天、下载/导出、备份、日志或其他设备的远程内容也不能在保留普通数据的同时保证自动识别删除。本文清除联邦身份、应用状态和专用日志以便从零配对，不承诺介质级安全擦除或删除共享对象中的每个字节。
+其他机器、旧浏览器、导出/备份和用户主动复制到普通聊天/记忆的内容需分别核对处理。未覆盖的副本不能默认为已清除。应用层文件删除也不承诺介质级安全擦除。
 
 ## 4. Hub：删旧库并清空旧静态授权
 
@@ -140,7 +144,8 @@ npm --prefix communication-hub run reset -- --config "$HUB_CONFIG" --confirm 'DE
 
 ## 6. 验收与回滚边界
 
-- 在新申请前确认：Hub 无旧设备/申请/联系人/群/消息；每台客户端无保存的旧 Hub、静态选中项、旧通信队列/远程 Session、待发意图或恢复工作。本地 Bot、普通群/聊天和模型配置仍在。
+- 完成必须同时满足：Hub 无旧设备/申请/联系人/群/消息；每台客户端无保存的旧 Hub、静态选中项、旧通信队列/远程 Session、待发意图或恢复工作；所有远程独占附件和其缓存已处理，每个旧浏览器存储已清；没有未解决的 provider/引用范围/孤儿对象残留报告。本地 Bot、普通群/聊天和模型配置仍在。
+- 有任一项尚未验证或明确残留时，记录实际目标、原因和下一步，报告“重置未完成”，不能只因 `erased:true`、新身份能配对或 `/health` 成功就报完整清零。
 - 配对后确认新 Hub ID、新设备 ID/公钥，不再出现旧联系人/群。用两台新身份互发唯一标记消息，并测试共享 Bot DM/新群；正常重启与短暂断线后不重发旧消息、不恢复旧群。
 - `/health` 成功只证明服务就绪。新消息双向到达才是通信验证；清零不证明连接缺陷已经修复。异常时记录脱敏错误码和消息 ID，不提交秘密或正文。
 - 默认不可回滚。若另有完整停机快照，回滚也必须先停全部新进程，并成套恢复匹配的 Hub 库、sidecar、配置、客户端 provider/队列/Session/浏览器状态及旧二进制，不能只还原主 `.sqlite` 或把旧身份导入新 Hub。新旧消息不能自动合并。快照不完整时不保证恢复。
