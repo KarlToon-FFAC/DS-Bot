@@ -39,7 +39,7 @@ try{
   assert.equal(jk.conversation_id,kj.conversation_id)
   assert.equal((await botMessages(`Communication reply J-K-${nonce}`))[0].conversation_id,jk.conversation_id)
   record('DM-04-05',{conversationId:jk.conversation_id,bidirectional:true})
-  await assert.rejects(a.api({endpoint:'send',conversationId:ab.conversationId,text:'forged',messageId:randomUUID(),clientCreatedAt:new Date().toISOString(),senderId:b.bot}),/AUTHOR_MISMATCH/)
+  await assert.rejects(a.api({endpoint:'send',conversationId:ab.conversationId,text:'forged',messageId:randomUUID(),clientCreatedAt:new Date().toISOString(),senderId:b.bot}),{code:'AUTHOR_MISMATCH'})
   record('DM-08',{forgedSenderRejected:true})
   const privateCanary=`A-K-private-${nonce}`
   await topology.bench(b,'stop');await topology.startPeer(b,{MOCK_WATCH:privateCanary})
@@ -107,15 +107,16 @@ try{
   }finally{reopened.close()}
   const foreignReply=await topology.send(a,group,`forbidden reference ${nonce}`,[],{replyToMessageId:simultaneous.messageId})
   await until(async()=> (await a.api({endpoint:'state'})).outbox.find(item=>item.id===foreignReply.messageId)?.error==='INVALID_REPLY_TARGET','cross-conversation reply refused')
-  await assert.rejects(b.api({endpoint:'reference',conversationId:ak,messageId:simultaneous.messageId}),/NOT_A_MEMBER/)
+  await assert.rejects(b.api({endpoint:'reference',conversationId:ak,messageId:simultaneous.messageId}),{code:'NOT_A_MEMBER'})
   record('GR-08',{crossConversationReplyRejected:true,unrelatedHumanCannotReadPrivateReference:true})
   let long=`Begin 😀 中文\n${'汉'.repeat(21780)}\nEnd ${nonce}`
   assert.ok(Buffer.byteLength(long)>65000&&Buffer.byteLength(long)<65536)
   const longMessage=await topology.send(a,ab.conversationId,long)
   await until(()=>topology.hasText(b,ab.conversationId,long),'whole UTF-8 message')
-  for(const extra of [{attachments:[{name:'not-sent.png',data:'synthetic'}]},{files:[{name:'not-sent.txt'}]}])await assert.rejects(topology.send(a,ab.conversationId,'unsupported',[],extra),/UNSUPPORTED_CONTENT/)
-  await assert.rejects(topology.send(a,ab.conversationId,'😀'.repeat(16385)),/PAYLOAD_TOO_LARGE/)
-  record('CT-01',{messageId:longMessage.messageId,utf8Bytes:Buffer.byteLength(long),completeTextPreserved:true,attachmentsRejected:true,oversizeRejected:true})
+  await assert.rejects(topology.send(a,ab.conversationId,'unsupported',[],{attachments:[{name:'not-sent.png',data:'synthetic'}]}),{code:'INVALID_ATTACHMENT'})
+  await assert.rejects(topology.send(a,ab.conversationId,'unsupported',[],{files:[{name:'not-sent.txt'}]}),{code:'UNSUPPORTED_CONTENT'})
+  await assert.rejects(topology.send(a,ab.conversationId,'😀'.repeat(16385)),{code:'PAYLOAD_TOO_LARGE'})
+  record('CT-01',{messageId:longMessage.messageId,utf8Bytes:Buffer.byteLength(long),completeTextPreserved:true,invalidAttachmentsRejected:true,oversizeRejected:true})
   evidence.status='PASS'
 }catch(error){evidence.status='FAIL';evidence.error=error.stack;console.error(error.stack);process.exitCode=1}
 finally{await topology.close();writeFileSync(join(topology.root,'p4-behavior.json'),JSON.stringify(evidence,null,2))}

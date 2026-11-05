@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { LocalTopology,until } from './local-topology.mjs'
 import { modelCalls } from './bench-client.mjs'
 
-const topology=new LocalTopology(),evidence={status:'RUNNING',platform:'native Windows',model:'local deterministic Mock',cases:[]}
+const topology=new LocalTopology(),evidence={status:'RUNNING',platform:process.platform,model:'local deterministic Mock',cases:[]}
 const nonce=randomUUID()
 const record=(id,detail)=>{evidence.cases.push({id,status:'PASS',...detail});console.log(`PASS ${id}`);writeFileSync(join(topology.root,'p4-recovery.json'),JSON.stringify(evidence,null,2))}
 try{
