@@ -19,6 +19,8 @@ const ZH = {
   "Use an IP note of at most 160 characters without line breaks or hidden control characters.": "IP 备注最多 160 个字符，不能包含换行或隐藏控制字符。",
   "Up to 256 IP notes can be saved for this Hub. Clear an old note before adding another.": "当前 Hub 最多保存 256 条 IP 备注，请先清除旧备注再添加。",
 
+  "Discard publication changes": "放弃发布列表修改",
+  "Published Bots changed elsewhere. Your selection is retained. Discard your changes to review the current list before saving again.": "其他窗口已修改发布列表，已保留你的选择。请先放弃本次修改，核对当前列表后再重新保存。",
   "Connection status unavailable": "连接状态未知",
   "Disconnected from Hub": "未连接 Hub",
   "Status may be out of date.": "状态可能已过期。",

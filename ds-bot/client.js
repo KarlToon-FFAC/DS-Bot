@@ -55,6 +55,8 @@ var ZH = {
   "Enter a valid IPv4 or IPv6 address. Ports are optional; use brackets around IPv6 with a port.": "请输入有效的 IPv4 或 IPv6 地址。端口可省略；IPv6 带端口时请用方括号括起地址。",
   "Use an IP note of at most 160 characters without line breaks or hidden control characters.": "IP 备注最多 160 个字符，不能包含换行或隐藏控制字符。",
   "Up to 256 IP notes can be saved for this Hub. Clear an old note before adding another.": "当前 Hub 最多保存 256 条 IP 备注，请先清除旧备注再添加。",
+  "Discard publication changes": "放弃发布列表修改",
+  "Published Bots changed elsewhere. Your selection is retained. Discard your changes to review the current list before saving again.": "其他窗口已修改发布列表，已保留你的选择。请先放弃本次修改，核对当前列表后再重新保存。",
   "Connection status unavailable": "连接状态未知",
   "Disconnected from Hub": "未连接 Hub",
   "Status may be out of date.": "状态可能已过期。",
@@ -22228,7 +22230,7 @@ function ContactManager({ request, operation, contacts, humanPrincipalId, instan
   const [data, setData] = (0, import_react57.useState)(null), [code, setCode] = (0, import_react57.useState)(""), [userCode, setUserCode] = (0, import_react57.useState)("");
   const [published, setPublished] = (0, import_react57.useState)([]), [share, setShare] = (0, import_react57.useState)([]), [incomingShares, setIncomingShares] = (0, import_react57.useState)({});
   const [busy, setBusy] = (0, import_react57.useState)(false), [error, setError] = (0, import_react57.useState)(""), [confirm, setConfirm] = (0, import_react57.useState)("");
-  const generation = (0, import_react57.useRef)(0), loadOrder = (0, import_react57.useRef)(0), working = (0, import_react57.useRef)(false), publicationDirty = (0, import_react57.useRef)(false);
+  const generation = (0, import_react57.useRef)(0), loadOrder = (0, import_react57.useRef)(0), working = (0, import_react57.useRef)(false), publicationDirty = (0, import_react57.useRef)(false), publicationBase = (0, import_react57.useRef)(null);
   const [liveError, setLiveError] = (0, import_react57.useState)("");
   const load = async () => {
     const token = generation.current, order = ++loadOrder.current;
@@ -22269,8 +22271,8 @@ function ContactManager({ request, operation, contacts, humanPrincipalId, instan
       if (token === generation.current) await load();
     } catch (failure) {
       if (token === generation.current) {
-        setError(enrollmentFailure(failure));
-        if (failure.code === "CONTACT_VERSION_CONFLICT") {
+        setError(failure.code === "PUBLICATION_CHANGED" ? t("Published Bots changed elsewhere. Your selection is retained. Discard your changes to review the current list before saving again.") : enrollmentFailure(failure));
+        if (["CONTACT_VERSION_CONFLICT", "PUBLICATION_CHANGED"].includes(failure.code)) {
           try {
             await load();
           } catch {
@@ -22356,15 +22358,23 @@ function ContactManager({ request, operation, contacts, humanPrincipalId, instan
       { className: "bt-comm-contact-section" },
       (0, import_react57.createElement)("summary", null, t("Published Bots")),
       (0, import_react57.createElement)(BotChoices, { bots: available.bots, selected: published, onChange: (value) => {
+        if (!publicationDirty.current) publicationBase.current = [...available.publishedBotIds];
         publicationDirty.current = true;
         setPublished(value);
       }, label: "Bots available to contacts" }),
       (0, import_react57.createElement)("button", { type: "button", disabled: busy || JSON.stringify([...published].sort()) === JSON.stringify([...available.publishedBotIds].sort()), "data-dirty": JSON.stringify([...published].sort()) !== JSON.stringify([...available.publishedBotIds].sort()), onClick: () => {
         void run2(async () => {
-          await operation("publish-bots", { localBotIds: published });
+          await operation("publish-bots", { localBotIds: published, expectedPublishedBotIds: publicationBase.current ?? available.publishedBotIds });
           publicationDirty.current = false;
+          publicationBase.current = null;
         });
-      } }, t("Save published Bots"))
+      } }, t("Save published Bots")),
+      publicationDirty.current ? (0, import_react57.createElement)("button", { type: "button", disabled: busy, onClick: () => {
+        publicationDirty.current = false;
+        publicationBase.current = null;
+        setPublished([...available.publishedBotIds]);
+        setError("");
+      } }, t("Discard publication changes")) : null
     )
   );
 }

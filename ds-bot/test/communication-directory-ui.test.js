@@ -538,3 +538,64 @@ test('failed live reads back off without hint storms postponing recovery and onl
     controller.stop()
   })
 })
+
+
+test('publication edits freeze their expected base across live changes and preserve drafts on conflicts', async () => {
+  await ui(async ({ exports: api, doc, render, click }) => {
+    let canonical = ['one'], availableReads = 0
+    const mutations = [], request = async body => {
+      if (body.endpoint === 'user-code') return { userCode: 'SYNTHETIC' }
+      if (body.endpoint === 'contact-requests' || body.endpoint === 'contact-relations') return []
+      assert.equal(body.endpoint, 'available-bots'); availableReads++
+      return { bots: [{ id: 'one', name: 'One' }, { id: 'two', name: 'Two' }, { id: 'three', name: 'Three' }], publishedBotIds: [...canonical] }
+    }
+    const operation = async (endpoint, body) => {
+      assert.equal(endpoint, 'publish-bots'); mutations.push(body)
+      if (JSON.stringify([...body.expectedPublishedBotIds].sort()) !== JSON.stringify([...canonical].sort())) throw Object.assign(Error('PUBLICATION_CHANGED'), { code: 'PUBLICATION_CHANGED' })
+      canonical = [...body.localBotIds]
+      return { publishedBotIds: [...canonical] }
+    }
+    const pane = revision => React.createElement(api.ContactManager, { request, operation, contacts: [], revision })
+    await render(pane(1))
+    const field = id => [...doc.querySelectorAll('fieldset')].find(node => node.querySelector('legend').textContent === 'Bots available to contacts').querySelector(`[data-local-bot-id="${id}"]`)
+    await act(async () => field('two').click())
+    canonical = ['three']; await render(pane(2))
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 550)) })
+    await click('Save published Bots')
+    assert.deepEqual([...mutations[0].expectedPublishedBotIds], ['one'])
+    assert.deepEqual([...canonical], ['three'])
+    assert.equal(field('one').checked, true)
+    assert.equal(field('two').checked, true)
+    assert.equal(field('three').checked, false)
+    assert.match(doc.querySelector('[role=alert]').textContent, /changed elsewhere.*selection is retained/)
+    assert.equal(mutations.length, 1, 'a conflict never replays the mutation')
+    assert.ok(availableReads >= 3, 'the canonical list is refreshed after the conflict')
+    await click('Discard publication changes')
+    assert.equal(field('three').checked, true)
+    assert.equal(field('two').checked, false)
+    await act(async () => field('two').click())
+    await click('Save published Bots')
+    assert.deepEqual([...mutations[1].expectedPublishedBotIds], ['three'])
+    assert.deepEqual([...canonical].sort(), ['three', 'two'])
+  })
+})
+
+test('an old accepted contact ACK never overwrites a newer canonical cancelled request', async () => {
+  await ui(async ({ exports: api, doc, render, click }) => {
+    let canonical = 'pending'
+    const request = async body => {
+      if (body.endpoint === 'user-code') return { userCode: 'SYNTHETIC' }
+      if (body.endpoint === 'available-bots') return { bots: [], publishedBotIds: [] }
+      if (body.endpoint === 'contact-relations') return []
+      assert.equal(body.endpoint, 'contact-requests')
+      return [{ requestId: 'incoming', status: canonical, direction: 'incoming', senderName: 'Synthetic', version: 1 }]
+    }
+    const operation = async endpoint => { assert.equal(endpoint, 'accept-contact'); canonical = 'cancelled'; return { status: 'accepted' } }
+    await render(React.createElement(api.ContactManager, { request, operation, contacts: [] }))
+    await click('Accept contact')
+    const requests = [...doc.querySelectorAll('details')].find(node => node.querySelector('summary')?.textContent === 'Contact requests')
+    assert.match(requests.textContent, /cancelled/)
+    assert.doesNotMatch(requests.textContent, /accepted/)
+    assert.equal(doc.querySelector('[data-contact-id]'), null)
+  })
+})

@@ -191,7 +191,7 @@ export function ContactManager({ request, operation, contacts, humanPrincipalId,
   const [data, setData] = useState(null), [code, setCode] = useState(''), [userCode, setUserCode] = useState('')
   const [published, setPublished] = useState([]), [share, setShare] = useState([]), [incomingShares, setIncomingShares] = useState({})
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [confirm, setConfirm] = useState('')
-  const generation = useRef(0), loadOrder = useRef(0), working = useRef(false), publicationDirty = useRef(false)
+  const generation = useRef(0), loadOrder = useRef(0), working = useRef(false), publicationDirty = useRef(false), publicationBase = useRef(null)
   const [liveError, setLiveError] = useState('')
   const load = async () => {
     const token = generation.current, order = ++loadOrder.current
@@ -216,8 +216,8 @@ export function ContactManager({ request, operation, contacts, humanPrincipalId,
     try { await work(); if (token === generation.current) await load() }
     catch (failure) {
       if (token === generation.current) {
-        setError(enrollmentFailure(failure))
-        if (failure.code === 'CONTACT_VERSION_CONFLICT') {
+        setError(failure.code === 'PUBLICATION_CHANGED' ? t('Published Bots changed elsewhere. Your selection is retained. Discard your changes to review the current list before saving again.') : enrollmentFailure(failure))
+        if (['CONTACT_VERSION_CONFLICT', 'PUBLICATION_CHANGED'].includes(failure.code)) {
           try { await load() } catch { /* Keep the original conflict; never replay the mutation. */ }
         }
       }
@@ -254,6 +254,7 @@ export function ContactManager({ request, operation, contacts, humanPrincipalId,
         h('button', { type: 'button', disabled: busy, onClick: () => { void run(() => operation('reject-contact', { requestId: item.requestId, expectedVersion: item.version })) } }, t('Reject contact'))) :
         item.status === 'pending' ? h('button', { type: 'button', disabled: busy, onClick: () => { void run(() => operation('cancel-contact', { requestId: item.requestId, expectedVersion: item.version })) } }, t('Cancel request')) : null)),
     !(data?.requests ?? []).length ? h('p', { className: 'bt-comm-reference' }, t('No contact requests')) : null),
-    h('details', { className: 'bt-comm-contact-section' }, h('summary', null, t('Published Bots')), h(BotChoices, { bots: available.bots, selected: published, onChange: value => { publicationDirty.current = true; setPublished(value) }, label: 'Bots available to contacts' }),
-      h('button', { type: 'button', disabled: busy || JSON.stringify([...published].sort()) === JSON.stringify([...available.publishedBotIds].sort()), 'data-dirty': JSON.stringify([...published].sort()) !== JSON.stringify([...available.publishedBotIds].sort()), onClick: () => { void run(async () => { await operation('publish-bots', { localBotIds: published }); publicationDirty.current = false }) } }, t('Save published Bots'))))
+    h('details', { className: 'bt-comm-contact-section' }, h('summary', null, t('Published Bots')), h(BotChoices, { bots: available.bots, selected: published, onChange: value => { if (!publicationDirty.current) publicationBase.current = [...available.publishedBotIds]; publicationDirty.current = true; setPublished(value) }, label: 'Bots available to contacts' }),
+      h('button', { type: 'button', disabled: busy || JSON.stringify([...published].sort()) === JSON.stringify([...available.publishedBotIds].sort()), 'data-dirty': JSON.stringify([...published].sort()) !== JSON.stringify([...available.publishedBotIds].sort()), onClick: () => { void run(async () => { await operation('publish-bots', { localBotIds: published, expectedPublishedBotIds: publicationBase.current ?? available.publishedBotIds }); publicationDirty.current = false; publicationBase.current = null }) } }, t('Save published Bots')),
+      publicationDirty.current ? h('button', { type: 'button', disabled: busy, onClick: () => { publicationDirty.current = false; publicationBase.current = null; setPublished([...available.publishedBotIds]); setError('') } }, t('Discard publication changes')) : null))
 }
