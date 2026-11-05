@@ -44,6 +44,7 @@ test('administrator delete UI distinguishes revoke, escapes untrusted names, lis
   const button = [...row.querySelectorAll('button')].find(button => button.textContent === 'Delete device permanently')
   button.click(); await tick()
   assert.equal(f.calls.some(call => call.action === 'delete'), false)
+  assert.match(f.confirmations[0], /Device: "<Untrusted device>"\nInstance ID: device-a\n/)
   assert.match(f.confirmations[0], /This cannot be undone/)
   assert.match(f.confirmations[0], /Groups to close:\n<Shared group> \(shared-one\)/)
   assert.match(f.confirmations[0], /without assigning a new owner/)
@@ -67,4 +68,20 @@ test('administrator delete sends observed versions once, reconciles exact row an
   f.state.instances = []; f.render()
   assert.equal(document.querySelector('#instances').textContent, 'No enrolled devices.')
   assert.equal([...document.querySelectorAll('#instances button')].some(button => button.textContent === 'Repair original device'), false)
+})
+
+
+test('same-name device deletion confirmation identifies the exact selected instance and its own affected groups', async t => {
+  const f = fixture(t), { document } = f.window
+  for (const instance of f.state.instances) instance.label = 'Duplicate device name'
+  f.render()
+  const row = [...document.querySelectorAll('#instances article')].find(item => item.dataset.instanceId === 'device-b')
+  const button = [...row.querySelectorAll('button')].find(item => item.textContent === 'Delete device permanently')
+  button.click(); await tick()
+  assert.match(f.confirmations[0], /Device: "Duplicate device name"\nInstance ID: device-b\n/)
+  assert.match(f.confirmations[0], /No shared groups will be closed/)
+  assert.equal(f.confirmations[0].includes('shared-one'), false)
+  assert.equal(f.confirmations[0].includes('device-a'), false)
+  assert.equal(f.calls.some(call => call.action === 'delete'), false)
+  assert.equal(document.querySelectorAll('#instances article').length, 2)
 })
