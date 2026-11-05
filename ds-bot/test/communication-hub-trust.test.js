@@ -5,6 +5,7 @@ import { WebSocketServer } from 'ws'
 import { decodeHubCode, connectHubSocket, CommunicationOnboarding, communicationCredentialKey } from '../src/host/federation/onboarding.js'
 import { signedHubCode } from '../../communication-hub/src/hub-code.js'
 import { caFixture, openssl } from './fixtures/hub-ca-fixture.mjs'
+import { hubTlsObservation } from '../src/host/federation/tls-observation.js'
 import { scopedTrust } from '../src/host/federation/hub-trust.js'
 
 async function server(tls, port = 0) {
@@ -51,7 +52,10 @@ test('real WSS uses only scoped CA without environment setup, survives leaf rene
     const info = decodeHubCode(signedHubCode('hub-test', url, {caPem:a.pem,certificatePem:leaf.cert,privateKey:leaf.key}), {allowLoopback:true})
     const connect = trust => connectHubSocket(url, {allowLoopback:true,hubId:'hub-test',trust})
     await assert.rejects(connect(), {code:'HUB_TLS_UNTRUSTED'})
-    ;(await connect(info.trust)).close()
+    const verifiedSocket = await connect(info.trust)
+    assert.equal(hubTlsObservation(verifiedSocket).trustSource, 'hub-scoped-ca')
+    assert.equal(hubTlsObservation(verifiedSocket).verification, 'verified-for-observed-handshake')
+    verifiedSocket.close()
     await assert.rejects(connect({...info.trust,hubId:'other'}), {code:'HUB_TRUST_BINDING_MISMATCH'})
     await live.close();live = await server(f.leaf('renewed-a',a),port)
     ;(await connect(structuredClone(info.trust))).close()

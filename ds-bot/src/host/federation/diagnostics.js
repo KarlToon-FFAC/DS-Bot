@@ -1,5 +1,6 @@
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { parseCredentialKey } from '@deepseek-ai/dsh-credentials'
+import { hubTlsObservation } from './tls-observation.js'
 import { output } from '../tools.js'
 import { communicationError } from '../../shared/communication-diagnostics.js'
 
@@ -10,7 +11,7 @@ const safeId = value => typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.te
 const safeUrl = value => {
   try {
     const url = new URL(value)
-    if (!['ws:', 'wss:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) return null
+    if (!['ws:', 'wss:'].includes(url.protocol) || url.username || url.password || url.search || url.hash || url.pathname !== '/communication') return null
     return `${url.protocol}//${url.host}/communication`
   } catch { return null }
 }
@@ -51,6 +52,7 @@ export async function diagnoseCommunication(rt, state, { sessionId, agent } = {}
     state: !applied.enabled ? 'disabled' : !comm ? 'not-started' : !listsKnown ? 'not-synchronized' : connected ? 'authorized-snapshot' : 'cached-snapshot',
     why: !listsKnown ? 'No completed initial synchronization is known. An empty local list does not prove absence on the Hub.'
       : connected ? 'Counts describe the last locally synchronized authorized view, not every Hub identity.' : 'The last synchronized view may be stale while disconnected.' })
+  const tlsObservation = hubTlsObservation(comm?.transport?.socket)
   const definitions = state.toolNames ?? []
   let registeredNames = null
   if (agent && typeof rt.ctx.tools?.schemas === 'function') {
@@ -78,16 +80,16 @@ export async function diagnoseCommunication(rt, state, { sessionId, agent } = {}
       lastConnectedAt: comm?.lastConnectedAt ?? null, transportRunning: comm?.transport?.running ?? false },
     tls: { required: applied.url ? safeUrl(applied.url)?.startsWith('wss:') ?? null : null,
       handshake: !applied.enabled ? 'not-started' : connected ? 'connected' : errorCode?.startsWith('HUB_TLS_') ? 'failed' : 'not-confirmed',
-      verification: connected && applied.credentialKey && safeUrl(applied.url)?.startsWith('wss:') ? 'verified-by-scoped-or-system-trust' : 'not-confirmed',
+      verification: connected && tlsObservation ? tlsObservation.verification : 'not-confirmed',
+      trustSource: tlsObservation?.trustSource ?? 'not-observed',
+      observedHandshake: tlsObservation ? { ...tlsObservation, currentConnection: connected } : null,
       category: errorCode?.startsWith('HUB_TLS_') || errorCode === 'HUB_WEBSOCKET_HANDSHAKE_FAILED' ? error?.code : null,
-      peerCertificate: 'not-inspected', why: 'No new handshake is performed by diagnose. Certificate metadata is not inferred from configuration or a prior connection. Keep TLS verification enabled.' },
+      peerCertificate: 'not-inspected', why: 'Signed v2 Hub codes supply public CA trust scoped to the exact Hub and URL, without client CA environment setup. A socket without scoped CA uses Node default trust. Diagnose reports only an observed socket policy, never infers certificate facts or changes trust. Legacy clients or TLS-intercepting infrastructure require separate administrator review; keep TLS verification enabled.' },
     credential,
     environment: { credential: { name: envName, observedAtPluginActivation: state.credentialObserved === true,
       presentInCurrentProcess: envName ? Object.hasOwn(process.env, envName) : null,
       hostLeaseAvailable: applied.credentialKey ? null : state.legacy?.status().available === true,
-      why: 'Legacy bootstrap credentials are consumed into a host-only process lease and removed from child environments. Absence after consumption is expected; a newly configured shell variable requires restarting the actual host process.' },
-      extraCa: { presentInCurrentProcess: Object.hasOwn(process.env, 'NODE_EXTRA_CA_CERTS'), loadedAtProcessStart: 'unknown',
-        why: 'Presence is metadata only. Node reads this variable when the process starts; a plugin reload does not prove that Node loaded the file. No path, certificate contents or credential value is returned.' } },
+      why: 'Legacy bootstrap credentials are consumed into a host-only process lease and removed from child environments. Absence after consumption is expected; a newly configured shell variable requires restarting the actual host process.' } },
     lists: { contacts: listStatus(comm?.contacts?.length ?? 0), conversations: listStatus(conversationCount(comm?.queue)), invites: listStatus(count(comm?.queue, 'invites')) },
     error, nextActions: error?.nextActions ?? (!applied.enabled ? communicationError({ code: 'COMMUNICATION_NOT_CONFIGURED' }).nextActions
       : bot && !publishedIds.includes(bot.id) ? communicationError({ code: 'BOT_NOT_PUBLISHED' }).nextActions

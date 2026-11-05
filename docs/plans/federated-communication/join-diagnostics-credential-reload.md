@@ -8,7 +8,7 @@ request list have not been inspected here. Its join result is still unconfirmed.
 No production request was repeated, no remote service was contacted, and no real
 credential, registry value or certificate/private key was read.
 
-Review Hub is local parsing of version-1 Hub code `{hubId,url}`. It neither tests
+In the historical failure below, Review Hub was local parsing of a version-1 Hub code `{hubId,url}`. It neither tests
 reachability nor submits enrollment. The code has no TLS certificate fingerprint;
 Hub ID is not a certificate pin. The old UI hid every join error behind one generic
 message and failed to reload an already saved request after an ambiguous result.
@@ -39,33 +39,31 @@ saved identity. A failed local status read keeps submission blocked.
    reachable network route/listener. Importing a CA does not fix a mismatched SAN,
    a private address without routing, or a disabled enrollment service.
 
-## Simple CA trust without bypassing TLS
+## Current Hub-scoped CA trust without environment setup
 
-Obtain only the public CA PEM from the administrator and verify its SHA-256
-certificate fingerprint through an independently trusted channel. Do not obtain
-or copy the server's private key. For a source launch on Windows, after the owner
-has verified the CA:
+Normal enrollment now uses a signed version-2 Hub code obtained through a trusted
+channel. It includes the exact Hub ID/URL, public CA roots and server chain,
+bounded dates and a signature. Review that identity and fingerprint before
+joining. The client validates the code and supplies the public CA only to that
+Hub's TLS socket; it does not install system-wide trust or require a client CA
+environment variable. Hostname, expiry and peer-authentication checks remain on.
 
-```powershell
-$env:NODE_EXTRA_CA_CERTS = 'C:\PublicCertificates\hub-ca.pem'
-.\start.ps1 -DataRoot '<your existing data root>'
-```
+For a saved Hub whose CA changes, obtain its fresh signed code and explicitly
+choose **Update this Hub CA trust**, then reconcile the saved request. This
+preserves the existing enrolled identity. It neither silently joins another Hub
+nor approves an enrollment. A same-CA leaf renewal normally requires no new code.
 
-For a packaged app or container, supply that variable in its actual launch
-environment using its existing launcher. Fully quit/restart the Node/DSH process,
-including a tray process. Node reads extra CAs at process launch; changing the
-variable after launch or only refreshing a browser does not update trust.
-This augments trust for TLS in that Node process, not the Windows system store
-and not just one Hub; verify the CA accordingly. Hostname, expiry and peer
-authentication checks remain enabled. Do not set `NODE_TLS_REJECT_UNAUTHORIZED=0`,
-disable `rejectUnauthorized`, skip `checkServerIdentity` or bypass browser warnings.
+Older v1 codes contain only Hub ID/URL and cannot bootstrap private-CA trust.
+Prefer upgrading the Hub/client to signed codes, or use an already trusted server
+certificate for that legacy deployment. A TLS-intercepting corporate proxy is a
+separate administrator-controlled trust boundary; review its route and policy
+rather than applying a blanket override. Do not disable certificate verification,
+import global trust implicitly or bypass browser security warnings.
 
-Official behavior: [Node CLI: NODE_EXTRA_CA_CERTS](https://nodejs.org/api/cli.html#node_extra_ca_certsfile)
-and [Node TLS server identity validation](https://nodejs.org/api/tls.html#tlscheckserveridentityhostname-cert).
-A future certificate-pin/code format would need independently verified trust
-material and explicit host binding. Current code does not auto-trust a fingerprint
-received through an untrusted code/connection, and no new trust-import UI or system
-trust change is introduced in this patch.
+See [Hub-scoped trust](hub-scoped-trust.md) for the current format and rotation
+rules. Earlier process-start CA tests below are historical legacy-transport
+evidence, not the current setup procedure. The CLI guide and packaged Skill use
+the signed-code path and no longer recommend a manual CA environment override.
 
 ## Legacy static credential reload root cause and fix
 
@@ -101,7 +99,7 @@ ports were freed and nonce profiles deleted. Earlier fixture-name/Windows import
 failures were diagnosed, cleaned up and not counted as passes.
 
 Real WSS tests use temporary synthetic certificates: an untrusted CA is rejected,
-`NODE_EXTRA_CA_CERTS` at child-process launch succeeds, and a trusted CA with the
+the legacy process-start CA test succeeds, and a trusted CA with the
 wrong SAN remains rejected. Unit tests also distinguish expiry/refusal/timeout,
 without rendering raw errors. No system trust or network security was changed.
 

@@ -1,5 +1,10 @@
 # Two-machine trial and rollback
 
+For current clients, the normal setup is a signed v2 Hub code reviewed through
+Remote communication settings. It supplies public CA trust for the exact Hub;
+no manual client CA environment setup is required. Static configuration below
+is a legacy fallback, not the preferred enrollment path.
+
 This branch implements P0–P4 and the additional group governance and prompt
 isolation requirements. It is ready for a controlled trial. Acceptance so far
 uses independent DSH A/B processes on one Windows computer. Local WSS uses the
@@ -127,9 +132,12 @@ npm.cmd start --prefix communication-hub -- ./local/hub.json
 ```
 
 Use your real Hub name in both client URLs. The certificate must match that
-name/IP and be trusted by both clients. For an existing private CA, Node supports
-`NODE_EXTRA_CA_CERTS` pointing to its **public** PEM file in the client launch
-environment. Local WSS tests verify that approach without installing system trust.
+name/IP. For normal enrollment, use a signed v2 Hub code from a trusted channel.
+The client validates its public CA trust and binds it to the exact Hub ID and
+URL; no client CA environment setup is required. The static legacy flow below
+does not bootstrap private-CA trust: prefer upgrading to signed codes or use a
+certificate already trusted by that deployed client. TLS-intercepting proxies
+require separate administrator review, not a blanket CA override.
 Do not disable certificate validation. Non-loopback plaintext `ws://` is refused.
 Network reachability and an existing trusted certificate remain deployment
 prerequisites; this work changes no firewall rules, system trust or services.

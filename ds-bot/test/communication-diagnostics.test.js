@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { EventEmitter } from 'node:events'
+import { recordHubTls } from '../src/host/federation/tls-observation.js'
 import { communicationError } from '../src/shared/communication-diagnostics.js'
 import { diagnoseCommunication, communicationDiagnoseTool, communicationAvailabilityPrompt, loadedCommunicationSettings } from '../src/host/federation/diagnostics.js'
 import { legacyCredential } from '../src/host/federation/legacy-credential.js'
@@ -97,7 +98,7 @@ test('environment metadata distinguishes consumed private host lease from curren
   assert.equal(value.environment.credential.observedAtPluginActivation, true)
   assert.equal(value.environment.credential.presentInCurrentProcess, false)
   assert.equal(value.environment.credential.hostLeaseAvailable, true)
-  assert.equal(value.environment.extraCa.loadedAtProcessStart, 'unknown')
+  assert.equal(value.environment.extraCa, undefined)
   assert.doesNotMatch(JSON.stringify(value), new RegExp(secret))
   state.legacy.invalidate()
   assert.equal((await diagnoseCommunication(rt, state)).credential.availableToHost, false)
@@ -194,4 +195,30 @@ test('an initial onChange failure cannot turn unsynchronized empty caches into k
     assert.equal(result.lists.contacts.state, 'not-synchronized')
     assert.equal(runtime.snapshot().listState, 'not-synchronized')
   } finally { CommunicationTransport.prototype.start = start; await runtime?.close() }
+})
+
+
+test('diagnose reports the observed Hub-scoped trust source without inferring trust from a signing-record reference', async () => {
+  const { rt, state } = fixture({ enabled: true, url: 'wss://hub.example.test/communication', credentialKey: 'ds-bot/communication-test' })
+  state.runtime = { bots: new Map(), contacts: [], transport: { connected: true, socket: {} } }
+  assert.equal((await diagnoseCommunication(rt, state)).tls.trustSource, 'not-observed')
+  assert.equal((await diagnoseCommunication(rt, state)).tls.verification, 'not-confirmed')
+  recordHubTls(state.runtime.transport.socket, { secure: true, scopedCa: true })
+  const value = await diagnoseCommunication(rt, state)
+  assert.equal(value.tls.trustSource, 'hub-scoped-ca')
+  assert.equal(value.tls.verification, 'verified-for-observed-handshake')
+  assert.equal(value.tls.observedHandshake.currentConnection, true)
+  assert.doesNotMatch(JSON.stringify(value), /NODE_EXTRA_CA_CERTS|caPem|privateKey/)
+  state.runtime.transport.connected = false
+  const cached = await diagnoseCommunication(rt, state)
+  assert.equal(cached.tls.verification, 'not-confirmed')
+  assert.equal(cached.tls.observedHandshake.currentConnection, false)
+})
+
+
+test('diagnose never invents a standard endpoint when a legacy custom path was not safe to disclose', async () => {
+  const { rt, state } = fixture({ enabled: true, url: 'wss://hub.example.test/PRIVATE_CUSTOM_PATH' })
+  const value = await diagnoseCommunication(rt, state)
+  assert.equal(value.hub.url, null)
+  assert.doesNotMatch(JSON.stringify(value), /PRIVATE_CUSTOM_PATH/)
 })

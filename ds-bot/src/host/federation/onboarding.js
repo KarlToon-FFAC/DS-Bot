@@ -5,6 +5,7 @@ import { existsSync } from 'node:fs'
 import { lstat, realpath, rm } from 'node:fs/promises'
 import { join, resolve, dirname } from 'node:path'
 import { credentialKey, parseCredentialKey } from '@deepseek-ai/dsh-credentials'
+import { recordHubTls } from './tls-observation.js'
 import { scopedTrust, verifyHubCode } from './hub-trust.js'
 import { communicationCapabilities } from './transport.js'
 
@@ -209,6 +210,7 @@ export async function connectHubSocket(url, { allowLoopback = false, resolve = l
     socket.once('unexpected-response', unexpected)
     socket.once('error', failure); socket.once('close', failure); socket.once('open', success)
   })
+  recordHubTls(socket, { secure: new URL(url).protocol === 'wss:', scopedCa: Boolean(ca) })
   return socket
 }
 

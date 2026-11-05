@@ -543,9 +543,12 @@ The Hub owner restarts the Hub with its complete JSON config, for example
 `npm start --prefix communication-hub -- ./local/hub.json`, and its own private
 environment. A non-loopback listener needs `tls.certificateEnv` and
 `tls.privateKeyEnv` referencing PEM values. The WSS certificate must match the
-real hostname/IP and be trusted by both clients. For an existing private CA,
-`NODE_EXTRA_CA_CERTS` may reference its public PEM in the client environment.
-Do not disable TLS validation, install trust or change firewalls implicitly.
+real hostname/IP. Prefer the signed v2 Hub-code flow: it validates public CA
+trust and saves it for that exact Hub ID and URL, with no client CA environment
+setup. This manual legacy flow has no signed trust bootstrap; ask the Hub owner
+for a current signed code or a certificate already trusted by the deployed
+client. A TLS-intercepting proxy is a separate administrator-managed boundary.
+Do not disable TLS validation, install global trust or change firewalls implicitly.
 The ordinary DSH session cookie used by this CLI is separate from the
 instance pairing secret and is never forwarded to the Hub.
 
@@ -739,8 +742,8 @@ work around this boundary.
 4. `environment` reports presence metadata only. A legacy credential may have
    been consumed into a host-only process lease and removed from child
    environments. `hostLeaseAvailable` distinguishes that valid case from no
-   usable credential. `NODE_EXTRA_CA_CERTS` presence does not prove Node loaded
-   its file at process startup. Never print the value, private path or key.
+   usable credential. Never print the value, private path or key. Signed v2 Hub
+   codes provide per-Hub public CA trust without client CA environment setup.
 5. Check synchronization and list state. Before initial synchronization, empty
    lists mean **unknown**, not zero contacts. A disconnected cached view may be
    stale. A synchronized zero count is only the last authorized local view, not
@@ -754,8 +757,10 @@ work around this boundary.
 7. TLS results distinguish untrusted CA, hostname mismatch, expired/not-yet-valid
    certificates, TLS protocol handshake and WebSocket upgrade failures. Diagnose
    performs no new handshake and leaves unobserved certificate facts unknown.
-   Obtain a valid trusted certificate or correct Hub route; never disable TLS
-   verification.
+   `tls.trustSource` reports only an observed socket's trust policy, not a guess
+   from configuration. Review a fresh signed v2 Hub code to update that exact
+   Hub's trust, or ask the owner to fix its certificate/route. Never disable TLS
+   verification or configure a global CA override as the normal setup path.
 8. Once connected and synchronized, resolve the exact authorized contact. Use
    the communication send tool as your own published Bot for a Bot message, or
    the authenticated Human UI/CLI for a Human message. Keep the returned request
