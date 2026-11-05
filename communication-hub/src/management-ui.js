@@ -14,7 +14,7 @@ async function api(action, input = {}, signal) {
   if (!r.ok || !value.ok) throw Error(value.error?.code || 'REQUEST_FAILED');
   return value;
 }
-function error(e) { $('error').textContent = e.message === 'INSTANCE_NAME_VERSION_CONFLICT' ? 'Device name changed elsewhere. Refresh before editing again.' : e.message; }
+function error(e) { if (e.message === 'DEVICE_DELETE_GROUPS_CHANGED') { $('error').textContent = 'Owned groups changed. Refresh and review the deletion again. No data was deleted.'; return; } $('error').textContent = e.message === 'INSTANCE_NAME_VERSION_CONFLICT' ? 'Device name changed elsewhere. Refresh before editing again.' : e.message; }
 function text(tag, value) { const e = document.createElement(tag); e.textContent = value; return e; }
 function button(label, run) {
   const b = text('button', label);
@@ -63,7 +63,8 @@ function render(value) {
         const connection = text('small', ''); connection.className = 'instance-connection';
         row.replaceChildren(text('strong', heading), text('small', i.instanceId), connection, form);
       }
-      if (i.trusted) row.append(button('Remove device', () => { if (confirm('Remove this device: revoke access, group memberships and pending deliveries; keep chat history. Owned groups retain the inactive owner until the same device is explicitly repaired. Continue?')) return api('revoke', {instanceId:i.instanceId}); }));
+      if (i.trusted) row.append(button('Revoke access', () => { if (confirm('Remove this device: revoke access, group memberships and pending deliveries; keep chat history. Owned groups retain the inactive owner until the same device is explicitly repaired. Continue?')) return api('revoke', {instanceId:i.instanceId}); }));
+      row.append(button('Delete device permanently', () => { if (confirm('Permanently delete this device, user and Bots, contacts, private chats and device-only groups from this Hub? This cannot be undone. Other devices and shared-group history are kept. Owned shared groups listed below will be closed without assigning a new owner. The device must reset its local Hub data before requesting fresh access.' + (i.ownedSharedGroups.length ? '\\n\\nGroups to close:\\n' + i.ownedSharedGroups.map(group => group.title + ' (' + group.conversationId + ')').join('\\n') : '\\n\\nNo shared groups will be closed.'))) return api('delete', {instanceId:i.instanceId, expectedPairingRevision:i.pairingRevision, expectedNameVersion:i.nameVersion, ownedSharedGroups:i.ownedSharedGroups.map(group => ({conversationId:group.conversationId,version:group.version})), confirmDelete:true}); }));
       if (!i.trusted && i.revision) row.append(button('Repair original device', () => { if (confirm('Restore trust for the same previously proved device key? Group memberships stay removed.')) return api('repair', {instanceId:i.instanceId, expectedRevision:i.revision}); }));
       row.dataset.signature = JSON.stringify(i);
     }

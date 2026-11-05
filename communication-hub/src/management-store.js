@@ -1,6 +1,7 @@
 import { createHash, createPublicKey, randomBytes, randomUUID, verify } from 'node:crypto'
 import { identifier, requireThat, hash } from './protocol.js'
 import { signedHubCode } from './hub-code.js'
+import { deleteDevice } from './delete-device.js'
 
 const digest = value => createHash('sha256').update(value).digest('hex')
 const day = 86400000
@@ -146,7 +147,7 @@ export class HubManagement {
       return { requestId: row.id, status: 'approved', instanceId: id }
     })
   }
-  instances() { return this.db.prepare('SELECT i.id instanceId,i.label,i.trusted,i.pairing_revision pairingRevision,p.revision,coalesce(n.version,0) nameVersion FROM instances i LEFT JOIN hub_enrolled_peers p ON p.instance_id=i.id LEFT JOIN hub_instance_names n ON n.instance_id=i.id ORDER BY i.id').all().map(instance => ({ ...instance, connected: this.isInstanceConnected?.(instance.instanceId) === true })) }
+  instances() { return this.db.prepare('SELECT i.id instanceId,i.label,i.trusted,i.pairing_revision pairingRevision,p.revision,coalesce(n.version,0) nameVersion FROM instances i LEFT JOIN hub_enrolled_peers p ON p.instance_id=i.id LEFT JOIN hub_instance_names n ON n.instance_id=i.id ORDER BY i.id').all().map(instance => ({ ...instance, connected: this.isInstanceConnected?.(instance.instanceId) === true, ownedSharedGroups: this.db.prepare("SELECT c.id conversationId,c.title,c.version FROM conversations c JOIN principals owner ON owner.id=c.owner_id WHERE owner.instance_id=? AND c.kind='group' AND c.closed=0 AND EXISTS (SELECT 1 FROM memberships m JOIN principals p ON p.id=m.principal_id WHERE m.conversation_id=c.id AND p.instance_id<>?) ORDER BY c.id").all(instance.instanceId, instance.instanceId) })) }
   rename(input) {
     requireThat(input && typeof input === 'object' && !Array.isArray(input) && Object.keys(input).every(key => ['instanceId', 'label', 'expectedNameVersion'].includes(key)), 'INVALID_REQUEST')
     identifier(input.instanceId)
@@ -164,6 +165,7 @@ export class HubManagement {
     })
   }
   revoke(instanceId) { identifier(instanceId); const result = this.store.revokeInstance(instanceId); this.audit('instance.revoke', instanceId); return result }
+  delete(input) { return deleteDevice(this, input) }
   repair(input) {
     identifier(input.instanceId)
     requireThat(Object.keys(input).every(key => ['instanceId', 'expectedRevision'].includes(key)), 'INVALID_REQUEST')

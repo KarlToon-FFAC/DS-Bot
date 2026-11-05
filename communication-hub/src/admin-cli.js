@@ -4,7 +4,7 @@ import {request as httpsRequest} from 'node:https'
 import {readFile} from 'node:fs/promises'
 import {pathToFileURL} from 'node:url'
 
-const fields={state:[], 'hub-code':[],approve:['requestId','expectedVersion'],reject:['requestId','expectedVersion'],rename:['instanceId','label','expectedNameVersion'],revoke:['instanceId'],repair:['instanceId','expectedRevision'],'revoke-sessions':[]}
+const fields={state:[], 'hub-code':[],approve:['requestId','expectedVersion'],reject:['requestId','expectedVersion'],rename:['instanceId','label','expectedNameVersion'],revoke:['instanceId'],repair:['instanceId','expectedRevision'],delete:['instanceId','expectedPairingRevision','expectedNameVersion','ownedSharedGroups','confirmDelete'],'revoke-sessions':[]}
 const routes={approve:'decide',reject:'decide','hub-code':'state','revoke-sessions':'sessions/revoke'}
 const fail=(code,uncertain=false)=>{throw Object.assign(Error(code),{code,uncertain})}
 export const help=operation=>JSON.stringify({name:'dsbot-hub-admin',usage:'npm run admin -- <operation> < request.json',
@@ -12,13 +12,15 @@ export const help=operation=>JSON.stringify({name:'dsbot-hub-admin',usage:'npm r
  authentication:'Provide DSBOT_HUB_ADMIN_PASSWORD privately in the process environment and DSBOT_HUB_ADMIN_URL as the exact trusted HTTP-loopback/HTTPS admin origin. No credential arguments or config files. Optional DSBOT_HUB_ADMIN_CA_FILE contains public PEM CA certificates only.',
  operations:operation&&fields[operation]?{[operation]:fields[operation]}:fields,
  safety:'No discovery, redirects, TLS bypass or automatic retry. Reconcile state after an uncertain mutation. Approval/rejection and rename/repair require the observed version.',
- lifecycle:'revoke removes device access and active group memberships, revokes unfinished delivery, retains history/principal rows and releases live-principal quota. An inactive owner remains the original owner; other members gain no rights. Explicit repair restores only that same proved device key, is capacity-checked and does not restore group membership. Never hard-delete historical identities to make room.'},null,2)
+ lifecycle:'revoke removes device access and active group memberships, revokes unfinished delivery, retains history/principal rows and releases live-principal quota. An inactive owner remains the original owner; other members gain no rights. Explicit repair restores only that same proved device key, is capacity-checked and does not restore group membership. delete permanently removes the exact device identity, contacts, private chats and device-only groups. It requires confirmDelete:true and observed pairing/name versions, closes active sockets, and cannot be repaired. Shared-group history is retained. ownedSharedGroups must list exact conversationId/version pairs from current state: these owned open shared groups are closed, without transferring ownership. A stale group list fails without deletion. Remove a static peer from server configuration before deleting its data. A complete test reset is a separate operation.'},null,2)
 export function prepare(operation,input={}){
  if(!Object.hasOwn(fields,operation))fail('UNKNOWN_OPERATION')
  if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).some(key=>!fields[operation].includes(key)))fail('INVALID_REQUEST')
  for(const key of fields[operation]){
   const value=input[key]
   if(key.startsWith('expected')){if(!Number.isSafeInteger(value)||value<(key==='expectedNameVersion'?0:1))fail('INVALID_REQUEST')}
+  else if(key==='ownedSharedGroups'){if(!Array.isArray(value)||value.some(group=>!group||typeof group!=='object'||Array.isArray(group)||Object.keys(group).sort().join(',')!=='conversationId,version'||typeof group.conversationId!=='string'||!group.conversationId.trim()||!Number.isSafeInteger(group.version)||group.version<1))fail('INVALID_REQUEST')}
+  else if(key==='confirmDelete'){if(value!==true)fail('DEVICE_DELETE_CONFIRMATION_REQUIRED')}
   else if(typeof value!=='string'||!value.trim()||value.length>(key==='label'?100:200))fail('INVALID_REQUEST')
  }
  return {operation,path:routes[operation]??operation,input:{...input,...(['approve','reject'].includes(operation)?{action:operation}:{})}}

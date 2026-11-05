@@ -11,7 +11,7 @@ export function initializeAdmin(management, password) {
   management.db.prepare("INSERT INTO hub_management VALUES ('adminRevision','1') ON CONFLICT(key) DO UPDATE SET value=CAST(value AS INTEGER)+1").run()
   management.audit('admin.initialize', 'local')
 }
-export function createManagementHttp(management, { password, origin, onRevoke = id => management.revoke(id), onChange, changeWaitMs = 20000 } = {}) {
+export function createManagementHttp(management, { password, origin, onRevoke = id => management.revoke(id), onDelete = input => management.delete(input), onChange, changeWaitMs = 20000 } = {}) {
   requireThat(typeof origin === 'string' && ['http:', 'https:'].includes(new URL(origin).protocol) && new URL(origin).origin === origin, 'INVALID_CONFIG')
   requireThat(origin.startsWith('https:') || ['127.0.0.1', '[::1]'].includes(new URL(origin).hostname), 'TLS_REQUIRED')
   const secure = origin.startsWith('https:'), sessions = new Map(), waiters = new Set()
@@ -129,13 +129,14 @@ export function createManagementHttp(management, { password, origin, onRevoke = 
       if (path === '/admin/api/state') value = { ...management.info(), requests: management.joins(), instances: management.instances() }
       else if (path === '/admin/api/decide') value = management.decide(input)
       else if (path === '/admin/api/revoke') { value = await onRevoke(input.instanceId); management.audit('admin.instance.revoke', input.instanceId) }
+      else if (path === '/admin/api/delete') value = await onDelete(input)
       else if (path === '/admin/api/repair') value = management.repair(input)
       else if (path === '/admin/api/rename') value = management.rename(input)
       else requireThat(false, 'UNKNOWN_OPERATION')
       if (path !== '/admin/api/state') changed()
       send(res, 200, { ok: true, value, revision: currentRevision() })
     } catch (error) {
-      const code = ['INVALID_REQUEST', 'UNAUTHENTICATED', 'ORIGIN_REJECTED', 'RATE_LIMITED', 'PAYLOAD_TOO_LARGE', 'JOIN_VERSION_CONFLICT', 'PAIRING_REVISION_CONFLICT', 'INSTANCE_NOT_FOUND', 'INSTANCE_NAME_VERSION_CONFLICT', 'UNKNOWN_OPERATION', 'ALREADY_ENROLLED', 'DIRECTORY_FULL'].includes(error.code) ? error.code : 'MANAGEMENT_UNAVAILABLE'
+      const code = ['INVALID_REQUEST', 'UNAUTHENTICATED', 'ORIGIN_REJECTED', 'RATE_LIMITED', 'PAYLOAD_TOO_LARGE', 'JOIN_VERSION_CONFLICT', 'PAIRING_REVISION_CONFLICT', 'INSTANCE_NOT_FOUND', 'INSTANCE_NAME_VERSION_CONFLICT', 'UNKNOWN_OPERATION', 'ALREADY_ENROLLED', 'DIRECTORY_FULL', 'DEVICE_DELETE_CONFIRMATION_REQUIRED', 'DEVICE_DELETE_VERSION_CONFLICT', 'DEVICE_DELETE_GROUPS_CHANGED', 'STATIC_PEER_REMOVAL_REQUIRED', 'OWNER_TRANSFER_REQUIRED'].includes(error.code) ? error.code : 'MANAGEMENT_UNAVAILABLE'
       if (path === '/admin/login') {
         res.writeHead(code === 'RATE_LIMITED' ? 429 : 401, { ...headers, 'content-type': 'text/html; charset=utf-8' })
         res.end(managementPage.replace('<p id="error" role="status"></p>', '<p id="error" role="alert">Sign-in failed. Check the trusted address and password, or wait before trying again.</p>'))

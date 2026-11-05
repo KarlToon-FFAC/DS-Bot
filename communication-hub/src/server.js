@@ -38,6 +38,8 @@ export async function startHub({ databasePath, peers, host='127.0.0.1', port=319
   const store=new HubStore(databasePath,{limits,beforeCommit})
   const pairingTrust=managementOptions?.pairingCa ? { caPem:String(managementOptions.pairingCa), certificatePem:String(tls?.cert??''), privateKey:tls?.key } : undefined
   const management=new HubManagement(store,{url:managementOptions?.url??managementOptions?.publicUrl,pairingTrust})
+  const configuredPeers=new Set(allowed.keys())
+  management.isConfiguredPeer=id=>configuredPeers.has(id)
   store.directoryFilter=(auth,rows,principalId)=>management.filterDirectory(auth,rows,principalId)
   store.contactPolicy=(auth,actorId,targetId)=>management.assertContact(auth,actorId,targetId)
   store.dmPolicy=id=>management.assertDm(id)
@@ -182,16 +184,17 @@ export async function startHub({ databasePath, peers, host='127.0.0.1', port=319
   const address=server.address()
   const url=`${tls?'wss':'ws'}://${host.includes(':')?`[${host}]`:host}:${address.port}/communication`
   const revoke=instanceId=>{allowed.delete(instanceId);const value=store.revokeInstance(instanceId);for(const [socket,id] of identities)if(id===instanceId)socket.close(1008,'Trust revoked');changed();return value}
+  const deleteInstance=input=>{const value=management.delete(input);for(const [socket,id] of identities)if(id===input.instanceId)socket.close(1008,'Device deleted');changed();return value}
   if(managementOptions?.enabled){
     try{
       management.url??=url
       if(pairingTrust)management.info()
       const origin=managementOptions.origin??new URL(management.url.replace(/^ws/,'http')).origin
-      managementHttp=createManagementHttp(management,{password:managementOptions.password,origin,onRevoke:revoke,onChange:invalidate})
+      managementHttp=createManagementHttp(management,{password:managementOptions.password,origin,onRevoke:revoke,onDelete:deleteInstance,onChange:invalidate})
       if(managementHttp.enabled)managementUrl=`${origin}/admin/`
     }catch(error){clearInterval(heartbeat);closing=true;clearTimeout(invalidationTimer);for(const socket of connections)socket.terminate();await new Promise(resolve=>sockets.close(resolve));await new Promise(resolve=>server.close(resolve));store.close();throw error}
   }
   return {store,management,host,port:address.port,url,managementUrl,
-    revoke,
+    revoke,deleteInstance,
     async close(){closing=true;clearInterval(heartbeat);clearTimeout(invalidationTimer);managementHttp?.close();for(const socket of connections)socket.terminate();await new Promise(resolve=>sockets.close(resolve));await new Promise(resolve=>server.close(resolve));store.close()}}
 }

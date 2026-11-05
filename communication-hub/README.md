@@ -104,6 +104,16 @@ Codes identify users but never authenticate them or grant administrator rights.
 Unknown/unavailable code requests have indistinguishable acknowledgments. Pending
 requests expire, and rate limits and single-use signed challenges prevent abuse.
 
+The administrator page distinguishes **Revoke access** (retain identity/history for
+explicit same-key repair) from **Delete device permanently** (remove that device,
+its users/Bots, contacts, private history and device-only groups). Deletion lists
+and closes its owned shared groups without promoting another owner, while
+preserving other devices and shared history. It cannot be repaired. The client
+must explicitly reset its old local Hub data before making a fresh application.
+A full test reset is a separate operation and retains no federation history.
+See [permanent device deletion](../docs/plans/federated-communication/permanent-device-deletion.md)
+for exact scope, versioned confirmation and the static-peer prerequisite.
+
 Revoking a contact blocks DMs and new invitations, fences old queued DM intents
 and preserves historical data. Existing shared groups keep their separate
 permissions. Revoking an instance stops its authentication; explicit repair accepts
