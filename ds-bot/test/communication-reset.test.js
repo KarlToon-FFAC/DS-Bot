@@ -217,3 +217,60 @@ test('unproven queue sidecars without a main database are not silently removed',
   assert.equal(await readFile(f.queues[0] + '-wal', 'utf8'), 'foreign-or-unproven')
   assert.deepEqual(await readFile(f.profile), before)
 })
+
+
+test('protected ordinary Sessions and configuration inputs cannot overlap whole-tree erase targets', async t => {
+  const f = await fixture(t), before = await readFile(f.profile), credentialBefore = await readFile(f.credentials)
+  const nested = join(f.home, 'communication-workspaces', 'ordinary-sessions')
+  await mkdir(join(nested, 'project', 'ordinary'), { recursive: true })
+  const ordinary = join(nested, 'project', 'ordinary', 'session.v4.jsonl')
+  const bytes = JSON.stringify({ type: 'session', version: 4, id: 'ordinary', cwd: f.root, createdAt: 1, isSeeded: false, delegationDepth: 0 }) + '\n'
+  await writeFile(ordinary, bytes)
+  for (const options of [
+    { ...f.options, sessions: nested },
+    { ...f.options, attachmentsHome: join(f.home, 'communication-workspaces') },
+    { ...f.options, profiles: [join(f.home, 'communication-workspaces', 'profile.yml')] },
+    { ...f.options, credentials: f.profile },
+    { ...f.options, sessions: f.root },
+  ]) await assert.rejects(resetFederation(options), { code: 'RESET_PROTECTED_PATH_OVERLAP' })
+  assert.equal(await readFile(ordinary, 'utf8'), bytes)
+  assert.deepEqual(await readFile(f.profile), before); assert.deepEqual(await readFile(f.credentials), credentialBefore)
+  assert.ok(!(await readdir(f.home)).includes('communication-reset.pending.json'))
+})
+
+test('pending reset refuses a remote Session directory replaced by an ordinary journal', async t => {
+  const f = await fixture(t)
+  await assert.rejects(resetFederation({ ...f.options, afterStep: step => { if (step === 'manifest') throw new Error('synthetic interruption') } }))
+  const text = JSON.stringify({ type: 'session', version: 4, id: 'new-ordinary', cwd: f.root, createdAt: 1, isSeeded: false, delegationDepth: 0 }) + '\n'
+  await rm(f.remote, { recursive: true }); await mkdir(f.remote)
+  await writeFile(join(f.remote, 'session.v4.jsonl'), text)
+  await assert.rejects(resetFederation(f.options), { code: 'RESET_SESSION_CHANGED_OWNERSHIP', target: f.remote })
+  assert.equal(await readFile(join(f.remote, 'session.v4.jsonl'), 'utf8'), text)
+  assert.equal((await federationResetStatus(f.home)).pending, true)
+})
+
+
+test('legacy Bot/group fallback IDs and archived ordinary segments are protected', async t => {
+  for (const state of [
+    { bots: { 'remote-one': { name: 'legacy Bot' } } },
+    { rooms: { 'remote-one': { id: 'remote-one' } } },
+    { privateArchives: [{ id: 'remote-one', segments: [{ sessionId: 'remote-old' }] }] },
+    { rooms: { ordinary: { id: 'ordinary', segments: { bot: [{ sessionId: 'remote-one' }] } } } },
+  ]) {
+    const f = await fixture(t), path = join(f.home, 'state.json')
+    const text = JSON.stringify(state); await writeFile(path, text)
+    await assert.rejects(resetFederation(f.options), { code: 'RESET_LOCAL_SESSION_CONFLICT' })
+    assert.equal(await readFile(path, 'utf8'), text)
+    assert.ok((await readFile(f.credentials, 'utf8')).includes('synthetic-erased-key'))
+  }
+})
+
+test('pending reset refuses a new remote-looking identity at a prior Session directory', async t => {
+  const f = await fixture(t)
+  await assert.rejects(resetFederation({ ...f.options, afterStep: step => { if (step === 'manifest') throw new Error('synthetic interruption') } }))
+  await rm(f.remote, { recursive: true }); await mkdir(f.remote)
+  const text = JSON.stringify({ type: 'session', version: 4, id: 'another-remote', cwd: join(f.home, 'communication-workspaces', 'binding-remote'), agentPreset: 'ds-bot-communication', createdAt: 1, isSeeded: false, delegationDepth: 0 }) + '\n'
+  await writeFile(join(f.remote, 'session.v4.jsonl'), text)
+  await assert.rejects(resetFederation(f.options), { code: 'RESET_SESSION_CHANGED_OWNERSHIP', target: f.remote })
+  assert.equal(await readFile(join(f.remote, 'session.v4.jsonl'), 'utf8'), text)
+})

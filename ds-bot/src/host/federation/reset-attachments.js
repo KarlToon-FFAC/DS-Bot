@@ -63,7 +63,7 @@ async function references(path, catalog = sessionFormatCatalog, artifactOnly = f
     }
     return refs
   } catch (error) {
-    if (error.code?.startsWith('RESET_')) throw error
+    if (error.code?.startsWith('RESET_')) { error.target ??= path; throw error }
     fail('RESET_ATTACHMENT_SESSION_UNSUPPORTED', path)
   } finally { lines.close(); decoded.destroy(); input.destroy() }
 }
@@ -75,9 +75,8 @@ export async function validateAttachmentFile(target) {
   return true
 }
 
-export async function planFederationAttachments({ sessionsRoot, remoteSessionDirectories, attachmentDshHome, provider } = {}) {
-  if (provider !== '@deepseek-ai/dsh-attachment-local') fail('RESET_ATTACHMENT_PROVIDER_UNSUPPORTED')
-  await checked(sessionsRoot, true, true); await checked(attachmentDshHome, true)
+async function scanSessionReferences(sessionsRoot, remoteSessionDirectories) {
+  await checked(sessionsRoot, true, true)
   if (!Array.isArray(remoteSessionDirectories)) fail('RESET_ATTACHMENT_INVALID_TARGETS')
   const targets = new Set(remoteSessionDirectories), remote = new Map(), retained = new Map()
   for (const path of targets) { await checked(path, true, true); if (!relative(sessionsRoot, path) || relative(sessionsRoot, path).startsWith('..') || isAbsolute(relative(sessionsRoot, path))) fail('RESET_ATTACHMENT_INVALID_TARGETS') }
@@ -93,7 +92,11 @@ export async function planFederationAttachments({ sessionsRoot, remoteSessionDir
     if (!targets.has(dirname(path))) for (const digest of JSON.stringify(artifact.events).matchAll(/sha256:([a-f0-9]{64})/g)) possibleRetained.set(digest[1], path)
     if (artifact.header.parentSession) {
       const previous = children.get(artifact.header.id)
-      if (!previous || previous.version < version) children.set(artifact.header.id, { version, parent: artifact.header.parentSession, source: historicalChildCatalogSource(artifact) })
+      if (!previous || previous.version < version) {
+        let source
+        try { source = historicalChildCatalogSource(artifact) } catch { fail('RESET_ATTACHMENT_SESSION_UNSUPPORTED', path) }
+        children.set(artifact.header.id, { version, parent: artifact.header.parentSession, source })
+      }
     }
   }
   for (const { path, id } of logs) {
@@ -105,6 +108,38 @@ export async function planFederationAttachments({ sessionsRoot, remoteSessionDir
       else destination.set(key, ref)
     }
   }
+  return { remote, retained, possibleRetained }
+}
+
+export async function revalidateFederationAttachmentPlan({ sessionsRoot, remoteSessionDirectories, attachmentPlan } = {}) {
+  if (!attachmentPlan || !Array.isArray(attachmentPlan.files) || !Array.isArray(attachmentPlan.trees)) fail('RESET_INVALID_MANIFEST')
+  const candidateDigests = new Set()
+  for (const file of attachmentPlan.files) {
+    if (!file || typeof file.path !== 'string' || typeof file.key !== 'string') fail('RESET_INVALID_MANIFEST', file?.path)
+    const path = file.path.replaceAll('\\', '/')
+    const canonical = /\/(objects|file-objects)\/([a-f0-9]{2})\/([a-f0-9]{64})$/.exec(path)
+    const alias = /\/(files)\/([a-f0-9]{2})\/([a-f0-9]{64})\/[^/]+$/.exec(path)
+    const location = canonical ?? alias
+    if (!location || location[2] !== location[3].slice(0, 2) || file.key !== `${location[1] === 'objects' ? 'image' : 'file'}:${location[3]}`) fail('RESET_INVALID_MANIFEST', file.path)
+    candidateDigests.add(location[3])
+  }
+  // A saved inode proves file identity, not continued exclusive ownership after a restart.
+  // Re-read every retained generation before the caller performs its first mutation.
+  let scan
+  try { scan = await scanSessionReferences(sessionsRoot, remoteSessionDirectories) }
+  catch (error) { fail('RESET_ATTACHMENT_CHANGED_OWNERSHIP', error.target ?? sessionsRoot) }
+  for (const digest of candidateDigests) {
+    const target = scan.possibleRetained.get(digest)
+    if (target) fail('RESET_ATTACHMENT_CHANGED_OWNERSHIP', target)
+    if (scan.retained.has(`image:${digest}`) || scan.retained.has(`file:${digest}`)) fail('RESET_ATTACHMENT_CHANGED_OWNERSHIP', sessionsRoot)
+  }
+  return { valid: true }
+}
+
+export async function planFederationAttachments({ sessionsRoot, remoteSessionDirectories, attachmentDshHome, provider } = {}) {
+  if (provider !== '@deepseek-ai/dsh-attachment-local') fail('RESET_ATTACHMENT_PROVIDER_UNSUPPORTED')
+  await checked(sessionsRoot, true, true); await checked(attachmentDshHome, true)
+  const { remote, retained, possibleRetained } = await scanSessionReferences(sessionsRoot, remoteSessionDirectories)
   const base = join(attachmentDshHome, 'attachments', 'v1'), objects = [], known = new Map(), inodeLinks = new Map()
   const register = async (path, key) => {
     const stat = await checked(path)

@@ -100,6 +100,14 @@ async function firstHeader(path) {
 function localSessions(value, result = new Set()) {
   if (!value || typeof value !== 'object') return result
   for (const [key, child] of Object.entries(value)) {
+    if (['bots', 'rooms'].includes(key) && child && typeof child === 'object' && !Array.isArray(child)) {
+      for (const [id, record] of Object.entries(child)) {
+        result.add(id)
+        if (record && typeof record.id === 'string') result.add(record.id)
+      }
+    } else if (key === 'privateArchives' && Array.isArray(child)) {
+      for (const record of child) if (record && typeof record.id === 'string') result.add(record.id)
+    }
     if (key === 'sessions' && child && typeof child === 'object') { for (const id of Object.values(child)) if (typeof id === 'string') result.add(id); localSessions(child, result) }
     else if (key === 'sessionId' && typeof child === 'string') result.add(child)
     else if (key === 'sessionIds' && Array.isArray(child)) { for (const id of child) if (typeof id === 'string') result.add(id) }
@@ -140,6 +148,30 @@ async function sessionTargets(root, home, bindingSessions, localIds) {
   }
   // A never-materialized Session may have no file. No journal then exists to erase.
   return targets
+}
+async function sessionWitnesses(paths) {
+  const witnesses = {}
+  for (const path of paths) {
+    const logs = (await readdir(path)).filter(name => /^session(?:\.v[1-9][0-9]*)?\.jsonl(?:\.zstd)?$/.test(name))
+    witnesses[path] = []
+    for (const file of logs) {
+      const header = await firstHeader(join(path, file))
+      witnesses[path].push({ file, id: header.id, cwd: header.cwd, ...(header.agentPreset ? { agentPreset: header.agentPreset } : {}) })
+    }
+  }
+  return witnesses
+}
+async function validatePendingSessionWitnesses(pending, sessions) {
+  const paths = pending.trees.filter(path => inside(sessions, path))
+  if (!pending.sessionWitnesses || typeof pending.sessionWitnesses !== 'object') fail('RESET_INVALID_MANIFEST')
+  for (const path of paths) {
+    const prior = pending.sessionWitnesses[path]
+    if (!Array.isArray(prior) || !prior.length || prior.some(row => !row || typeof row.file !== 'string' || !/^session(?:\.v[1-9][0-9]*)?\.jsonl(?:\.zstd)?$/.test(row.file) || typeof row.id !== 'string' || typeof row.cwd !== 'string')) fail('RESET_INVALID_MANIFEST', path)
+    if (!(await info(path))) continue
+    await checkedPath(path, 'directory')
+    const current = (await sessionWitnesses([path]))[path]
+    for (const row of current) if (!prior.some(old => old.file === row.file && old.id === row.id && old.cwd === row.cwd && old.agentPreset === row.agentPreset)) fail('RESET_SESSION_CHANGED_OWNERSHIP', path)
+  }
 }
 async function readPlan(options, pending) {
   const { home, profiles, credentials, sessions, attachmentsHome } = options
@@ -211,10 +243,13 @@ async function readPlan(options, pending) {
   const stateFile = join(home, 'state.json')
   await checkedPath(stateFile, 'file', true)
   const localIds = await info(stateFile) ? localSessions(JSON.parse(await readFile(stateFile, 'utf8'))) : new Set()
+  for (const id of [...bindingSessions.keys(), ...(pending?.remoteSessionIds ?? [])]) if (localIds.has(id)) fail('RESET_LOCAL_SESSION_CONFLICT', stateFile)
   const journals = await sessionTargets(sessions, home, bindingSessions, localIds)
+  const witnesses = { ...(pending?.sessionWitnesses ?? {}), ...await sessionWitnesses(journals) }
+  const remoteSessionIds = [...new Set([...bindingSessions.keys(), ...(pending?.remoteSessionIds ?? []), ...Object.values(witnesses).flat().map(row => row.id)])]
   const { planFederationAttachments } = await import('./reset-attachments.js')
   const attachmentPlan = pending?.attachmentPlan ?? await planFederationAttachments({ sessionsRoot: sessions, remoteSessionDirectories: journals, attachmentDshHome: attachmentsHome, provider: '@deepseek-ai/dsh-attachment-local' })
-  return { version: 1, home, profiles, credentials, sessions, profileWrites, credentialText, recordCount,
+  return { version: 1, home, profiles, credentials, sessions, sessionWitnesses: witnesses, remoteSessionIds, profileWrites, credentialText, recordCount,
     envNames: [...envNames], attachmentPlan, files: queueFiles, trees: [...journals, ...trees] }
 }
 async function validateTree(path) {
@@ -225,9 +260,31 @@ async function validateTree(path) {
     if (entry.isDirectory()) await validateTree(child)
   }
 }
+function protectResetInputs(options, trees = [], files = []) {
+  const { home, sessions, attachmentsHome, credentials, profiles } = options
+  const protectedFiles = [...new Set(profiles ?? []), credentials]
+  const roots = [home, sessions, attachmentsHome]
+  for (const path of [...roots, ...protectedFiles]) if (typeof path !== 'string' || !isAbsolute(path) || resolve(path) !== path) fail('RESET_ABSOLUTE_PATH_REQUIRED', typeof path === 'string' ? path : undefined)
+  if (protectedFiles.length !== new Set(protectedFiles).size) fail('RESET_PROTECTED_PATH_OVERLAP', credentials)
+  const permanent = ['state.json', 'state.lock', markerName, epochName].map(name => join(home, name))
+  for (const path of protectedFiles) if (permanent.includes(path)) fail('RESET_PROTECTED_PATH_OVERLAP', path)
+  const dedicated = [join(home, 'communication-hubs'), join(home, 'communication-workspaces')]
+  const cache = join(attachmentsHome, 'cache', 'attachments', 'request-images')
+  const contains = (root, path) => root === path || inside(root, path)
+  for (const tree of [...dedicated, cache, ...trees]) {
+    for (const path of [...protectedFiles, home, sessions, attachmentsHome]) if (contains(tree, path)) fail('RESET_PROTECTED_PATH_OVERLAP', path)
+  }
+  // A Sessions root that contains a dedicated whole-tree target would otherwise
+  // lose ordinary journals even when those were not selected as remote Sessions.
+  for (const tree of [...dedicated, cache]) if (contains(sessions, tree)) fail('RESET_PROTECTED_PATH_OVERLAP', sessions)
+  const attachmentRoot = join(attachmentsHome, 'attachments', 'v1')
+  if (contains(attachmentRoot, sessions) || contains(sessions, attachmentRoot)) fail('RESET_PROTECTED_PATH_OVERLAP', sessions)
+  for (const path of protectedFiles) if (files.includes(path) || contains(attachmentRoot, path)) fail('RESET_PROTECTED_PATH_OVERLAP', path)
+}
 export async function resetFederation(options) {
   const { home } = options
   await checkedPath(home, 'directory')
+  protectResetInputs(options)
   const lockPath = join(home, 'state.lock')
   await checkedPath(lockPath, 'file', true)
   if (await info(lockPath)) {
@@ -246,6 +303,7 @@ export async function resetFederation(options) {
       || JSON.stringify(pending.options) !== JSON.stringify({ profiles: options.profiles, credentials: options.credentials, sessions: options.sessions, attachmentsHome: options.attachmentsHome }))) fail('RESET_PENDING_OPTIONS_CHANGED')
     if (pending) {
       if (!Array.isArray(pending.files) || !Array.isArray(pending.trees) || !Array.isArray(pending.envNames)
+        || !Array.isArray(pending.remoteSessionIds) || pending.remoteSessionIds.some(id => typeof id !== 'string')
         || pending.envNames.some(name => !/^DSBOT_COMMUNICATION_[A-Z0-9_]+$/.test(name))
         || pending.files.some(path => typeof path !== 'string' || !inside(home, path) || !/(?:^|[\\/])communication\.sqlite(?:-wal|-shm|-journal)?$/.test(path))
         || pending.trees.some(path => typeof path !== 'string' || ![join(home, 'communication-hubs'), join(home, 'communication-workspaces')].includes(path)
@@ -259,14 +317,21 @@ export async function resetFederation(options) {
           || !/^(?:image|file):[a-f0-9]{64}$/.test(target.key) || !Number.isSafeInteger(target.dev) || !Number.isSafeInteger(target.ino) || !Number.isSafeInteger(target.links))
         || pending.attachmentPlan.trees.some(path => path !== join(options.attachmentsHome, 'cache', 'attachments', 'request-images'))) fail('RESET_INVALID_MANIFEST')
     }
+    if (pending) await validatePendingSessionWitnesses(pending, options.sessions)
     const plan = await readPlan(options, pending)
-    const { validateAttachmentFile } = await import('./reset-attachments.js')
+    const { validateAttachmentFile, revalidateFederationAttachmentPlan } = await import('./reset-attachments.js')
+    if (pending) {
+      const previousRemote = pending.trees.filter(path => inside(options.sessions, path))
+      await revalidateFederationAttachmentPlan({ sessionsRoot: options.sessions,
+        remoteSessionDirectories: [...new Set([...plan.trees.filter(path => inside(options.sessions, path)), ...previousRemote])], attachmentPlan: plan.attachmentPlan })
+    }
     for (const target of plan.attachmentPlan.files) await validateAttachmentFile(target)
     for (const path of plan.attachmentPlan.trees) await validateTree(path)
     if (pending) {
       plan.files = [...new Set([...plan.files, ...pending.files])]
       plan.trees = [...new Set([...plan.trees, ...pending.trees])]
     }
+    protectResetInputs(options, [...plan.trees, ...plan.attachmentPlan.trees], [...plan.files, ...plan.attachmentPlan.files.map(target => target.path)])
     for (const path of plan.files) await checkedPath(path, 'file', true)
     for (const path of plan.trees) await validateTree(path)
     const summary = { dryRun: options.confirm !== RESET_CONFIRMATION, configurationFiles: plan.profileWrites.length,
@@ -274,7 +339,7 @@ export async function resetFederation(options) {
       browserCleanupPending: true, serverResetRequired: true, irreversible: true, profileCoverage: 'supplied-files-only', backend: 'local-yaml-and-jsonl' }
     if (summary.dryRun) return summary
     if (!lock.owns()) fail('RESET_HOST_MUST_STOP')
-    await atomicWrite(marker, JSON.stringify({ version: 1, home, options: { profiles: options.profiles, credentials: options.credentials, sessions: options.sessions, attachmentsHome: options.attachmentsHome }, files: plan.files, trees: plan.trees, envNames: plan.envNames, attachmentPlan: plan.attachmentPlan }))
+    await atomicWrite(marker, JSON.stringify({ version: 1, home, options: { profiles: options.profiles, credentials: options.credentials, sessions: options.sessions, attachmentsHome: options.attachmentsHome }, files: plan.files, trees: plan.trees, remoteSessionIds: plan.remoteSessionIds, sessionWitnesses: plan.sessionWitnesses, envNames: plan.envNames, attachmentPlan: plan.attachmentPlan }))
     await options.afterStep?.('manifest')
     for (const item of plan.profileWrites) await atomicWrite(item.path, item.text)
     await options.afterStep?.('profiles')

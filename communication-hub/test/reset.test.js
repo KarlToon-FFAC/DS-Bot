@@ -131,3 +131,65 @@ test('a different valid SQLite database is never erased or reconfigured', async 
   assert.throws(() => f.reset(), { code: 'NOT_A_HUB_DATABASE' })
   assert.deepEqual(readFileSync(f.databasePath), before); assert.deepEqual(readFileSync(f.configPath), config)
 })
+
+for (const suffix of ['-wal', '-shm', '-journal']) test(`orphan ${suffix} without a pending reset is preserved without any config or lock writes`, t => {
+  const f = fixture(t), sidecar = f.databasePath + suffix, config = readFileSync(f.configPath)
+  writeFileSync(sidecar, 'unproven unrelated sidecar')
+  assert.throws(() => f.reset(), { code: 'RESET_QUEUE_OWNERSHIP_UNPROVEN' })
+  assert.deepEqual(readFileSync(f.configPath), config)
+  assert.equal(readFileSync(sidecar, 'utf8'), 'unproven unrelated sidecar')
+  assert.equal(existsSync(f.databasePath + '.lock'), false)
+  assert.equal(existsSync(f.configPath + '.reset-tmp'), false)
+})
+
+test('a foreign SQLite coordination filename is rejected byte-for-byte without changing its user_version or schema', async t => {
+  const { DatabaseSync } = await import('node:sqlite')
+  const f = fixture(t), lockPath = f.databasePath + '.lock', db = new DatabaseSync(lockPath)
+  db.exec("CREATE TABLE personal_notes (text TEXT); CREATE INDEX personal_index ON personal_notes(text); INSERT INTO personal_notes VALUES ('keep this'); PRAGMA user_version=1")
+  db.close()
+  const before = readFileSync(lockPath), config = readFileSync(f.configPath)
+  assert.throws(() => f.reset(), { code: 'INVALID_HUB_LOCK' })
+  assert.throws(() => new HubStore(f.databasePath), { code: 'INVALID_HUB_LOCK' })
+  assert.deepEqual(readFileSync(lockPath), before); assert.deepEqual(readFileSync(f.configPath), config)
+  assert.equal(existsSync(f.databasePath), false)
+  for (const suffix of ['-wal', '-shm', '-journal']) assert.equal(existsSync(lockPath + suffix), false)
+  const verify = new DatabaseSync(lockPath, { readOnly: true })
+  try { assert.equal(verify.prepare('PRAGMA user_version').get().user_version, 1); assert.equal(verify.prepare('SELECT text FROM personal_notes').get().text, 'keep this') }
+  finally { verify.close() }
+})
+
+test('an unsupported empty coordination database version is rejected without rewriting it', async t => {
+  const { DatabaseSync } = await import('node:sqlite')
+  const f = fixture(t), path = f.databasePath + '.lock', db = new DatabaseSync(path)
+  db.exec('PRAGMA user_version=27'); db.close()
+  const before = readFileSync(path)
+  assert.throws(() => f.reset(), { code: 'INVALID_HUB_LOCK' })
+  assert.deepEqual(readFileSync(path), before)
+  assert.equal(existsSync(path + '-journal'), false)
+})
+
+test('a durable pending reset permits missing-main sidecar cleanup after interruption', t => {
+  const f = fixture(t), store = new HubStore(f.databasePath); store.close()
+  writeFileSync(f.databasePath + '-wal', 'synthetic residual WAL')
+  assert.throws(() => f.reset({ beforeStep: step => { if (step === f.databasePath + '-wal') throw Error('crash after main deletion') } }), /crash after main deletion/)
+  assert.equal(existsSync(f.databasePath), false)
+  assert.equal(existsSync(f.databasePath + '-wal'), true)
+  assert.equal(f.reset().reset, true)
+  assert.equal(existsSync(f.databasePath + '-wal'), false)
+  const fresh = new HubStore(f.databasePath); fresh.close()
+})
+
+test('an initial empty deployment can be reset without a database or sidecars', t => {
+  const f = fixture(t)
+  assert.equal(f.reset().reset, true)
+  assert.deepEqual(JSON.parse(readFileSync(f.configPath)).peers, [])
+})
+
+test('an empty placeholder main file does not authorize deleting unproven sidecars', t => {
+  const f = fixture(t), config = readFileSync(f.configPath)
+  writeFileSync(f.databasePath, ''); writeFileSync(f.databasePath + '-wal', 'unknown WAL')
+  assert.throws(() => f.reset(), { code: 'RESET_QUEUE_OWNERSHIP_UNPROVEN' })
+  assert.deepEqual(readFileSync(f.configPath), config)
+  assert.equal(readFileSync(f.databasePath + '-wal', 'utf8'), 'unknown WAL')
+  assert.equal(existsSync(f.databasePath + '.lock'), false)
+})

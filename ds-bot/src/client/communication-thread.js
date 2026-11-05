@@ -1,4 +1,5 @@
 import { useLiveRefresh } from './communication-live.js'
+import { saveCommunicationBrowserState } from './communication-reset.js'
 import { randomId } from './random-id.js'
 import { createElement as h, useEffect, useRef, useState } from 'react'
 import { t } from './i18n.js'
@@ -110,7 +111,7 @@ export function ThreadReplyComposer({ storageKey, member, target, request, onSen
   const choices = completion ? mentionChoices(members,completion.query,t('All Bots')) : []
   const update = value => {
     const next = { ...draft, ...value }
-    try { localStorage.setItem(storageKey,JSON.stringify(next)); setDraft(next); return next }
+    try { if (!saveCommunicationBrowserState(localStorage,storageKey,next)) return null; setDraft(next); return next }
     catch { setError(t('Unable to save this reply on this device. Nothing was sent.')); return null }
   }
   const submit = async () => {

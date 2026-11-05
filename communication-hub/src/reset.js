@@ -2,7 +2,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { readFileSync, readSync, writeFileSync, renameSync, unlinkSync, openSync, closeSync, fsyncSync, statSync, mkdirSync, existsSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { acquireDatabaseLock, safeFile, resetError } from './database-lock.js'
+import { acquireDatabaseLock, inspectDatabaseLock, safeFile, resetError } from './database-lock.js'
 
 export const RESET_CONFIRMATION = 'DELETE ALL HUB DATA'
 const suffixes = ['', '-wal', '-shm', '-journal']
@@ -25,9 +25,13 @@ export function resetHub({ configPath, confirmation, beforeStep } = {}) {
       if (statSync(databasePath).size && header.toString() !== 'SQLite format 3\0') throw resetError('INVALID_DATABASE_FILE')
     } finally { closeSync(fd) }
   } catch (error) { if (error.code !== 'ENOENT') throw error }
+  // An orphan WAL/journal is not evidence that this path belongs to a Hub.
+  const orphanSidecars = (!existsSync(databasePath) || statSync(databasePath).size === 0) && targets.slice(1).some(target => existsSync(target))
+  if (orphanSidecars && !inspectDatabaseLock(databasePath).pending) throw Object.assign(resetError('RESET_QUEUE_OWNERSHIP_UNPROVEN'), { target: databasePath })
   mkdirSync(dirname(databasePath), { recursive: true })
   const lock = acquireDatabaseLock(databasePath, { reset: true })
   try {
+    if (orphanSidecars && !lock.pending) throw Object.assign(resetError('RESET_QUEUE_OWNERSHIP_UNPROVEN'), { target: databasePath })
     // A correct SQLite header alone does not prove that this is a Hub database.
     if (existsSync(databasePath) && statSync(databasePath).size) {
       const signature = { instances: ['id', 'epoch', 'trusted', 'pairing_revision'], principals: ['id', 'instance_id', 'kind', 'local_id'],

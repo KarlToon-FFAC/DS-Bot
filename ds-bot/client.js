@@ -21001,6 +21001,31 @@ function clearCommunicationBrowserState(epoch, session, local) {
   session.setItem(EPOCH, epoch);
   return true;
 }
+var reloadPending = false;
+var documentEpoch = (() => {
+  try {
+    return sessionStorage.getItem(EPOCH);
+  } catch {
+    return null;
+  }
+})();
+var communicationBrowserResetPending = () => reloadPending;
+function saveCommunicationBrowserState(storage, key, value) {
+  if (reloadPending) return false;
+  storage.setItem(key, JSON.stringify(value));
+  return true;
+}
+function prepareCommunicationBrowserEpoch(epoch, session, local) {
+  if (reloadPending) return true;
+  const resumed = documentEpoch === `pending:${epoch}`;
+  const changed = clearCommunicationBrowserState(epoch, session, local);
+  if (changed && !resumed) {
+    reloadPending = true;
+    session.setItem(EPOCH, `pending:${epoch}`);
+    return true;
+  }
+  return false;
+}
 
 // src/shared/ip-address.js
 function normalizeIpAddress(value) {
@@ -22838,7 +22863,7 @@ function ThreadReplyComposer({ storageKey, member, target, request, onSent, atta
   const update = (value) => {
     const next = { ...draft, ...value };
     try {
-      localStorage.setItem(storageKey, JSON.stringify(next));
+      if (!saveCommunicationBrowserState(localStorage, storageKey, next)) return null;
       setDraft(next);
       return next;
     } catch {
@@ -23429,7 +23454,7 @@ var read = (key, fallback) => {
 };
 var save = (key, value) => {
   try {
-    sessionStorage.setItem(key, JSON.stringify(value));
+    saveCommunicationBrowserState(sessionStorage, key, value);
   } catch {
   }
 };
@@ -23445,18 +23470,17 @@ var readOperationIds = () => {
   if (current.length !== entries2.length) save(OPERATION_IDS, current);
   return current;
 };
-var browserResetReloadPending = false;
 async function communicationRequest(body) {
-  if (browserResetReloadPending) throw Object.assign(new Error("COMMUNICATION_BROWSER_RESET_REQUIRED"), { code: "COMMUNICATION_BROWSER_RESET_REQUIRED" });
+  if (communicationBrowserResetPending()) throw Object.assign(new Error("COMMUNICATION_BROWSER_RESET_REQUIRED"), { code: "COMMUNICATION_BROWSER_RESET_REQUIRED" });
   const preflight = await fetch("/api/communication", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ endpoint: "reset-status" }), signal: AbortSignal.timeout(15e3) });
   if ([401, 403].includes(preflight.status)) throw Object.assign(new Error("INSTANCE_AUTHENTICATION_REQUIRED"), { code: "INSTANCE_AUTHENTICATION_REQUIRED" });
   const status = await preflight.json();
+  if (communicationBrowserResetPending()) throw Object.assign(new Error("COMMUNICATION_BROWSER_RESET_REQUIRED"), { code: "COMMUNICATION_BROWSER_RESET_REQUIRED" });
   if (!status.ok) throw Object.assign(new Error("COMMUNICATION_UNAVAILABLE"), { code: "COMMUNICATION_UNAVAILABLE" });
   if (status.value.pending) throw Object.assign(new Error("COMMUNICATION_RESET_INCOMPLETE"), { code: "COMMUNICATION_RESET_INCOMPLETE" });
   if (status.value.browserEpoch) {
     try {
-      if (clearCommunicationBrowserState(status.value.browserEpoch, sessionStorage, localStorage)) {
-        browserResetReloadPending = true;
+      if (prepareCommunicationBrowserEpoch(status.value.browserEpoch, sessionStorage, localStorage)) {
         window.location.reload();
         throw Object.assign(new Error("COMMUNICATION_BROWSER_RESET_REQUIRED"), { code: "COMMUNICATION_BROWSER_RESET_REQUIRED" });
       }
@@ -23464,6 +23488,7 @@ async function communicationRequest(body) {
       throw Object.assign(new Error("COMMUNICATION_BROWSER_RESET_REQUIRED", { cause: error }), { code: "COMMUNICATION_BROWSER_RESET_REQUIRED" });
     }
   }
+  if (communicationBrowserResetPending()) throw Object.assign(new Error("COMMUNICATION_BROWSER_RESET_REQUIRED"), { code: "COMMUNICATION_BROWSER_RESET_REQUIRED" });
   if (body.endpoint === "reset-status") return status.value;
   const response = await fetch("/api/communication", { method: "POST", headers: { "content-type": "application/json", "x-dsbot-browser-epoch": status.value.browserEpoch ?? "" }, body: JSON.stringify(body), signal: AbortSignal.timeout(15e3) });
   if ([401, 403].includes(response.status)) throw Object.assign(new Error("INSTANCE_AUTHENTICATION_REQUIRED"), { code: "INSTANCE_AUTHENTICATION_REQUIRED" });

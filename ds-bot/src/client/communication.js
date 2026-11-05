@@ -1,4 +1,4 @@
-import { clearCommunicationBrowserState } from './communication-reset.js'
+import { communicationBrowserResetPending, prepareCommunicationBrowserEpoch, saveCommunicationBrowserState } from './communication-reset.js'
 import { randomId } from './random-id.js'
 import { createElement as h, Fragment, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
@@ -25,30 +25,30 @@ const SIDEBAR_HIDDEN = 'ds-bot:communication:sidebar-hidden'
 const OPERATION_IDS = 'ds-bot:communication:operation-ids'
 const DRAFTS = 'ds-bot:communication:drafts', ATTEMPTS = 'ds-bot:communication:attempts'
 const read = (key, fallback) => { try { return JSON.parse(sessionStorage.getItem(key)) ?? fallback } catch { return fallback } }
-const save = (key, value) => { try { sessionStorage.setItem(key, JSON.stringify(value)) } catch { /* A full browser store must not prevent sending. */ } }
+const save = (key, value) => { try { saveCommunicationBrowserState(sessionStorage, key, value) } catch { /* A full browser store must not prevent sending. */ } }
 const readOperationIds = () => {
   const entries = read(OPERATION_IDS, [])
   const current = entries.filter(([key]) => { try { return JSON.parse(key)?.[1] !== 'reclaim' } catch { return true } })
   if (current.length !== entries.length) save(OPERATION_IDS, current)
   return current
 }
-let browserResetReloadPending = false
 export async function communicationRequest(body) {
-  if (browserResetReloadPending) throw Object.assign(new Error('COMMUNICATION_BROWSER_RESET_REQUIRED'), { code: 'COMMUNICATION_BROWSER_RESET_REQUIRED' })
+  if (communicationBrowserResetPending()) throw Object.assign(new Error('COMMUNICATION_BROWSER_RESET_REQUIRED'), { code: 'COMMUNICATION_BROWSER_RESET_REQUIRED' })
   const preflight = await fetch('/api/communication', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ endpoint: 'reset-status' }), signal: AbortSignal.timeout(15000) })
   if ([401,403].includes(preflight.status)) throw Object.assign(new Error('INSTANCE_AUTHENTICATION_REQUIRED'), { code: 'INSTANCE_AUTHENTICATION_REQUIRED' })
   const status = await preflight.json()
+  if (communicationBrowserResetPending()) throw Object.assign(new Error('COMMUNICATION_BROWSER_RESET_REQUIRED'), { code: 'COMMUNICATION_BROWSER_RESET_REQUIRED' })
   if (!status.ok) throw Object.assign(new Error('COMMUNICATION_UNAVAILABLE'), { code: 'COMMUNICATION_UNAVAILABLE' })
   if (status.value.pending) throw Object.assign(new Error('COMMUNICATION_RESET_INCOMPLETE'), { code: 'COMMUNICATION_RESET_INCOMPLETE' })
   if (status.value.browserEpoch) {
     try {
-      if (clearCommunicationBrowserState(status.value.browserEpoch, sessionStorage, localStorage)) {
-        browserResetReloadPending = true
+      if (prepareCommunicationBrowserEpoch(status.value.browserEpoch, sessionStorage, localStorage)) {
         window.location.reload()
         throw Object.assign(new Error('COMMUNICATION_BROWSER_RESET_REQUIRED'), { code: 'COMMUNICATION_BROWSER_RESET_REQUIRED' })
       }
     } catch (error) { throw Object.assign(new Error('COMMUNICATION_BROWSER_RESET_REQUIRED', { cause: error }), { code: 'COMMUNICATION_BROWSER_RESET_REQUIRED' }) }
   }
+  if (communicationBrowserResetPending()) throw Object.assign(new Error('COMMUNICATION_BROWSER_RESET_REQUIRED'), { code: 'COMMUNICATION_BROWSER_RESET_REQUIRED' })
   if (body.endpoint === 'reset-status') return status.value
   const response = await fetch('/api/communication', { method: 'POST', headers: { 'content-type': 'application/json', 'x-dsbot-browser-epoch': status.value.browserEpoch ?? '' }, body: JSON.stringify(body), signal: AbortSignal.timeout(15000) })
   if ([401,403].includes(response.status)) throw Object.assign(new Error('INSTANCE_AUTHENTICATION_REQUIRED'), { code: 'INSTANCE_AUTHENTICATION_REQUIRED' })
