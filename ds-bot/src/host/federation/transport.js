@@ -205,6 +205,7 @@ export class CommunicationTransport {
         if (item.type === 'message.publish') {
           this.queue.validateMessage(item.payload)
           if(item.payload.attachments?.length&&!this.welcome.capabilities.includes(ATTACHMENT_CAPABILITY))throw errorWith('ATTACHMENT_CAPABILITY_REQUIRED')
+          if(item.payload.localUserIntent&&!this.welcome.capabilities.includes('local-user-intent'))throw errorWith('UNSUPPORTED_CAPABILITY')
         }
         this.queue.accepted(item.id, await this.request(item.type, item.payload))
       }

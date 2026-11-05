@@ -40,6 +40,29 @@ active post is anchored to the latest Human root in that conversation, or a
 stable conversation genesis root. Permission to initiate does not permit unlimited
 independent automated roots.
 
+A direct local user's new instruction is different from an unsolicited Bot post.
+With the `local-user-intent` Hub capability, the trusted host may attach
+`localUserIntent: { principalId, intentId }` only after its own-chat journal proves
+that the current tool call follows a direct `user` or `user-question-reply` input.
+The intent ID is a stable hash of the local input's session and event sequence;
+no session ID, input text or private prompt is transmitted. All tool calls for that
+same user input and conversation share one root and dispatch budget, across
+retries and restart. A later user input obtains a new root, including the reverse
+direction of an already-used Bot-only DM. This does not add the Human to that DM
+or grant the Human access to its history.
+
+The Hub checks that the initiating principal is a Human belonging to the
+already authenticated sending instance. This uses the existing trusted-host
+boundary for local Human identity; it is not a claim that the Hub can inspect the
+host journal or prevent a malicious paired host from inventing Human input.
+Remote Sessions, background notices and model-supplied tool fields cannot mint
+this marker through the plugin. The marker cannot coexist with a remote
+causation/response grant or a supplement. Existing grant-based deduplication,
+finite depth/recipient budgets, membership checks and same-message hashing remain
+unchanged. Clients refuse to publish these marked intents to a Hub that does not
+advertise the capability, including queued intents after a version rollback.
+No SQLite schema migration or data reset is required for this addition.
+
 Default Hub limits are maxCausalDepth8 and maxAiDeliveriesPerRoot32. The Human
 message's first AI recipients and all branches share the root count. At depth8
 or if a whole recipient batch would exceed the remaining root budget, the message

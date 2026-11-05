@@ -3,7 +3,7 @@ import { normalizeAttachments, ATTACHMENT_CAPABILITY } from './attachments.js'
 
 export const PROTOCOL = 'dsbot-communication/1'
 export const CAPABILITIES = ['text', 'markdown', 'mentions', 'group', 'dm', 'reply', 'history', 'group-policy', 'membership-epoch', 'explicit-bot-activation', 'bot-input-updates']
-export const HUB_CAPABILITIES = [...CAPABILITIES, 'bounded-bot-collaboration', 'principal-avatars', 'principal-publication', 'bot-work-events', 'state-invalidation', ATTACHMENT_CAPABILITY]
+export const HUB_CAPABILITIES = [...CAPABILITIES, 'bounded-bot-collaboration', 'principal-avatars', 'principal-publication', 'bot-work-events', 'state-invalidation', 'local-user-intent', ATTACHMENT_CAPABILITY]
 export const DEFAULT_LIMITS = { maxTextBytes: 65536, maxEnvelopeBytes: 131072, maxMembers: 64, maxPendingDeliveries: 10000,
   maxPrincipals: 64, maxMembershipsPerInstance: 64, maxPendingInvitesPerInstance: 64, maxCausalDepth: 8, maxAiDeliveriesPerRoot: 32 }
 
@@ -55,6 +55,13 @@ export function normalizeMessage(input, author, limits) {
   if (input.replyToMessageId !== null) identifier(input.replyToMessageId)
   if (input.responseToDeliveryId !== undefined) identifier(input.responseToDeliveryId)
   if (input.causationDeliveryId !== undefined) identifier(input.causationDeliveryId)
+  if (input.localUserIntent !== undefined) {
+    const intent = input.localUserIntent
+    requireThat(author.kind === 'bot' && intent && typeof intent === 'object' && !Array.isArray(intent)
+      && Object.keys(intent).length === 2 && Object.hasOwn(intent, 'principalId') && Object.hasOwn(intent, 'intentId')
+      && !input.causationDeliveryId && !input.responseToDeliveryId && !input.updateForMessageId, 'INVALID_CAUSATION_GRANT')
+    identifier(intent.principalId); identifier(intent.intentId)
+  }
   requireThat(['causality','rootMessageId','parentMessageId','depth','dispatchSuppressed'].every(key => !Object.hasOwn(input,key)), 'INVALID_CAUSALITY')
   if (input.updateForMessageId !== undefined) {
     identifier(input.updateForMessageId); identifier(input.updateRecipientPrincipalId)
@@ -71,5 +78,6 @@ export function normalizeMessage(input, author, limits) {
     ...(input.inputUpdateIds ? { inputUpdateIds: [...new Set(input.inputUpdateIds)].sort() } : {}),
     replyToMessageId: input.replyToMessageId, ...(input.responseToDeliveryId === undefined ? {} : { responseToDeliveryId: input.responseToDeliveryId }),
     ...(input.causationDeliveryId === undefined ? {} : { causationDeliveryId: input.causationDeliveryId }),
+    ...(input.localUserIntent === undefined ? {} : { localUserIntent: { principalId: input.localUserIntent.principalId, intentId: input.localUserIntent.intentId } }),
     ...(input.membershipEpoch === undefined ? {} : { membershipEpoch: input.membershipEpoch }) }
 }

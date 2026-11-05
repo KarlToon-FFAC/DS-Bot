@@ -640,6 +640,11 @@ export class HubStore {
       let rootId, parentMessageId=null, depth=0
       if(updateParent){const parent=this.db.prepare('SELECT * FROM message_causality WHERE message_id=?').get(message.updateForMessageId);rootId=parent.root_id;parentMessageId=message.updateForMessageId;depth=parent.depth+1}
       else if(author.kind==='human')rootId=`message:${message.messageId}`
+      else if(message.localUserIntent){
+        const initiator=this.principal(auth,message.localUserIntent.principalId)
+        requireThat(initiator.kind==='human','INVALID_CAUSATION_GRANT')
+        rootId=`intent:${hash([auth.instanceId,message.conversationId,initiator.principalId,message.localUserIntent.intentId])}`
+      }
       else if(cause){
         const parent=this.db.prepare('SELECT * FROM message_causality WHERE message_id=?').get(cause.message_id)
         requireThat(parent,'INVALID_CAUSATION_GRANT')

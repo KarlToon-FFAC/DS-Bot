@@ -23,10 +23,11 @@ export async function localManagementAuthority(rt, exec) {
   for (const event of events) {
     if (event.seq > call.seq) break
     if (event.type === 'turn/start') { turn = event.data.turn; source = undefined }
-    if (event.type === 'user/message' && !contextSources.has(event.data.source?.kind)) source = { turn: event.data.turn ?? turn, value: event.data.source }
+    if (event.type === 'user/message' && !contextSources.has(event.data.source?.kind)) source = { seq: event.seq, turn: event.data.turn ?? turn, value: event.data.source }
   }
   if (!source || source.turn !== (call.data.turn ?? turn) || !['user', 'user-question-reply'].includes(source.value?.kind)) fail('LOCAL_USER_AUTHORIZATION_REQUIRED')
-  return { botId, sourceKey: JSON.stringify(['local-management', sessionId, call.seq, call.data.message.id, exec.callId]) }
+  return { botId, sourceKey: JSON.stringify(['local-management', sessionId, call.seq, call.data.message.id, exec.callId]),
+    userIntentId: createHash('sha256').update(JSON.stringify(['local-user-input', sessionId, source.seq])).digest('hex') }
 }
 
 function managementGuard(rt, exec) {

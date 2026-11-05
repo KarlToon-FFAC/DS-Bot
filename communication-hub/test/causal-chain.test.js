@@ -264,3 +264,42 @@ test('supplements preserve one activation, require the original author, and gate
   f.send(f.B,{...final,inputUpdateIds:[accepted.messageId]})
   assert.throws(()=>f.store.publish(f.a,{...update,messageId:randomUUID()}),{code:'HANDOFF_ALREADY_COMPLETED'})
 })
+
+test('distinct verified local user intents start fresh Bot DM roots while same-intent retries share duplicate suppression', t => {
+  const f = fixture(t, {}, true)
+  const remoteHuman = f.store.register(f.b, { localId: 'owner', kind: 'human', displayName: 'B owner' }).principalId
+  const dm = f.store.createDm(f.a, f.op({ principalId: f.A, otherPrincipalId: f.B })).conversationId
+  const send = (id, intent, extra = {}) => f.send(id, { conversationId: dm, membershipEpoch: f.member(id, dm).membershipEpoch,
+    localUserIntent: intent, ...extra })
+  const first = send(f.A, { principalId: f.H, intentId: 'user-input-a-1' })
+  assert.deepEqual(f.ai(first), [f.B])
+  const reply = send(f.B, undefined, { responseToDeliveryId: f.grant(first, f.B), replyToMessageId: first.messageId })
+  assert.deepEqual(f.ai(reply), [f.A])
+  const reverseIntent = { principalId: remoteHuman, intentId: 'user-input-b-1' }
+  const reverse = send(f.B, reverseIntent)
+  assert.deepEqual(f.ai(reverse), [f.A])
+  assert.notEqual(reverse.causality.rootMessageId, first.causality.rootMessageId)
+  assert.equal(reverse.causality.parentMessageId, null)
+  assert.equal(reverse.causality.depth, 0)
+  const duplicate = send(f.B, reverseIntent)
+  assert.equal(duplicate.dispatchSuppressed, 'DUPLICATE_HANDOFF')
+  assert.deepEqual(f.ai(duplicate), [])
+  f.store.close(); f.store = new HubStore(f.path)
+  const restarted = send(f.B, reverseIntent)
+  assert.equal(restarted.dispatchSuppressed, 'DUPLICATE_HANDOFF')
+  const fresh = send(f.B, { ...reverseIntent, intentId: 'user-input-b-2' })
+  assert.deepEqual(f.ai(fresh), [f.A])
+  const retry = f.input(f.B, { conversationId: dm, membershipEpoch: f.member(f.B, dm).membershipEpoch, localUserIntent: { ...reverseIntent, intentId: 'user-input-b-3' } })
+  const accepted = f.store.publish(f.b, retry)
+  assert.deepEqual(f.store.publish(f.b, retry), accepted)
+  assert.throws(() => f.store.publish(f.b, { ...retry, localUserIntent: { ...reverseIntent, intentId: 'changed' } }), { code: 'MESSAGE_ID_CONFLICT' })
+})
+
+test('a local-user root cannot borrow another device, a Bot identity or a remote delivery grant', t => {
+  const f = fixture(t)
+  const human = f.send(f.H, { mentions: [{ principalId: f.A }] }), grant = f.grant(human, f.A)
+  assert.throws(() => f.send(f.B, { localUserIntent: { principalId: f.H, intentId: 'wrong-device' } }), { code: 'AUTHOR_MISMATCH' })
+  assert.throws(() => f.send(f.A, { localUserIntent: { principalId: f.A, intentId: 'bot-not-human' } }), { code: 'INVALID_CAUSATION_GRANT' })
+  assert.throws(() => f.send(f.A, { localUserIntent: { principalId: f.H, intentId: 'mixed' }, causationDeliveryId: grant }), { code: 'INVALID_CAUSATION_GRANT' })
+  assert.throws(() => f.send(f.H, { localUserIntent: { principalId: f.H, intentId: 'human-is-already-a-root' } }), { code: 'INVALID_CAUSATION_GRANT' })
+})

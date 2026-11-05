@@ -15,7 +15,7 @@ import { splitRef } from '../text.js'
 import { communicationPrompt } from './prompt.js'
 import { RelationshipMemory, relationshipMemoryContext } from './relationship-memory.js'
 import { OUTSIDE_CONVERSATION_TOOLS } from './tool-scope.js'
-import { LOCAL_MANAGEMENT_TOOLS } from './local-management.js'
+import { LOCAL_MANAGEMENT_TOOLS, localManagementAuthority } from './local-management.js'
 import { COMMUNICATION_PRESET, hasCommunicationPreset, communicationInputs, sourceDelivery, legacySessionSettled, isCommunicationContext } from './session-scope.js'
 
 const PROTOCOL = 'dsbot-communication/1'
@@ -160,7 +160,17 @@ export class CommunicationRuntime {
     if (!event?.data.message.id) fail('TOOL_SOURCE_UNKNOWN')
     const sourceKey = JSON.stringify(['tool', exec.agent.id, event.seq, event.data.message.id, exec.callId])
     const binding = this.owners?.get(exec.agent.id)
-    if (!binding) return { sourceKey }
+    if (!binding) {
+      if (this.rt && this.human) {
+        try {
+          const authority = await localManagementAuthority(this.rt, exec)
+          return { sourceKey, localUserIntent: { principalId: this.human.principalId, intentId: authority.userIntentId } }
+        } catch (error) {
+          if (!['LOCAL_USER_SESSION_REQUIRED', 'LOCAL_USER_AUTHORIZATION_REQUIRED'].includes(error.code)) throw error
+        }
+      }
+      return { sourceKey }
+    }
     let turn
     const inputs = []
     for (const record of events) {
@@ -379,8 +389,9 @@ export class CommunicationRuntime {
       this.profileRefreshedAt.set(conversationId, Date.now())
     }
   }
-  message(principalId, conversationId, { text, mentions = [], activationTargets = [], replyToMessageId = null, responseToDeliveryId, causationDeliveryId, membershipEpoch, messageId = randomUUID(), clientCreatedAt = new Date().toISOString(), attachments, files, updateForMessageId, updateRecipientPrincipalId, inputUpdateIds } = {}) {
+  message(principalId, conversationId, { text, mentions = [], activationTargets = [], replyToMessageId = null, responseToDeliveryId, causationDeliveryId, localUserIntent, membershipEpoch, messageId = randomUUID(), clientCreatedAt = new Date().toISOString(), attachments, files, updateForMessageId, updateRecipientPrincipalId, inputUpdateIds } = {}) {
     if (files) fail('UNSUPPORTED_CONTENT')
+    if (localUserIntent && !this.transport?.welcome?.capabilities?.includes('local-user-intent')) fail('UNSUPPORTED_CAPABILITY')
     const admitted = normalizeAttachments(attachments)
     if(admitted.length&&!this.transport.welcome?.capabilities?.includes(ATTACHMENT_CAPABILITY))fail('ATTACHMENT_CAPABILITY_REQUIRED')
     if (typeof text !== 'string') fail('INVALID_REQUEST')
@@ -400,11 +411,12 @@ export class CommunicationRuntime {
       ...(bot ? { activationTargets: activationTargets.map(item => ({ principalId: typeof item === 'string' ? item : item.principalId })) } : {}),
       replyToMessageId, ...(responseToDeliveryId ? { responseToDeliveryId } : {}),
       ...(causationDeliveryId ? { causationDeliveryId } : {}),
+      ...(localUserIntent ? { localUserIntent } : {}),
       membershipEpoch: membershipEpoch ?? this.member(principalId, conversationId).membershipEpoch }
   }
   sendHuman(input) {
     if (typeof input.messageId !== 'string' || typeof input.clientCreatedAt !== 'string') fail('INVALID_REQUEST')
-    if (input.responseToDeliveryId !== undefined || input.causationDeliveryId !== undefined) fail('INVALID_REQUEST')
+    if (input.responseToDeliveryId !== undefined || input.causationDeliveryId !== undefined || input.localUserIntent !== undefined) fail('INVALID_REQUEST')
     if (input.files) fail('UNSUPPORTED_CONTENT')
     const saved = this.queue.intent(input.messageId)
     if (saved) {
@@ -476,7 +488,7 @@ export class CommunicationRuntime {
       activationIntent: { targets: input.activationTargets ?? input.mentions ?? [], allBots: input.allBots ?? false }, replyToMessageId }
     const [messageId] = this.queue.commitExports(`tool:${exec.agent.id}`, [output], [], () => this.message(actor.principalId, conversationId, { ...input, replyToMessageId, inputUpdateIds,
       activationTargets: CommunicationRuntime.prototype.targets.call(this, actor.principalId, conversationId, targeting, member.membershipEpoch),
-      responseToDeliveryId: completesReply?causal.causationDeliveryId:undefined, causationDeliveryId: causal?.causationDeliveryId, membershipEpoch: member.membershipEpoch }),
+      responseToDeliveryId: completesReply?causal.causationDeliveryId:undefined, causationDeliveryId: causal?.causationDeliveryId, localUserIntent: causal?.localUserIntent, membershipEpoch: member.membershipEpoch }),
       completesReply?{bindingId:exec.communicationBinding.id,deliveryId:causal.causationDeliveryId}:undefined)
     return { messageId, conversationId, status: this.queue.outboxStatus(messageId).state,
       completesCurrentReply:Boolean(exec.communicationBinding?.id&&causal?.causationDeliveryId&&this.queue.completedToolReply(exec.communicationBinding.id,causal.causationDeliveryId)===messageId&&this.queue.outboxStatus(messageId).state==='accepted') }

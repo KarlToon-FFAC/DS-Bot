@@ -202,3 +202,44 @@ test('staged reply targets survive process queue reopen and remain bound to the 
     assert.throws(()=>queue.replyTargets('new-binding','delivery'),{code:'CONVERSATION_SCOPE_MISMATCH'})
   }finally{queue.close();rmSync(dir,{recursive:true,force:true})}
 })
+
+test('new local-user intent is host-derived, stable per user input and unavailable to notices or remote sessions', async () => {
+  let events = [{ seq: 1, type: 'turn/start', data: { turn: 1 } },
+    { seq: 2, type: 'user/message', data: { turn: 1, source: { kind: 'user' } } },
+    { seq: 3, type: 'assistant/message', data: { turn: 1, message: { id: 'call-message', content: [{ type: 'tool-call', id: 'call', name: 'send_contact_message' }] } } }]
+  const ctx = { sessions: { flush: async () => {} }, sessionController: { inspect: async () => ({ events }) } }
+  const runtime = { ctx, owners: new Map(), human: { principalId: 'human:a:owner' } }
+  runtime.rt = { ctx, chatOwners: new Map([['local-chat', 'bot']]), groupOwners: new Map(), communication: runtime, botOf: () => ({ id: 'bot' }) }
+  const exec = { name: 'send_contact_message', callId: 'call', agent: { id: 'local-chat', session: {} } }
+  const read = () => CommunicationRuntime.prototype.toolProvenance.call(runtime, exec)
+  const first = await read()
+  assert.equal(first.localUserIntent.principalId, 'human:a:owner')
+  assert.match(first.localUserIntent.intentId, /^[a-f0-9]{64}$/)
+  events.at(-1).seq = 4; events.at(-1).data.message.id = 'later-call-same-input'
+  assert.deepEqual((await read()).localUserIntent, first.localUserIntent)
+  events.splice(2, 0, { seq: 3, type: 'user/message', data: { turn: 1, source: { kind: 'user' } } })
+  assert.notEqual((await read()).localUserIntent.intentId, first.localUserIntent.intentId)
+  events[2].data.source = { kind: 'remote-notice' }
+  assert.equal((await read()).localUserIntent, undefined)
+  events[2].data.source = { kind: 'user' }; runtime.rt.chatOwners.clear()
+  assert.equal((await read()).localUserIntent, undefined)
+})
+
+test('model-supplied local-user intent cannot enter a Bot export', async () => {
+  let message
+  const runtime = { member: () => ({ kind: 'dm', membershipEpoch: 'epoch' }),
+    message: (_actor, _conversation, input) => { message = input; return input },
+    queue: { commitExports: (_id, _outputs, _unused, factory) => { factory(); return ['id'] }, outboxStatus: () => ({ state: 'pending' }) } }
+  await CommunicationRuntime.prototype.sendBot.call(runtime, { principalId: 'bot:a:one' }, {
+    conversationId: 'dm', text: 'Synthetic', localUserIntent: { principalId: 'human:a:owner', intentId: 'forged-by-tool' } },
+  { callId: 'call', agent: { id: 'own' }, communicationSource: 'verified-tool-source' })
+  assert.equal(message.localUserIntent, undefined)
+})
+
+test('a verified local-user intent cannot silently degrade on an older Hub or enter the Human send API', () => {
+  const intent = { principalId: 'human:a:owner', intentId: 'stable-user-event' }
+  assert.throws(() => CommunicationRuntime.prototype.message.call({ transport: { welcome: { capabilities: [] } } },
+    'bot:a:one', 'dm', { text: 'Synthetic', localUserIntent: intent }), { code: 'UNSUPPORTED_CAPABILITY' })
+  assert.throws(() => CommunicationRuntime.prototype.sendHuman.call({}, { messageId: 'id', clientCreatedAt: new Date().toISOString(),
+    localUserIntent: intent }), { code: 'INVALID_REQUEST' })
+})
