@@ -42,6 +42,19 @@ module.exports = __toCommonJS(index_exports);
 // src/client/i18n.js
 var NAMESPACE = "ds-bot";
 var ZH = {
+  "This browser cannot create secure request identifiers. Nothing was sent. Use a supported browser and refresh.": "浏览器无法生成安全请求标识，未发送任何内容。请使用受支持的浏览器并刷新。",
+  "The API does not recognise this action. Update the plugin and restart its host process.": "接口不支持此操作。请更新插件并重启宿主进程。",
+  "The request was incomplete. Refresh before trying again.": "请求不完整，请刷新后再试。",
+  "Confirm the reviewed Hub identity and address before continuing.": "请核对并确认 Hub 身份和地址后继续。",
+  "This Hub address is not allowed. Ask its owner for a reachable WSS address.": "此 Hub 地址不被允许，请向所有者获取可达的 WSS 地址。",
+  "The Hub code is invalid. Obtain a fresh code through a trusted channel.": "Hub 码无效，请通过可信渠道获取新码。",
+  "The saved pairing does not match this Hub. Check saved Hubs before reusing an identity.": "保存的配对与此 Hub 不匹配，请先检查已保存的 Hub，不要直接复用身份。",
+  "The local credential store is unavailable or read-only. Check the instance configuration without sharing credentials.": "本机凭据存储不可用或只读，请检查实例配置，不要分享凭据。",
+  "The Hub rejected the enrollment exchange. Check versions and saved request status before continuing.": "Hub 拒绝了加入验证，请先检查版本和已保存的申请状态再继续。",
+  "This Hub has no approved access yet. Check the saved join request first.": "此 Hub 尚无已批准的访问权限，请先检查保存的加入申请。",
+  "Choose only local Bots that exist on this device.": "请选择此设备上存在的本地 Bot。",
+  "Only the local human user can perform this action.": "此操作仅限本机用户本人执行。",
+  "The sender identity does not match this authenticated session. Refresh without changing identities.": "发送者身份与当前认证会话不匹配，请刷新，不要替换身份。",
   "Also permanently delete this Hub communication queue and cached files. DSH session journals and browser drafts are retained.": "同时永久删除此 Hub 的通信队列和缓存文件。DSH 会话日志及浏览器中未发送的内容仍保留。",
   "Close replies": "关闭回复小窗",
   "Reply in this thread": "在此消息链中回复",
@@ -19412,6 +19425,21 @@ function Overlays({ useRoster, useUi, useSessions, useSessionStatus, useActivity
   );
 }
 
+// src/client/random-id.js
+function randomId(source = globalThis.crypto) {
+  try {
+    if (typeof source?.randomUUID === "function") return source.randomUUID();
+    if (typeof source?.getRandomValues !== "function") throw new Error();
+    const bytes = source.getRandomValues(new Uint8Array(16));
+    bytes[6] = bytes[6] & 15 | 64;
+    bytes[8] = bytes[8] & 63 | 128;
+    const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  } catch {
+    throw Object.assign(new Error("Secure random identifiers are unavailable."), { code: "SECURE_RANDOM_UNAVAILABLE" });
+  }
+}
+
 // src/client/read-page.js
 var READ_LIMITS = {
   chars: 4e5,
@@ -20348,7 +20376,7 @@ function createBotBrowsers({ bridge, createSource: createSource2, storage = glob
   };
 }
 var sleep = (ms) => new Promise((resolve2) => setTimeout(resolve2, ms));
-function serveBrowserReads({ browsers, post, clientId = globalThis.crypto.randomUUID(), retryMs = 1e3 }) {
+function serveBrowserReads({ browsers, post, clientId = randomId(), retryMs = 1e3 }) {
   let stopped = false;
   let poll;
   let reported = "";
@@ -21210,6 +21238,26 @@ function HumanProfile({ human, request, operation, onSaved, convertImage = avata
 
 // src/client/communication-errors.js
 var descriptions = {
+  SECURE_RANDOM_UNAVAILABLE: "This browser cannot create secure request identifiers. Nothing was sent. Use a supported browser and refresh.",
+  UNKNOWN_OPERATION: "The API does not recognise this action. Update the plugin and restart its host process.",
+  OPERATION_ID_REQUIRED: "The request was incomplete. Refresh before trying again.",
+  INVALID_REQUEST: "The request was incomplete. Refresh before trying again.",
+  HUB_CONFIRMATION_REQUIRED: "Confirm the reviewed Hub identity and address before continuing.",
+  HUB_ADDRESS_FORBIDDEN: "This Hub address is not allowed. Ask its owner for a reachable WSS address.",
+  INVALID_HUB_CODE: "The Hub code is invalid. Obtain a fresh code through a trusted channel.",
+  COMMUNICATION_CREDENTIAL_MISMATCH: "The saved pairing does not match this Hub. Check saved Hubs before reusing an identity.",
+  COMMUNICATION_PAIRING_CONFLICT: "The saved pairing does not match this Hub. Check saved Hubs before reusing an identity.",
+  CREDENTIAL_STORAGE_UNAVAILABLE: "The local credential store is unavailable or read-only. Check the instance configuration without sharing credentials.",
+  COMMUNICATION_STORAGE_UNAVAILABLE: "The local credential store is unavailable or read-only. Check the instance configuration without sharing credentials.",
+  CREDENTIAL_STORAGE_READ_ONLY: "The local credential store is unavailable or read-only. Check the instance configuration without sharing credentials.",
+  ENROLLMENT_CONFLICT: "The Hub rejected the enrollment exchange. Check versions and saved request status before continuing.",
+  INVALID_ENROLLMENT_CHALLENGE: "The Hub rejected the enrollment exchange. Check versions and saved request status before continuing.",
+  INVALID_ENROLLMENT_RESPONSE: "The Hub rejected the enrollment exchange. Check versions and saved request status before continuing.",
+  JOIN_NOT_SUBMITTED: "This Hub has no approved access yet. Check the saved join request first.",
+  COMMUNICATION_NOT_APPROVED: "This Hub has no approved access yet. Check the saved join request first.",
+  INVALID_BOT_SCOPE: "Choose only local Bots that exist on this device.",
+  HUMAN_REQUIRED: "Only the local human user can perform this action.",
+  AUTHOR_MISMATCH: "The sender identity does not match this authenticated session. Refresh without changing identities.",
   ATTACHMENT_CAPABILITY_REQUIRED: "Attachments require a compatible Hub and clients.",
   ATTACHMENT_TOO_LARGE: "Choose up to four files, at most 64 KiB total.",
   INVALID_ATTACHMENT: "The attachment is invalid or unsafe. Choose a regular file or raster image.",
@@ -21390,7 +21438,7 @@ function AddDevice({ request, manualGuide, displayName = "Human" }) {
       if (!active) return;
       setStorage(value.storage ?? value.enrollments?.[0]?.storage ?? null);
       setEnrollments(value.enrollments ?? (value.hubId ? [value] : []));
-      setSelectedHub(value.selectedHub ?? null);
+      setSelectedHub(value.selectedHub ?? (value.configured && value.hubId ? { hubId: value.hubId, url: value.url } : null));
     }).catch(() => {
       if (active) setError(t("Unable to read pairing status"));
     });
@@ -21423,7 +21471,7 @@ function AddDevice({ request, manualGuide, displayName = "Human" }) {
     const value = await request({ endpoint: "onboarding-storage" });
     if (token !== generation.current) return;
     setStorage(value.storage ?? storage);
-    setSelectedHub(value.selectedHub ?? null);
+    setSelectedHub(value.selectedHub ?? (value.configured && value.hubId ? { hubId: value.hubId, url: value.url } : null));
     if (hub) setUncertainHub((current) => current === hub.hubId ? null : current);
     if (value.enrollments) setEnrollments(value.enrollments);
     else if (value.hubId) update(value);
@@ -21820,14 +21868,20 @@ function CommunicationAttachments({ files = EMPTY2 }) {
 var import_react56 = require("react");
 var import_react_dom10 = require("react-dom");
 function CommunicationMessage({ message, members, request, onInspect }) {
-  const namespace = (0, import_react56.useRef)(crypto.randomUUID()), wrapper = (0, import_react56.useRef)(null);
+  const [namespace] = (0, import_react56.useState)(() => {
+    try {
+      return randomId();
+    } catch {
+      return null;
+    }
+  }), wrapper = (0, import_react56.useRef)(null);
   const [slots, setSlots] = (0, import_react56.useState)([]);
   const labels = contactLabels(members);
   const projection = (0, import_react56.useMemo)(() => {
-    const spans = messageMentionSpans(message, members);
+    const spans = namespace ? messageMentionSpans(message, members) : [];
     let text = "", start = 0;
     const entries2 = spans.map((span, index) => {
-      const url = `https://remote-mentions.dsbot.invalid/${namespace.current}/${index}`;
+      const url = `https://remote-mentions.dsbot.invalid/${namespace}/${index}`;
       text += message.content.text.slice(start, span.start) + `[⁠](${url})`;
       start = span.end;
       return { ...span, url };
@@ -22169,17 +22223,23 @@ function ThreadReplyComposer({ storageKey, member, target, request, onSent, atta
   };
   const submit = async () => {
     if (flight.current || busy || !currentTarget || !draft.text?.trim() && !draft.attachments?.length) return;
-    const attempt = draft.attempt ?? {
-      endpoint: "send",
-      conversationId: member.conversationId,
-      membershipEpoch: member.membershipEpoch,
-      messageId: crypto.randomUUID(),
-      clientCreatedAt: (/* @__PURE__ */ new Date()).toISOString(),
-      text: draft.text ?? "",
-      mentions: draft.mentions ?? [],
-      replyToMessageId: currentTarget,
-      ...draft.attachments?.length ? { attachments: draft.attachments } : {}
-    };
+    let attempt;
+    try {
+      attempt = draft.attempt ?? {
+        endpoint: "send",
+        conversationId: member.conversationId,
+        membershipEpoch: member.membershipEpoch,
+        messageId: randomId(),
+        clientCreatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        text: draft.text ?? "",
+        mentions: draft.mentions ?? [],
+        replyToMessageId: currentTarget,
+        ...draft.attachments?.length ? { attachments: draft.attachments } : {}
+      };
+    } catch (failure) {
+      setError(communicationFailure(failure));
+      return;
+    }
     if (!update({ attempt, replyTarget: draft.replyTarget ?? { author: target.author, content: { text: referenceExcerpt(target.content?.text ?? "") } } })) return;
     flight.current = true;
     setBusy(true);
@@ -23143,7 +23203,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
     const current = state?.conversations?.find((item) => item.conversationId === values.conversationId);
     if (current && !["reclaim", "dm", "create-group", "accept"].includes(endpoint)) values = { membershipEpoch: current.membershipEpoch, expectedVersion: current.membershipVersion, ...values };
     const operationKey = JSON.stringify([scope, endpoint, values]);
-    if (!operationIds.current.has(operationKey)) operationIds.current.set(operationKey, crypto.randomUUID());
+    if (!operationIds.current.has(operationKey)) operationIds.current.set(operationKey, randomId());
     const persist = () => {
       save(OPERATION_IDS, [...operationIds.current]);
       setOperationPending(operationIds.current.size > 0);
@@ -23190,7 +23250,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
       endpoint: "send",
       conversationId: selected,
       membershipEpoch: member.membershipEpoch,
-      messageId: crypto.randomUUID(),
+      messageId: randomId(),
       clientCreatedAt: (/* @__PURE__ */ new Date()).toISOString(),
       text: draft.text,
       mentions: draft.mentions,

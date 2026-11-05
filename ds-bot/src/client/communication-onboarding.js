@@ -72,7 +72,7 @@ export function AddDevice({ request, manualGuide, displayName = 'Human' }) {
       if (!active) return
       setStorage(value.storage ?? value.enrollments?.[0]?.storage ?? null)
       setEnrollments(value.enrollments ?? (value.hubId ? [value] : []))
-      setSelectedHub(value.selectedHub??null)
+      setSelectedHub(value.selectedHub ?? (value.configured && value.hubId ? {hubId:value.hubId,url:value.url} : null))
     }).catch(() => { if (active) setError(t('Unable to read pairing status')) })
     return () => { active = false; generation.current += 1 }
   }, [request])
@@ -95,7 +95,7 @@ export function AddDevice({ request, manualGuide, displayName = 'Human' }) {
     const value = await request({ endpoint: 'onboarding-storage' })
     if (token !== generation.current) return
     setStorage(value.storage ?? storage)
-    setSelectedHub(value.selectedHub??null)
+    setSelectedHub(value.selectedHub ?? (value.configured && value.hubId ? {hubId:value.hubId,url:value.url} : null))
     if (hub) setUncertainHub(current => current === hub.hubId ? null : current)
     if (value.enrollments) setEnrollments(value.enrollments)
     else if (value.hubId) update(value)

@@ -5,6 +5,19 @@
 export const NAMESPACE = 'ds-bot'
 
 const ZH = {
+  "This browser cannot create secure request identifiers. Nothing was sent. Use a supported browser and refresh.":"浏览器无法生成安全请求标识，未发送任何内容。请使用受支持的浏览器并刷新。",
+  "The API does not recognise this action. Update the plugin and restart its host process.":"接口不支持此操作。请更新插件并重启宿主进程。",
+  "The request was incomplete. Refresh before trying again.":"请求不完整，请刷新后再试。",
+  "Confirm the reviewed Hub identity and address before continuing.":"请核对并确认 Hub 身份和地址后继续。",
+  "This Hub address is not allowed. Ask its owner for a reachable WSS address.":"此 Hub 地址不被允许，请向所有者获取可达的 WSS 地址。",
+  "The Hub code is invalid. Obtain a fresh code through a trusted channel.":"Hub 码无效，请通过可信渠道获取新码。",
+  "The saved pairing does not match this Hub. Check saved Hubs before reusing an identity.":"保存的配对与此 Hub 不匹配，请先检查已保存的 Hub，不要直接复用身份。",
+  "The local credential store is unavailable or read-only. Check the instance configuration without sharing credentials.":"本机凭据存储不可用或只读，请检查实例配置，不要分享凭据。",
+  "The Hub rejected the enrollment exchange. Check versions and saved request status before continuing.":"Hub 拒绝了加入验证，请先检查版本和已保存的申请状态再继续。",
+  "This Hub has no approved access yet. Check the saved join request first.":"此 Hub 尚无已批准的访问权限，请先检查保存的加入申请。",
+  "Choose only local Bots that exist on this device.":"请选择此设备上存在的本地 Bot。",
+  "Only the local human user can perform this action.":"此操作仅限本机用户本人执行。",
+  "The sender identity does not match this authenticated session. Refresh without changing identities.":"发送者身份与当前认证会话不匹配，请刷新，不要替换身份。",
   "Also permanently delete this Hub communication queue and cached files. DSH session journals and browser drafts are retained.":"同时永久删除此 Hub 的通信队列和缓存文件。DSH 会话日志及浏览器中未发送的内容仍保留。",
   "Close replies":"关闭回复小窗",
   "Reply in this thread":"在此消息链中回复",

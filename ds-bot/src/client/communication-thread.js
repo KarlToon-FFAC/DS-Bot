@@ -1,3 +1,4 @@
+import { randomId } from './random-id.js'
 import { createElement as h, useEffect, useRef, useState } from 'react'
 import { t } from './i18n.js'
 import { contactLabels, referenceExcerpt, mentionQuery, mentionChoices, insertMention, retainedMentions } from './communication-model.js'
@@ -110,9 +111,11 @@ export function ThreadReplyComposer({ storageKey, member, target, request, onSen
   }
   const submit = async () => {
     if (flight.current || busy || !currentTarget || !draft.text?.trim() && !draft.attachments?.length) return
-    const attempt = draft.attempt ?? { endpoint:'send',conversationId:member.conversationId,membershipEpoch:member.membershipEpoch,
-      messageId:crypto.randomUUID(),clientCreatedAt:new Date().toISOString(),text:draft.text??'',mentions:draft.mentions??[],
+    let attempt
+    try { attempt = draft.attempt ?? { endpoint:'send',conversationId:member.conversationId,membershipEpoch:member.membershipEpoch,
+      messageId:randomId(),clientCreatedAt:new Date().toISOString(),text:draft.text??'',mentions:draft.mentions??[],
       replyToMessageId:currentTarget,...(draft.attachments?.length?{attachments:draft.attachments}:{}) }
+    } catch (failure) { setError(communicationFailure(failure)); return }
     if (!update({attempt,replyTarget:draft.replyTarget??{author:target.author,content:{text:referenceExcerpt(target.content?.text??'')}}})) return
     flight.current = true; setBusy(true); setError(''); setCompletion(null)
     try {

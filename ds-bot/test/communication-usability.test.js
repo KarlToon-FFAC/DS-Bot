@@ -12,7 +12,7 @@ const { JSDOM } = harness('jsdom'), React = harness('react'), { act } = React
 const { outputFiles } = await build({ entryPoints: [fileURLToPath(new URL('../src/client/communication.js', import.meta.url))],
   bundle: true, platform: 'browser', format: 'cjs', external: ['react', 'react-dom', '@deepseek-ai/dsh-client-ui-primitives'], write: false })
 
-async function pane({ enabled = true, snapshot, history = [], getState, handleRead = async () => ({}), MarkdownText = ({ text }) => React.createElement('p', null, text), handle = async () => ({}) }, check) {
+async function pane({ enabled = true, snapshot, history = [], getState, handleRead = async () => ({}), MarkdownText = ({ text }) => React.createElement('p', null, text), handle = async () => ({}), cryptoSource = { subtle: globalThis.crypto.subtle, getRandomValues: bytes => globalThis.crypto.getRandomValues(bytes) } }, check) {
   const dom = new JSDOM('<!doctype html><body><textarea id="native">private draft</textarea><div id="root"></div></body>', { url: 'http://127.0.0.1:3138/', pretendToBeVisual: true })
   const saved = Object.fromEntries(['window', 'document', 'navigator', 'HTMLElement', 'IS_REACT_ACT_ENVIRONMENT'].map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]))
   for (const [key, value] of Object.entries({ window: dom.window, document: dom.window.document, navigator: dom.window.navigator, HTMLElement: dom.window.HTMLElement, IS_REACT_ACT_ENVIRONMENT: true })) Object.defineProperty(globalThis, key, { configurable: true, value })
@@ -22,7 +22,7 @@ async function pane({ enabled = true, snapshot, history = [], getState, handleRe
   runInNewContext(outputFiles[0].text, { module: mod, exports: mod.exports,
     require: id => id === 'react' ? React : id === 'react-dom' ? harness('react-dom') : { MarkdownText },
     window: dom.window, document: dom.window.document, navigator:dom.window.navigator, sessionStorage: dom.window.sessionStorage, localStorage: dom.window.localStorage,
-    setTimeout, clearTimeout, crypto: globalThis.crypto, URL, AbortSignal, requestAnimationFrame: dom.window.requestAnimationFrame, cancelAnimationFrame: dom.window.cancelAnimationFrame })
+    setTimeout, clearTimeout, crypto: cryptoSource, URL, AbortSignal, requestAnimationFrame: dom.window.requestAnimationFrame, cancelAnimationFrame: dom.window.cancelAnimationFrame })
   const panel = createSource(true), roster = createSource({ communicationEnabled: enabled }), surface = createSource({ mode: 'bot' }), calls = []
   const request = async body => {
     calls.push(body)
@@ -1096,4 +1096,25 @@ test('publication diagnostics retain real safe errors and refresh local settings
     assert.equal(button('Save published Bots').disabled,true,'effective config confirms the original save without another write')
     assert.equal(calls.filter(call=>call.endpoint==='publish-bots').length,2)
   })
+})
+
+// Every pane test above also runs without randomUUID, matching ordinary LAN HTTP.
+test('legacy storage does not offer selecting the current Hub or infer its connection state',async()=>{
+ await pane({snapshot:state(),handle:async body=>body.endpoint==='onboarding-storage'?{configured:true,hubId:'old-hub',url:'wss://synthetic.example.test/communication',status:'approved'}:{}},async({click,button,calls})=>{
+  await click('Personal settings');await click('Add a device')
+  assert.equal(button('Select this Hub'),undefined)
+  assert.equal(button('Disconnect this Hub'),undefined)
+  assert.equal(button('Resume this Hub'),undefined)
+  assert.equal(calls.some(call=>call.endpoint==='switch-hub'),false)
+ })
+})
+test('missing secure randomness fails before sending and retains the composer text',async()=>{
+ await pane({snapshot:{...state(),conversations:[membership]},cryptoSource:{}},async({click,doc,edit,calls})=>{
+  await click('Shared group')
+  const input=doc.querySelector('textarea[aria-label="Message"]')??doc.querySelector('footer textarea')
+  await edit(input,'synthetic unsent text');await click('Send message')
+  assert.equal(calls.some(call=>call.endpoint==='send'),false)
+  assert.equal(input.value,'synthetic unsent text')
+  assert.match(doc.body.textContent,/cannot create secure request identifiers/)
+ })
 })

@@ -1,3 +1,4 @@
+import { randomId } from './random-id.js'
 // Bot browsers in DSH Desktop and the desktop app: per Bot, a tab strip of pages. Each tab
 // is one Electron webview in the Bot's own storage partition (`browser.acquire('bot:<id>')`
 // on either one's bridge — the same key always yields the same partition, so cookies and logins
@@ -585,7 +586,7 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
  * @param {{ browsers: ReturnType<typeof createBotBrowsers>, post: (endpoint:string, payload:any, signal?:AbortSignal) => Promise<any>, clientId?: string, retryMs?: number }} options
  * @returns {() => void} stop
  */
-export function serveBrowserReads({ browsers, post, clientId = globalThis.crypto.randomUUID(), retryMs = 1000 }) {
+export function serveBrowserReads({ browsers, post, clientId = randomId(), retryMs = 1000 }) {
   let stopped = false
   let poll
   let reported = ''

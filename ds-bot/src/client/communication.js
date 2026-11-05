@@ -1,3 +1,4 @@
+import { randomId } from './random-id.js'
 import { createElement as h, Fragment, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { createSource } from './sources.js'
@@ -318,7 +319,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
     const current = state?.conversations?.find(item => item.conversationId === values.conversationId)
     if (current && !['reclaim','dm','create-group','accept'].includes(endpoint)) values = { membershipEpoch: current.membershipEpoch, expectedVersion: current.membershipVersion, ...values }
     const operationKey = JSON.stringify([scope, endpoint, values])
-    if (!operationIds.current.has(operationKey)) operationIds.current.set(operationKey, crypto.randomUUID())
+    if (!operationIds.current.has(operationKey)) operationIds.current.set(operationKey, randomId())
     const persist = () => { save(OPERATION_IDS, [...operationIds.current]); setOperationPending(operationIds.current.size > 0) }
     persist()
     let value
@@ -340,7 +341,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
   const send = () => act(async () => {
     if(attachmentFlight.current)return
     if (!member || member.kind === 'group' && member.speakingMode !== 'speak' || !draft.text.trim() && !draft.attachments?.length) return
-    const intent = attempts[key] ?? { endpoint: 'send', conversationId: selected, membershipEpoch: member.membershipEpoch, messageId: crypto.randomUUID(), clientCreatedAt: new Date().toISOString(),
+    const intent = attempts[key] ?? { endpoint: 'send', conversationId: selected, membershipEpoch: member.membershipEpoch, messageId: randomId(), clientCreatedAt: new Date().toISOString(),
       text: draft.text, mentions: draft.mentions, ...(draft.attachments?.length ? {attachments:draft.attachments} : {}), replyToMessageId: reply?.messageId ?? null }
     const next = { ...attempts, [key]: intent }; save(ATTEMPTS, next); setAttempts(next)
     // Keep the exact intent on every failure; retry must retain the original ID.

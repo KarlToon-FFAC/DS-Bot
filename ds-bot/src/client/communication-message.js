@@ -1,3 +1,4 @@
+import { randomId } from './random-id.js'
 import { createElement as h, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { MarkdownText } from './dsh-primitives.js'
@@ -10,14 +11,14 @@ import { CommunicationAttachments } from './communication-attachments.js'
 // A random component namespace makes authored links incapable of impersonating a
 // structured mention. Only anchors produced by our exact span mapping become chips.
 export function CommunicationMessage({ message, members, request, onInspect }) {
-  const namespace = useRef(crypto.randomUUID()), wrapper = useRef(null)
+  const [namespace] = useState(() => { try { return randomId() } catch { return null } }), wrapper = useRef(null)
   const [slots, setSlots] = useState([])
   const labels = contactLabels(members)
   const projection = useMemo(() => {
-    const spans = messageMentionSpans(message, members)
+    const spans = namespace ? messageMentionSpans(message, members) : []
     let text = '', start = 0
     const entries = spans.map((span, index) => {
-      const url = `https://remote-mentions.dsbot.invalid/${namespace.current}/${index}`
+      const url = `https://remote-mentions.dsbot.invalid/${namespace}/${index}`
       text += message.content.text.slice(start, span.start) + `[\u2060](${url})`
       start = span.end
       return { ...span, url }
