@@ -27,12 +27,12 @@ test('operator CLI covers Hub state/code, enrollment decisions, names, revoke/re
  await run('reject',{requestId:next.requestId,expectedVersion:next.version})
  assert.equal((await run('state')).requests.find(item=>item.requestId===two.requestId).status,'rejected')
  await run('revoke-sessions')
- await assert.rejects(execute(prepare('state'),{...options,password:'wrong-synthetic-admin-password'}),{code:'UNAUTHENTICATED'})
+ await assert.rejects(execute(prepare('state'),{...options,password:'mock-wrong-synthetic-admin-password'}),{code:'UNAUTHENTICATED'})
  assert.equal(Object.keys(JSON.parse(help()).operations).length,8)
 })
 
 test('CLI keeps administrator credentials out of arguments/output, consumes private env and never follows redirects',async t=>{
- const password='synthetic-private-admin-cli-password'
+ const password='mock-synthetic-private-admin-cli-password'
  const server=createServer((req,res)=>{if(req.url==='/admin/api/state'){res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify({ok:true,value:{reflected:password}}))}else{res.writeHead(302,{location:'https://untrusted.example.test/'});res.end()}})
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));t.after(()=>new Promise(resolve=>server.close(resolve)))
  const url=`http://127.0.0.1:${server.address().port}`,env={DSBOT_HUB_ADMIN_URL:url,DSBOT_HUB_ADMIN_PASSWORD:password};let output='',error=''

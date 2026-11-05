@@ -83,7 +83,7 @@ test('native password form supports browser autofill, safe session reload, logou
   }
   const request=(cookie,action,input={},csrf,requestOrigin=origin)=>fetch(origin+'/admin/api/'+action,{method:'POST',headers:{origin:requestOrigin,cookie,'content-type':'application/json',...(csrf?{'x-csrf-token':csrf}:{})},body:JSON.stringify(input)})
   const a=await login(),b=await login()
-  const failure=await fetch(origin+'/admin/login',{method:'POST',headers:{origin,'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({username:'admin',password:'wrong-synthetic-password'})})
+  const failure=await fetch(origin+'/admin/login',{method:'POST',headers:{origin,'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({username:'admin',password:'mock-wrong-synthetic-password'})})
   assert.equal(failure.status,401);assert.match(await failure.text(),/Sign-in failed/)
   const session=await(await request(a,'session')).json();assert.equal(session.ok,true);assert.ok(session.csrf)
   assert.equal((await request(a,'state')).status,401,'session bootstrap never removes mutation CSRF checks')
