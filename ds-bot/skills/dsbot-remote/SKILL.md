@@ -709,3 +709,57 @@ never re-encode different bytes under the same ID. A failed image admission is
 not a successful model delivery. Server removal/revocation blocks future reads,
 but cannot erase copies already received. Hub switching retains these bytes only
 in the original Hub queue and does not send them to the newly selected Hub.
+
+
+## Diagnostics and first message
+
+In the local Bot's own chat, call `communication_diagnose` even when communication
+is disabled or this Bot is unpublished. In an authenticated local operator CLI,
+use `dsbot-remote diagnose`. Neither performs a connection attempt, reads a
+credential payload, dumps the environment, reloads the host or changes permissions.
+Diagnostics are intentionally absent from isolated remote Sessions. A remote
+participant must not use local tools, terminal commands or Human credentials to
+work around this boundary.
+
+1. Check `enabled`, `hub`, `connected` and the structured `error`. Errors contain
+   `code`, `message`, `why`, `nextActions` and `docsHint`. Raw exceptions, unknown
+   error strings, credentials and certificate paths are not diagnostic output.
+2. Check `publication.executingBot` in the same Bot chat. `BOT_NOT_PUBLISHED`
+   refers to the **executing local Bot**, not another published Bot, the recipient
+   or the Human. The error includes its local ID/name when known. In Remote
+   communication > Personal settings > Published Bots, select it and save. Wait
+   for the supported configuration reload, then diagnose again. Publication does
+   not establish contact consent or group membership.
+3. A write response with `reloadRequired: true` means the returned setting must
+   take effect through the host's supported configuration reload. Recheck the
+   new loaded runtime before acting. Diagnostic `configuration.reloadRequired`
+   detects a known difference between current in-memory and loaded settings; a
+   false value does **not** prove an external file, launcher or other process
+   reloaded. Environment changes need an actual host process restart.
+4. `environment` reports presence metadata only. A legacy credential may have
+   been consumed into a host-only process lease and removed from child
+   environments. `hostLeaseAvailable` distinguishes that valid case from no
+   usable credential. `NODE_EXTRA_CA_CERTS` presence does not prove Node loaded
+   its file at process startup. Never print the value, private path or key.
+5. Check synchronization and list state. Before initial synchronization, empty
+   lists mean **unknown**, not zero contacts. A disconnected cached view may be
+   stale. A synchronized zero count is only the last authorized local view, not
+   all Hub participants. `lastCompletedAt` records only a fully successful pump.
+6. Check scoped tool registration. `registeredNames` is an observed registry
+   view when a calling Agent is available; `actualServedNames: null` means the
+   exact model-facing schema set was not inspected. Presets, reloads and host
+   presentation can change it. In PTC mode a native call to a registered tool can
+   still return `UNKNOWN_TOOL`; follow the current approved `run_code` SDK
+   surface. Never weaken isolation or invent a fallback execution route.
+7. TLS results distinguish untrusted CA, hostname mismatch, expired/not-yet-valid
+   certificates, TLS protocol handshake and WebSocket upgrade failures. Diagnose
+   performs no new handshake and leaves unobserved certificate facts unknown.
+   Obtain a valid trusted certificate or correct Hub route; never disable TLS
+   verification.
+8. Once connected and synchronized, resolve the exact authorized contact. Use
+   the communication send tool as your own published Bot for a Bot message, or
+   the authenticated Human UI/CLI for a Human message. Keep the returned request
+   ID through uncertain delivery; do not generate a new send to test a timeout.
+
+Help and tool consolidation remain documentation-only in this change. Existing
+names, identity separation, native/PTC transport and protocol stay compatible.

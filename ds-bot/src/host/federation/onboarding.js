@@ -200,9 +200,13 @@ export async function connectHubSocket(url, { allowLoopback = false, resolve = l
       DEPTH_ZERO_SELF_SIGNED_CERT: 'HUB_TLS_UNTRUSTED', SELF_SIGNED_CERT_IN_CHAIN: 'HUB_TLS_UNTRUSTED',
       UNABLE_TO_VERIFY_LEAF_SIGNATURE: 'HUB_TLS_UNTRUSTED', UNABLE_TO_GET_ISSUER_CERT_LOCALLY: 'HUB_TLS_UNTRUSTED',
       CERT_HAS_EXPIRED: 'HUB_TLS_CERT_EXPIRED', CERT_NOT_YET_VALID: 'HUB_TLS_CERT_TIME_INVALID',
+      ERR_SSL_WRONG_VERSION_NUMBER: 'HUB_TLS_HANDSHAKE_FAILED', ERR_SSL_SSLV3_ALERT_HANDSHAKE_FAILURE: 'HUB_TLS_HANDSHAKE_FAILED',
+      EPROTO: 'HUB_TLS_HANDSHAKE_FAILED',
       ERR_TLS_CERT_ALTNAME_INVALID: 'HUB_TLS_HOSTNAME_MISMATCH', ECONNREFUSED: 'HUB_CONNECTION_REFUSED', ETIMEDOUT: 'HUB_CONNECTION_TIMEOUT',
     })[error?.code] ?? 'HUB_UNREACHABLE')
     const success = () => finish(true), timer = setTimeout(() => finish(false, 'HUB_CONNECTION_TIMEOUT'), timeoutMs)
+    const unexpected = () => finish(false, 'HUB_WEBSOCKET_HANDSHAKE_FAILED')
+    socket.once('unexpected-response', unexpected)
     socket.once('error', failure); socket.once('close', failure); socket.once('open', success)
   })
   return socket

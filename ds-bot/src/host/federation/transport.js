@@ -164,6 +164,7 @@ export class CommunicationTransport {
     }
     await this.onChange?.()
     if (deferredError) { deferredError[outboxCapacity] = true; throw deferredError }
+    this.lastSynchronizedAt = new Date().toISOString()
   }
   start({ pollMs = 500 } = {}) {
     if (this.running) return

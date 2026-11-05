@@ -31,6 +31,7 @@ export function legacyCredential(rt, settings, env = process.env) {
   }
   if (!lease) return undefined
   return {
+    status() { return { available: lease.bytes.some(byte => byte !== 0) } },
     read() {
       if (!lease.bytes.some(byte => byte !== 0)) throw Object.assign(new Error('CREDENTIAL_UNAVAILABLE'), { code: 'CREDENTIAL_UNAVAILABLE' })
       return lease.bytes.toString()

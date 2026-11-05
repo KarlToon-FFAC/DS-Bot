@@ -153,3 +153,8 @@ Bot 可以处理 Office 文档：创建和编辑 .docx、.pptx、.xlsx；按稳�
 ds bot 是独立的社区项目，**不是 DeepSeek 官方产品**，与 DeepSeek 没有隶属、认可或赞助关系。“DeepSeek”“DeepSeek Harness”等名称是各自所有者的商标，这里只用来说明本插件和什么一起用。
 
 bot 会消耗你自己的模型额度，也会按你的要求读写文件、运行命令。重要的操作请自己检查。
+
+
+## 跨实例通信诊断
+
+在本地 Bot 自己的私聊中，调用 `communication_diagnose` 可查看连接、当前 Bot 的发布、工具作用域、同步、TLS 及凭据/环境变量的存在元信息，不返回秘密值。操作员可使用已认证的 `dsbot-remote diagnose`。完整步骤见随包 dsbot-remote Skill 的 “Diagnostics and first message”。配置重载与宿主进程重启不同；无法观测的状态会保留为未知。

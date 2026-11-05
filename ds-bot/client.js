@@ -1994,9 +1994,9 @@ function teamActions({ call: call2, after, partFor, roster, ui: ui2, live, cards
     },
     toggleDetails: (id, force) => {
       ui2.set((state) => {
-        const details = force || state.details !== id || state.view !== "details" ? id : null;
-        if (details === null && panelFolded?.("details") === true) return { ...state, renaming: false, tab: null, details: id, view: "details", panelYield: true };
-        return { ...state, renaming: false, tab: null, details, view: "details" };
+        const details2 = force || state.details !== id || state.view !== "details" ? id : null;
+        if (details2 === null && panelFolded?.("details") === true) return { ...state, renaming: false, tab: null, details: id, view: "details", panelYield: true };
+        return { ...state, renaming: false, tab: null, details: details2, view: "details" };
       });
     },
     // The open panel follows the main view; a subject with no browser (a group
@@ -21325,8 +21325,8 @@ function ContactDirectory({ contacts, relations, humanPrincipalId, instanceId, r
   );
 }
 
-// src/client/communication-errors.js
-var descriptions = {
+// src/shared/communication-diagnostics.js
+var communicationDescriptions = {
   SECURE_RANDOM_UNAVAILABLE: "This browser cannot create secure request identifiers. Nothing was sent. Use a supported browser and refresh.",
   UNKNOWN_OPERATION: "The API does not recognise this action. Update the plugin and restart its host process.",
   OPERATION_ID_REQUIRED: "The request was incomplete. Refresh before trying again.",
@@ -21423,10 +21423,229 @@ var descriptions = {
   CONFIG_EDIT_ENTRY_CHANGED: "The configuration changed during reload. Refresh the published Bot selection before applying again.",
   CONFIG_EDIT_NOT_ACTIVE: "The configuration plugin reloaded. Refresh the effective settings before applying again.",
   COMMUNICATION_CONFIG_WRITE_FAILED: "The configuration save could not be confirmed. Refresh the published Bot selection before applying again.",
-  TLS_REQUIRED: "This Hub address requires a secure connection. Ask the Hub owner for its trusted WSS address."
+  TLS_REQUIRED: "This Hub address requires a secure connection. Ask the Hub owner for its trusted WSS address.",
+  UNKNOWN_TOOL: "This tool is unavailable through the current call surface. Check current Session scope, configuration reload and native/PTC presentation. A registered tool may require the approved run_code SDK transport in PTC mode; never bypass scope or permissions.",
+  BOT_NOT_PUBLISHED: "The executing local Bot is not published to this Hub. In Remote communication > Personal settings > Published Bots, select this Bot and save. Wait for the configuration reload, then check diagnose before retrying. Publishing another Bot does not publish this one.",
+  LOCAL_USER_SESSION_REQUIRED: "Open your own local Bot chat to inspect or manage this instance. Local diagnostics and management are unavailable in group and remote Sessions.",
+  HUB_TLS_HANDSHAKE_FAILED: "The secure Hub handshake failed. Check compatible TLS versions and the Hub listener with its administrator; keep certificate verification enabled.",
+  HUB_WEBSOCKET_HANDSHAKE_FAILED: "The Hub did not accept the WebSocket upgrade. Check the exact communication URL and reverse proxy WebSocket routing with its administrator.",
+  COMMUNICATION_STOPPED: "This communication runtime stopped during a configuration reload. Refresh diagnostics in the current local Bot chat before retrying.",
+  COMMUNICATION_SESSION_MIGRATION_REQUIRED: "This conversation needs a fresh isolated Session. Finish or recover its pending work and retry through the supported host; never remove isolation.",
+  COMMUNICATION_AUTHORIZATION_UNKNOWN: "The Hub is disconnected, so current conversation authorization cannot be verified. Restore the connection before acting.",
+  COMMUNICATION_TOOL_NOT_ALLOWED: "This isolated communication Session cannot use that tool. Use only the tools currently advertised here; local management and execution stay in your own local chat.",
+  CONVERSATION_SCOPE_MISMATCH: "This tool call targets a different conversation. Use only this Session’s exact authorized conversation and membership epoch."
 };
-var knownCommunicationFailure = (error) => Object.hasOwn(descriptions, error?.code ?? "");
-var communicationFailure = (error) => knownCommunicationFailure(error) ? t(descriptions[error.code]) + ` [${error.code}]` : t("The action could not be confirmed. Refresh status before trying again.");
+var details = {
+  BOT_NOT_PUBLISHED: {
+    why: "Communication sends authenticate the executing Bot, not another published Bot or the local Human. This Bot has no loaded publication entry.",
+    nextActions: ["In Remote communication > Personal settings > Published Bots, select the executing local Bot and save.", "Allow the configuration reload, then run communication_diagnose in the same local Bot chat. Confirm loaded publication and Hub connection before sending."]
+  },
+  COMMUNICATION_NOT_CONFIGURED: {
+    why: "Remote communication is disabled in the currently loaded plugin configuration.",
+    nextActions: ["Open Remote communication > Personal settings > Add a device and join the intended Hub.", "After approval and reload, run communication_diagnose before sending."]
+  },
+  CREDENTIAL_UNAVAILABLE: {
+    why: "The running host has no usable credential lease. An environment variable configured in a launcher or another shell does not prove this process received it.",
+    nextActions: ["Prefer the approved Hub code-join flow in Remote communication settings.", "For legacy pairing, inject the named credential privately into the host launch environment and restart that host. Never paste or print the value. A plugin reload alone cannot import a new shell environment."]
+  },
+  BOT_NOT_FOUND: { why: "The configured publication refers to a Bot that does not exist in this local team.", nextActions: ["Refresh Published Bots, choose existing local Bots and save; wait for reload."] },
+  AUTHORIZATION_PENDING: { why: "The host has not completed its first authorized Hub synchronization.", nextActions: ["Check connected and synchronization state with diagnose. An empty cached list before synchronization is not proof that there are no contacts or conversations."] },
+  COMMUNICATION_READ_ONLY: { why: "This host does not hold the writable team lease.", nextActions: ["Use the owning host or close the duplicate host normally, then refresh status. Do not delete locks or bypass read-only protection."] },
+  LOCAL_USER_SESSION_REQUIRED: { why: "Instance diagnostics are local-owner information, outside an isolated remote or group conversation.", nextActions: ["Open your own local Bot chat and call communication_diagnose there."] }
+};
+var phases = /* @__PURE__ */ new Set([
+  "ENROLLMENT_CONNECT_FAILED",
+  "ENROLLMENT_CHALLENGE_FAILED",
+  "ENROLLMENT_PROOF_FAILED",
+  "COMMUNICATION_CREDENTIAL_READ_FAILED",
+  "COMMUNICATION_CREDENTIAL_WRITE_FAILED",
+  "COMMUNICATION_CREDENTIAL_DESCRIBE_FAILED",
+  "COMMUNICATION_CREDENTIAL_LIST_FAILED",
+  "COMMUNICATION_CREDENTIAL_DELETE_FAILED",
+  "COMMUNICATION_CONFIG_WRITE_FAILED",
+  "CONFIG_EDIT_OVERLAID",
+  "CONFIG_EDIT_ENTRY_CHANGED",
+  "CONFIG_EDIT_NOT_ACTIVE",
+  "CONFIG_EDIT_INVALID_DOCUMENT"
+]);
+var knownCodes = /* @__PURE__ */ new Set([
+  ...Object.keys(communicationDescriptions),
+  ...phases,
+  "AI_MAPPING_CONFLICT",
+  "ATTACHMENT_CAPABILITY_REQUIRED",
+  "ATTACHMENT_SERVICE_UNAVAILABLE",
+  "AUTHORIZATION_PENDING",
+  "AUTHOR_MISMATCH",
+  "AVATAR_CAPABILITY_REQUIRED",
+  "AVATAR_SYNC_FAILED",
+  "BACKPRESSURE",
+  "BOT_NOT_FOUND",
+  "BOT_NOT_PUBLISHED",
+  "BOUNDED_COLLABORATION_REQUIRED",
+  "COMMUNICATION_AUTHORIZATION_UNKNOWN",
+  "COMMUNICATION_CACHE_DELETE_FAILED",
+  "COMMUNICATION_CONFIG_WRITE_FAILED",
+  "COMMUNICATION_CREDENTIAL_DELETE_FAILED",
+  "COMMUNICATION_CREDENTIAL_DESCRIBE_FAILED",
+  "COMMUNICATION_CREDENTIAL_LIST_FAILED",
+  "COMMUNICATION_CREDENTIAL_MISMATCH",
+  "COMMUNICATION_CREDENTIAL_READ_FAILED",
+  "COMMUNICATION_CREDENTIAL_WRITE_FAILED",
+  "COMMUNICATION_INPUT_SOURCE_UNKNOWN",
+  "COMMUNICATION_NOT_APPROVED",
+  "COMMUNICATION_NOT_CONFIGURED",
+  "COMMUNICATION_OUTPUT_SOURCE_UNKNOWN",
+  "COMMUNICATION_PAIRING_CONFLICT",
+  "COMMUNICATION_PRESET_CONFLICT",
+  "COMMUNICATION_PRESET_UNAVAILABLE",
+  "COMMUNICATION_READ_ONLY",
+  "COMMUNICATION_SESSION_MIGRATION_REQUIRED",
+  "COMMUNICATION_STOPPED",
+  "COMMUNICATION_STORAGE_UNAVAILABLE",
+  "COMMUNICATION_TOOL_NOT_ALLOWED",
+  "COMMUNICATION_UNAVAILABLE",
+  "COMMUNICATION_WORKSPACE_UNAVAILABLE",
+  "CONFIG_EDITOR_UNAVAILABLE",
+  "CONFIG_EDIT_ENTRY_CHANGED",
+  "CONFIG_EDIT_INVALID_DOCUMENT",
+  "CONFIG_EDIT_NOT_ACTIVE",
+  "CONFIG_EDIT_OVERLAID",
+  "CONFIG_ENTRY_UNAVAILABLE",
+  "CONNECTION_LOST",
+  "CONTACT_REQUIRED",
+  "CONVERSATION_PENDING",
+  "CONVERSATION_REQUIRED",
+  "CONVERSATION_SCOPE_MISMATCH",
+  "CREDENTIAL_DELETE_UNAVAILABLE",
+  "CREDENTIAL_STORAGE_READ_ONLY",
+  "CREDENTIAL_STORAGE_UNAVAILABLE",
+  "CREDENTIAL_UNAVAILABLE",
+  "DELIVERY_ID_CONFLICT",
+  "ENOENT",
+  "ENROLLMENT_CHALLENGE_FAILED",
+  "ENROLLMENT_CONFLICT",
+  "ENROLLMENT_CONNECT_FAILED",
+  "ENROLLMENT_PROOF_FAILED",
+  "ENROLLMENT_REQUEST_FAILED",
+  "EVENT_CONFLICT",
+  "EXPLICIT_ACTIVATION_REQUIRED",
+  "EXPORT_REJECTED",
+  "EXPORT_SOURCE_CONFLICT",
+  "EXPORT_UNKNOWN",
+  "FORBIDDEN",
+  "HANDOFF_ALREADY_SET",
+  "HISTORY_GAP",
+  "HUB_ADDRESS_FORBIDDEN",
+  "HUB_CANCEL_REQUIRED",
+  "HUB_CODE_EXPIRED",
+  "HUB_CONFIRMATION_REQUIRED",
+  "HUB_CONNECTION_REFUSED",
+  "HUB_CONNECTION_TIMEOUT",
+  "HUB_FORGET_CONFIRMATION_REQUIRED",
+  "HUB_LEAVE_CONFIRMATION_REQUIRED",
+  "HUB_LEAVE_REQUIRED",
+  "HUB_LEFT",
+  "HUB_NOT_SELECTED",
+  "HUB_PAUSED",
+  "HUB_RESUME_CONFIRMATION_REQUIRED",
+  "HUB_SELECTION_CHANGED",
+  "HUB_TLS_CERT_EXPIRED",
+  "HUB_TLS_CERT_TIME_INVALID",
+  "HUB_TLS_HANDSHAKE_FAILED",
+  "HUB_TLS_HOSTNAME_MISMATCH",
+  "HUB_TLS_UNTRUSTED",
+  "HUB_TRUST_BINDING_MISMATCH",
+  "HUB_TRUST_EXPIRED",
+  "HUB_TRUST_UPDATE_REQUIRED",
+  "HUB_UNREACHABLE",
+  "HUB_WEBSOCKET_HANDSHAKE_FAILED",
+  "HUMAN_REQUIRED",
+  "INJECTION_UNKNOWN",
+  "INPUT_CANCELED",
+  "INPUT_UPDATES_PENDING",
+  "INSTANCE_ID_MISMATCH",
+  "INVALID_AI_MAPPING",
+  "INVALID_AI_STATE",
+  "INVALID_ATTACHMENT",
+  "INVALID_AVATAR",
+  "INVALID_AVATAR_RESPONSE",
+  "INVALID_BOT_SCOPE",
+  "INVALID_CONFIG",
+  "INVALID_CURSOR",
+  "INVALID_ENROLLMENT_CHALLENGE",
+  "INVALID_ENROLLMENT_RESPONSE",
+  "INVALID_EVENT",
+  "INVALID_HUB_CODE",
+  "INVALID_HUB_CODE_SIGNATURE",
+  "INVALID_HUB_TRUST",
+  "INVALID_INPUT_UPDATE",
+  "INVALID_MEMBERSHIP",
+  "INVALID_PRINCIPAL",
+  "INVALID_RECEIPT",
+  "INVALID_REQUEST",
+  "INVALID_RESPONSE",
+  "INVALID_RESPONSE_GRANT",
+  "JOIN_NOT_FOUND",
+  "JOIN_NOT_SUBMITTED",
+  "LEGACY_HUB_PROFILE_UNBOUND",
+  "LEGACY_HUB_SWITCH_REQUIRES_REENROLLMENT",
+  "LEGACY_RECONCILIATION_REQUIRED",
+  "LOCAL_MANAGEMENT_APPROVAL_CANCELLED",
+  "LOCAL_MANAGEMENT_APPROVAL_REJECTED",
+  "LOCAL_MANAGEMENT_APPROVAL_UNAVAILABLE",
+  "LOCAL_USER_AUTHORIZATION_REQUIRED",
+  "MEMBERSHIP_REVOKED",
+  "MESSAGE_ID_CONFLICT",
+  "MODEL_UNAVAILABLE",
+  "NOT_A_MEMBER",
+  "OPERATION_ID_REQUIRED",
+  "OUTBOX_FULL",
+  "PASSIVE_REPLY_ONLY",
+  "PAYLOAD_TOO_LARGE",
+  "PRINCIPAL_ID_MISMATCH",
+  "PROTOCOL_VERSION_UNSUPPORTED",
+  "PUBLICATION_CHANGED",
+  "RECIPIENT_UNAVAILABLE",
+  "RECOVERY_UNKNOWN",
+  "REFERENCE_NOT_AVAILABLE",
+  "REQUEST_TIMEOUT",
+  "RESPONSE_ALREADY_SENT",
+  "RESPONSE_NOT_ACCEPTED",
+  "RESPONSE_NOT_COMPLETED",
+  "SCHEMA_VERSION_UNSUPPORTED",
+  "SESSION_UNAVAILABLE",
+  "SPEAKING_FORBIDDEN",
+  "STALE_CONNECTION",
+  "STORAGE_UNAVAILABLE",
+  "TLS_REQUIRED",
+  "TOOL_SOURCE_UNKNOWN",
+  "UNAUTHENTICATED",
+  "UNKNOWN_ACTIVATION_TARGET",
+  "UNKNOWN_BINDING",
+  "UNKNOWN_OPERATION",
+  "UNSUPPORTED_CAPABILITY",
+  "UNSUPPORTED_CONTENT",
+  "WORK_START_NOT_RECORDED"
+]);
+function communicationError(error, { bot, reloadRequired = false } = {}) {
+  const code = knownCodes.has(error?.code) ? error.code : "COMMUNICATION_UNAVAILABLE";
+  const message = communicationDescriptions[code] ?? "The communication operation could not be completed.";
+  const detail = details[code];
+  return {
+    code,
+    message,
+    why: detail?.why ?? message,
+    nextActions: detail?.nextActions ?? [message, "Check communication_diagnose in your own local Bot chat or dsbot-remote diagnose through the authenticated local API before retrying."],
+    docsHint: "dsbot-remote Skill: Outcomes and recovery; An uncertain join or certificate failure",
+    ...phases.has(error?.phase) ? { phase: error.phase } : {},
+    ...code === "BOT_NOT_PUBLISHED" ? { reloadRequired, configurationChangeRequired: !reloadRequired, reloadRequiredAfterPublicationChange: true } : {},
+    ...code === "BOT_NOT_PUBLISHED" && bot ? { subject: { kind: "local-bot", localBotId: bot.id, displayName: bot.name } } : {}
+  };
+}
+
+// src/client/communication-errors.js
+var knownCommunicationFailure = (error) => Object.hasOwn(communicationDescriptions, error?.code ?? "");
+var communicationFailure = (error) => knownCommunicationFailure(error) ? t(communicationDescriptions[error.code]) + ` [${error.code}]` : t("The action could not be confirmed. Refresh status before trying again.");
 var definitive = /* @__PURE__ */ new Set([
   "INSTANCE_AUTHENTICATION_REQUIRED",
   "AMBIGUOUS_MENTION",
@@ -23497,9 +23716,9 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
     (0, import_react63.createElement)("summary", null, t(label), value ? ": " : "", value ? personLabel(people.find((person) => person.principalId === value) ?? { principalId: value }) : ""),
     contactsByAddress(people).map((group) => (0, import_react63.createElement)("section", { key: group.address, className: "bt-comm-address" }, (0, import_react63.createElement)("h3", null, t(group.address)), group.instances.map((instance) => (0, import_react63.createElement)("section", { key: instance.instanceId ?? "unknown" }, (0, import_react63.createElement)("p", { className: "bt-comm-reference", title: instance.instanceId }, instance.label), instance.contacts.map((person) => btn(labels.get(person.principalId) ?? person.displayName, (event) => {
       onChange(person.principalId);
-      const details = event.currentTarget.closest("details");
-      details.open = false;
-      details.querySelector("summary")?.focus();
+      const details2 = event.currentTarget.closest("details");
+      details2.open = false;
+      details2.querySelector("summary")?.focus();
     }, { key: person.principalId, "aria-pressed": person.principalId === value, children: personLabel(person) }))))))
   );
   if (!shown) return null;

@@ -4,6 +4,8 @@ import { output } from './tools.js'
 import { assertConversationToolScope } from './federation/tool-scope.js'
 import { communicationPreset, hasCommunicationPreset } from './federation/session-scope.js'
 import { profileHuman, readPrincipalAvatar } from './federation/avatars.js'
+import { communicationError } from '../shared/communication-diagnostics.js'
+import { communicationDiagnoseTool, diagnoseCommunication, loadedCommunicationSettings, communicationAvailabilityPrompt, communicationReloadRequired } from './federation/diagnostics.js'
 import { legacyCredential } from './federation/legacy-credential.js'
 import { normalizeAttachments,attachmentMetadata } from '../shared/communication-attachments.js'
 import { RELATIONSHIP_TOPICS } from './federation/relationship-memory.js'
@@ -18,6 +20,9 @@ const toolOperation = (kind, exec) => {
 export function install(rt) {
   const settings = rt.config.communication ?? {}
   const { ctx } = rt
+  const appliedSettings = loadedCommunicationSettings(settings)
+  const envName = settings.credentialEnv ?? 'DSBOT_COMMUNICATION_CREDENTIAL'
+  const credentialObserved = /^DSBOT_COMMUNICATION_[A-Z0-9_]+$/.test(envName) && Object.hasOwn(process.env, envName)
   const legacy = legacyCredential(rt, settings)
   let credential = legacy?.read
   let runtime, starting, stopped = false, startupError, disposePreset, onboarding
@@ -76,7 +81,7 @@ export function install(rt) {
       return JSON.stringify(await work(comm, actor, args, { ...exec, communicationSource: provenance?.sourceKey,
         communicationCausation: provenance, communicationBinding }))
     }
-    catch (error) { return JSON.stringify({ ok: false, error: { code: error.code ?? 'COMMUNICATION_UNAVAILABLE' } }) }
+    catch (error) { return JSON.stringify({ ok: false, error: communicationError(error, { bot: rt.botOf?.(rt.chatOwners?.get(exec.agent?.id)), reloadRequired: communicationReloadRequired(rt, appliedSettings) }) }) }
   }
   const definitions = [
     defineTool({ name: 'read_communication_relationships', description: 'Read only your own local relationship facts for this exact conversation/epoch and profiles explicitly shared by your local user. Claims and inferred roles are not authority.',
@@ -174,6 +179,10 @@ export function install(rt) {
       parameters: { conversationId: { type: 'string', required: true }, expectedVersion: { type: 'integer', required: true } }, output,
       execute: execute((comm, actor, args, exec) => comm.operation(actor.principalId, 'group.reclaim', args, toolOperation('reclaim', exec))) }),
   ]
+  const diagnosticState = () => ({ settings: appliedSettings, runtime, startupError, legacy, credentialObserved, toolNames: definitions.map(tool => tool.name) })
+  rt.teamTools.push(communicationDiagnoseTool(rt, diagnosticState))
+  if (ctx.systemPrompt?.section) ctx.effect(() => ctx.systemPrompt.section({ name: 'ds-bot-communication-availability', order: 645, interpolate: false,
+    text: context => communicationAvailabilityPrompt(rt, diagnosticState(), context) }), 'ds-bot: communication availability')
   if (settings.enabled) rt.teamTools.push(...definitions, ...localManagementTools(rt, { ensure, enrollment }))
   if (settings.enabled) ctx.effect(() => {
     let timer
@@ -193,6 +202,10 @@ export function install(rt) {
         if (!body || typeof body !== 'object' || Array.isArray(body)) fail('INVALID_REQUEST')
         if (['author', 'sender', 'senderId', 'homeInstanceId'].some(key => Object.hasOwn(body, key))
           || body.endpoint !== 'avatar' && Object.hasOwn(body, 'principalId')) fail('AUTHOR_MISMATCH')
+        if (body.endpoint === 'diagnose') {
+          await rt.load(); await rt.refresh()
+          return Response.json({ ok: true, value: await diagnoseCommunication(rt, diagnosticState()) })
+        }
         const enrollmentActions = { 'decode-hub-code': 'decode-hub-code', 'join-hub': 'join', 'hub-join-status': 'status', 'cancel-hub-join': 'cancel', 'onboarding-storage': 'storage',
           'memory-settings': 'memory-settings', 'set-memory-settings': 'set-memory-settings', 'available-bots': 'available-bots', 'publish-bots': 'publish-bots', 'update-hub-trust': 'update-hub-trust',
           'disconnect-hub':'disconnect-hub','switch-hub':'switch-hub','resume-hub':'resume-hub',
@@ -211,12 +224,12 @@ export function install(rt) {
           const result = await (await enrollment()).handle(action, input, { human: true })
           return Response.json({ ok: true, value: result })
         }
-        if (body.endpoint === 'state' && !settings.enabled) return Response.json({ ok: true, value: { enabled: false, connected: false, conversations: [], contacts: [], invites: [], outbox: [] } })
-        if (body.endpoint === 'state' && startupError && startupError !== 'COMMUNICATION_READ_ONLY') return Response.json({ ok: true, value: { enabled: true, connected: false, error: startupError, conversations: [], contacts: [], invites: [], outbox: [] } })
+        if (body.endpoint === 'state' && !settings.enabled) return Response.json({ ok: true, value: { enabled: false, connected: false, reloadRequired: communicationReloadRequired(rt, appliedSettings), listState: 'disabled', conversations: [], contacts: [], invites: [], outbox: [] } })
+        if (body.endpoint === 'state' && startupError && startupError !== 'COMMUNICATION_READ_ONLY') return Response.json({ ok: true, value: { enabled: true, connected: false, error: communicationError({ code: startupError }).code, errorDetails: communicationError({ code: startupError }), reloadRequired: communicationReloadRequired(rt, appliedSettings), listState: 'not-started', conversations: [], contacts: [], invites: [], outbox: [] } })
         const comm = await ensure()
         let value
         switch (body.endpoint) {
-          case 'state': value = comm.snapshot(); break
+          case 'state': value = { ...comm.snapshot(), reloadRequired: communicationReloadRequired(rt, appliedSettings) }; break
           case 'relationship-memory':
           case 'save-relationship-memory':
           case 'forget-relationship-memory': value = await comm.manageRelationships(body.endpoint, body); break
@@ -262,7 +275,6 @@ export function install(rt) {
           default: fail('UNKNOWN_OPERATION')
         }
         return Response.json({ ok: true, value })
-      } catch (error) { return Response.json({ ok: false, error: { code: error.code ?? 'COMMUNICATION_UNAVAILABLE', message: error.code ?? 'Communication is unavailable',
-        ...(/^(ENROLLMENT_(CONNECT|CHALLENGE|PROOF)_FAILED|COMMUNICATION_CREDENTIAL_(READ|WRITE|DESCRIBE|LIST)_FAILED|COMMUNICATION_CONFIG_WRITE_FAILED|CONFIG_EDIT_(OVERLAID|ENTRY_CHANGED|NOT_ACTIVE|INVALID_DOCUMENT))$/.test(error.phase ?? '') ? { phase: error.phase } : {}) } }) }
+      } catch (error) { return Response.json({ ok: false, error: communicationError(error) }) }
     } }), 'ds-bot: communication channel')
 }

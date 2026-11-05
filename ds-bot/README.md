@@ -255,3 +255,8 @@ dev/check.sh                             # all checks (see below)
 ## License
 
 [Apache-2.0](LICENSE)
+
+
+## Remote communication diagnostics
+
+In a local Bot chat, `communication_diagnose` explains connection, executing-Bot publication, scoped tools, synchronization, TLS and credential/environment presence without exposing values. Operators can use the authenticated `dsbot-remote diagnose`. See the bundled dsbot-remote Skill, “Diagnostics and first message”. Reloaded configuration and a restarted host process are different; diagnostics leave unobserved state unknown.

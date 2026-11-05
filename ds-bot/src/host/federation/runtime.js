@@ -67,7 +67,10 @@ export class CommunicationRuntime {
         conversationId: delivery.conversationId, messageId: delivery.messageId, deliveryId: delivery.deliveryId }),
       onConnect: async welcome => {
         await this.registerLocalIdentities()
-        if (welcome?.capabilities?.includes('principal-publication')) await this.transport.request('principal.publication', { principalIds: [...this.bots.values()].map(bot => bot.principalId) })
+        if (welcome?.capabilities?.includes('principal-publication')) {
+          await this.transport.request('principal.publication', { principalIds: [...this.bots.values()].map(bot => bot.principalId) })
+          this.publicationSyncedAt = new Date().toISOString()
+        }
         this.lastConnectedAt = new Date().toISOString()
         this.transportError = null
       },
@@ -517,7 +520,7 @@ export class CommunicationRuntime {
   snapshot() {
     const memberships = this.everReconciled ? this.queue.memberships().filter(member => member.principalId === this.human.principalId) : []
     const managementUrl = safeManagementUrl(this.transport.welcome?.managementUrl)
-    return { enabled: true, connected: this.transport.connected, reconciled: this.everReconciled, instanceId: this.queue.instanceId, humanPrincipalId: this.human.principalId,
+    return { enabled: true, connected: this.transport.connected, reloadRequired: false, listState: !this.everReconciled ? 'not-synchronized' : this.transport.connected ? 'authorized-snapshot' : 'cached-snapshot', reconciled: this.everReconciled, instanceId: this.queue.instanceId, humanPrincipalId: this.human.principalId,
       hubUrl: this.settings.url, hubId: this.settings.hubId ?? this.transport.welcome?.hubId ?? null, queueScope:this.settings.queueScope??'legacy',
       attachmentsAvailable: this.transport.welcome?.capabilities?.includes(ATTACHMENT_CAPABILITY) === true,
       managementUrl, managementAvailable: managementUrl !== null,

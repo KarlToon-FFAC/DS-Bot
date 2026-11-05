@@ -7,7 +7,7 @@ import { normalizeAttachments } from '../src/shared/communication-attachments.js
 
 const text = 'string', integer = 'integer'
 const schemas = {
-  state: {}, contacts: {}, conversations: {}, invites: {}, outbox: {},
+  state: {}, diagnose: {}, contacts: {}, conversations: {}, invites: {}, outbox: {},
   members: { conversationId: text },
   thread: { conversationId: text, messageId: text, after: integer, limit: integer, watermark: integer, membershipEpoch: text },
   history: { conversationId: text, after: integer, before: integer, limit: integer, latest: 'boolean', membershipEpoch: text },
