@@ -43,7 +43,7 @@ const environment = Object.fromEntries(Object.entries(process.env).filter(([key]
 const evidence = { status: 'RUNNING', network: 'same-machine loopback', model: 'local deterministic Mock', cases: [],
   paths: { evidence: output, hubConfig, hubDatabase, clients: [] },
   coverage: { realBrowser: 'NOT_RUN', browserUnitTests: 'Run the separate communication browser reset unit suite; this script does not claim its result.' },
-  uncovered: ['physical cross-machine/TLS deployment', 'real model behavior', 'real browser/cross-tab observation', 'legacy static DSH profile migration (separate unit coverage)', 'custom credential/session/attachment providers', 'retained multi-Hub namespaces beyond scopes materialized by this run'],
+  uncovered: ['physical cross-machine/TLS deployment', 'real model behavior', 'real browser/cross-tab observation', 'multi-device legacy static contact migration', 'custom credential/session/attachment providers', 'retained multi-Hub namespaces beyond scopes materialized by this run'],
   secrets: 'No keys, credentials, codes, cookies, raw responses or DSH contents are included in evidence.' }
 const save = () => writeFileSync(output, JSON.stringify(evidence, null, 2) + '\n', { mode: 0o600 })
 const stage = value => { evidence.stage = value; save() }
@@ -81,8 +81,9 @@ function profileWithoutCommunication(value) {
   for (const key of ['insert', 'before', 'after']) if (next[key]) next[key] = profileWithoutCommunication(next[key])
   return next
 }
-function records(peer) { return parse(readFileSync(peer.paths.credentials, 'utf8')).records ?? {} }
+function records(peer) { return existsSync(peer.paths.credentials) ? parse(readFileSync(peer.paths.credentials, 'utf8')).records ?? {} : {} }
 function credentialRemainder(peer) {
+  if (!existsSync(peer.paths.credentials)) return null
   const value = parse(readFileSync(peer.paths.credentials, 'utf8'))
   for (const key of Object.keys(value.records ?? {})) if (/^ds-bot\/communication-[a-f0-9]{32}$/.test(key)) delete value.records[key]
   return value
@@ -162,8 +163,8 @@ async function api(peer, endpoint, input = {}) {
   if (!result.ok) fail(result.error?.code ?? 'ACCEPTANCE_API_INVALID_RESPONSE')
   return result.value
 }
-async function startPeer(peer) {
-  await topology.bench(peer, 'start')
+async function startPeer(peer, extra = {}) {
+  await topology.bench(peer, 'start', extra)
   peer.client = await until(async () => { try { return await benchClient(peer.name, peer.web) } catch { return false } }, 'real DSH API ready', 45000)
   const login = readFileSync(join(peer.home, 'web.log'), 'utf8').match(new RegExp(`http://127\\.0\\.0\\.1:${peer.web}/\\?token=[^\\s]+`))?.[0]
   assert.ok(login)
@@ -212,14 +213,16 @@ async function contactAndGroup(label, attachments = []) {
 }
 function pathsFor(peer) {
   const profile = join(peer.home, 'profiles/communication-test')
-  const paths = { dshHome: peer.home, home: join(peer.home, 'bot'), profiles: [join(profile, 'cordis.yml'), join(profile, 'cordis.patch.yml'), join(peer.home, 'bench.patch.yml')], credentials: join(peer.home, '.credentials.yaml'), sessions: join(peer.home, 'sessions'), attachmentsHome: peer.home }
-  for (const path of [...paths.profiles, paths.credentials]) assert.ok(lstatSync(path).isFile(), 'Actual bench profile and credential store required')
+  const paths = { dshHome: peer.home, home: join(peer.home, 'bot'), profiles: [join(profile, 'cordis.yml'), join(profile, 'cordis.patch.yml'), join(peer.home, 'bench.patch.yml')], credentials: join(peer.home, '.credentials.yaml'), sessions: join(peer.home, 'sessions'), attachmentsHome: peer.home, storageRoot: join(peer.home, 'storages') }
+  for (const path of paths.profiles) assert.ok(lstatSync(path).isFile(), 'Actual bench profile required')
+  if (existsSync(paths.credentials)) assert.ok(lstatSync(paths.credentials).isFile(), 'Actual local credential store must be a file')
   assert.ok(lstatSync(paths.sessions).isDirectory(), 'Actual materialized DSH session root required')
+  assert.ok(lstatSync(paths.storageRoot).isDirectory(), 'Actual default JSON storage provider root required')
   return paths
 }
 function resetArguments(peer, confirm) {
   const p = peer.paths
-  return ['--home', p.home, ...p.profiles.flatMap(path => ['--profile', path]), '--credentials', p.credentials, '--sessions', p.sessions, '--attachments-home', p.attachmentsHome, ...(confirm ? ['--confirm', 'ERASE-ALL-FEDERATION-DATA'] : [])]
+  return ['--home', p.home, ...p.profiles.flatMap(path => ['--profile', path]), '--credentials', p.credentials, '--sessions', p.sessions, '--attachments-home', p.attachmentsHome, '--storage-root', p.storageRoot, ...(confirm ? ['--confirm', 'ERASE-ALL-FEDERATION-DATA'] : [])]
 }
 async function clientReset(peer, confirm = false) {
   const result = await command(join(repo, 'ds-bot/bin/dsbot-reset.mjs'), resetArguments(peer, confirm), { DSH_HOME: peer.home, DSH_HARNESS: join(repo, 'ds-bot/dev/harness') })
@@ -233,7 +236,13 @@ async function clientReset(peer, confirm = false) {
 function snapshot(peer) {
   const logs = journals(peer), remoteDirectories = [...new Set(logs.filter(value => value.remote).map(value => value.directory))]
   const ordinaryFiles = files(peer.paths.sessions).filter(path => !remoteDirectories.includes(dirname(path)))
-  return { state: hash(readFileSync(join(peer.paths.home, 'state.json'))), profiles: peer.paths.profiles.map(path => ({ path, digest: hash(readFileSync(path)), value: profileWithoutCommunication(parse(readFileSync(path, 'utf8'))) })), credentials: credentialRemainder(peer), credentialDigest: hash(readFileSync(peer.paths.credentials)), remoteDirectories,
+  const remoteIds = [...new Set(logs.filter(value => value.remote).map(value => value.header.id))]
+  const workspacePath = join(peer.paths.storageRoot, 'workspace.json')
+  const workspace = JSON.parse(readFileSync(workspacePath, 'utf8'))
+  const projectionRoot = join(peer.paths.storageRoot, 'session_projcache/sessions')
+  const remoteProjections = remoteIds.map(id => join(projectionRoot, id + '.json')).filter(existsSync)
+  const ordinaryProjections = files(projectionRoot).filter(path => !remoteProjections.includes(path)).map(path => ({ path, digest: hash(readFileSync(path)) }))
+  return { state: hash(readFileSync(join(peer.paths.home, 'state.json'))), profiles: peer.paths.profiles.map(path => ({ path, digest: hash(readFileSync(path)), value: profileWithoutCommunication(parse(readFileSync(path, 'utf8'))) })), credentials: credentialRemainder(peer), credentialDigest: existsSync(peer.paths.credentials) ? hash(readFileSync(peer.paths.credentials)) : null, remoteDirectories, remoteIds, workspace, remoteProjections, ordinaryProjections, storageFiles: files(peer.paths.storageRoot).map(path => ({ path, digest: hash(readFileSync(path)) })),
     ordinary: ordinaryFiles.map(path => ({ path, digest: hash(readFileSync(path)) })), attachments: files(join(peer.home, 'attachments/v1')).map(path => ({ path, digest: hash(readFileSync(path)) })) }
 }
 function preserved(peer, before) {
@@ -242,6 +251,60 @@ function preserved(peer, before) {
   for (const item of before.profiles) assert.deepEqual(profileWithoutCommunication(parse(readFileSync(item.path, 'utf8'))), item.value, 'Non-communication profile configuration must remain')
   assert.deepEqual(credentialRemainder(peer), before.credentials, 'Unrelated credentials must remain')
 }
+
+function derivedErased(peer, before) {
+  for (const path of before.remoteProjections) assert.equal(existsSync(path), false, 'Remote Session projection must be erased')
+  for (const item of before.ordinaryProjections) assert.equal(hash(readFileSync(item.path)), item.digest, 'Ordinary projection must remain byte-identical')
+  const workspacePath = join(peer.paths.storageRoot, 'workspace.json'), after = JSON.parse(readFileSync(workspacePath, 'utf8'))
+  const remoteRoot = join(peer.paths.home, 'communication-workspaces')
+  const insideRemote = path => typeof path === 'string' && path.startsWith(remoteRoot + (process.platform === 'win32' ? '\\' : '/'))
+  for (const [id, row] of Object.entries(before.workspace.tables.workspaces)) {
+    if (insideRemote(row.path)) assert.equal(after.tables.workspaces[id], undefined, 'Remote Workspace registration must be erased')
+    else assert.deepEqual(after.tables.workspaces[id], { ...row, sessionIds: row.sessionIds.filter(session => !before.remoteIds.includes(session)) }, 'Ordinary Workspace registration must remain')
+  }
+  for (const path of files(peer.paths.storageRoot).filter(path => path.endsWith('.json'))) {
+    const text = readFileSync(path, 'utf8')
+    for (const id of before.remoteIds) if (text.includes(id)) fail('ACCEPTANCE_REMOTE_DERIVED_RESIDUE', path)
+    if (text.includes(remoteRoot) || text.includes(remoteRoot.replaceAll('\\', '\\\\'))) fail('ACCEPTANCE_REMOTE_DERIVED_RESIDUE', path)
+  }
+}
+
+async function legacyStaticPrelude(peer) {
+  stage('existing normal profile starts with legacy static pairing')
+  await topology.bench(peer, 'stop')
+  const settings = { enabled: true, url: topology.url, instanceId: staticInstance, publishedBotIds: [peer.botId], humanDisplayName: 'Legacy static test', pollMs: 150 }
+  await startPeer(peer, { DSBOT_COMMUNICATION_ONBOARDING_FIXTURE: '', DSBOT_COMMUNICATION_CONFIG: JSON.stringify(settings), DSBOT_COMMUNICATION_CREDENTIAL: staticCredential })
+  const state = await until(async () => {
+    const value = await api(peer, 'state')
+    return value.connected && value.reconciled && value.instanceId === staticInstance && value.localBots.length === 1 && value
+  }, 'actual legacy static DSH connection reconciled', 45000)
+  peer.instanceId = state.instanceId; peer.human = state.humanPrincipalId; peer.bot = state.localBots[0].principalId
+  const group = await topology.group('Legacy static before reset', [peer.bot], { allowSpeaking: false })
+  const input = await topology.send(peer, group, `COMM-ECHO legacy-static-${nonce}`, [peer.bot])
+  await until(() => topology.hasText(peer, group, `Communication reply legacy-static-${nonce}`), 'legacy static real DSH Mock reply', 60000)
+  await topology.bench(peer, 'stop')
+  peer.paths = pathsFor(peer)
+  const before = snapshot(peer)
+  assert.ok(before.remoteProjections.length > 0, 'Actual legacy static projection cache materialized')
+  assert.ok(journals(peer).some(value => value.remote && JSON.stringify(value.rows).includes(input.messageId)), 'Legacy static Host created a real communication Session')
+  const dry = await clientReset(peer)
+  assert.equal(dry.dryRun, true); assert.ok(dry.configurationFiles > 0)
+  for (const item of [...before.profiles, ...before.storageFiles]) assert.equal(hash(readFileSync(item.path)), item.digest, 'Legacy dry run must not mutate profile or derived state')
+  const erased = await clientReset(peer, true)
+  assert.equal(erased.erased, true)
+  assert.ok(erased.clearLaunchEnvironment.includes('DSBOT_COMMUNICATION_CREDENTIAL'))
+  assert.equal(existsSync(join(peer.paths.home, 'communication.sqlite')), false)
+  assert.equal(existsSync(join(peer.paths.home, 'communication-workspaces')), false)
+  assert.ok(before.remoteDirectories.every(path => !existsSync(path)))
+  preserved(peer, before); derivedErased(peer, before)
+  // The CLI cannot erase a parent's environment. This restart explicitly removes the static launch inputs.
+  await startPeer(peer)
+  assert.equal((await api(peer, 'onboarding-storage')).configured, false)
+  assert.equal((await api(peer, 'state')).enabled, false)
+  assert.equal((await peer.client.request('/api/bot', { endpoint: 'state' })).mainBotId, peer.botId)
+  record('real-legacy-static-DSH-group-Mock-reply-reset-and-same-profile-unconfigured-restart', { launchCredentialClearedByFixture: true })
+}
+
 async function stopAll() {
   if (shuttingDown) return
   shuttingDown = true
@@ -271,6 +334,7 @@ try {
     await peer.client.request('/api/bot', { endpoint: 'update-bot', payload: { id: peer.botId, name: `Retained local ${peer.id}`, model: 'deepseek-official/deepseek-v4-pro' } })
     await peer.client.request('/api/bot', { endpoint: 'send', payload: { sessionId: peer.botId, text: `ordinary-reset-canary-${nonce}-${peer.id}` } })
     await until(async () => { const metrics = await peer.client.api({ operation: 'metrics' }); return metrics.chiefEvents > 0 && metrics.chiefStatus === 'idle' && metrics.chiefPending === 0 }, 'ordinary local chat settled', 45000)
+    if (peer.id === 'a') await legacyStaticPrelude(peer)
     await enroll(peer, oldHub); await publish(peer)
     peer.old = { instanceId: peer.instanceId, human: peer.human, bot: peer.bot, userCode: (await api(peer, 'user-code')).userCode }
   }
@@ -291,6 +355,7 @@ try {
     if (peer.id === 'b') {
       assert.ok(logs.some(value => value.remote && JSON.stringify(value.rows).includes(oldGroup.inputId)), 'Remote input was admitted into a real DSH journal')
       assert.ok(peer.before.attachments.length > 0, 'Real DSH attachment objects materialized')
+      assert.ok(peer.before.remoteProjections.length > 0, 'Real DSH projection cache materialized')
     }
   }
   record('normal-Host-stop-and-exact-runtime-paths-verified')
@@ -313,7 +378,7 @@ try {
     const dry = await clientReset(peer)
     assert.equal(dry.dryRun, true); assert.ok(dry.pairingRecords > 0)
     assert.equal(hash(readFileSync(peer.paths.credentials)), peer.before.credentialDigest, 'Dry run cannot change credentials')
-    for (const item of peer.before.profiles) assert.equal(hash(readFileSync(item.path)), item.digest, 'Dry run cannot change profile bytes')
+    for (const item of [...peer.before.profiles, ...peer.before.storageFiles]) assert.equal(hash(readFileSync(item.path)), item.digest, 'Dry run cannot change profile or derived state bytes')
     assert.ok(peer.before.remoteDirectories.every(existsSync)); preserved(peer, peer.before)
     const erased = await clientReset(peer, true)
     assert.equal(erased.erased, true); assert.equal(erased.dryRun, false); assert.equal(erased.browserCleanupPending, true)
@@ -326,8 +391,8 @@ try {
     assert.equal(Object.keys(records(peer)).some(key => key.startsWith('ds-bot/communication-')), false)
     assert.equal(files(join(peer.home, 'attachments/v1')).length, 0, 'All attachment bytes in this fixture are remote-only')
     for (const path of peer.paths.profiles) assert.deepEqual(parse(readFileSync(path, 'utf8')), profileWithoutCommunication(parse(readFileSync(path, 'utf8'))))
-    preserved(peer, peer.before)
-    record(`client-${peer.id}-all-materialized-federation-data-erased-local-data-preserved`, { exclusiveAttachmentObjects: erased.exclusiveAttachmentObjects, erasedRemoteDirectories: peer.before.remoteDirectories.length })
+    preserved(peer, peer.before); derivedErased(peer, peer.before)
+    record(`client-${peer.id}-all-materialized-federation-data-erased-local-data-preserved`, { exclusiveAttachmentObjects: erased.exclusiveAttachmentObjects, erasedRemoteDirectories: peer.before.remoteDirectories.length, erasedProjectionRecords: peer.before.remoteProjections.length })
   }
   stage('normal Hub shutdown and offline CLI reset of actual config')
   await stopHub()
