@@ -1,0 +1,89 @@
+{
+  "status": "PASS_LOCAL_MOCK_FOLLOWUP",
+  "verifiedAt": "2026-11-05T08:57:38.240741+00:00",
+  "publishedBase": "d61b42a9d369b097143ad9b767847d8662439bf7",
+  "testedCommit": "c0f1223949125d75b0ecb1a2f92a6e2c2fdde45c",
+  "testedTree": "2dfd8acc75219ae8b61bb342d91b16078d82bc25",
+  "sourceCommits": {
+    "focus": "eca0845f384b05423b0481f99598ebc8b25b6f50",
+    "liveScope": "22e8d15",
+    "scopedTrustGuidance": "36b1a28"
+  },
+  "integrationCommits": {
+    "focus": "dc03769",
+    "liveScope": "30d91f4",
+    "scopedTrustGuidance": "482c038",
+    "publicationTestContract": "55a0fac",
+    "structuredBenchErrors": "c0f1223"
+  },
+  "pluginTests": {
+    "total": 1782,
+    "passed": 1778,
+    "failed": 0,
+    "skipped": 4
+  },
+  "hubTests": {
+    "total": 117,
+    "passed": 117,
+    "failed": 0,
+    "skipped": 0
+  },
+  "openaiMockChain": {
+    "status": "PASS_MOCK_DSH_HUB",
+    "cases": 7,
+    "loopbackRequests": 6,
+    "externalRequests": 0
+  },
+  "relationshipMock": {
+    "passed": 6,
+    "failed": 0,
+    "additionalCoverage": "DM contact revoke/reconsent excludes old membership-epoch facts and queued send; explicit local shared profile remains separate."
+  },
+  "nativeMockSmoke": {
+    "passed": 52,
+    "failed": 0,
+    "ownedBenchStopped": true
+  },
+  "staticChecks": {
+    "lint": "PASS_WITH_EXISTING_WARNINGS",
+    "generatedClient": "PASS",
+    "probeClient": "PASS",
+    "diffCheck": "PASS"
+  },
+  "independentStaticReview": {
+    "blockingFindings": 0,
+    "scope": "Live scope generation/tombstone safety, scoped TLS observations, publication-gate fixture, and structured bench errors."
+  },
+  "resolvedEarlierEvidence": [
+    "The two DSH startup validations deferred in cloud-contact-integration-evidence.json now pass serially on this tested tree.",
+    "The first followup full regression exposed an outdated unpublished list_contacts fixture; only the test was changed to verify the send publication gate alongside legitimate local-owner reads.",
+    "The first followup Mock chain exposed text-based error matching; the bench helper now preserves only allowlisted structured codes and never forwards unknown raw error details."
+  ],
+  "sourceSha256": {
+    "ds-bot/src/host/tools.js": "76425a6193943c5d8ddb7e8793e91c419756f5ca13c33998d7437f3bf29310d6",
+    "ds-bot/src/host/federation/diagnostics.js": "8f626d1a99a38082b47577afd6f4448acfe04b3b3ed52587acd6b7590a84f8cb",
+    "ds-bot/src/host/federation/tls-observation.js": "5b8e4ea74365615dc49f26360fe0efc8f884cb1c0d6dd8c2bb0cab42cef646f9",
+    "ds-bot/dev/communication/bench-client.mjs": "b38baf868e4edea2a1f836e2166a0731106f59dbcb7cca40585ec86aff8bfa86",
+    "ds-bot/dev/communication/openai-dsh-pilot.mjs": "0a2c8cc50b59ba925fe4c81a2bec0d449fe5fd34a64d77e30a6bc51ee5535935",
+    "ds-bot/dev/communication/relationship-memory-acceptance.mjs": "24a691216ec3c3e66d4012fda07aa27484e6cdca8ec978759461fe9b7b78f167",
+    "ds-bot/src/client/communication.js": "3ad1eccfadf53fda2f9e85b2d1b7e3b30e886de6ffb9c83aa36067f199458dfd",
+    "ds-bot/client.js": "39f9cba1c224152f80b101300a7afff2e94284ca458b4631f1b4b35bb29a1687"
+  },
+  "scope": {
+    "onlyMock": true,
+    "realModelCalls": false,
+    "credentialsRequested": false,
+    "credentialsReadOrTransferred": false,
+    "push": false,
+    "actionsTriggered": false,
+    "otherWorktreesModified": false
+  },
+  "notCovered": [
+    "Real-model behavior and paid calls.",
+    "Physical cross-machine network and native Windows runtime.",
+    "Independent live-DSH pixel/layout browser validation; prior supported synthetic component preview is narrower.",
+    "Later always-visible conversations and private IP notes commits, which are not part of this tested tree.",
+    "Newly reported contact-removal disconnect and Hub-instance removal issues; separate fixes remain pending.",
+    "The user-authorized incompatible IM redesign, which is separate work."
+  ]
+}
