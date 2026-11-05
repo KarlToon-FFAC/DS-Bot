@@ -577,7 +577,9 @@ test('publication and withdrawal reload the same live chat while the real runtim
   t.after(first.unload)
   await first.call('state', {})
   await first.agentCreated('a')
-  const denied = JSON.parse(await first.tool('list_contacts', {}, 'a'))
+  // Unpublished local contact reads have a separate authenticated-owner path.
+  // Speaking as the Bot still requires its own publication after every reload.
+  const denied = JSON.parse(await first.tool('send_contact_message', { text: 'synthetic publication gate', contactPrincipalId: 'human:b:owner' }, 'a'))
   assert.equal(denied.error.code, 'BOT_NOT_PUBLISHED')
   assert.equal(denied.error.subject.localBotId, 'a')
   const sameAgent = first.agentOf('a')
@@ -595,7 +597,7 @@ test('publication and withdrawal reload the same live chat while the real runtim
   const third = start(TEAM, { agentPresets: preset }, [], shared)
   t.after(third.stop)
   await third.call('state', {})
-  const withdrawn = JSON.parse(await third.tool('list_contacts', {}, 'a'))
+  const withdrawn = JSON.parse(await third.tool('send_contact_message', { text: 'synthetic withdrawal gate', contactPrincipalId: 'human:b:owner' }, 'a'))
   assert.equal(withdrawn.error.code, 'BOT_NOT_PUBLISHED')
   assert.equal(third.agentOf('a'), sameAgent)
   assert.ok(third.scoped.some(entry => entry.sessionId === 'a' && entry.name === 'send_contact_message'), JSON.stringify({ status: third.runtime.teamToolScopeStatus('a'), names: scopedNames(third, 'a'), botSession: third.runtime.isBotSession('a'), count: third.runtime.teamTools.length }))
