@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { generateKeyPairSync, randomUUID, sign } from 'node:crypto'
+import { createHash, generateKeyPairSync, randomUUID, sign } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -63,7 +63,14 @@ test('permanent device deletion removes identities, private history, contact sta
   db.prepare('INSERT INTO cursors VALUES (?,?,?,?)').run(privateGroup, a.principalId, member(store, a, privateGroup).membershipEpoch, 1)
   const untouched = store.createGroup(c.auth, op({ principalId: c.principalId, title: 'Other device group' })).conversationId
   const untouchedMessage = message(store, c, untouched, 'Do not delete me')
-  store.invite(c.auth, op({ principalId: c.principalId, conversationId: untouched, membershipEpoch: member(store, c, untouched).membershipEpoch, inviteePrincipalId: a.principalId }))
+  const invitationInput = op({ principalId: c.principalId, conversationId: untouched, membershipEpoch: member(store, c, untouched).membershipEpoch, inviteePrincipalId: a.principalId })
+  const invitation = store.invite(c.auth, invitationInput)
+  assert.ok(db.prepare('SELECT 1 FROM operations WHERE id=?').get(invitationInput.operationId))
+  const digest = key => createHash('sha256').update(key).digest('hex')
+  const privateRateKeys = [`contact:${a.auth.instanceId}`, `contact-target:${a.principalId}`, `contact-target:${bot}`]
+  for (const key of privateRateKeys) m.rate(key, 1000)
+  m.rate(`contact:${b.auth.instanceId}`, 1000)
+  const retainedRates = db.prepare('SELECT * FROM hub_rate_limits WHERE key IN (?,?) ORDER BY key').all(digest('contact:global'), digest(`contact:${b.auth.instanceId}`))
   const priorOtherMessage = db.prepare('SELECT * FROM messages WHERE id=?').get(untouchedMessage.messageId)
   const authChallenge = m.challenge({}, { purpose: 'login', instanceId: a.auth.instanceId })
   const statusChallenge = m.challenge({}, { purpose: 'status', requestId: a.requestId })
@@ -77,6 +84,11 @@ test('permanent device deletion removes identities, private history, contact sta
     for (const id of [a.auth.instanceId, a.principalId, bot, privateGroup, dm, privateMessage.messageId, dmMessage.messageId, dmDelivery.id]) assert.equal(rows.includes(id), false, `${table} retained ${id}`)
   }
   assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), [])
+  assert.equal(db.prepare('SELECT 1 FROM invites WHERE id=?').get(invitation.inviteId), undefined)
+  assert.equal(db.prepare('SELECT 1 FROM operations WHERE id=?').get(invitationInput.operationId), undefined)
+  assert.throws(() => store.invite(c.auth, invitationInput), { code: 'UNKNOWN_PRINCIPAL' })
+  for (const key of privateRateKeys) assert.equal(db.prepare('SELECT 1 FROM hub_rate_limits WHERE key=?').get(digest(key)), undefined)
+  assert.deepEqual(db.prepare('SELECT * FROM hub_rate_limits WHERE key IN (?,?) ORDER BY key').all(digest('contact:global'), digest(`contact:${b.auth.instanceId}`)), retainedRates)
   assert.deepEqual(db.prepare('SELECT * FROM messages WHERE id=?').get(untouchedMessage.messageId), priorOtherMessage)
   assert.deepEqual(m.relations(b.auth, { principalId: b.principalId }), [])
   assert.throws(() => store.check(a.auth), { code: 'UNAUTHENTICATED' })

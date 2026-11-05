@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { identifier, requireThat } from './protocol.js'
 
 function references(value, ids) {
@@ -45,7 +46,9 @@ export function deleteDevice(management, input) {
     const requests = db.prepare('SELECT id FROM hub_join_requests WHERE instance_id=? OR public_key=(SELECT public_key FROM hub_enrolled_peers WHERE instance_id=?)').all(id, id)
     deletedRequests = new Set(requests.map(request => request.id))
     const contactRequests = db.prepare('SELECT id FROM hub_contact_requests WHERE sender IN (SELECT id FROM principals WHERE instance_id=?) OR target IN (SELECT id FROM principals WHERE instance_id=?)').all(id, id)
-    const removedIds = new Set([id, ...principalIds, ...deletedConversations, ...requests.map(r => r.id), ...contactRequests.map(r => r.id)])
+    const invitations = db.prepare('SELECT id,conversation_id,principal_id,inviter_id FROM invites').all()
+      .filter(invite => deletedConversations.has(invite.conversation_id) || principals.has(invite.principal_id) || principals.has(invite.inviter_id))
+    const removedIds = new Set([id, ...principalIds, ...deletedConversations, ...requests.map(r => r.id), ...contactRequests.map(r => r.id), ...invitations.map(invite => invite.id)])
     const messages = db.prepare('SELECT id,conversation_id FROM messages').all().filter(m => deletedConversations.has(m.conversation_id))
     const messageIds = new Set(messages.map(m => m.id))
     const deliveries = db.prepare('SELECT id,message_id,recipient_id FROM deliveries').all().filter(d => messageIds.has(d.message_id) || principals.has(d.recipient_id))
@@ -98,6 +101,10 @@ export function deleteDevice(management, input) {
       }
     }
     for (const subject of removedIds) drop('hub_admin_audit', 'subject', subject)
+    // Shared address/global abuse limits are not private device state.
+    for (const key of [`contact:${id}`, ...principalIds.map(principalId => `contact-target:${principalId}`)]) {
+      drop('hub_rate_limits', 'key', createHash('sha256').update(key).digest('hex'))
+    }
     for (const request of requests) drop('hub_join_requests', 'id', request.id)
     for (const table of ['hub_enrolled_peers', 'instance_features', 'instance_addresses', 'hub_instance_names']) drop(table, 'instance_id', id)
     drop('principals', 'instance_id', id)

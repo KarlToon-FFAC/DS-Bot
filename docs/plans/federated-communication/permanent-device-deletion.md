@@ -45,7 +45,11 @@ Deletion is one SQLite transaction and removes:
   including events, messages/inline attachments, delivery receipts, response and
   input-update records, causality state and dispatch records.
 - Its own operation receipts and other operation results referring to deleted
-  records, plus old audit entries whose subject is a deleted identity/request.
+  records, including removed invitation IDs, plus old audit entries whose subject
+  is a deleted identity/request. Replaying another device's old invitation
+  operation therefore cannot return a now-deleted invitation as a success.
+- The exact device's contact-request rate-limit row and each deleted principal's
+  contact-target rate-limit row. Shared address and global abuse limits remain.
   There is no deleted-device identity, repair record or recovery owner tombstone.
 
 Shared groups are not erased. Others' messages and the shared canonical history
