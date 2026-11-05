@@ -343,3 +343,32 @@ test('removed ownership recovery cannot be prepared or retried by CLI', () => {
   assert.throws(() => prepare('reclaim', { conversationId: 'old', expectedVersion: 2 }), /INVALID_OPERATION_OR_INPUT/)
   assert.throws(() => prepare('retry', { endpoint: 'reclaim', conversationId: 'old', expectedVersion: 2, operationId: 'old' }), /INVALID_OPERATION_OR_INPUT/)
 })
+
+test('CLI reconciles only a definite local reset-generation gate once with the exact original intent', async t => {
+  const epoch = '00000000-0000-4000-8000-000000000001', seen = []
+  const url = await mock(t, (req, res, body) => {
+    seen.push(body)
+    res.setHeader('content-type', 'application/json')
+    if (body.endpoint === 'reset-status') return res.end(JSON.stringify({ ok: true, value: { pending: false, browserEpoch: epoch } }))
+    if (req.headers['x-dsbot-browser-epoch'] !== epoch) return res.end(JSON.stringify({ ok: false, error: { code: 'COMMUNICATION_BROWSER_RESET_REQUIRED' } }))
+    res.end(JSON.stringify({ ok: true, value: { accepted: true } }))
+  })
+  const prepared = prepare('send', requests.send), result = await execute(prepared, { url, cookie: 'synthetic-reset-cookie' })
+  assert.equal(result.value.accepted, true)
+  assert.equal(seen.length, 3); assert.deepEqual(seen[0], seen[2]); assert.deepEqual(seen[1], { endpoint: 'reset-status' })
+  assert.deepEqual(result.request, prepared.request)
+})
+
+test('CLI never loops through a second reset-generation rejection or sends while reset is incomplete', async t => {
+  let pending = true, count = 0
+  const url = await mock(t, (_req, res, body) => {
+    count++; res.setHeader('content-type', 'application/json')
+    res.end(JSON.stringify(body.endpoint === 'reset-status' ? { ok: true, value: { pending, browserEpoch: '00000000-0000-4000-8000-000000000001' } } : { ok: false, error: { code: 'COMMUNICATION_BROWSER_RESET_REQUIRED' } }))
+  })
+  const prepared = prepare('send', requests.send)
+  await assert.rejects(execute(prepared, { url, cookie: 'synthetic-reset-cookie' }), { code: 'COMMUNICATION_RESET_INCOMPLETE', exitCode: 4 })
+  assert.equal(count, 2)
+  pending = false; count = 0
+  await assert.rejects(execute(prepared, { url, cookie: 'synthetic-reset-cookie' }), { code: 'COMMUNICATION_BROWSER_RESET_REQUIRED', exitCode: 4 })
+  assert.equal(count, 3)
+})

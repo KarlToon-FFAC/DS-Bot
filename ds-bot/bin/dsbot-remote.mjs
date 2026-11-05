@@ -180,7 +180,7 @@ export const help = operation => JSON.stringify({
   authentication: 'DSBOT_REMOTE_URL and DSBOT_REMOTE_COOKIE, or explicit --config JSON {url,cookie}. Local loopback only; no discovery. Never put a cookie in argv.',
   operations: operation && schemas[operation] ? { [operation]: { fields: schemas[operation], required: required[operation] ?? [] } }
     : Object.fromEntries(Object.entries(schemas).map(([name, fields]) => [name, { fields, required: required[name] ?? [] }])),
-  retry: 'dsbot-remote retry < original-request.json; use the request object from the previous result/error unchanged. No automatic retries.',
+  retry: 'dsbot-remote retry < original-request.json; use the request object from the previous result/error unchanged. No automatic retries for uncertain outcomes. A definite local reset-generation rejection is reconciled once with the same request IDs.',
   settings: 'save-settings atomically validates/applies title, routing and member policies against one expectedVersion and increments the group version once. No partial save; retry the complete original request with its original operationId.',
   profile: 'profile-human changes only the authenticated Human. avatar:null resets to a name-derived avatar; avatar:{image:dataURL} uses a consenting custom PNG/JPEG/WebP/GIF image, max 160000 characters. No URLs or file paths. Preserve the complete original operationId/request for an uncertain retry. Profile requests and avatar reads contain image data: keep them private to the intended audience.',
   enrollment: 'decode-hub-code uses the authenticated local API. Review exact Hub ID/URL and, for signed v2 codes, confirmedTrustFingerprint; join-hub requires those confirmations. Host SDK owns durable keys and pending state. Reconcile hub-join-status/onboarding-storage before retrying uncertain enrollment. Never read credential records or send the local session cookie to the Hub.',
@@ -203,18 +203,31 @@ export async function execute(prepared, { url, cookie, fetchImpl = fetch, timeou
   if (typeof cookie !== 'string' || !cookie.trim() || /[\r\n]/.test(cookie)) fail('SESSION_COOKIE_REQUIRED', 3)
   if (!['/api/communication', '/api/bot'].includes(apiPath)) fail('LOCAL_API_REQUIRED', 3)
   const { request, operation } = prepared
-  let response, result
-  try {
-    response = await fetchImpl(new URL(apiPath, base), { method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(timeout),
-      headers: { 'content-type': 'application/json', cookie }, body: JSON.stringify(request) })
-    if ([401, 403].includes(response.status)) fail('AUTHENTICATION_REJECTED', 3, request)
-    if (response.status >= 300 && response.status < 400) fail('REDIRECT_REFUSED', 3, request)
-    if (!response.ok) fail('HTTP_FAILURE_UNCERTAIN', 5, request)
-    result = await response.json()
-    if (!object(result) || typeof result.ok !== 'boolean' || result.ok && !Object.hasOwn(result, 'value')) fail('INVALID_RESPONSE_UNCERTAIN', 5, request)
-  } catch (error) {
-    if (error.exitCode) throw error
-    fail('NETWORK_OUTCOME_UNCERTAIN', 5, request)
+  const post = async (body, extraHeaders = {}) => {
+    try {
+      const response = await fetchImpl(new URL(apiPath, base), { method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(timeout),
+        headers: { 'content-type': 'application/json', cookie, ...extraHeaders }, body: JSON.stringify(body) })
+      if ([401, 403].includes(response.status)) fail('AUTHENTICATION_REJECTED', 3, request)
+      if (response.status >= 300 && response.status < 400) fail('REDIRECT_REFUSED', 3, request)
+      if (!response.ok) fail('HTTP_FAILURE_UNCERTAIN', 5, request)
+      const result = await response.json()
+      if (!object(result) || typeof result.ok !== 'boolean' || result.ok && !Object.hasOwn(result, 'value')) fail('INVALID_RESPONSE_UNCERTAIN', 5, request)
+      return result
+    } catch (error) {
+      if (error.exitCode) throw error
+      fail('NETWORK_OUTCOME_UNCERTAIN', 5, request)
+    }
+  }
+  let result = await post(request)
+  // Node fetch supplies browser-shaped fetch metadata. A generation rejection is
+  // definite: the Host has not run the request. Reuse its exact IDs once after
+  // reading the authenticated gate, never replay an uncertain network outcome.
+  if (apiPath === '/api/communication' && !result.ok && result.error?.code === 'COMMUNICATION_BROWSER_RESET_REQUIRED') {
+    const reset = await post({ endpoint: 'reset-status' })
+    if (!reset.ok) fail(/^[A-Z][A-Z0-9_]{0,100}$/.test(reset.error?.code ?? '') ? reset.error.code : 'API_REJECTED', 4, request)
+    if (reset.value?.pending) fail('COMMUNICATION_RESET_INCOMPLETE', 4, request)
+    if (typeof reset.value?.browserEpoch !== 'string' || !/^[0-9a-f-]{36}$/.test(reset.value.browserEpoch)) fail('COMMUNICATION_BROWSER_RESET_REQUIRED', 4, request)
+    result = await post(request, { 'x-dsbot-browser-epoch': reset.value.browserEpoch })
   }
   if (!result.ok) {
     const code = /^[A-Z][A-Z0-9_]{0,100}$/.test(result.error?.code ?? '') ? result.error.code : 'API_REJECTED'
