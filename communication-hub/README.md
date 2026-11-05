@@ -170,7 +170,7 @@ wrong credentials. Different-IP operation remains separate acceptance work. See
 
 ## Reset a disposable test Hub
 
-For an intentional clean start, follow the [test Hub reset guide (Chinese)](../docs/plans/federated-communication/test-hub-reset.zh.md). It covers server/client scope, stopping processes, optional backups, pairing and contact/group rebuild, and rollback limits. This is not a reconnect procedure; never delete a live database or attach an old client outbox to a replacement Hub.
+For an intentional clean start, follow the [test Hub reset guide (Chinese)](../docs/plans/federated-communication/test-hub-reset.zh.md). It covers stopping both sides, permanently erasing all federation data with the offline reset commands, generating a fresh Hub code, and rebuilding pairing, contacts and groups while preserving ordinary local Bots and chats. No backup is made by default. This is not a reconnect procedure; never delete a live database or attach an old client outbox to a replacement Hub.
 
 ## Durable behavior
 
