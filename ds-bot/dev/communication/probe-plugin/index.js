@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { completedOutputs, inspectBinding, reconcileInput, recoverBinding, resumePendingInput, SOURCE_KIND } from '../../../src/host/federation/session-journal.js'
+import { recordRecoveryNotice, recordRecoveryAssembly } from '../recovery-marker.mjs'
 
 export const name = 'ds-bot-communication-probe'
 export const inject = ['connection', 'sessions', 'sessionController']
@@ -18,6 +19,22 @@ export function apply(ctx) {
   let productionHold
   let runtimeHold
   const runtimeCheckpoints = new Map()
+  const recoveryNotices = new Map()
+  ctx.on('session/event', (session, event) => {
+    const marker = recordRecoveryNotice(root, session, event)
+    if (marker) recoveryNotices.set(session.id, marker)
+  })
+  ctx.on('system-prompt/assemble', async (_assembly, context, next) => {
+    const marker = recoveryNotices.get(context?.agent?.id)
+    if (!marker) return next()
+    recordRecoveryAssembly(root, marker, 'assembling')
+    try { return await next() }
+    finally {
+      if (recoveryNotices.get(marker.sessionId) === marker) {
+        recordRecoveryAssembly(root, marker, 'settled'); recoveryNotices.delete(marker.sessionId)
+      }
+    }
+  }, { prepend: true })
   ctx.on('ds-bot/communication-checkpoint', async detail => {
     if (runtimeHold?.point !== detail.point || runtimeHold.conversationId !== detail.conversationId) return
     runtimeHold = null
@@ -113,6 +130,17 @@ export function apply(ctx) {
       resolved.agent.followup(createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: 'Synthetic local input without communication provenance; must never use an earlier communication response grant.' }] }))
       await ctx.sessions.flush(resolved.agent.session)
       return { queued: true }
+    }
+    if (body.operation === 'production-cancel') {
+      const db = new DatabaseSync(join(root, 'bot/communication.sqlite'), { readOnly: true })
+      let owned
+      try { owned = db.prepare('SELECT sessions FROM bindings WHERE conversation_id=?').all(body.conversationId)
+        .some(row => JSON.parse(row.sessions).includes(body.sessionId)) } finally { db.close() }
+      if (!owned) throw new Error('Cancellation requires an exact isolated communication binding')
+      const agent = await agentOf(body.sessionId)
+      agent.cancel({ kind: 'user' })
+      await ctx.sessions.flush(agent.session)
+      return { cancellationRequested: true }
     }
     if (body.operation === 'production-release') {
       const db = new DatabaseSync(join(root, 'bot/communication.sqlite'), { readOnly: true })

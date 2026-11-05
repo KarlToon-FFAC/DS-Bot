@@ -2,10 +2,12 @@
 import { writeFileSync } from 'node:fs'
 import { startHub } from '../../../communication-hub/src/server.js'
 import { CommunicationError } from '../../../communication-hub/src/protocol.js'
+import { matchingRecoveryNotice } from './recovery-marker.mjs'
 
 const peers=JSON.parse(process.env.DSBOT_TEST_PEERS)
 delete process.env.DSBOT_TEST_PEERS
 let armed=null,activeRequest=null
+let pendingPromptFault
 const sockets=new Map()
 const checkpoint=(point,extra={})=>{
   const value={point,...extra}
@@ -22,6 +24,11 @@ const hub=await startHub({databasePath:process.argv[2],port:Number(process.argv[
   beforeResponse:({type,value,socket})=>{
     if(type==='hello')sockets.set(value.instanceId,socket)
     if(!armed)return
+    if(type==='conversation.members'&&armed.point==='recovery-prompt-rpc'
+      &&activeRequest.payload.principalId===armed.principalId&&activeRequest.payload.conversationId===armed.conversationId){
+      const marker=matchingRecoveryNotice(armed.markerPath,armed)
+      if(marker){pendingPromptFault={socket,marker};armed=null;checkpoint('recovery-prompt-rpc',{...marker,rpcType:type,socketOpen:socket.readyState===1,responseSent:false});return false}
+    }
     if(type==='message.publish'&&['after-commit-crash','drop-ack'].includes(armed.point)){
       const point=armed.point;armed=null;checkpoint(point,{messageId:value.messageId,conversationSeq:value.conversationSeq,socketOpen:socket.readyState===1})
       if(point==='after-commit-crash')process.kill(process.pid,'SIGKILL')
@@ -40,6 +47,15 @@ process.on('message',async message=>{
     if(message.command==='arm'){armed=message.value;value={armed:true}}
     else if(message.command==='clear'){armed=null;value={cleared:true}}
     else if(message.command==='disconnect'){sockets.get(message.value.instanceId)?.close(1001,'Local recovery test');value={disconnected:true}}
+    else if(message.command==='disconnect-prompt-rpc'){
+      if(!pendingPromptFault)throw new Error('No exact prompt RPC is held')
+      pendingPromptFault.socket.terminate();value={disconnected:true,...pendingPromptFault.marker};pendingPromptFault=null
+    }
+    else if(message.command==='accept-scoped-invite'){
+      const {instanceId,principalId,inviteId}=message.value
+      const auth={instanceId,epoch:hub.store.db.prepare('SELECT epoch FROM instances WHERE id=?').get(instanceId).epoch}
+      value=hub.store.accept(auth,{principalId,inviteId,operationId:message.id+'-'+inviteId})
+    }
     else if(message.command==='stats')value={messages:hub.store.db.prepare('SELECT id,conversation_id,seq,author_id,body FROM messages').all(),
       deliveries:hub.store.db.prepare('SELECT * FROM deliveries').all(),responses:hub.store.db.prepare('SELECT * FROM responses').all(),instances:hub.store.db.prepare('SELECT id,epoch FROM instances').all()}
     else if(message.command==='close'){await hub.close();process.send?.({id:message.id,ok:true,value:{closed:true}});process.exit(0)}
