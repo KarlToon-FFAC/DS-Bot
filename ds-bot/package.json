@@ -56,7 +56,10 @@
     "@deepseek-ai/dsh-llm": "*",
     "@deepseek-ai/dsh-scope": "*",
     "@deepseek-ai/dsh-tools": "*",
-    "@deepseek-ai/dsh-web": "*"
+    "@deepseek-ai/dsh-web": "*",
+    "@deepseek-ai/dsh-session-format-catalog": "*",
+    "@deepseek-ai/dsh-session-log-export": "*",
+    "@deepseek-ai/dsh-session-format-v3-to-v4": "*"
   },
   "dsh": {
     "client": {
@@ -72,10 +75,23 @@
   },
   "dependencies": {
     "deep-view": "0.1.0",
-    "ws": "8.22.1"
+    "ws": "8.22.1",
+    "yaml": "2.9.1"
   },
   "bin": {
     "dsbot-remote": "./bin/dsbot-remote.mjs",
-    "dsbot-team": "./bin/dsbot-team.mjs"
+    "dsbot-team": "./bin/dsbot-team.mjs",
+    "dsbot-reset": "./bin/dsbot-reset.mjs"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh-session-format-catalog": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-session-log-export": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-session-format-v3-to-v4": {
+      "optional": true
+    }
   }
 }

@@ -1,3 +1,4 @@
+import { clearCommunicationBrowserState } from './communication-reset.js'
 import { randomId } from './random-id.js'
 import { createElement as h, Fragment, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
@@ -31,8 +32,25 @@ const readOperationIds = () => {
   if (current.length !== entries.length) save(OPERATION_IDS, current)
   return current
 }
+let browserResetReloadPending = false
 export async function communicationRequest(body) {
-  const response = await fetch('/api/communication', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(15000) })
+  if (browserResetReloadPending) throw Object.assign(new Error('COMMUNICATION_BROWSER_RESET_REQUIRED'), { code: 'COMMUNICATION_BROWSER_RESET_REQUIRED' })
+  const preflight = await fetch('/api/communication', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ endpoint: 'reset-status' }), signal: AbortSignal.timeout(15000) })
+  if ([401,403].includes(preflight.status)) throw Object.assign(new Error('INSTANCE_AUTHENTICATION_REQUIRED'), { code: 'INSTANCE_AUTHENTICATION_REQUIRED' })
+  const status = await preflight.json()
+  if (!status.ok) throw Object.assign(new Error('COMMUNICATION_UNAVAILABLE'), { code: 'COMMUNICATION_UNAVAILABLE' })
+  if (status.value.pending) throw Object.assign(new Error('COMMUNICATION_RESET_INCOMPLETE'), { code: 'COMMUNICATION_RESET_INCOMPLETE' })
+  if (status.value.browserEpoch) {
+    try {
+      if (clearCommunicationBrowserState(status.value.browserEpoch, sessionStorage, localStorage)) {
+        browserResetReloadPending = true
+        window.location.reload()
+        throw Object.assign(new Error('COMMUNICATION_BROWSER_RESET_REQUIRED'), { code: 'COMMUNICATION_BROWSER_RESET_REQUIRED' })
+      }
+    } catch (error) { throw Object.assign(new Error('COMMUNICATION_BROWSER_RESET_REQUIRED', { cause: error }), { code: 'COMMUNICATION_BROWSER_RESET_REQUIRED' }) }
+  }
+  if (body.endpoint === 'reset-status') return status.value
+  const response = await fetch('/api/communication', { method: 'POST', headers: { 'content-type': 'application/json', 'x-dsbot-browser-epoch': status.value.browserEpoch ?? '' }, body: JSON.stringify(body), signal: AbortSignal.timeout(15000) })
   if ([401,403].includes(response.status)) throw Object.assign(new Error('INSTANCE_AUTHENTICATION_REQUIRED'), { code: 'INSTANCE_AUTHENTICATION_REQUIRED' })
   const result = await response.json()
   if (!result.ok) throw Object.assign(new Error(result.error?.code ?? 'COMMUNICATION_UNAVAILABLE'), { code: result.error?.code, phase: result.error?.phase })
@@ -176,6 +194,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
   if (currentStateScope.current !== stateScope) { currentStateScope.current = stateScope; stateOrder.current += 1 }
   const state = !team.communicationEnabled || team.communicationHubId && receivedState?.hubId !== team.communicationHubId ? null : receivedState
   const [pollError, setPollError] = useState(''), [syncError, setSyncError] = useState(null)
+  useEffect(() => { if (request === communicationRequest) void request({ endpoint: 'reset-status' }).catch(error => setPollError(friendly(error))) }, [request])
   const [operationPending, setOperationPending] = useState(() => readOperationIds().length > 0)
   const [attaching,setAttaching]=useState(false),attachmentFlight=useRef(false)
   const [selected, setSelected] = useState(() => read(SELECTED, null))

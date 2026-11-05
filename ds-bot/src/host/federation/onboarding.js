@@ -260,6 +260,7 @@ export class CommunicationOnboarding {
     if (['principalId', 'sender', 'author', 'privateKey', 'publicKey', 'credentialKey', 'allowLoopback'].some(key => Object.hasOwn(input, key))) return Promise.reject(Object.assign(new Error('AUTHOR_MISMATCH'), { code: 'AUTHOR_MISMATCH' }))
     const next = this.tail.catch(() => {}).then(() => {
       authority.beforeDispatch?.()
+      if (this.rt.home && existsSync(join(this.rt.home, 'communication-reset.pending.json'))) fail('COMMUNICATION_RESET_INCOMPLETE')
       return this.dispatch(action, input, authority.beforeDispatch)
     })
     this.tail = next

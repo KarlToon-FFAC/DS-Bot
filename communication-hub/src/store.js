@@ -2,19 +2,22 @@ import { DatabaseSync } from 'node:sqlite'
 import { randomUUID } from 'node:crypto'
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
+import { acquireDatabaseLock } from './database-lock.js'
 import { ATTACHMENT_CAPABILITY } from './attachments.js'
 import { MAX_AVATAR_LENGTH, AVATAR_CHUNK_LENGTH, avatarRevision, validAvatarRevision, normalizeAvatar, validateAvatarImage } from './avatars.js'
 import { CAPABILITIES, HUB_CAPABILITIES, DEFAULT_LIMITS, PROTOCOL, CommunicationError, hash, identifier, normalizeMessage, requireThat, responseBytes } from './protocol.js'
 
 export class HubStore {
-  constructor(path, { limits = {}, beforeCommit } = {}) {
+  constructor(path, { limits = {}, beforeCommit, databaseLock } = {}) {
     this.limits = { ...DEFAULT_LIMITS, ...limits }
     for (const value of Object.values(this.limits)) requireThat(Number.isSafeInteger(value) && value > 0, 'INVALID_CONFIG')
     this.beforeCommit = beforeCommit
     if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true })
+    this.databaseLock = databaseLock ?? acquireDatabaseLock(path)
+    try {
     this.db = new DatabaseSync(path)
     const version=this.db.prepare('PRAGMA user_version').get().user_version
-    if(version>4){this.db.close();throw new CommunicationError('SCHEMA_VERSION_UNSUPPORTED')}
+    if(version>4)throw new CommunicationError('SCHEMA_VERSION_UNSUPPORTED')
     this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;
       CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY);
       INSERT OR IGNORE INTO schema_version VALUES (1);
@@ -77,8 +80,9 @@ export class HubStore {
       }
       this.db.prepare('INSERT INTO causal_schema VALUES (1)').run()
     })
+    } catch (error) { this.db?.close(); this.databaseLock.close(); throw error }
   }
-  close() { this.db.close() }
+  close() { if (this.closed) return; this.closed = true; try { this.db.close() } finally { this.databaseLock.close() } }
   activePrincipalCount(excludingInstance) {
     return this.db.prepare('SELECT count(*) n FROM principals p JOIN instances i ON i.id=p.instance_id WHERE i.trusted=1 AND (? IS NULL OR i.id<>?)').get(excludingInstance??null,excludingInstance??null).n
   }

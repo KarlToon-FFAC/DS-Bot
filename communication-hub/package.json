@@ -8,6 +8,7 @@
   "scripts": {
     "start": "node src/cli.js",
     "admin": "node src/admin-cli.js",
+    "reset": "node src/reset-cli.js",
     "test": "node --test test/*.test.js"
   },
   "dependencies": { "ws": "8.22.1" },

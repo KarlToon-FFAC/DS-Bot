@@ -20983,6 +20983,25 @@ function listedOpener({ list, open, refresh, current }) {
   };
 }
 
+// src/client/communication-reset.js
+var PREFIX = "ds-bot:communication:";
+var EPOCH = "ds-bot:federation-browser-epoch";
+function clearCommunicationBrowserState(epoch, session, local) {
+  if (typeof epoch !== "string" || !/^[0-9a-f-]{36}$/.test(epoch)) throw Object.assign(new Error("COMMUNICATION_BROWSER_RESET_REQUIRED"), { code: "COMMUNICATION_BROWSER_RESET_REQUIRED" });
+  if (session.getItem(EPOCH) === epoch) return false;
+  for (const storage of [session, local]) {
+    const keys = [];
+    for (let i = 0; i < storage.length; i++) {
+      const key = storage.key(i);
+      if (key?.startsWith(PREFIX)) keys.push(key);
+    }
+    for (const key of keys) storage.removeItem(key);
+    for (let i = 0; i < storage.length; i++) if (storage.key(i)?.startsWith(PREFIX)) throw Object.assign(new Error("COMMUNICATION_BROWSER_RESET_REQUIRED"), { code: "COMMUNICATION_BROWSER_RESET_REQUIRED" });
+  }
+  session.setItem(EPOCH, epoch);
+  return true;
+}
+
 // src/shared/ip-address.js
 function normalizeIpAddress(value) {
   if (typeof value !== "string" || value.length > 128) return null;
@@ -21376,6 +21395,8 @@ function ContactDirectory({ contacts, relations, humanPrincipalId, instanceId, r
 
 // src/shared/communication-diagnostics.js
 var communicationDescriptions = {
+  COMMUNICATION_RESET_INCOMPLETE: "Complete federation reset was interrupted. Stop the Host and rerun the same reset command before using Remote communication.",
+  COMMUNICATION_BROWSER_RESET_REQUIRED: "Federation data was reset. Refresh this tab to clear its old communication drafts and pending actions before continuing.",
   INVALID_IP_ADDRESS: "Enter a valid IPv4 or IPv6 address. Ports are optional; use brackets around IPv6 with a port.",
   INVALID_IP_NOTE: "Use an IP note of at most 160 characters without line breaks or hidden control characters.",
   IP_NOTE_LIMIT: "Up to 256 IP notes can be saved for this Hub. Clear an old note before adding another.",
@@ -21416,7 +21437,7 @@ var communicationDescriptions = {
   HUB_SELECTION_CHANGED: "The selected Hub changed. Refresh saved Hubs before continuing; no identity should be reused blindly.",
   HUB_RESUME_CONFIRMATION_REQUIRED: "Confirm that retained pending messages and work may resume before reconnecting this Hub.",
   HUB_NOT_SELECTED: "Select this saved Hub first. Only one Hub can be active at a time.",
-  LEGACY_HUB_SWITCH_REQUIRES_REENROLLMENT: "Legacy shared-secret pairing cannot be safely assigned to another Hub. Keep this data and enroll through a separate profile first.",
+  LEGACY_HUB_SWITCH_REQUIRES_REENROLLMENT: "Legacy shared-secret pairing cannot be assigned to another Hub. For a clean test start, stop the Host and run dsbot-reset to erase all local federation state, then request access with the new Hub code.",
   LEGACY_HUB_PROFILE_UNBOUND: "This old enrollment has no proven queue binding. Its history was preserved; use a separate profile rather than guessing ownership.",
   INVALID_HUB_TRUST: "The Hub code contains invalid CA trust. Obtain a fresh code from the owner through a trusted channel.",
   HUB_TRUST_EXPIRED: "This Hub CA or certificate has expired. Obtain a renewed code from the owner.",
@@ -21566,6 +21587,8 @@ var knownCodes = /* @__PURE__ */ new Set([
   "COMMUNICATION_CREDENTIAL_WRITE_FAILED",
   "COMMUNICATION_INPUT_SOURCE_UNKNOWN",
   "COMMUNICATION_NOT_APPROVED",
+  "COMMUNICATION_RESET_INCOMPLETE",
+  "COMMUNICATION_BROWSER_RESET_REQUIRED",
   "COMMUNICATION_NOT_CONFIGURED",
   "COMMUNICATION_OUTPUT_SOURCE_UNKNOWN",
   "COMMUNICATION_PAIRING_CONFLICT",
@@ -23398,8 +23421,27 @@ var readOperationIds = () => {
   if (current.length !== entries2.length) save(OPERATION_IDS, current);
   return current;
 };
+var browserResetReloadPending = false;
 async function communicationRequest(body) {
-  const response = await fetch("/api/communication", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(15e3) });
+  if (browserResetReloadPending) throw Object.assign(new Error("COMMUNICATION_BROWSER_RESET_REQUIRED"), { code: "COMMUNICATION_BROWSER_RESET_REQUIRED" });
+  const preflight = await fetch("/api/communication", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ endpoint: "reset-status" }), signal: AbortSignal.timeout(15e3) });
+  if ([401, 403].includes(preflight.status)) throw Object.assign(new Error("INSTANCE_AUTHENTICATION_REQUIRED"), { code: "INSTANCE_AUTHENTICATION_REQUIRED" });
+  const status = await preflight.json();
+  if (!status.ok) throw Object.assign(new Error("COMMUNICATION_UNAVAILABLE"), { code: "COMMUNICATION_UNAVAILABLE" });
+  if (status.value.pending) throw Object.assign(new Error("COMMUNICATION_RESET_INCOMPLETE"), { code: "COMMUNICATION_RESET_INCOMPLETE" });
+  if (status.value.browserEpoch) {
+    try {
+      if (clearCommunicationBrowserState(status.value.browserEpoch, sessionStorage, localStorage)) {
+        browserResetReloadPending = true;
+        window.location.reload();
+        throw Object.assign(new Error("COMMUNICATION_BROWSER_RESET_REQUIRED"), { code: "COMMUNICATION_BROWSER_RESET_REQUIRED" });
+      }
+    } catch (error) {
+      throw Object.assign(new Error("COMMUNICATION_BROWSER_RESET_REQUIRED", { cause: error }), { code: "COMMUNICATION_BROWSER_RESET_REQUIRED" });
+    }
+  }
+  if (body.endpoint === "reset-status") return status.value;
+  const response = await fetch("/api/communication", { method: "POST", headers: { "content-type": "application/json", "x-dsbot-browser-epoch": status.value.browserEpoch ?? "" }, body: JSON.stringify(body), signal: AbortSignal.timeout(15e3) });
   if ([401, 403].includes(response.status)) throw Object.assign(new Error("INSTANCE_AUTHENTICATION_REQUIRED"), { code: "INSTANCE_AUTHENTICATION_REQUIRED" });
   const result = await response.json();
   if (!result.ok) throw Object.assign(new Error(result.error?.code ?? "COMMUNICATION_UNAVAILABLE"), { code: result.error?.code, phase: result.error?.phase });
@@ -23660,6 +23702,9 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
   }
   const state = !team.communicationEnabled || team.communicationHubId && receivedState?.hubId !== team.communicationHubId ? null : receivedState;
   const [pollError, setPollError] = (0, import_react65.useState)(""), [syncError, setSyncError] = (0, import_react65.useState)(null);
+  (0, import_react65.useEffect)(() => {
+    if (request === communicationRequest) void request({ endpoint: "reset-status" }).catch((error2) => setPollError(communicationFailure(error2)));
+  }, [request]);
   const [operationPending, setOperationPending] = (0, import_react65.useState)(() => readOperationIds().length > 0);
   const [attaching, setAttaching] = (0, import_react65.useState)(false), attachmentFlight = (0, import_react65.useRef)(false);
   const [selected, setSelected] = (0, import_react65.useState)(() => read(SELECTED, null));

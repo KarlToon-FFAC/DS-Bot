@@ -62,3 +62,23 @@ test('legacy ownership recovery API is rejected without starting runtime or touc
   const response = await route.fetch(new Request('http://127.0.0.1/api/communication', { method: 'POST', body: JSON.stringify({ endpoint: 'reclaim', conversationId: 'old-group', operationId: 'old-reclaim', expectedVersion: 2 }) }))
   assert.deepEqual((await response.json()).error.code, 'UNKNOWN_OPERATION')
 })
+
+test('pending complete reset blocks setup and stale browser epochs cannot submit old requests', async t => {
+  const { mkdtemp, writeFile, rm } = await import('node:fs/promises')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const home = await mkdtemp(join(tmpdir(), 'dsbot-reset-route-'))
+  t.after(() => rm(home, { recursive: true, force: true }))
+  let route
+  const rt = { home, config: {}, teamTools: [], load: async () => {}, refresh: async () => {}, ctx: { effect: fn => fn(), connection: { fetch: { register: value => { route = value; return () => {} } } } } }
+  install(rt)
+  const call = async (body, headers = {}) => (await route.fetch(new Request('http://127.0.0.1/api/communication', { method: 'POST', headers, body: JSON.stringify(body) }))).json()
+  await writeFile(join(home, 'communication-reset.pending.json'), '{}')
+  assert.equal((await call({ endpoint: 'state' })).error.code, 'COMMUNICATION_RESET_INCOMPLETE')
+  assert.equal((await call({ endpoint: 'reset-status' })).value.pending, true)
+  await rm(join(home, 'communication-reset.pending.json'))
+  const epoch = '00000000-0000-4000-8000-000000000001'
+  await writeFile(join(home, 'communication-browser-epoch'), epoch)
+  assert.equal((await call({ endpoint: 'state' }, { origin: 'http://127.0.0.1' })).error.code, 'COMMUNICATION_BROWSER_RESET_REQUIRED')
+  assert.equal((await call({ endpoint: 'state' }, { origin: 'http://127.0.0.1', 'x-dsbot-browser-epoch': epoch })).value.enabled, false)
+})

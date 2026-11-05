@@ -1,3 +1,4 @@
+import { federationResetStatus } from './federation/reset.js'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { createHash } from 'node:crypto'
 import { output } from './tools.js'
@@ -34,6 +35,7 @@ export function install(rt) {
   }
   const ensure = () => {
     starting ??= (async () => {
+      if (rt.home && (await federationResetStatus(rt.home)).pending) fail('COMMUNICATION_RESET_INCOMPLETE')
       if (!settings.enabled) fail('COMMUNICATION_NOT_CONFIGURED')
       await rt.load()
       await rt.refresh()
@@ -197,6 +199,11 @@ export function install(rt) {
       try {
         const body = await request.json()
         if (!body || typeof body !== 'object' || Array.isArray(body)) fail('INVALID_REQUEST')
+        const reset = rt.home ? await federationResetStatus(rt.home) : { pending: false, browserEpoch: null }
+        if (body.endpoint === 'reset-status') return Response.json({ ok: true, value: reset })
+        if (reset.pending) fail('COMMUNICATION_RESET_INCOMPLETE')
+        const browser = request.headers.has('origin') || request.headers.has('sec-fetch-mode') || request.headers.has('x-dsbot-browser-epoch')
+        if (browser && reset.browserEpoch && request.headers.get('x-dsbot-browser-epoch') !== reset.browserEpoch) fail('COMMUNICATION_BROWSER_RESET_REQUIRED')
         if (['author', 'sender', 'senderId', 'homeInstanceId'].some(key => Object.hasOwn(body, key))
           || body.endpoint !== 'avatar' && Object.hasOwn(body, 'principalId')) fail('AUTHOR_MISMATCH')
         if (body.endpoint === 'reclaim') fail('UNKNOWN_OPERATION')

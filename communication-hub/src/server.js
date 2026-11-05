@@ -25,7 +25,7 @@ const routes = {
   'principal.publication':'syncPublication',
 }
 
-export async function startHub({ databasePath, peers, host='127.0.0.1', port=3190, tls, limits, management:managementOptions, beforeCommit, beforeRequest, beforeResponse, heartbeatMs=30000 }={}) {
+export async function startHub({ databasePath, databaseLock, peers, host='127.0.0.1', port=3190, tls, limits, management:managementOptions, beforeCommit, beforeRequest, beforeResponse, heartbeatMs=30000 }={}) {
   requireThat(loopback(host)||tls?.key&&tls?.cert,'TLS_REQUIRED','Non-loopback listeners require TLS')
   requireThat(Number.isInteger(port)&&port>=0&&port<=65535,'INVALID_CONFIG')
   requireThat(Number.isSafeInteger(heartbeatMs)&&heartbeatMs>=10,'INVALID_CONFIG')
@@ -35,7 +35,8 @@ export async function startHub({ databasePath, peers, host='127.0.0.1', port=319
     requireThat(!peer.instanceId.includes(':')&&!allowed.has(peer.instanceId)&&typeof peer.credential==='string'&&peer.credential.length>=32,'INVALID_CONFIG')
     allowed.set(peer.instanceId,{credentialHash:digest(peer.credential),label:peer.instanceLabel??peer.instanceId,pairingRevision:peer.pairingRevision??1})
   }
-  const store=new HubStore(databasePath,{limits,beforeCommit})
+  const store=new HubStore(databasePath,{limits,beforeCommit,databaseLock})
+  try {
   const pairingTrust=managementOptions?.pairingCa ? { caPem:String(managementOptions.pairingCa), certificatePem:String(tls?.cert??''), privateKey:tls?.key } : undefined
   const management=new HubManagement(store,{url:managementOptions?.url??managementOptions?.publicUrl,pairingTrust})
   const configuredPeers=new Set(allowed.keys())
@@ -197,4 +198,5 @@ export async function startHub({ databasePath, peers, host='127.0.0.1', port=319
   return {store,management,host,port:address.port,url,managementUrl,
     revoke,deleteInstance,
     async close(){closing=true;clearInterval(heartbeat);clearTimeout(invalidationTimer);managementHttp?.close();for(const socket of connections)socket.terminate();await new Promise(resolve=>sockets.close(resolve));await new Promise(resolve=>server.close(resolve));store.close()}}
+  } catch(error) { store.close(); throw error }
 }
