@@ -64,3 +64,38 @@ test('an outbox permission denial stays failed and cannot hold unrelated synchro
     assert.ok(transport.lastSynchronizedAt)
   } finally { queue.close() }
 })
+
+for (const stage of ['applySync', 'receive']) {
+  test(`a newer local membership snapshot racing ${stage} stays scoped and cannot store the old projection`, async () => {
+    const queue = new CommunicationQueue(':memory:', { instanceId: 'a' }), errors = []
+    const human = queue.localPrincipal('human', 'user', 'Synthetic user')
+    const membership = { principalId: human.principalId, conversationId: 'old-dm', membershipEpoch: 'old-epoch', joinSeq: 1, watermark: stage === 'applySync' ? 1 : 0, active: true }
+    let snapshots = 0, closes = 0
+    const transport = new CommunicationTransport(queue, { url: 'ws://127.0.0.1:3190/communication', onError: error => errors.push(error.code),
+      beforeReceive: async () => { queue.applyMemberships({ memberships: [], invites: [] }) } })
+    transport.connected = true
+    transport.socket = { readyState: WebSocket.OPEN, close: () => { closes++ } }
+    transport.request = async operation => {
+      if (operation === 'memberships.list') return { memberships: ++snapshots === 1 ? [membership] : [], invites: [] }
+      if (operation === 'conversation.sync') {
+        queue.applyMemberships({ memberships: [], invites: [] })
+        return { ...membership, events: [] }
+      }
+      if (operation === 'deliveries.pull') return snapshots === 1 ? [{ ...membership, recipientPrincipalId: human.principalId, deliveryId: 'stale-delivery' }] : []
+      assert.fail(`Unexpected request: ${operation}`)
+    }
+    try {
+      transport.start({ pollMs: 5 })
+      await until(() => Boolean(transport.lastSynchronizedAt))
+      assert.deepEqual(errors, ['MEMBERSHIP_REVOKED'])
+      assert.equal(transport.connected, true)
+      assert.equal(transport.running, true)
+      assert.equal(closes, 0)
+      assert.equal(queue.authorized, true)
+      assert.deepEqual(queue.memberships(), [])
+      assert.equal(queue.db.prepare('SELECT count(*) n FROM events').get().n, 0)
+      assert.equal(queue.db.prepare('SELECT count(*) n FROM inbox').get().n, 0)
+      assert.equal(queue.pendingReceipts().length, 0)
+    } finally { transport.stop(); queue.close() }
+  })
+}

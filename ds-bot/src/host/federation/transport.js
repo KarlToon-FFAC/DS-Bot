@@ -214,17 +214,17 @@ export class CommunicationTransport {
         this.queue.rejected(item.id, error.code ?? 'INVALID_RESPONSE')
       }
     }
+    const scopeFailure = error => {
+      // Both a Hub response and a local projection can race a newer membership.
+      if (['NOT_A_MEMBER', 'MEMBERSHIP_REVOKED', 'CONTACT_REQUIRED'].includes(error.code)) {
+        this.queue.disconnected()
+        error[membershipChanged] = true
+      }
+      return error
+    }
     const requestMembership = async (type, payload) => {
       try { return await this.request(type, payload) }
-      catch (error) {
-        // A contact or group can change after the membership snapshot was read.
-        // Refresh authorization next poll without treating that scope as device trust.
-        if (['NOT_A_MEMBER', 'MEMBERSHIP_REVOKED', 'CONTACT_REQUIRED'].includes(error.code)) {
-          this.queue.disconnected()
-          error[membershipChanged] = true
-        }
-        throw error
-      }
+      catch (error) { throw scopeFailure(error) }
     }
     this.queue.applyMemberships(await this.request('memberships.list'))
     for (const member of this.queue.memberships()) {
@@ -233,14 +233,15 @@ export class CommunicationTransport {
       while (after < member.watermark) {
         const page = await requestMembership('conversation.sync', { conversationId: member.conversationId, principalId: member.principalId,
           membershipEpoch: member.membershipEpoch, after, limit: 100 })
-        const next = this.queue.applySync(page)
+        let next
+        try { next = this.queue.applySync(page) } catch (error) { throw scopeFailure(error) }
         if (next <= after) throw errorWith('HISTORY_GAP')
         after = next
       }
     }
     for (const delivery of await this.request('deliveries.pull')) {
       try { await this.beforeReceive?.(delivery); current(); this.queue.receive(delivery); await this.afterReceive?.(delivery); current() } catch (error) {
-        if (error.code !== 'BACKPRESSURE') throw error
+        if (error.code !== 'BACKPRESSURE') throw scopeFailure(error)
         this.onError?.(error)
         break
       }

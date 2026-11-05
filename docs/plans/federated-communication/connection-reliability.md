@@ -104,7 +104,8 @@ Mock models. They do not access a real Hub or call a real model.
   fallback, reconnect catch-up, half-open heartbeat expiry and stale-epoch presence.
 - `communication-hub/test/contact-race.test.js` and
   `ds-bot/test/communication-membership-race.test.js`: membership rotation
-  between snapshot and sync/ACK is scoped, not device revocation.
+  between snapshot and sync/ACK, or a newer local snapshot racing sync-page
+  application or delivery storage, is scoped, not device revocation.
 - Existing `communication-hub/test/network.test.js` covers ACK loss, forced Hub
   death, restart, durable receipt retry, TLS and canonical message recovery;
   `transport-fairness.test.js` prevents capacity backoff from starving inbound
