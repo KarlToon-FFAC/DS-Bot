@@ -138,3 +138,35 @@ test('retry does not trust a saved digest key that disagrees with its physical d
   await assert.rejects(revalidateFederationAttachmentPlan({ ...f.options, attachmentPlan }), { code: 'RESET_INVALID_MANIFEST' })
   assert.equal(await readFile(object.path, 'utf8'), 'manifest identity')
 })
+
+test('alias-only retry keeps shared bytes usable and succeeds until ordinary history claims the exact alias', async t => {
+  const f = await fixture(t), shared = await f.object('stable shared bytes')
+  const aliasName = 'remote-only-name.txt', alias = join(shared.alias, '..', aliasName)
+  await link(shared.path, alias)
+  const remoteRef = { ...shared, attachment: { ...shared.attachment, name: aliasName } }
+  await f.journal(f.remote, [remoteRef]); await f.journal(f.local, [shared])
+  const attachmentPlan = await planFederationAttachments(f.options)
+  assert.deepEqual(attachmentPlan.files.map(file => file.path), [alias])
+  await rm(f.remote, { recursive: true })
+  assert.deepEqual(await revalidateFederationAttachmentPlan({ ...f.options, attachmentPlan }), { valid: true })
+  await f.journal(f.local, [shared, remoteRef], 4, true)
+  await assert.rejects(revalidateFederationAttachmentPlan({ ...f.options, attachmentPlan }), error => error.code === 'RESET_ATTACHMENT_CHANGED_OWNERSHIP' && error.target === join(f.local, 'session.v4.jsonl.zstd'))
+  assert.equal(await readFile(alias, 'utf8'), 'stable shared bytes')
+  assert.equal(await readFile(shared.alias, 'utf8'), 'stable shared bytes')
+})
+
+test('same-event opaque exact alias evidence blocks both initial planning and a saved alias-only retry', async t => {
+  const f = await fixture(t), shared = await f.object('opaque shared reference')
+  const aliasName = 'remote-file.json', alias = join(shared.alias, '..', aliasName)
+  await link(shared.path, alias)
+  const remoteRef = { ...shared, attachment: { ...shared.attachment, name: aliasName } }
+  await f.journal(f.remote, [remoteRef]); await f.journal(f.local, [shared])
+  const attachmentPlan = await planFederationAttachments(f.options), path = join(f.local, 'session.v4.jsonl')
+  const original = await readFile(path, 'utf8')
+  const opaque = { type: 'user/message', seq: 1, time: 2, data: { role: 'user', id: 'opaque-file', content: [{ type: 'text', text: JSON.stringify({ attachmentId: shared.attachment.attachmentId, name: aliasName }) }] } }
+  await writeFile(path, original + JSON.stringify(opaque) + '\n')
+  await assert.rejects(planFederationAttachments(f.options), { code: 'RESET_ATTACHMENT_OWNERSHIP_UNPROVEN', target: path })
+  await rm(f.remote, { recursive: true })
+  await assert.rejects(revalidateFederationAttachmentPlan({ ...f.options, attachmentPlan }), { code: 'RESET_ATTACHMENT_CHANGED_OWNERSHIP', target: path })
+  assert.equal(await readFile(alias, 'utf8'), 'opaque shared reference')
+})

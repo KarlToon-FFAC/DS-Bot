@@ -59,7 +59,7 @@ async function references(path, catalog = sessionFormatCatalog, artifactOnly = f
       async *readFileStream(ref) { add('file', ref); yield new Uint8Array() },
     }
     for await (const entry of sessionLogZipEntries({ attachments }, serializeSessionLog(artifact.header, artifact.events), artifact.header.id, false)) {
-      if (entry.chunks) for await (const _chunk of entry.chunks) { /* exhaust the declared file reference */ }
+      if (entry.chunks) for await (const chunk of entry.chunks) { void chunk }
     }
     return refs
   } catch (error) {
@@ -80,7 +80,7 @@ async function scanSessionReferences(sessionsRoot, remoteSessionDirectories) {
   if (!Array.isArray(remoteSessionDirectories)) fail('RESET_ATTACHMENT_INVALID_TARGETS')
   const targets = new Set(remoteSessionDirectories), remote = new Map(), retained = new Map()
   for (const path of targets) { await checked(path, true, true); if (!relative(sessionsRoot, path) || relative(sessionsRoot, path).startsWith('..') || isAbsolute(relative(sessionsRoot, path))) fail('RESET_ATTACHMENT_INVALID_TARGETS') }
-  const logs = [], children = new Map(), possibleRetained = new Map()
+  const logs = [], children = new Map(), possibleRetained = new Map(), retainedEvents = []
   for (const path of await walk(sessionsRoot)) {
     const match = /^session(?:\.v([1-9][0-9]*))?\.jsonl(?:\.zstd)?$/.exec(basename(path))
     if (!match) continue
@@ -89,7 +89,19 @@ async function scanSessionReferences(sessionsRoot, remoteSessionDirectories) {
     const artifact = await references(path, version < 4 ? historicalSessionFormatCatalog : sessionFormatCatalog, true)
     logs.push({ path, id: artifact.header.id })
     // Opaque extension/tool payloads cannot authorize deletion or be assumed reference-free.
-    if (!targets.has(dirname(path))) for (const digest of JSON.stringify(artifact.events).matchAll(/sha256:([a-f0-9]{64})/g)) possibleRetained.set(digest[1], path)
+    if (!targets.has(dirname(path))) for (const event of artifact.events) {
+      const digests = new Set([...JSON.stringify(event).matchAll(/sha256:([a-f0-9]{64})/g)].map(match => match[1]))
+      for (const digest of digests) possibleRetained.set(digest, path)
+      if (digests.size) {
+        const strings = [], queue = [event]
+        while (queue.length) {
+          const value = queue.pop()
+          if (typeof value === 'string') strings.push(value)
+          else if (value && typeof value === 'object') queue.push(...Object.values(value))
+        }
+        retainedEvents.push({ path, digests, strings })
+      }
+    }
     if (artifact.header.parentSession) {
       const previous = children.get(artifact.header.id)
       if (!previous || previous.version < version) {
@@ -108,20 +120,33 @@ async function scanSessionReferences(sessionsRoot, remoteSessionDirectories) {
       else destination.set(key, ref)
     }
   }
-  return { remote, retained, possibleRetained }
+  return { remote, retained, possibleRetained, retainedEvents }
+}
+
+function retainedAliasTarget(scan, digest, name) {
+  // Keep same-event opaque JSON filename evidence conservative without treating a
+  // different alias of the same shared bytes as ownership of this filename.
+  const quoted = JSON.stringify(name)
+  const event = scan.retainedEvents.find(event => event.digests.has(digest) && event.strings.some(value => value === name || value.includes(quoted)))
+  if (event) return event.path
+  if (scan.retained.get(`file:${digest}`)?.names.has(name)) return scan.possibleRetained.get(digest)
 }
 
 export async function revalidateFederationAttachmentPlan({ sessionsRoot, remoteSessionDirectories, attachmentPlan } = {}) {
   if (!attachmentPlan || !Array.isArray(attachmentPlan.files) || !Array.isArray(attachmentPlan.trees)) fail('RESET_INVALID_MANIFEST')
-  const candidateDigests = new Set()
+  const candidateDigests = new Set(), candidateAliases = []
   for (const file of attachmentPlan.files) {
     if (!file || typeof file.path !== 'string' || typeof file.key !== 'string') fail('RESET_INVALID_MANIFEST', file?.path)
     const path = file.path.replaceAll('\\', '/')
     const canonical = /\/(objects|file-objects)\/([a-f0-9]{2})\/([a-f0-9]{64})$/.exec(path)
-    const alias = /\/(files)\/([a-f0-9]{2})\/([a-f0-9]{64})\/[^/]+$/.exec(path)
+    const alias = /\/(files)\/([a-f0-9]{2})\/([a-f0-9]{64})\/([^/]+)$/.exec(path)
     const location = canonical ?? alias
     if (!location || location[2] !== location[3].slice(0, 2) || file.key !== `${location[1] === 'objects' ? 'image' : 'file'}:${location[3]}`) fail('RESET_INVALID_MANIFEST', file.path)
-    candidateDigests.add(location[3])
+    if (canonical) candidateDigests.add(location[3])
+    else {
+      if (file.aliasName !== undefined && file.aliasName !== alias[4]) fail('RESET_INVALID_MANIFEST', file.path)
+      candidateAliases.push({ digest: location[3], name: alias[4] })
+    }
   }
   // A saved inode proves file identity, not continued exclusive ownership after a restart.
   // Re-read every retained generation before the caller performs its first mutation.
@@ -133,13 +158,18 @@ export async function revalidateFederationAttachmentPlan({ sessionsRoot, remoteS
     if (target) fail('RESET_ATTACHMENT_CHANGED_OWNERSHIP', target)
     if (scan.retained.has(`image:${digest}`) || scan.retained.has(`file:${digest}`)) fail('RESET_ATTACHMENT_CHANGED_OWNERSHIP', sessionsRoot)
   }
+  for (const { digest, name } of candidateAliases) {
+    const target = retainedAliasTarget(scan, digest, name)
+    if (target) fail('RESET_ATTACHMENT_CHANGED_OWNERSHIP', target)
+  }
   return { valid: true }
 }
 
 export async function planFederationAttachments({ sessionsRoot, remoteSessionDirectories, attachmentDshHome, provider } = {}) {
   if (provider !== '@deepseek-ai/dsh-attachment-local') fail('RESET_ATTACHMENT_PROVIDER_UNSUPPORTED')
   await checked(sessionsRoot, true, true); await checked(attachmentDshHome, true)
-  const { remote, retained, possibleRetained } = await scanSessionReferences(sessionsRoot, remoteSessionDirectories)
+  const scan = await scanSessionReferences(sessionsRoot, remoteSessionDirectories)
+  const { remote, retained, possibleRetained } = scan
   const base = join(attachmentDshHome, 'attachments', 'v1'), objects = [], known = new Map(), inodeLinks = new Map()
   const register = async (path, key) => {
     const stat = await checked(path)
@@ -181,6 +211,11 @@ export async function planFederationAttachments({ sessionsRoot, remoteSessionDir
   for (const path of cacheFiles) if ((await checked(path)).nlink !== 1) fail('RESET_ATTACHMENT_EXTERNAL_HARDLINK', path)
   const exclusive = [...remote.keys()].filter(key => !retained.has(key))
   for (const key of exclusive) if (possibleRetained.has(key.split(':')[1])) fail('RESET_ATTACHMENT_OWNERSHIP_UNPROVEN', possibleRetained.get(key.split(':')[1]))
-  return { files: objects.filter(object => object.aliasName ? remote.get(object.key)?.names.has(object.aliasName) && !retained.get(object.key)?.names.has(object.aliasName) : exclusive.includes(object.key)), trees: await checked(cache, true, true) ? [cache] : [],
+  const files = objects.filter(object => object.aliasName ? remote.get(object.key)?.names.has(object.aliasName) && !retained.get(object.key)?.names.has(object.aliasName) : exclusive.includes(object.key))
+  for (const file of files) if (file.aliasName) {
+    const target = retainedAliasTarget(scan, file.key.split(':')[1], file.aliasName)
+    if (target) fail('RESET_ATTACHMENT_OWNERSHIP_UNPROVEN', target)
+  }
+  return { files, trees: await checked(cache, true, true) ? [cache] : [],
     exclusiveObjects: exclusive.length, sharedObjects: [...remote.keys()].filter(key => retained.has(key)).length }
 }

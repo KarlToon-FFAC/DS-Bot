@@ -41,7 +41,7 @@ async function fixture(t) {
   const ordinary = await journal('local-ordinary', join(root, 'work'), null)
   await journal('local-group', join(root, 'work'), null)
   return { root, home, sessions, credentials, profile, queues, remote, orphan, ordinary, journal,
-    options: { home, profiles: [profile], credentials, sessions, attachmentsHome: root, confirm: RESET_CONFIRMATION } }
+    options: { home, profiles: [profile], credentials, sessions, attachmentsHome: root, storageRoot: join(root, 'storages'), confirm: RESET_CONFIRMATION } }
 }
 
 test('complete client reset erases every Hub scope/static pairing/journal generation but preserves ordinary state and credentials', async t => {
@@ -70,9 +70,9 @@ test('dry run does not erase, reconfigure or rotate browser epoch', async t => {
   assert.equal((await federationResetStatus(f.home)).browserEpoch, null)
 })
 
-for (const step of ['manifest', 'profiles', 'credentials', 'journals', 'attachments']) test(`interruption after ${step} remains blocked and can be fully retried without restoring old data`, async t => {
+for (const step of ['manifest', 'profiles', 'credentials', 'derived', 'journals', 'attachments']) test(`interruption after ${step} remains blocked and can be fully retried without restoring old data`, async t => {
   const f = await fixture(t)
-  await assert.rejects(resetFederation({ ...f.options, afterStep: value => { if (value === step) throw new Error('synthetic interruption') } }))
+  await assert.rejects(resetFederation({ ...f.options, afterStep: value => { if (value === step) throw new Error('synthetic interruption') } }), /synthetic interruption/)
   assert.equal((await federationResetStatus(f.home)).pending, true)
   const manifest = await readFile(join(f.home, 'communication-reset.pending.json'), 'utf8')
   assert.ok(!manifest.includes('synthetic-erased-key')); assert.ok(!manifest.includes('synthetic-old-static-value'))
@@ -127,7 +127,7 @@ test('plain offline CLI resolves only public SDK exports and reports dry-run and
   const { spawnSync } = await import('node:child_process')
   const f = await fixture(t)
   const args = [new URL('../bin/dsbot-reset.mjs', import.meta.url).pathname, '--home', f.home, '--profile', f.profile,
-    '--credentials', f.credentials, '--sessions', f.sessions, '--attachments-home', f.root]
+    '--credentials', f.credentials, '--sessions', f.sessions, '--attachments-home', f.root, '--storage-root', f.options.storageRoot]
   const dry = spawnSync(process.execPath, args, { encoding: 'utf8', env: process.env })
   assert.equal(dry.status, 0, dry.stderr); assert.equal(JSON.parse(dry.stdout).dryRun, true)
   const erased = spawnSync(process.execPath, [...args, '--confirm', RESET_CONFIRMATION], { encoding: 'utf8', env: process.env })
@@ -192,7 +192,7 @@ test('a reset interrupted after journal erasure still deletes proven exclusive a
     cwd: join(f.home, 'communication-workspaces', 'binding-remote'), agentPreset: 'ds-bot-communication' }
   const event = { type: 'user/message', seq: 0, time: 1, data: { role: 'user', id: 'synthetic-message', content: [{ type: 'file', attachment: { attachmentId: 'sha256:' + digest, bytes: bytes.length, name: 'remote.txt' } }] } }
   await writeFile(join(f.remote, 'session.v4.jsonl.zstd'), zstdCompressSync([header, event].map(row => JSON.stringify(row)).join('\n') + '\n'))
-  await assert.rejects(resetFederation({ ...f.options, afterStep: step => { if (step === 'journals') throw new Error('synthetic power loss') } }))
+  await assert.rejects(resetFederation({ ...f.options, afterStep: step => { if (step === 'journals') throw new Error('synthetic power loss') } }), /synthetic power loss/)
   assert.equal(await readFile(object, 'utf8'), bytes.toString())
   assert.equal((await federationResetStatus(f.home)).pending, true)
   const result = await resetFederation(f.options)
@@ -240,7 +240,7 @@ test('protected ordinary Sessions and configuration inputs cannot overlap whole-
 
 test('pending reset refuses a remote Session directory replaced by an ordinary journal', async t => {
   const f = await fixture(t)
-  await assert.rejects(resetFederation({ ...f.options, afterStep: step => { if (step === 'manifest') throw new Error('synthetic interruption') } }))
+  await assert.rejects(resetFederation({ ...f.options, afterStep: step => { if (step === 'manifest') throw new Error('synthetic interruption') } }), /synthetic interruption/)
   const text = JSON.stringify({ type: 'session', version: 4, id: 'new-ordinary', cwd: f.root, createdAt: 1, isSeeded: false, delegationDepth: 0 }) + '\n'
   await rm(f.remote, { recursive: true }); await mkdir(f.remote)
   await writeFile(join(f.remote, 'session.v4.jsonl'), text)
@@ -267,10 +267,54 @@ test('legacy Bot/group fallback IDs and archived ordinary segments are protected
 
 test('pending reset refuses a new remote-looking identity at a prior Session directory', async t => {
   const f = await fixture(t)
-  await assert.rejects(resetFederation({ ...f.options, afterStep: step => { if (step === 'manifest') throw new Error('synthetic interruption') } }))
+  await assert.rejects(resetFederation({ ...f.options, afterStep: step => { if (step === 'manifest') throw new Error('synthetic interruption') } }), /synthetic interruption/)
   await rm(f.remote, { recursive: true }); await mkdir(f.remote)
   const text = JSON.stringify({ type: 'session', version: 4, id: 'another-remote', cwd: join(f.home, 'communication-workspaces', 'binding-remote'), agentPreset: 'ds-bot-communication', createdAt: 1, isSeeded: false, delegationDepth: 0 }) + '\n'
   await writeFile(join(f.remote, 'session.v4.jsonl'), text)
   await assert.rejects(resetFederation(f.options), { code: 'RESET_SESSION_CHANGED_OWNERSHIP', target: f.remote })
   assert.equal(await readFile(join(f.remote, 'session.v4.jsonl'), 'utf8'), text)
+})
+
+test('complete CLI removes actual public JSON projection/workspace residue and preserves ordinary records', async t => {
+  const { spawnSync } = await import('node:child_process')
+  const { workspaceDomainSpec } = await import('@deepseek-ai/dsh-workspace')
+  const { projectionCacheDomainSpec } = await import('@deepseek-ai/dsh-session-projection-cache')
+  const f = await fixture(t), root = f.options.storageRoot, cache = join(root, 'session_projcache', 'sessions')
+  await mkdir(cache, { recursive: true })
+  const cwd = join(f.home, 'communication-workspaces', 'binding-remote')
+  const record = (path, ids) => ({ path, title: path, sessionIds: ids, createdAt: '2026-11-05T00:00:00.000Z', updatedAt: '2026-11-05T00:00:00.000Z' })
+  const workspacePath = join(root, 'workspace.json')
+  await writeFile(workspacePath, JSON.stringify({ unit: { name: 'workspace', version: workspaceDomainSpec.version }, global: { initialized: true, workspaceIds: ['ordinary-workspace', 'remote-workspace'], archivedSessionIds: ['remote-one'], pinnedSessionIds: ['local-ordinary'] }, tables: { workspaces: { 'ordinary-workspace': record(f.root, ['local-ordinary', 'remote-one']), 'remote-workspace': record(cwd, ['remote-one']) } } }))
+  const checkpoint = cwd => JSON.stringify({ version: projectionCacheDomainSpec.version, record: { identity: { createdAt: 1, cwd, formatVersion: 4, isSeeded: false, inheritedEventCount: 0 }, rows: { title: { ver: 1, seq: -1, val: { text: cwd } } } } })
+  const ordinary = checkpoint(f.root)
+  await writeFile(join(cache, 'remote-one.json'), checkpoint(cwd)); await writeFile(join(cache, 'local-ordinary.json'), ordinary)
+  const args = [new URL('../bin/dsbot-reset.mjs', import.meta.url).pathname, '--home', f.home, '--profile', f.profile, '--credentials', f.credentials, '--sessions', f.sessions, '--attachments-home', f.root, '--storage-root', root]
+  const before = await readFile(workspacePath)
+  const dry = spawnSync(process.execPath, args, { encoding: 'utf8', env: process.env })
+  assert.equal(dry.status, 0, dry.stderr); assert.equal(JSON.parse(dry.stdout).projectionRecords, 1)
+  assert.deepEqual(await readFile(workspacePath), before)
+  const erased = spawnSync(process.execPath, [...args, '--confirm', RESET_CONFIRMATION], { encoding: 'utf8', env: process.env })
+  assert.equal(erased.status, 0, erased.stderr)
+  await assert.rejects(readFile(join(cache, 'remote-one.json')), { code: 'ENOENT' })
+  assert.equal(await readFile(join(cache, 'local-ordinary.json'), 'utf8'), ordinary)
+  const after = JSON.parse(await readFile(workspacePath, 'utf8'))
+  assert.deepEqual(after.global.workspaceIds, ['ordinary-workspace']); assert.deepEqual(after.global.archivedSessionIds, [])
+  assert.deepEqual(after.global.pinnedSessionIds, ['local-ordinary'])
+  assert.deepEqual(after.tables.workspaces['ordinary-workspace'].sessionIds, ['local-ordinary'])
+  assert.equal(after.tables.workspaces['remote-workspace'], undefined)
+})
+
+test('persistent search, custom derived routes and unresolved includes fail before any client mutation', async t => {
+  const f = await fixture(t), original = await readFile(f.profile, 'utf8'), credentials = await readFile(f.credentials)
+  for (const [suffix, code] of [
+    ['- id: session-query-sqlite\n  config:\n    path: /explicit/persistent-search.sqlite\n    openAt: never\n', 'RESET_DERIVED_QUERY_INDEX_UNSUPPORTED'],
+    ['- id: storage-json\n  config:\n    root: /unverified/other-store\n', 'RESET_DERIVED_PROVIDER_UNSUPPORTED'],
+    ['- id: storage-domain\n  config:\n    backend: sqlite\n', 'RESET_DERIVED_PROVIDER_UNSUPPORTED'],
+    ['- name: cordis:include\n  config:\n    path: /unverified/more.yml\n', 'RESET_PROFILE_INCLUDE_UNSUPPORTED'],
+  ]) {
+    const text = original + suffix; await writeFile(f.profile, text)
+    await assert.rejects(resetFederation(f.options), { code, target: f.profile })
+    assert.equal(await readFile(f.profile, 'utf8'), text); assert.deepEqual(await readFile(f.credentials), credentials)
+    assert.equal((await federationResetStatus(f.home)).pending, false)
+  }
 })

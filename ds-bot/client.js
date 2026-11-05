@@ -21002,16 +21002,25 @@ function clearCommunicationBrowserState(epoch, session, local) {
   return true;
 }
 var reloadPending = false;
+var hydrationBlocked = false;
 var documentEpoch = (() => {
+  if (typeof sessionStorage === "undefined") return null;
+  let value;
   try {
-    return sessionStorage.getItem(EPOCH);
+    value = sessionStorage.getItem(EPOCH);
+    if (value?.startsWith("pending:")) clearCommunicationBrowserState(value.slice(8), sessionStorage, localStorage);
   } catch {
-    return null;
+    hydrationBlocked = true;
   }
+  return value;
 })();
+function readCommunicationBrowserState(storage, key) {
+  if (reloadPending || hydrationBlocked) return null;
+  return storage.getItem(key);
+}
 var communicationBrowserResetPending = () => reloadPending;
 function saveCommunicationBrowserState(storage, key, value) {
-  if (reloadPending) return false;
+  if (reloadPending || hydrationBlocked) return false;
   storage.setItem(key, JSON.stringify(value));
   return true;
 }
@@ -21019,6 +21028,7 @@ function prepareCommunicationBrowserEpoch(epoch, session, local) {
   if (reloadPending) return true;
   const resumed = documentEpoch === `pending:${epoch}`;
   const changed = clearCommunicationBrowserState(epoch, session, local);
+  hydrationBlocked = false;
   if (changed && !resumed) {
     reloadPending = true;
     session.setItem(EPOCH, `pending:${epoch}`);
@@ -22840,7 +22850,7 @@ function CommunicationThread({ member, messageId, request, canSpeak, onReply, on
 function ThreadReplyComposer({ storageKey, member, target, request, onSent, attachmentsAvailable }) {
   const initial = () => {
     try {
-      const value = JSON.parse(localStorage.getItem(storageKey));
+      const value = JSON.parse(readCommunicationBrowserState(localStorage, storageKey));
       if (!value || typeof value !== "object" || Array.isArray(value)) return {};
       if (value.attempt && (value.attempt.conversationId !== member.conversationId || value.attempt.membershipEpoch !== member.membershipEpoch)) return {};
       return value;
@@ -23447,7 +23457,7 @@ var OPERATION_IDS = "ds-bot:communication:operation-ids";
 var DRAFTS = "ds-bot:communication:drafts", ATTEMPTS = "ds-bot:communication:attempts";
 var read = (key, fallback) => {
   try {
-    return JSON.parse(sessionStorage.getItem(key)) ?? fallback;
+    return JSON.parse(readCommunicationBrowserState(sessionStorage, key)) ?? fallback;
   } catch {
     return fallback;
   }

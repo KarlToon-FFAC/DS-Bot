@@ -1,5 +1,5 @@
 import { useLiveRefresh } from './communication-live.js'
-import { saveCommunicationBrowserState } from './communication-reset.js'
+import { readCommunicationBrowserState, saveCommunicationBrowserState } from './communication-reset.js'
 import { randomId } from './random-id.js'
 import { createElement as h, useEffect, useRef, useState } from 'react'
 import { t } from './i18n.js'
@@ -96,7 +96,7 @@ export function CommunicationThread({ member, messageId, request, canSpeak, onRe
 export function ThreadReplyComposer({ storageKey, member, target, request, onSent, attachmentsAvailable }) {
   const initial = () => {
     try {
-      const value=JSON.parse(localStorage.getItem(storageKey))
+      const value=JSON.parse(readCommunicationBrowserState(localStorage,storageKey))
       if(!value||typeof value!=='object'||Array.isArray(value))return {}
       if(value.attempt&&(value.attempt.conversationId!==member.conversationId||value.attempt.membershipEpoch!==member.membershipEpoch))return {}
       return value

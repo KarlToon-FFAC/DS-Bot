@@ -1,6 +1,6 @@
 // Offline maintenance only. No Hub request, enrollment, or recovery is attempted.
 import { createReadStream } from 'node:fs'
-import { lstat, realpath, readdir, readFile, open, rename, rm } from 'node:fs/promises'
+import { lstat, realpath, readdir, readFile, open, rename, rm, rmdir } from 'node:fs/promises'
 import { dirname, join, resolve, isAbsolute, relative } from 'node:path'
 import { hostname } from 'node:os'
 import { randomUUID } from 'node:crypto'
@@ -35,6 +35,16 @@ async function syncDirectory(path) {
   if (process.platform === 'win32') return
   while (!(await info(path))) path = dirname(path)
   const directory = await open(path, 'r'); try { await directory.sync() } finally { await directory.close() }
+}
+async function pruneEmptyParents(path, boundary) {
+  while (inside(boundary, path)) {
+    if (await checkedPath(path, 'directory', true)) {
+      try { await rmdir(path) }
+      catch (error) { if (['ENOTEMPTY', 'EEXIST'].includes(error.code)) return; if (error.code !== 'ENOENT') throw error }
+      await syncDirectory(dirname(path))
+    }
+    path = dirname(path)
+  }
 }
 async function atomicWrite(path, text) {
   await checkedPath(path, 'file', true)
@@ -77,6 +87,31 @@ function stripProfile(doc, envNames, path) {
   }
   visit(doc.contents)
   return count
+}
+function validateProviderConfiguration(doc, path, options) {
+  const unsupported = code => fail(code, path)
+  const literal = node => node && !node.tag ? node.value : undefined
+  const visit = node => {
+    if (isSeq(node)) { for (const row of node.items) visit(row); return }
+    if (!isMap(node)) return
+    const id = node.get('id'), name = node.get('name'), config = node.get('config', true)
+    if (name === 'cordis:include') unsupported('RESET_PROFILE_INCLUDE_UNSUPPORTED')
+    if (isMap(config)) {
+      const selected = (short, packageName = short) => id === short || name === '@deepseek-ai/dsh-' + packageName
+      if (selected('session-query-sqlite') && config.has('path') && literal(config.get('path', true)) !== ':memory:') unsupported('RESET_DERIVED_QUERY_INDEX_UNSUPPORTED')
+      if (selected('storage-json') && config.has('root') && literal(config.get('root', true)) !== options.storageRoot) unsupported('RESET_DERIVED_PROVIDER_UNSUPPORTED')
+      if (selected('storage-domain')) {
+        if (config.has('backend') && literal(config.get('backend', true)) !== 'json') unsupported('RESET_DERIVED_PROVIDER_UNSUPPORTED')
+        const routes = config.get('routes', true)
+        if (routes !== undefined && !isMap(routes)) unsupported('RESET_DERIVED_PROVIDER_UNSUPPORTED')
+        for (const key of ['workspace', 'session_projcache']) if (routes?.has(key) && literal(routes.get(key, true)) !== 'json') unsupported('RESET_DERIVED_PROVIDER_UNSUPPORTED')
+      }
+      if ((selected('session-persistence', 'session-persistence-jsonl') || selected('session-persistence-jsonl')) && config.has('root') && literal(config.get('root', true)) !== options.sessions) unsupported('RESET_SESSION_PROVIDER_UNSUPPORTED')
+    }
+    if (typeof name === 'string' && name.startsWith('@deepseek-ai/dsh-session-persistence-') && name !== '@deepseek-ai/dsh-session-persistence-jsonl') unsupported('RESET_SESSION_PROVIDER_UNSUPPORTED')
+    for (const pair of node.items) if (isMap(pair.value) || isSeq(pair.value)) visit(pair.value)
+  }
+  visit(doc.contents)
 }
 async function firstHeader(path) {
   const source = createReadStream(path), decoded = path.endsWith('.zstd') ? source.pipe(createZstdDecompress()) : source
@@ -156,7 +191,7 @@ async function sessionWitnesses(paths) {
     witnesses[path] = []
     for (const file of logs) {
       const header = await firstHeader(join(path, file))
-      witnesses[path].push({ file, id: header.id, cwd: header.cwd, ...(header.agentPreset ? { agentPreset: header.agentPreset } : {}) })
+      witnesses[path].push({ file, id: header.id, cwd: header.cwd, createdAt: header.createdAt, formatVersion: header.version, ...(header.agentPreset ? { agentPreset: header.agentPreset } : {}) })
     }
   }
   return witnesses
@@ -170,18 +205,20 @@ async function validatePendingSessionWitnesses(pending, sessions) {
     if (!(await info(path))) continue
     await checkedPath(path, 'directory')
     const current = (await sessionWitnesses([path]))[path]
-    for (const row of current) if (!prior.some(old => old.file === row.file && old.id === row.id && old.cwd === row.cwd && old.agentPreset === row.agentPreset)) fail('RESET_SESSION_CHANGED_OWNERSHIP', path)
+    for (const row of current) if (!prior.some(old => old.file === row.file && old.id === row.id && old.cwd === row.cwd && old.createdAt === row.createdAt && old.formatVersion === row.formatVersion && old.agentPreset === row.agentPreset)) fail('RESET_SESSION_CHANGED_OWNERSHIP', path)
   }
 }
 async function readPlan(options, pending) {
-  const { home, profiles, credentials, sessions, attachmentsHome } = options
+  const { home, profiles, credentials, sessions, attachmentsHome, storageRoot } = options
   if (!Array.isArray(profiles) || !profiles.length) fail('RESET_PROFILE_REQUIRED')
   await checkedPath(home, 'directory')
   await checkedPath(attachmentsHome, 'directory')
+  await checkedPath(storageRoot, 'directory', true)
   const envNames = new Set(pending?.envNames ?? []), profileWrites = []
   for (const path of new Set(profiles)) {
     await checkedPath(path, 'file')
     const original = await readFile(path, 'utf8'), doc = yamlDocument(original)
+    validateProviderConfiguration(doc, path, options)
     const count = stripProfile(doc, envNames, path)
     if (count) profileWrites.push({ path, text: doc.toString() })
   }
@@ -247,9 +284,11 @@ async function readPlan(options, pending) {
   const journals = await sessionTargets(sessions, home, bindingSessions, localIds)
   const witnesses = { ...(pending?.sessionWitnesses ?? {}), ...await sessionWitnesses(journals) }
   const remoteSessionIds = [...new Set([...bindingSessions.keys(), ...(pending?.remoteSessionIds ?? []), ...Object.values(witnesses).flat().map(row => row.id)])]
+  const { planFederationDerived } = await import('./reset-derived.js')
+  const derivedPlan = await planFederationDerived({ storageRoot, remoteSessionIds, remoteWorkspaceRoot: join(home, 'communication-workspaces'), provider: 'json', remoteSessionWitnesses: [...new Map(Object.values(witnesses).flat().map(row => [row.id, row])).values()], pendingWorkspaceDeletes: pending?.derivedWorkspaceDeletes ?? [] })
   const { planFederationAttachments } = await import('./reset-attachments.js')
   const attachmentPlan = pending?.attachmentPlan ?? await planFederationAttachments({ sessionsRoot: sessions, remoteSessionDirectories: journals, attachmentDshHome: attachmentsHome, provider: '@deepseek-ai/dsh-attachment-local' })
-  return { version: 1, home, profiles, credentials, sessions, sessionWitnesses: witnesses, remoteSessionIds, profileWrites, credentialText, recordCount,
+  return { version: 1, home, profiles, credentials, sessions, sessionWitnesses: witnesses, remoteSessionIds, derivedPlan, profileWrites, credentialText, recordCount,
     envNames: [...envNames], attachmentPlan, files: queueFiles, trees: [...journals, ...trees] }
 }
 async function validateTree(path) {
@@ -261,9 +300,9 @@ async function validateTree(path) {
   }
 }
 function protectResetInputs(options, trees = [], files = []) {
-  const { home, sessions, attachmentsHome, credentials, profiles } = options
+  const { home, sessions, attachmentsHome, storageRoot, credentials, profiles } = options
   const protectedFiles = [...new Set(profiles ?? []), credentials]
-  const roots = [home, sessions, attachmentsHome]
+  const roots = [home, sessions, attachmentsHome, storageRoot]
   for (const path of [...roots, ...protectedFiles]) if (typeof path !== 'string' || !isAbsolute(path) || resolve(path) !== path) fail('RESET_ABSOLUTE_PATH_REQUIRED', typeof path === 'string' ? path : undefined)
   if (protectedFiles.length !== new Set(protectedFiles).size) fail('RESET_PROTECTED_PATH_OVERLAP', credentials)
   const permanent = ['state.json', 'state.lock', markerName, epochName].map(name => join(home, name))
@@ -272,13 +311,13 @@ function protectResetInputs(options, trees = [], files = []) {
   const cache = join(attachmentsHome, 'cache', 'attachments', 'request-images')
   const contains = (root, path) => root === path || inside(root, path)
   for (const tree of [...dedicated, cache, ...trees]) {
-    for (const path of [...protectedFiles, home, sessions, attachmentsHome]) if (contains(tree, path)) fail('RESET_PROTECTED_PATH_OVERLAP', path)
+    for (const path of [...protectedFiles, home, sessions, attachmentsHome, storageRoot]) if (contains(tree, path)) fail('RESET_PROTECTED_PATH_OVERLAP', path)
   }
   // A Sessions root that contains a dedicated whole-tree target would otherwise
   // lose ordinary journals even when those were not selected as remote Sessions.
   for (const tree of [...dedicated, cache]) if (contains(sessions, tree)) fail('RESET_PROTECTED_PATH_OVERLAP', sessions)
   const attachmentRoot = join(attachmentsHome, 'attachments', 'v1')
-  if (contains(attachmentRoot, sessions) || contains(sessions, attachmentRoot)) fail('RESET_PROTECTED_PATH_OVERLAP', sessions)
+  if (contains(attachmentRoot, sessions) || contains(sessions, attachmentRoot) || contains(sessions, storageRoot) || contains(storageRoot, sessions) || contains(attachmentRoot, storageRoot) || contains(storageRoot, attachmentRoot)) fail('RESET_PROTECTED_PATH_OVERLAP', sessions)
   for (const path of protectedFiles) if (files.includes(path) || contains(attachmentRoot, path)) fail('RESET_PROTECTED_PATH_OVERLAP', path)
 }
 export async function resetFederation(options) {
@@ -300,7 +339,7 @@ export async function resetFederation(options) {
     // The manifest holds paths/IDs only, never old configuration or credentials.
     const pending = await info(marker) ? JSON.parse(await readFile(marker, 'utf8')) : null
     if (pending && (pending.version !== 1 || pending.home !== home
-      || JSON.stringify(pending.options) !== JSON.stringify({ profiles: options.profiles, credentials: options.credentials, sessions: options.sessions, attachmentsHome: options.attachmentsHome }))) fail('RESET_PENDING_OPTIONS_CHANGED')
+      || JSON.stringify(pending.options) !== JSON.stringify({ profiles: options.profiles, credentials: options.credentials, sessions: options.sessions, attachmentsHome: options.attachmentsHome, storageRoot: options.storageRoot }))) fail('RESET_PENDING_OPTIONS_CHANGED')
     if (pending) {
       if (!Array.isArray(pending.files) || !Array.isArray(pending.trees) || !Array.isArray(pending.envNames)
         || !Array.isArray(pending.remoteSessionIds) || pending.remoteSessionIds.some(id => typeof id !== 'string')
@@ -335,25 +374,30 @@ export async function resetFederation(options) {
     for (const path of plan.files) await checkedPath(path, 'file', true)
     for (const path of plan.trees) await validateTree(path)
     const summary = { dryRun: options.confirm !== RESET_CONFIRMATION, configurationFiles: plan.profileWrites.length,
-      pairingRecords: plan.recordCount, exclusiveAttachmentObjects: plan.attachmentPlan.exclusiveObjects, sharedAttachmentObjectsPreservedForOrdinarySessions: plan.attachmentPlan.sharedObjects, queueFiles: plan.files.length, remoteDirectories: plan.trees.length,
+      pairingRecords: plan.recordCount, attachmentFiles: plan.attachmentPlan.files.length, attachmentAliasFiles: plan.attachmentPlan.files.filter(file => file.aliasName).length, projectionRecords: plan.derivedPlan.projectionSessionIds.length, remoteWorkspaceRecords: plan.derivedPlan.workspaceDeletes.length, workspaceSessionAccounts: plan.derivedPlan.workspaceUpdates.length, exclusiveAttachmentObjects: plan.attachmentPlan.exclusiveObjects, sharedAttachmentObjectsPreservedForOrdinarySessions: plan.attachmentPlan.sharedObjects, queueFiles: plan.files.length, remoteDirectories: plan.trees.length,
       browserCleanupPending: true, serverResetRequired: true, irreversible: true, profileCoverage: 'supplied-files-only', backend: 'local-yaml-and-jsonl' }
     if (summary.dryRun) return summary
     if (!lock.owns()) fail('RESET_HOST_MUST_STOP')
-    await atomicWrite(marker, JSON.stringify({ version: 1, home, options: { profiles: options.profiles, credentials: options.credentials, sessions: options.sessions, attachmentsHome: options.attachmentsHome }, files: plan.files, trees: plan.trees, remoteSessionIds: plan.remoteSessionIds, sessionWitnesses: plan.sessionWitnesses, envNames: plan.envNames, attachmentPlan: plan.attachmentPlan }))
+    await atomicWrite(marker, JSON.stringify({ version: 1, home, options: { profiles: options.profiles, credentials: options.credentials, sessions: options.sessions, attachmentsHome: options.attachmentsHome, storageRoot: options.storageRoot }, files: plan.files, trees: plan.trees, derivedWorkspaceDeletes: plan.derivedPlan.workspaceDeletionWitnesses, remoteSessionIds: plan.remoteSessionIds, sessionWitnesses: plan.sessionWitnesses, envNames: plan.envNames, attachmentPlan: plan.attachmentPlan }))
     await options.afterStep?.('manifest')
     for (const item of plan.profileWrites) await atomicWrite(item.path, item.text)
     await options.afterStep?.('profiles')
     if (plan.credentialText !== undefined) await atomicWrite(options.credentials, plan.credentialText)
     await options.afterStep?.('credentials')
+    const { applyFederationDerived } = await import('./reset-derived.js')
+    await applyFederationDerived(plan.derivedPlan)
+    await options.afterStep?.('derived')
     // Erase journals first. Queue bindings remain available if cleanup is interrupted.
     for (const path of plan.trees) {
       if (!lock.owns()) fail('RESET_HOST_MUST_STOP')
       await validateTree(path); await rm(path, { recursive: true, force: true }); await syncDirectory(dirname(path))
+      if (inside(options.sessions, path)) await pruneEmptyParents(dirname(path), options.sessions)
     }
     await options.afterStep?.('journals')
     for (const target of plan.attachmentPlan.files) {
       if (!lock.owns()) fail('RESET_HOST_MUST_STOP')
       if (await validateAttachmentFile(target)) { await rm(target.path); await syncDirectory(dirname(target.path)) }
+      await pruneEmptyParents(dirname(target.path), join(options.attachmentsHome, 'attachments', 'v1'))
     }
     for (const path of plan.attachmentPlan.trees) { await validateTree(path); await rm(path, { recursive: true, force: true }); await syncDirectory(dirname(path)) }
     await options.afterStep?.('attachments')

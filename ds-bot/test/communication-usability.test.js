@@ -12,9 +12,10 @@ const { JSDOM } = harness('jsdom'), React = harness('react'), { act } = React
 const { outputFiles } = await build({ entryPoints: [fileURLToPath(new URL('../src/client/communication.js', import.meta.url))],
   bundle: true, platform: 'browser', format: 'cjs', external: ['react', 'react-dom', '@deepseek-ai/dsh-client-ui-primitives'], write: false })
 
-async function pane({ enabled = true, snapshot, storage = {}, history = [], getState, handleRead = async () => ({}), MarkdownText = ({ text }) => React.createElement('p', null, text), handle = async () => ({}), cryptoSource = { subtle: globalThis.crypto.subtle, getRandomValues: bytes => globalThis.crypto.getRandomValues(bytes) } }, check) {
+async function pane({ enabled = true, snapshot, storage = {}, localStored = {}, history = [], getState, handleRead = async () => ({}), MarkdownText = ({ text }) => React.createElement('p', null, text), handle = async () => ({}), cryptoSource = { subtle: globalThis.crypto.subtle, getRandomValues: bytes => globalThis.crypto.getRandomValues(bytes) } }, check) {
   const dom = new JSDOM('<!doctype html><body><textarea id="native">private draft</textarea><div id="root"></div></body>', { url: 'http://127.0.0.1:3138/', pretendToBeVisual: true })
   for (const [key, value] of Object.entries(storage)) dom.window.sessionStorage.setItem(key, value)
+  for (const [key, value] of Object.entries(localStored)) dom.window.localStorage.setItem(key, value)
   const saved = Object.fromEntries(['window', 'document', 'navigator', 'HTMLElement', 'IS_REACT_ACT_ENVIRONMENT'].map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]))
   for (const [key, value] of Object.entries({ window: dom.window, document: dom.window.document, navigator: dom.window.navigator, HTMLElement: dom.window.HTMLElement, IS_REACT_ACT_ENVIRONMENT: true })) Object.defineProperty(globalThis, key, { configurable: true, value })
   dom.window.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} })
@@ -1288,5 +1289,33 @@ test('personal memory settings update and recover automatically without writing 
     fail = false; await autoRefresh()
     assert.doesNotMatch(doc.querySelector('.bt-comm-personal-settings').textContent, /Status may be out of date/)
     assert.equal(calls.some(call => call.endpoint === 'set-memory-settings'), false)
+  })
+})
+
+
+test('a fresh pending-reset document clears main and thread drafts before React hydrates either composer', async () => {
+  const epoch = '00000000-0000-4000-8000-000000000001'
+  const event = { type: 'message', conversationSeq: 1, serverAcceptedAt: '2026-11-04T00:00:00Z', message: { messageId: 'root', author: membership.info.members[0], content: { text: 'New reply target' }, mentions: [], replyToMessageId: null } }
+  const threadKey = 'ds-bot:communication:thread:a:group:epoch:root'
+  await pane({ snapshot: { ...state(), conversations: [membership] }, history: [event],
+    storage: { 'ds-bot:federation-browser-epoch': 'pending:' + epoch, 'ds-bot:communication:selected': JSON.stringify('group'),
+      'ds-bot:communication:drafts': JSON.stringify({ 'a:group': { text: 'old main text' }, 'old:other': { text: 'old hidden text' } }),
+      'ds-bot:communication:attempts': JSON.stringify({ 'a:group': { text: 'old pending attempt' } }) },
+    localStored: { [threadKey]: JSON.stringify({ text: 'old thread text', attempt: { conversationId: 'group', membershipEpoch: 'epoch', text: 'old thread attempt' } }) },
+    handle: async body => body.endpoint === 'thread' ? { conversationId: 'group', membershipEpoch: 'epoch', messageId: 'root', rootMessageId: 'root', watermark: 1, events: [event], hasMore: false } : {},
+  }, async ({ dom, doc, click, edit }) => {
+    assert.equal(dom.window.sessionStorage.getItem('ds-bot:federation-browser-epoch'), epoch)
+    assert.equal(dom.window.sessionStorage.getItem('ds-bot:communication:attempts'), null)
+    assert.equal(dom.window.localStorage.getItem(threadKey), null)
+    await click('Shared group')
+    assert.equal(doc.querySelector('footer textarea').value, '')
+    await edit(doc.querySelector('footer textarea'), 'New main text')
+    const persisted = dom.window.sessionStorage.getItem('ds-bot:communication:drafts')
+    assert.ok(persisted.includes('New main text')); assert.ok(!persisted.includes('old'))
+    await act(async () => doc.querySelector('[data-message-id="root"] button[aria-label="Reply"]').click())
+    assert.equal(doc.querySelector('.bt-comm-thread-composer textarea').value, '')
+    await edit(doc.querySelector('.bt-comm-thread-composer textarea'), 'New thread text')
+    assert.ok(dom.window.localStorage.getItem(threadKey).includes('New thread text'))
+    assert.ok(!dom.window.localStorage.getItem(threadKey).includes('old'))
   })
 })

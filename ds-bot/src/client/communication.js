@@ -1,4 +1,4 @@
-import { communicationBrowserResetPending, prepareCommunicationBrowserEpoch, saveCommunicationBrowserState } from './communication-reset.js'
+import { communicationBrowserResetPending, prepareCommunicationBrowserEpoch, readCommunicationBrowserState, saveCommunicationBrowserState } from './communication-reset.js'
 import { randomId } from './random-id.js'
 import { createElement as h, Fragment, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
@@ -24,7 +24,7 @@ const OPEN = 'ds-bot:communication:open', SELECTED = 'ds-bot:communication:selec
 const SIDEBAR_HIDDEN = 'ds-bot:communication:sidebar-hidden'
 const OPERATION_IDS = 'ds-bot:communication:operation-ids'
 const DRAFTS = 'ds-bot:communication:drafts', ATTEMPTS = 'ds-bot:communication:attempts'
-const read = (key, fallback) => { try { return JSON.parse(sessionStorage.getItem(key)) ?? fallback } catch { return fallback } }
+const read = (key, fallback) => { try { return JSON.parse(readCommunicationBrowserState(sessionStorage, key)) ?? fallback } catch { return fallback } }
 const save = (key, value) => { try { saveCommunicationBrowserState(sessionStorage, key, value) } catch { /* A full browser store must not prevent sending. */ } }
 const readOperationIds = () => {
   const entries = read(OPERATION_IDS, [])

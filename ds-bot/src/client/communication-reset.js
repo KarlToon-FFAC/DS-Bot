@@ -18,10 +18,23 @@ export function clearCommunicationBrowserState(epoch, session, local) {
 let reloadPending = false
 // Captured once per document, so only a genuinely fresh document may finalize the
 // second cleanup. An old concurrent request cannot turn a reload fence back off.
-const documentEpoch = (() => { try { return sessionStorage.getItem(EPOCH) } catch { return null } })()
+let hydrationBlocked = false
+const documentEpoch = (() => {
+  if (typeof sessionStorage === 'undefined') return null
+  let value
+  try {
+    value = sessionStorage.getItem(EPOCH)
+    if (value?.startsWith('pending:')) clearCommunicationBrowserState(value.slice(8), sessionStorage, localStorage)
+  } catch { hydrationBlocked = true }
+  return value
+})()
+export function readCommunicationBrowserState(storage, key) {
+  if (reloadPending || hydrationBlocked) return null
+  return storage.getItem(key)
+}
 export const communicationBrowserResetPending = () => reloadPending
 export function saveCommunicationBrowserState(storage, key, value) {
-  if (reloadPending) return false
+  if (reloadPending || hydrationBlocked) return false
   storage.setItem(key, JSON.stringify(value))
   return true
 }
@@ -29,6 +42,7 @@ export function prepareCommunicationBrowserEpoch(epoch, session, local) {
   if (reloadPending) return true
   const resumed = documentEpoch === `pending:${epoch}`
   const changed = clearCommunicationBrowserState(epoch, session, local)
+  hydrationBlocked = false
   if (changed && !resumed) {
     reloadPending = true
     // Late attachment reads/callbacks in this document cannot persist after the
