@@ -5,6 +5,7 @@
 ## 适用版本与边界
 
 - 按提交 `d61b42a9d369b097143ad9b767847d8662439bf7` 的实际实现核查。Hub 为 Node 24+ 服务；Hub SQLite `user_version=4`，客户端通信队列 `user_version=5`，SDK 配对记录版本最高为 3。后续版本执行前先复核下列源码，不要手改版本号。
+- 2026-11-05 又按连接生命周期、失效通知和本地主动意图来源提交 `8b8b157`、`6c0b6c2`、`e8b882c`、`8de301c`（整合代码 `9d02f82`）复核：上述 schema 与目录保持不变；停止会先阻止旧回调并等待在途任务，未新增静默重新登记或成员恢复。
 - 本次是测试数据清零，不是日常断线修复。不要把删库、换身份、降低 `pairingRevision` 当作重连办法。
 - 只操作明确核实过的测试实例。不要按本文猜测路径，不要操作用户自己的 `~/.dsh`、其他 Hub 或未授权的安装版数据。
 - Hub 与所有客户端使用同一兼容代码版本；升级不能只更新仓库而继续运行 `app/node_modules/ds-bot` 的旧副本。
@@ -15,7 +16,7 @@
 | 范围 | 清零后结果 | 仍然保留 |
 | --- | --- | --- |
 | Hub 数据库及其 WAL/SHM | Hub ID、已审批设备、公钥授权、用户码、联系人/申请、群/成员/权限、消息/内联附件、事件、投递/回执、游标、操作去重、头像/昵称、管理审计及库内曾保存的密码校验记录全部清零重建 | Hub 配置文件、环境变量来源、TLS 证书/私钥、公开 CA 文件、客户端自己的所有文件 |
-| 某客户端的 `forget-hub`，选择删除本地历史 | 该 Hub 的 SDK 配对私钥/信任记录、选中配置、远程队列/收发箱/游标/投递映射/本地关系记忆被删除 | 其他 Hub、本地 Bot、普通本地群、普通本地消息、DSH Session 日志、普通 Bot 记忆、工作区、模型配置/密钥；浏览器未发送内容也不在这个删除范围 |
+| 某客户端的 `forget-hub`，选择删除本地历史 | 该 Hub 的 SDK 配对私钥/信任记录、选中配置、远程队列/收发箱/游标/投递映射/本地关系记忆/本机 IP 备注被删除 | 其他 Hub、本地 Bot、普通本地群、普通本地消息、DSH Session 日志、普通 Bot 记忆、工作区、模型配置/密钥；浏览器未发送内容也不在这个删除范围 |
 | 全新客户端数据根和 shell 根 | 活跃测试客户端从空白开始，没有旧配对、队列、Bot、Session、模型配置、浏览器未发送内容或登录 | 旧目录和外部工作区仍在磁盘，除非另外删除；Hub 也不会随客户端重建 |
 
 **路线 A**：旧 Hub 还能正常管理和认证，使用 Hub code / SDK 登记配对，保留本地 Bot/模型配置，只清远程通信。旧静态 `credentialEnv` 配对没有这套 SDK 注销记录，本次从零测试应走路线 B，不能套用 `forget-hub`。
@@ -67,7 +68,7 @@ printf '%s\n' '{"hubId":"OLD_HUB_ID","confirmedUrl":"OLD_HUB_URL","confirmForget
 
 4. 有尚未审批的申请时先 `cancel-hub-join`，观察已取消状态，再忘记。`HUB_LEAVE_REQUIRED`、`HUB_CANCEL_REQUIRED`、`COMMUNICATION_PAIRING_CONFLICT`、文件权限或 Config Editor 错误出现时停止处理该设备，不手改记录、复制身份或绕过验证。旧 Hub 已不可用且无法证实撤销时改走路线 B。
 5. `forget-hub` 返回应有 `forgotten:true`、`historyRetained:false`。复查 `onboarding-storage`：目标 Hub 不再保存，其他 Hub 未变。该操作已自行关闭目标队列后删除相应库/WAL/SHM或作用域目录。不要再笼统删除整个 `communication-hubs/`。
-6. 在每个实际使用过的客户端浏览器 origin 中，仅删除 `sessionStorage`/`localStorage` 里属于旧 Hub 的 `ds-bot:communication:` 未发送内容、待确认操作、隐藏项及 thread intent。可在 DevTools 的 Application/Storage 面板核对 key/value，勿打印正文。若此 profile 只用于此次测试，可以删除该前缀的所有项；共享 profile 需按旧 `instanceId` / Hub scope 定位，不能清其他 Hub。旧待发 intent 不应手动重新提交。不要清整站数据来代替，否则还会丢登录和其他设置。
+6. 在每个实际使用过的客户端浏览器 origin 中，仅删除 `sessionStorage`/`localStorage` 里属于旧 Hub 的 `ds-bot:communication:` 未发送内容、待确认操作、旧版隐藏项及 thread intent。可在 DevTools 的 Application/Storage 面板核对 key/value，勿打印正文。若此 profile 只用于此次测试，可以删除该前缀的所有项；共享 profile 需按旧 `instanceId` / Hub scope 定位，不能清其他 Hub。旧待发 intent 不应手动重新提交。不要清整站数据来代替，否则还会丢登录和其他设置。
 7. 完整退出每台 DS Bot，包含托盘；关闭同数据根的 DSH Web/Desktop及其 Host。然后按第 4 节停止并重建 Hub。
 
 路线 A **不会清掉**包含旧远程内容的 DSH Session 日志或已经写入普通 Bot 记忆的内容。没有经过核实的按远程绑定安全删除所有 Session 的统一命令。若要求连这些残留也完全隔离，走路线 B；不要直接删除整个 `sessions/` 后仍声称保留普通本地聊天。
