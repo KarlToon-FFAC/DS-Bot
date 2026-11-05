@@ -163,7 +163,7 @@ npm --prefix communication-hub run reset -- --config "$HUB_CONFIG" --confirm 'DE
 2. 本次使用管理审批配对：核对 `management.enabled: true`、正确可达的 `management.url`（例如实际的 `wss://…/communication`）、TLS/CA。重置只清旧 `peers`，不会替你开启管理模式。
 3. Windows：`npm.cmd --prefix communication-hub start -- "$HubConfig"`；Linux：`npm --prefix communication-hub start -- "$HUB_CONFIG"`。打开**本次启动日志**的 `/admin/`，重新登录，从当前 Hub 取得新码。旧 Hub ID 和旧复制码不再使用，即使 URL 和证书没变。
 4. **v2 不是软件版本号。** 配了 `management.pairingCaFile`（相对 Hub 配置文件的公开 CA PEM），并使用匹配的 TLS 证书/私钥和 `wss://` 地址时，新 Hub 生成签名 `dsbot-hub:2:` 码，最长有效七天。没有该配置时当前程序仍可生成 `dsbot-hub:1:`，它仅使用系统现有 TLS 信任，不能引导私有 CA。需要私有 CA/v2 时先正确配置，不手改码前缀、不关 TLS 校验。
-5. 启动**新版、已重置**的原客户端，不换 DSH_HOME。Remote communication → Add a device，粘贴新码，核对新 Hub ID、地址及 CA 指纹后明确申请。管理员核对申请人和设备公钥指纹后审批。每台设备生成独立新密钥，不复制旧记录或别人的身份。
+5. 启动**新版、已重置**的原客户端，不换 DSH_HOME。Remote communication → Join Hub，粘贴新码，核对新 Hub ID、地址及 CA 指纹后明确申请。管理员核对申请人和设备公钥指纹后审批。每台设备生成独立新密钥，不复制旧记录或别人的身份。
 6. 明确重新选择共享本地 Bot（默认无）、交换新 Human 用户码、申请/接受联系人、重新建群/邀请/权限。保留的是本地 Bot，不是它原来的联邦身份或发布关系。
 
 若仍出现“旧共享密钥配对”或 `LEGACY_HUB_SWITCH_REQUIRES_REENROLLMENT`，不要再重置新 Hub。先停止该客户端，查它是否运行旧插件、漏传生效覆盖层、用了另一个 home，或原启动来源再次写回 `communication`。只清服务器不能解决客户端旧配置。
