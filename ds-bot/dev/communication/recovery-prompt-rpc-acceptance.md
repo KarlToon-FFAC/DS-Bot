@@ -34,7 +34,8 @@ stays failed; later cases have their own independent conversation and input.
    original delivery/message and recovery notice match. The checkpoint proves
    socket OPEN and response not sent. The Session journal backs the notice ID
    and sequence, and the Mock log proves no second model request yet occurred.
-6. An IPC command terminates that exact held socket. There is no sleep-based
+6. An IPC command terminates that exact held socket. The reconnect case repeats
+   this exact sequence for a second distinct notice before allowing recovery. There is no sleep-based
    guess at the failing interval and no synthetic successful response.
 
 ## Assertions
@@ -47,16 +48,17 @@ stays failed; later cases have their own independent conversation and input.
   do not re-admit input or regenerate the reply.
 - `revoked`: while the RPC is held, remove the recipient. The original delivery
   becomes revoked, never produces a model request/final/export, and stays denied
-  across two further explicit reconnects.
+  across two further explicit reconnects and a normal host restart.
 - `new-epoch`: remove and explicitly accept a new invitation through the
   canonical Hub store API under the current synthetic recipient authorization.
   This test-only IPC operation does not modify Session state or bypass product
   authorization. A new membership epoch cannot revive the old delivery/input.
 - `user-cancel`: while the recovery prompt RPC is held, call the documented
   `agent.cancel({kind:'user'})`, then drop the socket. The actual terminal journal
-  must show cancellation/abort; reconnect cannot turn it into a transport retry.
-- `model-error`: a separate real Mock provider request rejects an authorized
-  synthetic image. Its error turn must not be retried by transport recovery.
+  must show cancellation/abort; reconnect and a normal host restart cannot turn it into a transport retry.
+- `model-error`: a separate real Mock provider request for the explicit test command
+  `COMM-MODEL-ERROR` returns an HTTP error. Its error turn must not be retried
+  by transport recovery or a normal host restart.
 
 Preparation checks cover marker matching, source attribution and assembly
 interval closure. They are not evidence that these real DSH cases passed.

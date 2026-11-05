@@ -27,7 +27,7 @@ const hub=await startHub({databasePath:process.argv[2],port:Number(process.argv[
     if(type==='conversation.members'&&armed.point==='recovery-prompt-rpc'
       &&activeRequest.payload.principalId===armed.principalId&&activeRequest.payload.conversationId===armed.conversationId){
       const marker=matchingRecoveryNotice(armed.markerPath,armed)
-      if(marker){pendingPromptFault={socket,marker};armed=null;checkpoint('recovery-prompt-rpc',{...marker,rpcType:type,socketOpen:socket.readyState===1,responseSent:false});return false}
+      if(marker&&marker.noticeId!==armed.lastNoticeId){const arm=armed;pendingPromptFault={socket,marker,arm};armed=null;checkpoint('recovery-prompt-rpc',{...marker,faultIndex:arm.faultIndex??1,rpcType:type,socketOpen:socket.readyState===1,responseSent:false});return false}
     }
     if(type==='message.publish'&&['after-commit-crash','drop-ack'].includes(armed.point)){
       const point=armed.point;armed=null;checkpoint(point,{messageId:value.messageId,conversationSeq:value.conversationSeq,socketOpen:socket.readyState===1})
@@ -49,7 +49,9 @@ process.on('message',async message=>{
     else if(message.command==='disconnect'){sockets.get(message.value.instanceId)?.close(1001,'Local recovery test');value={disconnected:true}}
     else if(message.command==='disconnect-prompt-rpc'){
       if(!pendingPromptFault)throw new Error('No exact prompt RPC is held')
-      pendingPromptFault.socket.terminate();value={disconnected:true,...pendingPromptFault.marker};pendingPromptFault=null
+      const held=pendingPromptFault;pendingPromptFault=null
+      if((held.arm.remaining??1)>1)armed={...held.arm,remaining:held.arm.remaining-1,lastNoticeId:held.marker.noticeId,faultIndex:(held.arm.faultIndex??1)+1}
+      held.socket.terminate();value={disconnected:true,...held.marker}
     }
     else if(message.command==='accept-scoped-invite'){
       const {instanceId,principalId,inviteId}=message.value

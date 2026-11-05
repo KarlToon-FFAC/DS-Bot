@@ -1,6 +1,6 @@
 // Real isolated DSH A/B, Hub and deterministic Mock. No production credentials.
 import assert from 'node:assert/strict'
-import { randomUUID, createHash } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
 import { createServer } from 'node:net'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -41,14 +41,12 @@ async function run(name) {
   const membershipEpoch = await until(() => epoch(b, conversationId), 'recipient projects the current membership epoch')
   const membershipVersion = JSON.parse(localRow(b, 'SELECT body FROM memberships WHERE conversation_id=? AND principal_id=?', conversationId, b.bot).body).membershipVersion
   if (name === 'model-error') {
-    await topology.bench(b, 'stop')
-    await topology.startPeer(b, { MOCK_REJECT_IMAGES: '1' })
-    const bytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVQImWMQSTnxHwAEEAJACI4/1wAAAABJRU5ErkJggg==', 'base64')
-    const sent = await topology.send(a, conversationId, `COMM-ECHO model-error-${nonce}`, [b.bot], { attachments: [{ name: 'synthetic.png', mime: 'image/png', size: bytes.length, data: bytes.toString('base64'), sha256: createHash('sha256').update(bytes).digest('hex') }] })
-    const settled = await until(async () => { const state = await inspect(b, conversationId); return ends(state).some(end => end.kind === 'error' || end.kind === 'failed') && state }, 'real Mock provider rejection ends the turn')
+    const sent = await topology.send(a, conversationId, `COMM-MODEL-ERROR model-error-${nonce}`, [b.bot])
+    const settled = await until(async () => { const state = await inspect(b, conversationId); return ends(state).some(end => end.kind === 'error' || end.kind === 'failed') && state }, 'an actual Mock provider request rejects and ends the turn')
     const sessionId = settled.sessions[0].sessionId, calls = callCount(b, sessionId)
     assert.ok(calls > 0); assert.equal(settled.exports.length, 0)
     await reconnectAndReconcile(b); await reconnectAndReconcile(b)
+    await topology.bench(b, 'stop'); await topology.startPeer(b)
     assert.equal(callCount(b, sessionId), calls, 'a provider error must not become a transport retry')
     assert.equal(originalInputs(await inspect(b, conversationId), sent.messageId).length, 1)
     return { originalMessageId: sent.messageId, conversationId, modelRequests: calls, retryRequests: 0, terminalKinds: ends(settled) }
@@ -66,16 +64,17 @@ async function run(name) {
   await topology.bench(b, 'stop')
   const markerPath = recoveryMarkerPath(b.home, conversationId)
   assert.equal(existsSync(markerPath), false, 'no old notice may select the fault window')
-  await topology.hub('arm', { point: 'recovery-prompt-rpc', principalId: b.bot, conversationId, deliveryId, messageId: sent.messageId, markerPath })
+  await topology.hub('arm', { point: 'recovery-prompt-rpc', principalId: b.bot, conversationId, deliveryId, messageId: sent.messageId, markerPath, remaining: name === 'reconnect' ? 2 : 1, faultIndex: 1 })
   await topology.startPeer(b, {}, { allowOffline: true })
   const fault = await until(() => {
-    try { const value = JSON.parse(readFileSync(join(topology.root, `${topology.prefix}-hub-checkpoint.json`), 'utf8')); return value.point === 'recovery-prompt-rpc' && value.messageId === sent.messageId && value }
+    try { const value = JSON.parse(readFileSync(join(topology.root, `${topology.prefix}-hub-checkpoint.json`), 'utf8')); return value.point === 'recovery-prompt-rpc' && value.messageId === sent.messageId && value.faultIndex === 1 && value }
     catch { return false }
   }, 'a real recovery notice is followed by an in-flight prompt membership RPC')
   assert.equal(fault.deliveryId, deliveryId); assert.equal(fault.sessionId, sessionId)
   assert.equal(fault.rpcType, 'conversation.members'); assert.equal(fault.socketOpen, true); assert.equal(fault.responseSent, false)
   assert.equal(fault.phase, 'assembling', 'the exact recovered Session is still inside the public prompt assembly waterfall')
-  proofs.set(name, { conversationId, originalMessageId: sent.messageId, deliveryId, membershipEpoch, sessionId, fault })
+  const faults = [fault]
+  proofs.set(name, { conversationId, originalMessageId: sent.messageId, deliveryId, membershipEpoch, sessionId, faults })
   const held = await inspect(b, conversationId)
   assert.ok(ends(held).some(end => end.kind === 'interrupted'), 'the original loss is interrupted, never a user cancellation')
   assert.ok(held.sessions.flatMap(session => session.events).some(event => event.seq === fault.seq && event.type === 'agent/inbox/spliced'
@@ -99,6 +98,19 @@ async function run(name) {
   await topology.hub('disconnect-prompt-rpc')
 
   if (name === 'reconnect') {
+    const second = await until(() => {
+      try { const value = JSON.parse(readFileSync(join(topology.root, `${topology.prefix}-hub-checkpoint.json`), 'utf8')); return value.point === 'recovery-prompt-rpc' && value.messageId === sent.messageId && value.faultIndex === 2 && value }
+      catch { return false }
+    }, 'a second distinct recovery notice reaches the same exact pre-request fault window')
+    assert.notEqual(second.noticeId, fault.noticeId)
+    assert.equal(second.sessionId, sessionId); assert.equal(second.deliveryId, deliveryId)
+    assert.equal(second.phase, 'assembling'); assert.equal(second.socketOpen, true); assert.equal(second.responseSent, false)
+    const twiceHeld = await inspect(b, conversationId)
+    assert.ok(twiceHeld.sessions.flatMap(session => session.events).some(event => event.seq === second.seq && event.type === 'agent/inbox/spliced'
+      && event.data.inserted.some(message => message.id === second.noticeId && message.source?.forDeliveryId === deliveryId)))
+    assert.equal(callCount(b, sessionId), 1, 'neither failed prompt authorization attempt may call the model')
+    faults.push(second); save()
+    await topology.hub('disconnect-prompt-rpc')
     await until(() => topology.hasText(a, conversationId, `Communication reply ${tag}`), 'authorization-only recovery failure leaves a future legitimate resume available', 60000)
     const restored = await inspect(b, conversationId)
     assert.equal(originalInputs(restored, sent.messageId).length, 1)
@@ -112,7 +124,7 @@ async function run(name) {
     assert.deepEqual(reopened.exports.map(row => row.message_id), [finalMessageId])
     assert.equal(originalInputs(reopened, sent.messageId).length, 1); assert.equal(callCount(b, sessionId), 2)
     assert.equal(epoch(b, conversationId), membershipEpoch); assert.deepEqual(identity(b), beforeIdentity)
-    return { conversationId, originalMessageId: sent.messageId, deliveryId, membershipEpoch, finalMessageId, logicalInputs: 1, finalMessages: 1, modelRequests: 2, fault, terminalKinds: ends(reopened) }
+    return { conversationId, originalMessageId: sent.messageId, deliveryId, membershipEpoch, finalMessageId, logicalInputs: 1, finalMessages: 1, modelRequests: 2, faults, terminalKinds: ends(reopened) }
   }
 
   await until(async () => {
@@ -121,6 +133,7 @@ async function run(name) {
     return state.inbox.some(row => row.delivery_id === deliveryId && row.revoked) && state
   }, 'explicit cancellation or revoked original scope becomes terminal')
   await reconnectAndReconcile(b); await reconnectAndReconcile(b)
+  await topology.bench(b, 'stop'); await topology.startPeer(b)
   const terminal = await inspect(b, conversationId)
   assert.equal(callCount(b, sessionId), 1, 'forbidden recovery never reaches a model request')
   assert.equal(terminal.exports.length, 0); assert.equal(originalInputs(terminal, sent.messageId).length, 1)
@@ -136,7 +149,7 @@ async function run(name) {
     freshScopeControl = { messageId: fresh.messageId, replyCount: (await topology.history(a, conversationId)).events.filter(event => event.message?.content.text === `Communication reply fresh-epoch-${nonce}`).length }
     assert.equal(freshScopeControl.replyCount, 1)
   }
-  return { ...(freshScopeControl ? { freshScopeControl } : {}), conversationId, originalMessageId: sent.messageId, deliveryId, originalMembershipEpoch: membershipEpoch, logicalInputs: 1, finalMessages: 0, modelRequests: 1, fault, terminalKinds: ends(terminal) }
+  return { ...(freshScopeControl ? { freshScopeControl } : {}), conversationId, originalMessageId: sent.messageId, deliveryId, originalMembershipEpoch: membershipEpoch, logicalInputs: 1, finalMessages: 0, modelRequests: 1, faults, terminalKinds: ends(terminal) }
 }
 
 try {

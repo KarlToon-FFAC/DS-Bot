@@ -176,6 +176,7 @@ function decide(body) {
     const history = /^COMM-READ (\S+)$/.exec(command)
     if (!communicationResults && history) return [tool('read_communication_history', { conversationId: history[1], limit: 100 })]
     if (!communicationResults && command === 'COMM-LIST') return [tool('list_communication_conversations', {})]
+    if (/^COMM-MODEL-ERROR (\S+)$/.test(command)) return 'fail'
     const echo = /^COMM-ECHO ([^\n]+)$/.exec(command)
       // Echoed mentions are quoted data; intentional delegation uses COMM-COLLAB.
       if (!communicationResults && echo) return [text(`${echo[1].includes('@') ? '> ' : ''}Communication reply ${echo[1]}`)]
@@ -798,7 +799,7 @@ const server = createServer((req, res) => {
       return
     }
     if (out === 'fail') {
-      appendFileSync(LOG, JSON.stringify({ t: new Date().toISOString(), id, images, fail: true, messages: body.messages?.length ?? 0 }) + '\n')
+      appendFileSync(LOG, JSON.stringify({ t: new Date().toISOString(), id, session: req.headers['x-deepseek-harness-session-id'] ?? null, images, fail: true, messages: body.messages?.length ?? 0 }) + '\n')
       res.writeHead(400, { 'content-type': 'application/json' })
       res.end(JSON.stringify({ type: 'error', error: { type: 'invalid_request_error', message: 'mock: this note request fails on purpose' } }))
       return
