@@ -8,6 +8,7 @@ import { within } from './folders.js'
 import { absoluteLinks } from './links.js'
 import { NAME_MAX } from './requests.js'
 import { unquote } from './text.js'
+import { cleanPublicProfile, profileContent } from './federation/public-profiles.js'
 import { mentionSpans } from '../shared/mentions.js'
 import { checkShownView, showViewDescription, showViewParameters } from 'deep-view/core'
 
@@ -344,12 +345,18 @@ export function install(rt) {
 
   rt.teamTools.push(defineTool({
     name: 'update_bot',
-    description: 'Change a Bot\'s name, role, color, profile picture, model, thinking level, working folder, or instructions. Every Bot may change itself; only a Main Bot may change another Bot.',
+    description: 'Change a Bot\'s name, role, color, profile picture, public expertise profile, model, thinking level, working folder, or instructions. Every Bot may change itself; only a Main Bot may change another Bot. public_profile patches only supplied fields and keeps the others. Public profile fields are shared with its authorized Remote audience; never put private instructions or secrets there.',
     parameters: {
       bot: { type: 'string', description: 'Current name of the Bot to change; leave out to change yourself' },
       name: { type: 'string', description: 'New name' },
       role: { type: 'string', description: 'New role label' },
       instructions: { type: 'string', description: 'Replacement instructions' },
+      public_profile: { type: 'object', additionalProperties: false, description: 'Patch the public profile independently of internal instructions: omitted fields stay unchanged; an empty string or empty list clears that field. Only user-authorized public information. Concurrent changes cause a conflict instead of overwriting another edit.', properties: {
+        headline: { type: 'string', description: 'Public specialty or responsibility, at most 80 characters; empty clears it' },
+        summary: { type: 'string', description: 'Public capabilities and limits, at most 1000 characters; empty clears it' },
+        expertise: { type: 'array', items: { type: 'string' }, description: 'Up to 12 skill keywords, each at most 32 characters; [] clears them' },
+        languages: { type: 'array', items: { type: 'string' }, description: 'Up to 8 languages, each at most 32 characters; [] clears them' },
+      } },
       color: { type: 'string', description: `One of ${[...COLORS, ...EXTRA_COLORS].join(', ')}` },
       avatar: { ...AVATAR_PARAM, description: `${AVATAR_PARAM.description} An empty string removes the photo and shows the Bot's character again.` },
       model: { type: 'string', description: 'Move the Bot to another model, as provider/model or a model id' },
@@ -367,6 +374,13 @@ export function install(rt) {
       if (bot.id !== caller.id && !rt.isMain(self)) return 'Only a Main Bot can change another Bot. Leave out bot to change yourself, or ask a Main Bot with message_bot.'
       try {
         const { name: newName, role, instructions, color, model, effort } = args
+        let publicProfilePatch = {}
+        if (args.public_profile !== undefined) {
+          const supplied = cleanPublicProfile(args.public_profile, rt)
+          const publicProfile = profileContent(bot.publicProfile)
+          for (const key of Object.keys(args.public_profile)) publicProfile[key] = supplied[key]
+          publicProfilePatch = { publicProfile, expectedProfileRevision: bot.publicProfile?.revision ?? 0 }
+        }
         let image
         if (args.avatar !== undefined) {
           const input = typeof args.avatar === 'string' ? args.avatar.trim() : args.avatar
@@ -379,7 +393,7 @@ export function install(rt) {
         // does: setting one keeps a custom character, and clearing removes only the image.
         // They are read here, after the waits above, so a change made meanwhile stays.
         const avatar = image === undefined ? undefined : { ...rt.botOf(bot.id)?.avatar, image }
-        const next = await rt.updateBot(bot.id, { name: newName, role, instructions, color, ...(avatar !== undefined ? { avatar } : {}), ...(model ? { model } : {}), ...(effort === undefined ? {} : { effort }), ...(moving ? { workDir: workDir ?? '' } : {}) }, self, exec.agent?.id)
+        const next = await rt.updateBot(bot.id, { name: newName, role, instructions, color, ...publicProfilePatch, ...(avatar !== undefined ? { avatar } : {}), ...(model ? { model } : {}), ...(effort === undefined ? {} : { effort }), ...(moving ? { workDir: workDir ?? '' } : {}) }, self, exec.agent?.id)
         if (!moving) return `Updated ${next.name}.`
         const folder = workDir ?? 'the team workspace'
         return bot.id === caller.id ? `Updated ${next.name}. From your next step on, you work in ${folder}.` : `Updated ${next.name}. It now works in ${folder}.`

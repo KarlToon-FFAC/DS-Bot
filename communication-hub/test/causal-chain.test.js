@@ -229,7 +229,7 @@ test('accepted legacy history retry returns its original ACK without recalculati
   const before=f.store.db.prepare('SELECT count(*) n FROM deliveries').get().n
   f.store.db.exec('PRAGMA user_version=2; DELETE FROM schema_version WHERE version=3; DROP TABLE bot_dispatches')
   f.store.close();f.store=new HubStore(f.path)
-  assert.equal(f.store.db.prepare('PRAGMA user_version').get().user_version,4)
+  assert.equal(f.store.db.prepare('PRAGMA user_version').get().user_version,5)
   const retry=f.store.publish(f.a,legacy)
   assert.equal(retry.messageId,accepted.messageId);assert.equal(retry.payloadHash,digest)
   assert.equal(f.store.db.prepare('SELECT count(*) n FROM deliveries').get().n,before)

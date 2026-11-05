@@ -606,32 +606,24 @@ test('Human and group rename send authenticated versioned requests and failed se
 })
 
 
-test('pairing guide is available before and after configuration and never performs API mutations', async () => {
+test('automatic device setup stays available without the manual configuration guide', async () => {
   for (const enabled of [false, true]) {
-    await pane({ enabled, snapshot: state(), handle: async body => { if(body.endpoint==='memory-settings')return {localMemory:true};assert.equal(body.endpoint, 'onboarding-storage'); return { storage: { defaultProvider: 'owner-acl-plaintext', encryptedByDefault: false, agentIsolation: false }, enrollments: [] } } }, async ({ doc, dom, calls, click, panel }) => {
+    await pane({ enabled, snapshot: state(), handle: async body => { if(body.endpoint==='memory-settings')return {localMemory:true};if(body.endpoint==='human-profile-info')return {principalId:'human:a:owner',publicProfile:{headline:'',summary:'',expertise:[],languages:[],version:0,updatedAt:null}};assert.equal(body.endpoint, 'onboarding-storage'); return { storage: { defaultProvider: 'owner-acl-plaintext', encryptedByDefault: false, agentIsolation: false }, enrollments: [] } } }, async ({ doc, dom, calls, click, panel }) => {
       await click('Personal settings')
       await click('Add a device')
-      const guide = doc.querySelector('.bt-comm-modal[aria-label="Pairing guide"]')
-      assert.ok(guide)
-      assert.match(guide.textContent, /Hub owner must authorize each device.*restart the Hub/)
-      assert.match(guide.textContent, /does not pair a device or change permissions/)
-      assert.match(guide.textContent, /environment variable names may differ/)
-      assert.match(guide.textContent, /local secret mechanism/)
-      assert.match(guide.textContent, /publishedBotIds/)
-      assert.match(guide.textContent, /Each instance has one person identity/)
-      assert.match(guide.textContent, /Readiness alone does not prove pairing/)
-      const peer = JSON.parse(guide.querySelector('pre[aria-label="Hub configuration example"]').textContent).peers[0]
-      assert.equal(peer.instanceId, 'new-device')
-      assert.equal(peer.credentialEnv, 'DSBOT_HUB_NEW_DEVICE_CREDENTIAL')
-      assert.equal(Object.hasOwn(peer, 'credential'), false)
-      assert.match(guide.querySelector('pre[aria-label="Device configuration example"]').textContent, /url: wss:\/\/hub.example.test:3190\/communication/)
-      assert.ok(guide.querySelector('[aria-label="Hub code"]'))
-      assert.equal(guide.querySelector('.bt-comm-manual-guide').open, false)
-      assert.equal(calls.filter(call => !['state', 'onboarding-storage', 'memory-settings'].includes(call.endpoint)).length, 0)
+      const setup = doc.querySelector('.bt-comm-modal[aria-label="Add a device"]')
+      assert.ok(setup)
+      assert.ok(setup.querySelector('[aria-label="Hub code"]'))
+      assert.ok([...setup.querySelectorAll('button')].some(item => item.textContent === 'Review Hub'))
+      assert.equal(setup.querySelector('.bt-comm-manual-guide'), null)
+      assert.equal(setup.querySelector('[aria-label="Hub configuration example"]'), null)
+      assert.equal(setup.querySelector('[aria-label="Device configuration example"]'), null)
+      assert.doesNotMatch(setup.textContent, /Manual configuration guide|publishedBotIds|credentialEnv/)
+      assert.equal(calls.filter(call => !['state', 'onboarding-storage', 'memory-settings', 'human-profile-info'].includes(call.endpoint)).length, 0, JSON.stringify(calls.map(call => call.endpoint)))
       await act(async () => doc.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })))
       assert.equal(doc.querySelector('.bt-comm-modal'), null)
       assert.equal(panel.getSnapshot(), true)
-      assert.equal(calls.filter(call => !['state', 'onboarding-storage', 'memory-settings'].includes(call.endpoint)).length, 0)
+      assert.equal(calls.filter(call => !['state', 'onboarding-storage', 'memory-settings', 'human-profile-info'].includes(call.endpoint)).length, 0, JSON.stringify(calls.map(call => call.endpoint)))
     })
   }
 })
@@ -1062,8 +1054,8 @@ test('Hub management is independent and has no entry in client settings or pairi
       await click('Personal settings')
       assert.doesNotMatch(doc.querySelector('.bt-comm-personal-settings').textContent, /Open Hub management|Hub management/)
       await click('Add a device')
-      assert.ok(doc.querySelector('[role=dialog][aria-label="Pairing guide"]'))
-      assert.equal(doc.querySelector('a.bt-comm-admin-link'), null, 'no WSS-derived guessed management link in the guide')
+      assert.ok(doc.querySelector('[role=dialog][aria-label="Add a device"]'))
+      assert.equal(doc.querySelector('a.bt-comm-admin-link'), null, 'no WSS-derived guessed management link in device setup')
     })
   }
 })

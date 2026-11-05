@@ -14,8 +14,8 @@ test('fixed onboarding rejections have safe English and Chinese diagnostics; unk
 })
 
 test('timeouts, disconnects and unknown errors preserve operation IDs; explicit denials remain terminal',()=>{
-  for(const code of ['REQUEST_TIMEOUT','CONNECTION_LOST','STALE_CONNECTION','STORAGE_UNAVAILABLE','BACKPRESSURE','ERR_SQLITE_ERROR','COMMUNICATION_UNAVAILABLE',undefined])assert.equal(operationOutcomeUncertain({code}),true,code)
-  for(const code of ['FORBIDDEN','INVALID_REQUEST','GROUP_VERSION_CONFLICT','MEMBERSHIP_REVOKED','MEMBERSHIP_LIMIT'])assert.equal(operationOutcomeUncertain({code}),false,code)
+  for(const code of ['REQUEST_TIMEOUT','CONNECTION_LOST','STALE_CONNECTION','STORAGE_UNAVAILABLE','BACKPRESSURE','ERR_SQLITE_ERROR','COMMUNICATION_UNAVAILABLE','INVALID_PUBLIC_PROFILE_RESPONSE',undefined])assert.equal(operationOutcomeUncertain({code}),true,code)
+  for(const code of ['FORBIDDEN','INVALID_REQUEST','GROUP_VERSION_CONFLICT','MEMBERSHIP_REVOKED','MEMBERSHIP_LIMIT','PUBLIC_PROFILE_VERSION_CONFLICT','PROFILE_VERSION_CONFLICT','INVALID_PUBLIC_PROFILE','PUBLIC_PROFILE_SECRET_REFUSED','PUBLIC_PROFILE_CAPABILITY_REQUIRED'])assert.equal(operationOutcomeUncertain({code}),false,code)
 })
 test('shared diagnostics expose safe known codes and never arbitrary exception text or unknown code strings',()=>{
   for(const code of ['CREDENTIAL_UNAVAILABLE','EXPLICIT_ACTIVATION_REQUIRED','CONFIG_EDITOR_UNAVAILABLE','REQUEST_TIMEOUT','HUB_TLS_UNTRUSTED','HUB_TLS_HOSTNAME_MISMATCH']){

@@ -9,6 +9,7 @@ import { completedOutputs, inspectBinding, interruptedInputs, reconcileInput, re
 import { communicationMentions } from '../../shared/communication-mentions.js'
 import { mentionSpans } from '../../shared/mentions.js'
 import { syncBotAvatars } from './avatars.js'
+import { syncBotPublicProfiles } from './public-profiles.js'
 import { startedSources } from './work-events.js'
 import { conversationSummary, safeManagementUrl } from './conversation-summary.js'
 import { splitRef } from '../text.js'
@@ -93,6 +94,8 @@ export class CommunicationRuntime {
         }
         try { await syncBotAvatars(this); this.avatarError = null }
         catch (error) { this.avatarError = error.code ?? 'AVATAR_SYNC_FAILED' }
+        try { await syncBotPublicProfiles(this); this.publicProfileError = null }
+        catch (error) { this.publicProfileError = error.code ?? 'PUBLIC_PROFILE_SYNC_FAILED' }
         const authorized = new Set(this.queue.memberships().map(member => member.conversationId))
         for (const id of this.conversations.keys()) if (!authorized.has(id)) this.conversations.delete(id)
         for (const member of this.queue.memberships()) {

@@ -151,8 +151,6 @@ export const communicationCSS = `
 }
 @media(prefers-reduced-motion:reduce){.bt-comm-frame{transition:none}}
 
-.bt-comm-pairing-guide pre{white-space:pre-wrap;overflow-wrap:anywhere;user-select:text;background:var(--bt-sidebar);padding:12px;border:1px solid var(--bt-line);border-radius:8px}
-.bt-comm-pairing-guide li{margin:8px 0}
 .bt-comm-avatar{width:28px;height:28px;flex:0 0 28px;display:inline-grid;place-items:center;border-radius:50%;background:var(--bt-bubble);color:var(--bt-ink);font:500 11px/16px var(--bt-font);vertical-align:middle;margin-right:8px}
 .bt-comm-avatar::before{content:attr(data-initials)}
 .bt-comm-avatar[data-avatar="1"]{background:var(--bt-tag-bg);color:var(--bt-tag-ink)}
@@ -187,7 +185,6 @@ export const communicationCSS = `
 .bt-comm-bot-choices{border:1px solid var(--bt-line);border-radius:8px;margin:12px 0;padding:8px 12px;min-width:0}
 .bt-comm-bot-choices legend{font-size:12px;color:var(--bt-ink-2)}
 .bt-comm-user-code{font:500 15px/20px ui-monospace,SFMono-Regular,monospace;user-select:all}
-.bt-comm-manual-guide{margin-top:16px;border-top:1px solid var(--bt-line);padding-top:8px}
 .bt-comm-set-card{padding:12px;border:1px solid var(--bt-line);border-radius:12px;background:var(--bt-card)}
 
 .bt-comm-avatar[data-kind=human][data-avatar="0"]{background:color-mix(in srgb,var(--bt-accent) 14%,var(--bt-card));color:var(--bt-accent)}

@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { avatarBytes } from '../avatar.js'
 import { MAX_AVATAR_IMAGE } from '../constants.js'
+import { cleanPublicProfile } from './public-profiles.js'
 
 const fail = code => { throw Object.assign(new Error(code), { code }) }
 const hash = value => createHash('sha256').update(value).digest('hex')
@@ -43,6 +44,54 @@ export async function profileHuman(runtime, input) {
   if (result.status !== 'queued') {
     if (result.displayName) runtime.human.displayName = result.displayName
     runtime.contacts = runtime.contacts.map(contact => contact.principalId === principalId ? { ...contact, ...result } : contact)
+  }
+  return result
+}
+
+const invalidProfileText = (value, multiline = false) => typeof value !== 'string' || !value.isWellFormed() || [...value].some(character => {
+  const code = character.codePointAt(0)
+  return code < 32 && (!multiline || ![9, 10, 13].includes(code)) || code >= 127 && code <= 159
+})
+function validatePublicProfile(profile) {
+  if (!profile || typeof profile !== 'object' || Array.isArray(profile)
+    || Object.keys(profile).some(key => !['headline', 'summary', 'expertise', 'languages', 'version', 'updatedAt', 'truncated'].includes(key))) fail('INVALID_PUBLIC_PROFILE_RESPONSE')
+  for (const [key, limit] of [['headline', 80], ['summary', 1000]]) {
+    const value = profile[key]
+    if (invalidProfileText(value, key === 'summary') || [...value].length > limit) fail('INVALID_PUBLIC_PROFILE_RESPONSE')
+  }
+  for (const [key, count] of [['expertise', 12], ['languages', 8]]) {
+    if (!Array.isArray(profile[key]) || profile[key].length > count
+      || profile[key].some(value => invalidProfileText(value) || !value.trim() || [...value].length > 32)) fail('INVALID_PUBLIC_PROFILE_RESPONSE')
+  }
+  if (profile.truncated === true || !Number.isSafeInteger(profile.version) || profile.version < 0) fail('INVALID_PUBLIC_PROFILE_RESPONSE')
+}
+
+export async function readHumanProfileInfo(runtime, input = {}) {
+  if (!runtime.transport.welcome?.capabilities?.includes('public-profiles')) fail('PUBLIC_PROFILE_CAPABILITY_REQUIRED')
+  if (Object.keys(input).some(key => key !== 'endpoint')) fail('INVALID_REQUEST')
+  const principalId = runtime.human.principalId
+  const result = await runtime.transport.request('principal.public-profile.read', { principalId, targetPrincipalId: principalId })
+  if (result?.principalId !== principalId) fail('INVALID_PUBLIC_PROFILE_RESPONSE')
+  validatePublicProfile(result.publicProfile)
+  return result
+}
+
+export async function profileHumanInfo(runtime, input) {
+  if (!runtime.transport.welcome?.capabilities?.includes('public-profiles')) fail('PUBLIC_PROFILE_CAPABILITY_REQUIRED')
+  if (Object.keys(input).some(key => !['endpoint', 'operationId', 'expectedVersion', 'profile'].includes(key))) fail('INVALID_REQUEST')
+  if (typeof input.operationId !== 'string' || !input.operationId || input.operationId.length > 256
+    || !Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 0 || input.expectedVersion === Number.MAX_SAFE_INTEGER) fail('INVALID_REQUEST')
+  const profile = cleanPublicProfile(input.profile, runtime.rt)
+  const principalId = runtime.human.principalId
+  const result = await runtime.operation(principalId, 'principal.public-profile', {
+    expectedVersion: input.expectedVersion, profile,
+  }, input.operationId)
+  if (result?.status !== 'queued') {
+    if (result?.principalId !== principalId || !result.publicProfile
+      || result.publicProfile.version !== input.expectedVersion + 1) fail('INVALID_PUBLIC_PROFILE_RESPONSE')
+    validatePublicProfile(result.publicProfile)
+    runtime.human.publicProfile = result.publicProfile
+    runtime.contacts = runtime.contacts.map(contact => contact.principalId === principalId ? { ...contact, publicProfile: result.publicProfile } : contact)
   }
   return result
 }

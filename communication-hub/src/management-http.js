@@ -126,16 +126,17 @@ export function createManagementHttp(management, { password, origin, onRevoke = 
         requireThat(!closed && latestRevision === revision && session.expires > management.now() && [...sessions.values()].includes(session), 'UNAUTHENTICATED')
         send(res, 200, { ok: true, revision: currentRevision() }); return true
       }
-      if (path === '/admin/api/state') value = { ...management.info(), requests: management.joins(), instances: management.instances() }
+      if (path === '/admin/api/state') value = { ...management.info(), requests: management.joins(), instances: management.instances(), participants: management.participants() }
+      else if (path === '/admin/api/avatar') value = management.participantAvatar(input)
       else if (path === '/admin/api/decide') value = management.decide(input)
       else if (path === '/admin/api/revoke') { value = await onRevoke(input.instanceId); management.audit('admin.instance.revoke', input.instanceId) }
       else if (path === '/admin/api/repair') value = management.repair(input)
       else if (path === '/admin/api/rename') value = management.rename(input)
       else requireThat(false, 'UNKNOWN_OPERATION')
-      if (path !== '/admin/api/state') changed()
+      if (!['/admin/api/state','/admin/api/avatar'].includes(path)) changed()
       send(res, 200, { ok: true, value, revision: currentRevision() })
     } catch (error) {
-      const code = ['INVALID_REQUEST', 'UNAUTHENTICATED', 'ORIGIN_REJECTED', 'RATE_LIMITED', 'PAYLOAD_TOO_LARGE', 'JOIN_VERSION_CONFLICT', 'PAIRING_REVISION_CONFLICT', 'INSTANCE_NOT_FOUND', 'INSTANCE_NAME_VERSION_CONFLICT', 'UNKNOWN_OPERATION', 'ALREADY_ENROLLED', 'DIRECTORY_FULL'].includes(error.code) ? error.code : 'MANAGEMENT_UNAVAILABLE'
+      const code = ['INVALID_REQUEST', 'UNAUTHENTICATED', 'ORIGIN_REJECTED', 'RATE_LIMITED', 'PAYLOAD_TOO_LARGE', 'JOIN_VERSION_CONFLICT', 'PAIRING_REVISION_CONFLICT', 'INSTANCE_NOT_FOUND', 'INSTANCE_NAME_VERSION_CONFLICT', 'UNKNOWN_OPERATION', 'UNKNOWN_PRINCIPAL', 'INVALID_AVATAR_REVISION', 'INVALID_AVATAR_CHUNK', 'AVATAR_REVISION_MISMATCH', 'ALREADY_ENROLLED', 'DIRECTORY_FULL'].includes(error.code) ? error.code : 'MANAGEMENT_UNAVAILABLE'
       if (path === '/admin/login') {
         res.writeHead(code === 'RATE_LIMITED' ? 429 : 401, { ...headers, 'content-type': 'text/html; charset=utf-8' })
         res.end(managementPage.replace('<p id="error" role="status"></p>', '<p id="error" role="alert">Sign-in failed. Check the trusted address and password, or wait before trying again.</p>'))

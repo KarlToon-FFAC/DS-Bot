@@ -147,6 +147,22 @@ export class HubManagement {
     })
   }
   instances() { return this.db.prepare('SELECT i.id instanceId,i.label,i.trusted,i.pairing_revision pairingRevision,p.revision,coalesce(n.version,0) nameVersion FROM instances i LEFT JOIN hub_enrolled_peers p ON p.instance_id=i.id LEFT JOIN hub_instance_names n ON n.instance_id=i.id ORDER BY i.id').all().map(instance => ({ ...instance, connected: this.isInstanceConnected?.(instance.instanceId) === true })) }
+  participants() {
+    const rows = this.db.prepare(`SELECT p.id principalId,p.instance_id homeInstanceId,p.kind,p.name displayName,
+      i.label instanceLabel,i.trusted FROM principals p JOIN instances i ON i.id=p.instance_id
+      LEFT JOIN principal_publication pub ON pub.principal_id=p.id
+      WHERE p.kind='human' OR coalesce(pub.published,1)=1 ORDER BY p.id`).all()
+      .map(person => ({ ...person, trusted: person.trusted === 1, published: this.store.isPublished(person.principalId),
+        avatar: this.store.avatarOf(person.principalId), connected: this.isInstanceConnected?.(person.homeInstanceId) === true }))
+    return this.store.participantProfiles(rows)
+  }
+  participantAvatar(input) {
+    requireThat(input && Object.keys(input).every(key => ['principalId','imageRevision','offset','limit'].includes(key)), 'INVALID_REQUEST')
+    identifier(input.principalId)
+    const person = this.db.prepare('SELECT kind FROM principals WHERE id=?').get(input.principalId)
+    requireThat(person && (person.kind === 'human' || this.store.isPublished(input.principalId)), 'UNKNOWN_PRINCIPAL')
+    return this.store.avatarImage(input)
+  }
   rename(input) {
     requireThat(input && typeof input === 'object' && !Array.isArray(input) && Object.keys(input).every(key => ['instanceId', 'label', 'expectedNameVersion'].includes(key)), 'INVALID_REQUEST')
     identifier(input.instanceId)
