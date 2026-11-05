@@ -65,9 +65,37 @@ node --import ./test/harness-resolve.mjs --test test/communication-directory-ui.
 ```
 
 All tests use synthetic state or the deterministic Mock; no real model or account
-is accessed. Actual Chromium visual checks were attempted but could not launch:
+is accessed. The initial standalone Chromium launch was blocked by
 `browser/process_singleton_posix.cc:297`, `socket() failed: Operation not permitted
-(1)`, followed by `SIGABRT`. The formally reviewed execution path produced the
-same environment restriction. No screenshot, pixel-layout pass or real-browser
-interaction result is claimed. Desktop, phone and dark-mode pixel verification
-remains pending in an available authorized browser environment.
+(1)`, followed by `SIGABRT`. That launch was not retried through another path.
+
+The follow-up used the platform's supported internal preview service with the
+already running cloud browser. `sites-preview start <static-preview-directory>`
+returned its exact browser URL; this successfully rendered the integrated
+`eab655102ef79e7cd7ed8af1294fc9d70f94aa7d` communication components and production
+shell/communication styles. No hosted Site, public deployment, sharing grant or
+new browser process was created. Earlier arbitrary-port loopback refusal was a
+preview connectivity problem, not proof that screenshots were unavailable.
+
+The synthetic harness supplies authorized Humans, same-name Bots, one shared IP,
+one active local-sharing scope and pending requests. The desktop screenshot and
+390px dark iframe viewport show the real responsive CSS, avatars, contact cards,
+long-name wrapping and dialogs. At 390px the document width is 390px and modal
+scroll/client widths both measure 349px. After scrolling 489px, Close remains
+visible at y=25–57px. The three management disclosures start collapsed, the
+request count is visible and new sharing selections remain unchecked. Search for
+Home laptop keeps only `human:b:person`, without sending a message. Back from
+pairing restores Add a device focus.
+
+AX activation additionally exposed that dialog focus restoration depended on the
+browser first focusing the clicked toolbar button. Toolbar actions now explicitly
+retain their event target, and the regression activates Settings while Contacts
+still holds focus. This preserves the exact opener for Close/Escape even with
+assistive-technology activation.
+
+Screenshots: `contact-managed-desktop.jpg`, `contact-managed-phone-dark.jpg`,
+`contact-managed-phone-requests.jpg`, `contact-managed-phone-pairing.jpg` and
+`contact-managed-search.jpg`. They are synthetic review artifacts, not production
+contact data. This verifies component rendering and interaction, not live Hub,
+DSH transport, real-model behavior, physical-device networking or the full app's
+Markdown integration.

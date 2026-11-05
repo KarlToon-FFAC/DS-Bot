@@ -23781,10 +23781,10 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
       showPanel("participant");
     }
   };
-  const showPanel = (name) => {
+  const showPanel = (name, trigger) => {
     setPanelBack("");
     setNewMenuOpen(false);
-    chooserTrigger.current = newMenuOpen ? newTrigger.current : document.activeElement;
+    chooserTrigger.current = newMenuOpen ? newTrigger.current : trigger ?? document.activeElement;
     if (name === "search") {
       setSearchQuery("");
       setSearchCursor(0);
@@ -23878,9 +23878,9 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
         (0, import_react63.createElement)(
           "div",
           { className: "bt-comm-nav-actions" },
-          btn("Personal settings", () => showPanel("settings"), { className: "bt-comm-settings-icon", "aria-label": t("Personal settings"), title: t("Personal settings"), children: (0, import_react63.createElement)(GearIcon) }),
-          btn("Contacts", () => showPanel("manage-contacts"), { className: "bt-comm-settings-icon", "aria-label": t("Contacts"), title: t("Contacts"), disabled: busy || !team.communicationEnabled, children: (0, import_react63.createElement)(PeopleIcon) }),
-          btn("Search", () => showPanel("search"), { className: "bt-comm-settings-icon", "aria-label": t("Search"), title: t("Search"), children: (0, import_react63.createElement)(SearchIcon) }),
+          btn("Personal settings", (event) => showPanel("settings", event.currentTarget), { className: "bt-comm-settings-icon", "aria-label": t("Personal settings"), title: t("Personal settings"), children: (0, import_react63.createElement)(GearIcon) }),
+          btn("Contacts", (event) => showPanel("manage-contacts", event.currentTarget), { className: "bt-comm-settings-icon", "aria-label": t("Contacts"), title: t("Contacts"), disabled: busy || !team.communicationEnabled, children: (0, import_react63.createElement)(PeopleIcon) }),
+          btn("Search", (event) => showPanel("search", event.currentTarget), { className: "bt-comm-settings-icon", "aria-label": t("Search"), title: t("Search"), children: (0, import_react63.createElement)(SearchIcon) }),
           (0, import_react63.createElement)(
             "div",
             { ref: newMenu, className: "bt-comm-new-menu", onKeyDown: (event) => {
@@ -24124,7 +24124,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
           if (member.kind === "group") frame.current?.querySelector(".bt-comm-members>summary")?.click();
           else inspect(currentMembers.filter((person) => person.principalId !== state.humanPrincipalId).map((person) => person.principalId));
         }, { className: "bt-pill bt-comm-title-pill", children: (0, import_react63.createElement)(import_react63.Fragment, null, (0, import_react63.createElement)(ConversationAvatar, { conversation: member, humanId: state.humanPrincipalId, request, size: 24 }), (0, import_react63.createElement)("h2", { className: "bt-pill-name" }, conversationTitle(member, state.humanPrincipalId, labels)), (0, import_react63.createElement)("span", { "aria-hidden": true }, "›")) }) : (0, import_react63.createElement)("h2", null, t("Remote communication"))),
-        btn("Activity details", () => showPanel("activity"), { className: "bt-comm-icon-button", "aria-label": t("Activity details"), title: t("Activity details"), children: (0, import_react63.createElement)(InfoIcon) }),
+        btn("Activity details", (event) => showPanel("activity", event.currentTarget), { className: "bt-comm-icon-button", "aria-label": t("Activity details"), title: t("Activity details"), children: (0, import_react63.createElement)(InfoIcon) }),
         member?.kind === "group" ? (0, import_react63.createElement)("span", { className: "bt-sr" }, `${currentMembers.length} ${t("Members")} · ${t(roleLabel(member.role))} · ${t(member.speakingMode === "readOnly" ? "Read only" : "Can speak")}`) : null,
         member ? btn("Close on this device", hide, { className: "bt-comm-icon-button", "aria-label": t("Close on this device"), title: t("Close on this device"), children: (0, import_react63.createElement)(CloseIcon) }) : null
       ),

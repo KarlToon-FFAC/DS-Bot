@@ -1134,7 +1134,7 @@ test('top Contacts entry opens the directory directly and every management dialo
     await click('Close dialog')
     assert.equal(doc.querySelector('.bt-comm-modal'), null)
     assert.equal(doc.activeElement, trigger)
-    await act(async () => button('Personal settings').focus())
+    // Assistive-technology activation need not focus its target first.
     await click('Personal settings'); await click('Manage contacts')
     assert.ok(button('Back to settings'))
     await click('Back to settings')

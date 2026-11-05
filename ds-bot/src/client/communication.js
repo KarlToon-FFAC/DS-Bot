@@ -399,7 +399,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
   const pendingForConversation = [...operationIds.current.keys()].some(item => { const [operationScope, , values] = JSON.parse(item); return operationScope === scope && (member ? values.conversationId === selected : !values.conversationId) })
   const remoteCount = contacts.filter(contact => contact.homeInstanceId !== state?.instanceId).length
   const inspect = ids => { const authorized = ids.filter(id => currentMembers.some(person => person.principalId === id)); if (authorized.length) { setInspectedIds(authorized); showPanel('participant') } }
-  const showPanel = name => { setPanelBack(''); setNewMenuOpen(false); chooserTrigger.current = newMenuOpen ? newTrigger.current : document.activeElement; if (name === 'search') { setSearchQuery(''); setSearchCursor(0) }; setActivePanel(name) }
+  const showPanel = (name, trigger) => { setPanelBack(''); setNewMenuOpen(false); chooserTrigger.current = newMenuOpen ? newTrigger.current : trigger ?? document.activeElement; if (name === 'search') { setSearchQuery(''); setSearchCursor(0) }; setActivePanel(name) }
   const messageContact = id => {
     const context = contextKey.current, version = panelShown.current.version
     void act(async () => {
@@ -447,9 +447,9 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
     h('aside', { id:'bt-comm-nav', className: 'bt-comm-nav' },
       h('div', { className: 'bt-comm-nav-heading' }, h('h2', {title:t('Remote communication')}, t('Remote communication')),
         h('div', { className:'bt-comm-nav-actions' },
-          btn('Personal settings', () => showPanel('settings'), { className: 'bt-comm-settings-icon', 'aria-label': t('Personal settings'), title: t('Personal settings'), children: h(GearIcon) }),
-          btn('Contacts', () => showPanel('manage-contacts'), { className: 'bt-comm-settings-icon', 'aria-label': t('Contacts'), title: t('Contacts'), disabled: busy || !team.communicationEnabled, children: h(PeopleIcon) }),
-          btn('Search',()=>showPanel('search'),{className:'bt-comm-settings-icon','aria-label':t('Search'),title:t('Search'),children:h(SearchIcon)}),
+          btn('Personal settings', event => showPanel('settings', event.currentTarget), { className: 'bt-comm-settings-icon', 'aria-label': t('Personal settings'), title: t('Personal settings'), children: h(GearIcon) }),
+          btn('Contacts', event => showPanel('manage-contacts', event.currentTarget), { className: 'bt-comm-settings-icon', 'aria-label': t('Contacts'), title: t('Contacts'), disabled: busy || !team.communicationEnabled, children: h(PeopleIcon) }),
+          btn('Search',event=>showPanel('search',event.currentTarget),{className:'bt-comm-settings-icon','aria-label':t('Search'),title:t('Search'),children:h(SearchIcon)}),
           h('div',{ref:newMenu,className:'bt-comm-new-menu',onKeyDown:event=>{
             if(!newMenuOpen||!['ArrowDown','ArrowUp','Home','End'].includes(event.key))return
             event.preventDefault();const items=[...newMenu.current.querySelectorAll('[role="menuitem"]:not(:disabled)')],index=items.indexOf(document.activeElement)
@@ -526,7 +526,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
           if (member.kind === 'group') frame.current?.querySelector('.bt-comm-members>summary')?.click()
           else inspect(currentMembers.filter(person => person.principalId !== state.humanPrincipalId).map(person => person.principalId))
         }, { className: 'bt-pill bt-comm-title-pill', children: h(Fragment, null, h(ConversationAvatar, { conversation: member, humanId: state.humanPrincipalId, request, size: 24 }), h('h2', { className: 'bt-pill-name' }, conversationTitle(member, state.humanPrincipalId, labels)), h('span', { 'aria-hidden': true }, '›')) }) : h('h2', null, t('Remote communication'))),
-        btn('Activity details', () => showPanel('activity'), { className: 'bt-comm-icon-button', 'aria-label': t('Activity details'), title: t('Activity details'), children: h(InfoIcon) }),
+        btn('Activity details', event => showPanel('activity', event.currentTarget), { className: 'bt-comm-icon-button', 'aria-label': t('Activity details'), title: t('Activity details'), children: h(InfoIcon) }),
         member?.kind === 'group' ? h('span', { className: 'bt-sr' }, `${currentMembers.length} ${t('Members')} · ${t(roleLabel(member.role))} · ${t(member.speakingMode === 'readOnly' ? 'Read only' : 'Can speak')}`) : null,
         member ? btn('Close on this device', hide, { className: 'bt-comm-icon-button', 'aria-label': t('Close on this device'), title: t('Close on this device'), children: h(CloseIcon) }) : null),
       !member ? h('section', { className: 'bt-comm-empty' },
