@@ -311,6 +311,8 @@ async function stopAll() {
   const errors = []
   for (const peer of topology.peers) if (peer.owned && existsSync(peer.home)) try { await topology.bench(peer, 'stop') } catch { errors.push('HOST_STOP_FAILED') }
   try { await stopHub() } catch { errors.push('HUB_STOP_FAILED') }
+  for (const port of ports) try { await freePort(port) } catch { errors.push(`PORT_NOT_RELEASED_${port}`) }
+  evidence.portsReleased = !errors.some(value => value.startsWith('PORT_NOT_RELEASED_'))
   evidence.shutdown = errors.length ? errors : 'owned processes stopped'
   if (errors.length) { evidence.status = 'FAIL'; process.exitCode = 1 }
 }
@@ -392,6 +394,8 @@ try {
     assert.equal(files(join(peer.home, 'attachments/v1')).length, 0, 'All attachment bytes in this fixture are remote-only')
     for (const path of peer.paths.profiles) assert.deepEqual(parse(readFileSync(path, 'utf8')), profileWithoutCommunication(parse(readFileSync(path, 'utf8'))))
     preserved(peer, peer.before); derivedErased(peer, peer.before)
+    const empty = await clientReset(peer)
+    for (const field of ['configurationFiles', 'pairingRecords', 'queueFiles', 'remoteDirectories', 'attachmentFiles', 'attachmentAliasFiles', 'projectionRecords', 'remoteWorkspaceRecords', 'workspaceSessionAccounts', 'temporaryFiles']) assert.equal(empty[field], 0, `Confirmed reset must leave no ${field}`)
     record(`client-${peer.id}-all-materialized-federation-data-erased-local-data-preserved`, { exclusiveAttachmentObjects: erased.exclusiveAttachmentObjects, erasedRemoteDirectories: peer.before.remoteDirectories.length, erasedProjectionRecords: peer.before.remoteProjections.length })
   }
   stage('normal Hub shutdown and offline CLI reset of actual config')
@@ -417,7 +421,11 @@ try {
     await startPeer(peer)
     const storage = await api(peer, 'onboarding-storage')
     assert.equal(storage.configured, false); assert.equal(storage.enrollments.length, 0); assert.equal(storage.selectedHub, null)
+    const cli = await command(join(repo, 'ds-bot/bin/dsbot-remote.mjs'), ['state'], { DSBOT_REMOTE_URL: `http://127.0.0.1:${peer.web}`, DSBOT_REMOTE_COOKIE: peer.cookie })
+    assert.equal(cli.code, 0); assert.equal(cli.value.ok, true); assert.equal(cli.value.value.enabled, false)
+    assert.deepEqual(cli.value.request, { endpoint: 'state' })
   }
+  record('actual-Node-remote-CLI-reconciles-reset-generation-without-reenrollment')
   stage('old Hub code rejected by public Human API')
   const a = topology.peers[0], reviewedOld = await api(a, 'decode-hub-code', { hubCode: oldHub.code })
   await assert.rejects(api(a, 'join-hub', { hubCode: oldHub.code, confirmedHubId: reviewedOld.hubId, confirmedUrl: reviewedOld.url, displayName: 'Stale code must not enroll' }), { code: 'INVALID_ENROLLMENT_CHALLENGE' })
