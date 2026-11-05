@@ -252,11 +252,14 @@ export class CommunicationOnboarding {
   handle(action, input = {}, authority) {
     if (authority?.human !== true || authority?.agent || !input || typeof input !== 'object' || Array.isArray(input)) return Promise.reject(Object.assign(new Error('HUMAN_REQUIRED'), { code: 'HUMAN_REQUIRED' }))
     if (['principalId', 'sender', 'author', 'privateKey', 'publicKey', 'credentialKey', 'allowLoopback'].some(key => Object.hasOwn(input, key))) return Promise.reject(Object.assign(new Error('AUTHOR_MISMATCH'), { code: 'AUTHOR_MISMATCH' }))
-    const next = this.tail.catch(() => {}).then(() => this.dispatch(action, input))
+    const next = this.tail.catch(() => {}).then(() => {
+      authority.beforeDispatch?.()
+      return this.dispatch(action, input, authority.beforeDispatch)
+    })
     this.tail = next
     return next
   }
-  async dispatch(action, input) {
+  async dispatch(action, input, guard) {
     if (action === 'decode-hub-code') return decodeHubCode(input.hubCode, { allowLoopback: this.allowLoopback })
     if (action === 'join') return this.join(input)
     if (action === 'disconnect-hub') return this.disconnect(input)
@@ -270,8 +273,8 @@ export class CommunicationOnboarding {
     if (action === 'memory-settings') return { localMemory: this.rt.config.communication?.localMemory !== false }
     if (action === 'set-memory-settings') return this.setMemorySettings(input)
     if (action === 'available-bots') return this.availableBots()
-    if (action === 'publish-bots') return this.publishBots(input)
-    return this.contact(action, input)
+    if (action === 'publish-bots') return this.publishBots(input, guard)
+    return this.contact(action, input, guard)
   }
   availableBots() {
     const bots = Object.values(this.rt.state?.bots ?? {}).filter(bot => bot && this.rt.botOf(bot.id) === bot).map(bot => ({
@@ -289,7 +292,7 @@ export class CommunicationOnboarding {
   }
   // Public configuration edits use the normal Loader reload. The runtime then
   // reconciles publication with the Hub; no Bot identity or history is replaced.
-  async publishBots(input) {
+  async publishBots(input, guard) {
     const ids = this.checkedBotIds(input.localBotIds), configured = this.rt.config.communication
     const instanceId = configured?.instanceId ?? this.rt.communication?.queue?.instanceId
     if (!configured?.url || !instanceId) fail('COMMUNICATION_NOT_CONFIGURED')
@@ -298,10 +301,13 @@ export class CommunicationOnboarding {
     const entries = editor.entries().filter(entry => entry.options?.name === 'ds-bot')
     if (entries.length !== 1) fail('CONFIG_ENTRY_UNAVAILABLE')
     await phase('COMMUNICATION_CONFIG_WRITE_FAILED', () => editor.edit(entries[0], current => {
+      guard?.()
       const latest = current.communication
       if (!latest?.url || !(latest.instanceId ?? this.rt.communication?.queue?.instanceId)) fail('COMMUNICATION_NOT_CONFIGURED')
       if (['url', 'instanceId', 'hubId', 'credentialKey', 'credentialEnv'].some(name => latest[name] !== configured[name])) fail('COMMUNICATION_PAIRING_CONFLICT')
       if (!latest.instanceId && this.rt.communication?.queue?.instanceId !== instanceId) fail('COMMUNICATION_PAIRING_CONFLICT')
+      if (input.expectedPublishedBotIds !== undefined && (!Array.isArray(input.expectedPublishedBotIds)
+        || JSON.stringify([...(latest.publishedBotIds ?? [])].sort()) !== JSON.stringify([...input.expectedPublishedBotIds].sort()))) fail('PUBLICATION_CHANGED')
       const publishedBotIds = this.checkedBotIds(ids)
       return { ...current, communication: { ...latest, publishedBotIds } }
     }))
@@ -648,7 +654,8 @@ export class CommunicationOnboarding {
         publishedBotIds: current.communication?.publishedBotIds ?? [] } }
     }))
   }
-  async contact(action, input) {
+  async contact(action, input, guard) {
+    guard?.()
     const comm = this.rt.communication
     if (!comm?.transport?.connected || !comm.human?.principalId) fail('COMMUNICATION_UNAVAILABLE')
     const principalId = comm.human.principalId

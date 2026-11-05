@@ -18,6 +18,12 @@ DS-Bot 新生成的自身 Skill 和项目 AGENTS.md 学习建议通过校验后�
 权限、配置、CLI、兼容与恢复边界见 [Hub 指南](communication-hub/README.md)
 及内置的 [操作与 Bot Skill](ds-bot/skills/dsbot-remote/SKILL.md)。
 
+本地 Bot 即使尚未发布，也能在自己的本地私聊中，按用户要求查看和管理远程
+联系人、发布选定 Bot。宿主校验直接来自本地用户的请求，远程消息不能授予
+这项权限；联系人变更和发布还须对具体动作进行原生审批。
+发布仍决定 Bot 能否用自己的远程身份参与通信；原有本地 Bot 角色
+和 Hub 成员、权限校验保持不变。
+
 [English](README.md) | 中文
 
 ![版本](https://img.shields.io/badge/版本-v0.2_预览-blue) ![DSH](https://img.shields.io/badge/DSH-0.2.1--rc.4-4D6BFE) ![许可](https://img.shields.io/badge/许可-Apache_2.0-green)

@@ -7,6 +7,7 @@ import { profileHuman, readPrincipalAvatar } from './federation/avatars.js'
 import { legacyCredential } from './federation/legacy-credential.js'
 import { normalizeAttachments,attachmentMetadata } from '../shared/communication-attachments.js'
 import { RELATIONSHIP_TOPICS } from './federation/relationship-memory.js'
+import { localManagementAuthority, localManagementTools } from './federation/local-management.js'
 
 const fail = code => { throw Object.assign(new Error(code), { code }) }
 const toolOperation = (kind, exec) => {
@@ -56,7 +57,12 @@ export function install(rt) {
   }
   const execute = work => async (args, exec) => {
     try {
-      const comm = await ensure(), actor = comm.actorForSession(exec.agent?.id), communicationBinding = comm.owners.get(exec.agent?.id)
+      const comm = await ensure(), communicationBinding = comm.owners.get(exec.agent?.id)
+      if (exec.name === 'list_contacts' && !communicationBinding && !comm.bots.has(rt.selfOf(exec.agent?.id))) {
+        await localManagementAuthority(rt, exec)
+        return JSON.stringify({ scope: 'local-user', contacts: await comm.transport.request('contacts.list', { principalId: comm.human.principalId }) })
+      }
+      const actor = comm.actorForSession(exec.agent?.id)
       assertConversationToolScope(communicationBinding, exec.name, args)
       if (['read_communication_relationships','remember_communication_relationship'].includes(exec.name) && Object.hasOwn(args, 'membershipEpoch')) fail('INVALID_RELATIONSHIP_MEMORY')
       if (communicationBinding) {
@@ -91,7 +97,7 @@ export function install(rt) {
         let decoded;try{decoded=new TextDecoder('utf-8',{fatal:true}).decode(bytes)}catch{}
         return {untrusted:true,...attachmentMetadata([file])[0],...(decoded!==undefined&&!file.mime.startsWith('image/')?{text:decoded}:{data:file.data,encoding:'base64'})}
       })}),
-    defineTool({ name: 'list_contacts', description: 'List your authorized Human and Bot contacts with exact global IDs and instance origins. Equal names are different contacts.', parameters: {}, output,
+    defineTool({ name: 'list_contacts', description: 'List authorized Human and Bot contacts with exact global IDs and instance origins. Equal names are different contacts. An unpublished Bot can inspect the local owner directory only for a direct user request in its own local chat; this does not publish it or let it send as the Human. Remote Sessions stay in their exact conversation.', parameters: {}, output,
       execute: execute(async (comm, actor, _args, exec) => ({ contacts: exec.communicationBinding
         ? (await comm.members(actor.principalId, { conversationId: exec.communicationBinding.conversationId, membershipEpoch: exec.communicationBinding.membershipEpoch })).members
         : await comm.transport.request('contacts.list', { principalId: actor.principalId }) })) }),
@@ -168,7 +174,7 @@ export function install(rt) {
       parameters: { conversationId: { type: 'string', required: true }, expectedVersion: { type: 'integer', required: true } }, output,
       execute: execute((comm, actor, args, exec) => comm.operation(actor.principalId, 'group.reclaim', args, toolOperation('reclaim', exec))) }),
   ]
-  if (settings.enabled) rt.teamTools.push(...definitions)
+  if (settings.enabled) rt.teamTools.push(...definitions, ...localManagementTools(rt, { ensure, enrollment }))
   if (settings.enabled) ctx.effect(() => {
     let timer
     const start = async () => {

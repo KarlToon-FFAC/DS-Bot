@@ -15,6 +15,7 @@ import { splitRef } from '../text.js'
 import { communicationPrompt } from './prompt.js'
 import { RelationshipMemory, relationshipMemoryContext } from './relationship-memory.js'
 import { OUTSIDE_CONVERSATION_TOOLS } from './tool-scope.js'
+import { LOCAL_MANAGEMENT_TOOLS } from './local-management.js'
 import { COMMUNICATION_PRESET, hasCommunicationPreset, communicationInputs, sourceDelivery, legacySessionSettled, isCommunicationContext } from './session-scope.js'
 
 const PROTOCOL = 'dsbot-communication/1'
@@ -288,7 +289,7 @@ export class CommunicationRuntime {
   }
   scope(agent) {
     if (this.scoped.has(agent)) return
-    const tools = this.tools.filter(tool => !OUTSIDE_CONVERSATION_TOOLS.has(tool.name))
+    const tools = this.tools.filter(tool => !OUTSIDE_CONVERSATION_TOOLS.has(tool.name) && !LOCAL_MANAGEMENT_TOOLS.has(tool.name))
     const communicationNames = new Set(tools.map(tool => tool.name))
     for (const tool of tools) this.disposers.push(agent.ctx.tools.register(tool))
     this.disposers.push(agent.ctx.on('system-prompt/assemble', async (_assembly, _context, next) => {

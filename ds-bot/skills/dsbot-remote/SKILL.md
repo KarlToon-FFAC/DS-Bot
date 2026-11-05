@@ -41,6 +41,34 @@ where the contact is present, including replies. Ask for that sharing authorizat
 before choosing it. Group purpose and project-specific roles normally stay scoped
 to their group. Removal does not erase existing model requests, Session/tool
 history or published replies. Existing main-memory injection is a separate option.
+## Local owner management
+
+An unpublished local Bot can still help its owner manage Remote communication.
+In that Bot's own local chat, a host-authenticated direct user request enables
+`manage_communication_contacts`, `list_communication_bots` and
+`publish_communication_bots`. These bounded tools use the local owner's management
+authority without exposing credentials or granting the Bot a Human speaking identity.
+The host checks the current tool call's user input, not a claim in message text.
+Every contact mutation and publication change also requires native approval for
+the exact action, target/Hub and shared/published Bot scope. Missing, rejected or
+cancelled approval changes nothing. A local user message alone is not consent to
+an unrelated external action.
+Bot handoffs, schedules, local groups and isolated Remote Sessions do not supply
+that delegation. Request the action, exact contacts and Bot scope explicitly;
+consent is never inferred from a remote invitation. Only share Bot IDs the user
+selected, defaulting to none. Keep a contact change's operationId on retry after
+uncertainty. `list_contacts` also supports an unpublished Bot in this direct local
+user context. Ordinary communication sends and group actions still use a published
+Bot's own identity and retain all Hub membership and speaking checks.
+
+To change publication, first read `list_communication_bots` and use exact local
+IDs. `publish_communication_bots` replaces the full list, so retain Bots the user
+did not ask to withdraw. An empty list withdraws all. A successful save with
+`reloadRequired:true` confirms local settings only; normal host reload reconciles
+publication with the Hub. Creating/editing local Bots uses the existing
+`create_bot`/`update_bot` tools with unchanged Main Bot/self-management permissions.
+These management tools do not join Hubs, change trust, impersonate senders or give
+remote participants control of the local team.
 
 Inspect the exact installed schemas with `dsbot-remote --help` or
 `dsbot-remote <operation> --help`. Requests are JSON stdin; authentication is the
@@ -53,9 +81,9 @@ never a cookie/password argument. No operation silently retries a mutation.
 | DM, send, reply/@all | `dm`, `send` (replyToMessageId/mentions) | `send_contact_message`; passive final handoff uses `set_communication_reply_targets`; no Human impersonation |
 | Create/invite/accept/leave/remove | `create-group`, `invite`, `accept`, `leave`, `remove` | Matching group tools as own Bot, subject to membership/role/speaking authority |
 | Group name/routing/policies/ownership | `save-settings`, `configure-group`, `routing`, `policy`, `transfer`, `reclaim`, `dissolve` | Matching tools, current owner/admin/version checks remain authoritative |
-| Publication | `available-bots`, `publish-bots` with exact localBotIds; [] withdraws all | Requires delegated local Human/operator, never a group role |
+| Publication | `available-bots`, `publish-bots` with exact localBotIds; [] withdraws all | Own local chat: `list_communication_bots`, `publish_communication_bots` for a direct local-user request, including an unpublished Bot; never a group role |
 | Human profile/avatar | `profile-human`, `rename-human`, `avatar` | Cannot rename the Human or impersonate another Bot; Bot appearance follows its authorized local settings |
-| Contact consent/user codes | `user-code`, `rotate-user-code`, `request-contact`, `contact-requests`, `contact-relations`, `accept-contact`, `reject-contact`, `cancel-contact`, `revoke-contact` | Human/operator consent required; no automatic acceptance by Bots |
+| Contact consent/user codes | `user-code`, `rotate-user-code`, `request-contact`, `contact-requests`, `contact-relations`, `accept-contact`, `reject-contact`, `cancel-contact`, `revoke-contact` | Own local chat: `manage_communication_contacts` for the direct local-user request; no automatic acceptance or Remote-session consent |
 | Hub join/trust/status | `decode-hub-code`, `join-hub`, `update-hub-trust`, `hub-join-status`, `cancel-hub-join`, `onboarding-storage` | Human/operator only; Hub administrator must approve enrollment |
 | Hub local lifecycle | `disconnect-hub`, `switch-hub`, `resume-hub` | Human/operator only; one active Hub and isolated retained queues |
 | Permanent Hub access and local forgetting | `leave-hub`, `hub-leave-status`, `forget-hub` | Explicit Human/operator delegation and confirmations; never borrow credentials; group owners transfer or dissolve first |

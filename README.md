@@ -22,6 +22,13 @@ total per message. See the [Hub guide](communication-hub/README.md) and packaged
 [operator/Bot Skill](ds-bot/skills/dsbot-remote/SKILL.md) for permissions, setup,
 CLI commands, compatibility and recovery limits.
 
+Local Bots can help their owner inspect and manage Remote contacts and publish
+selected Bots from their own local chat, even before they are published. The host
+checks a direct local-user request; Remote messages cannot grant this authority.
+Contact changes and publication additionally require native approval for the exact action.
+Publication still determines whether a Bot can participate under its own Remote
+identity. Local Bot roles and all Hub membership/permission checks stay unchanged.
+
 English | [中文](README.zh.md)
 
 ![version](https://img.shields.io/badge/version-v0.2_preview-blue) ![DSH](https://img.shields.io/badge/DSH-0.2.1--rc.4-4D6BFE) ![license](https://img.shields.io/badge/license-Apache_2.0-green)
