@@ -1,9 +1,9 @@
 // Offline maintenance only. No Hub request, enrollment, or recovery is attempted.
 import { createReadStream } from 'node:fs'
 import { lstat, realpath, readdir, readFile, open, rename, rm, rmdir } from 'node:fs/promises'
-import { dirname, join, resolve, isAbsolute, relative } from 'node:path'
+import { dirname, join, resolve, isAbsolute, relative, basename } from 'node:path'
 import { hostname } from 'node:os'
-import { randomUUID } from 'node:crypto'
+import { randomUUID, createHash } from 'node:crypto'
 import { createZstdDecompress } from 'node:zlib'
 import { DatabaseSync } from 'node:sqlite'
 import { parseDocument, isMap, isSeq } from 'yaml'
@@ -46,11 +46,12 @@ async function pruneEmptyParents(path, boundary) {
     path = dirname(path)
   }
 }
-async function atomicWrite(path, text) {
+async function atomicWrite(path, text, afterAtomicTemp) {
   await checkedPath(path, 'file', true)
   const temp = `${path}.reset-${randomUUID()}`
   const file = await open(temp, 'wx', 0o600)
   try { await file.writeFile(text); await file.sync() } finally { await file.close() }
+  await afterAtomicTemp?.({ path, temporaryPath: temp })
   try {
     await rename(temp, path)
     if (process.platform !== 'win32') { const directory = await open(dirname(path), 'r'); try { await directory.sync() } finally { await directory.close() } }
@@ -214,12 +215,13 @@ async function readPlan(options, pending) {
   await checkedPath(home, 'directory')
   await checkedPath(attachmentsHome, 'directory')
   await checkedPath(storageRoot, 'directory', true)
-  const envNames = new Set(pending?.envNames ?? []), profileWrites = []
+  const envNames = new Set(pending?.envNames ?? []), profileWrites = [], profileContents = new Map()
   for (const path of new Set(profiles)) {
     await checkedPath(path, 'file')
     const original = await readFile(path, 'utf8'), doc = yamlDocument(original)
     validateProviderConfiguration(doc, path, options)
     const count = stripProfile(doc, envNames, path)
+    profileContents.set(path, doc.toString())
     if (count) profileWrites.push({ path, text: doc.toString() })
   }
   await checkedPath(credentials, 'file', true)
@@ -288,7 +290,7 @@ async function readPlan(options, pending) {
   const derivedPlan = await planFederationDerived({ storageRoot, remoteSessionIds, remoteWorkspaceRoot: join(home, 'communication-workspaces'), provider: 'json', remoteSessionWitnesses: [...new Map(Object.values(witnesses).flat().map(row => [row.id, row])).values()], pendingWorkspaceDeletes: pending?.derivedWorkspaceDeletes ?? [] })
   const { planFederationAttachments } = await import('./reset-attachments.js')
   const attachmentPlan = pending?.attachmentPlan ?? await planFederationAttachments({ sessionsRoot: sessions, remoteSessionDirectories: journals, attachmentDshHome: attachmentsHome, provider: '@deepseek-ai/dsh-attachment-local' })
-  return { version: 1, home, profiles, credentials, sessions, sessionWitnesses: witnesses, remoteSessionIds, derivedPlan, profileWrites, credentialText, recordCount,
+  return { version: 1, home, profiles, credentials, sessions, sessionWitnesses: witnesses, remoteSessionIds, derivedPlan, profileContents, profileWrites, credentialText, recordCount,
     envNames: [...envNames], attachmentPlan, files: queueFiles, trees: [...journals, ...trees] }
 }
 async function validateTree(path) {
@@ -298,6 +300,37 @@ async function validateTree(path) {
     await checkedPath(child, entry.isDirectory() ? 'directory' : 'file')
     if (entry.isDirectory()) await validateTree(child)
   }
+}
+async function resetTemporaryFiles(options, plan) {
+  const marker = join(options.home, markerName), epoch = join(options.home, epochName)
+  const targets = [...new Set([...options.profiles, options.credentials, marker, epoch])], result = []
+  const manifestKeys = new Set(['version', 'home', 'options', 'files', 'trees', 'derivedWorkspaceDeletes', 'remoteSessionIds', 'sessionWitnesses', 'envNames', 'attachmentPlan'])
+  for (const target of targets) {
+    for (const name of await readdir(dirname(target))) {
+      const prefix = basename(target) + '.reset-'
+      if (!name.startsWith(prefix) || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(name.slice(prefix.length))) continue
+      const path = join(dirname(target), name), stat = await checkedPath(path, 'file'), text = await readFile(path, 'utf8')
+      let owned = false
+      if (target === marker) {
+        try {
+          const value = JSON.parse(text)
+          owned = value && value.version === 1 && value.home === options.home && Object.keys(value).every(key => manifestKeys.has(key))
+            && JSON.stringify(value.options) === JSON.stringify({ profiles: options.profiles, credentials: options.credentials, sessions: options.sessions, attachmentsHome: options.attachmentsHome, storageRoot: options.storageRoot })
+            && Array.isArray(value.files) && Array.isArray(value.trees) && Array.isArray(value.remoteSessionIds) && Array.isArray(value.envNames) && value.attachmentPlan && value.sessionWitnesses
+        } catch { /* An unproven temporary file is a blocker, never guessed disposable. */ }
+      } else if (target === epoch) owned = /^[0-9a-f-]{36}$/.test(text)
+      else owned = text === (target === options.credentials ? plan.credentialText : plan.profileContents.get(target))
+      if (!owned) fail('RESET_TEMP_OWNERSHIP_UNPROVEN', path)
+      result.push({ path, dev: stat.dev, ino: stat.ino, sha256: createHash('sha256').update(text).digest('hex') })
+    }
+  }
+  return result
+}
+async function eraseResetTemporaryFile(target) {
+  const stat = await checkedPath(target.path, 'file', true)
+  if (!stat) return
+  if (stat.dev !== target.dev || stat.ino !== target.ino || createHash('sha256').update(await readFile(target.path)).digest('hex') !== target.sha256) fail('RESET_TEMP_CHANGED', target.path)
+  await rm(target.path); await syncDirectory(dirname(target.path))
 }
 function protectResetInputs(options, trees = [], files = []) {
   const { home, sessions, attachmentsHome, storageRoot, credentials, profiles } = options
@@ -373,16 +406,17 @@ export async function resetFederation(options) {
     protectResetInputs(options, [...plan.trees, ...plan.attachmentPlan.trees], [...plan.files, ...plan.attachmentPlan.files.map(target => target.path)])
     for (const path of plan.files) await checkedPath(path, 'file', true)
     for (const path of plan.trees) await validateTree(path)
-    const summary = { dryRun: options.confirm !== RESET_CONFIRMATION, configurationFiles: plan.profileWrites.length,
+    const temporaryFiles = await resetTemporaryFiles(options, plan)
+    const summary = { temporaryFiles: temporaryFiles.length, dryRun: options.confirm !== RESET_CONFIRMATION, configurationFiles: plan.profileWrites.length,
       pairingRecords: plan.recordCount, attachmentFiles: plan.attachmentPlan.files.length, attachmentAliasFiles: plan.attachmentPlan.files.filter(file => file.aliasName).length, projectionRecords: plan.derivedPlan.projectionSessionIds.length, remoteWorkspaceRecords: plan.derivedPlan.workspaceDeletes.length, workspaceSessionAccounts: plan.derivedPlan.workspaceUpdates.length, exclusiveAttachmentObjects: plan.attachmentPlan.exclusiveObjects, sharedAttachmentObjectsPreservedForOrdinarySessions: plan.attachmentPlan.sharedObjects, queueFiles: plan.files.length, remoteDirectories: plan.trees.length,
       browserCleanupPending: true, serverResetRequired: true, irreversible: true, profileCoverage: 'supplied-files-only', backend: 'local-yaml-and-jsonl' }
     if (summary.dryRun) return summary
     if (!lock.owns()) fail('RESET_HOST_MUST_STOP')
-    await atomicWrite(marker, JSON.stringify({ version: 1, home, options: { profiles: options.profiles, credentials: options.credentials, sessions: options.sessions, attachmentsHome: options.attachmentsHome, storageRoot: options.storageRoot }, files: plan.files, trees: plan.trees, derivedWorkspaceDeletes: plan.derivedPlan.workspaceDeletionWitnesses, remoteSessionIds: plan.remoteSessionIds, sessionWitnesses: plan.sessionWitnesses, envNames: plan.envNames, attachmentPlan: plan.attachmentPlan }))
+    await atomicWrite(marker, JSON.stringify({ version: 1, home, options: { profiles: options.profiles, credentials: options.credentials, sessions: options.sessions, attachmentsHome: options.attachmentsHome, storageRoot: options.storageRoot }, files: plan.files, trees: plan.trees, derivedWorkspaceDeletes: plan.derivedPlan.workspaceDeletionWitnesses, remoteSessionIds: plan.remoteSessionIds, sessionWitnesses: plan.sessionWitnesses, envNames: plan.envNames, attachmentPlan: plan.attachmentPlan }), options.afterAtomicTemp)
     await options.afterStep?.('manifest')
-    for (const item of plan.profileWrites) await atomicWrite(item.path, item.text)
+    for (const item of plan.profileWrites) await atomicWrite(item.path, item.text, options.afterAtomicTemp)
     await options.afterStep?.('profiles')
-    if (plan.credentialText !== undefined) await atomicWrite(options.credentials, plan.credentialText)
+    if (plan.credentialText !== undefined) await atomicWrite(options.credentials, plan.credentialText, options.afterAtomicTemp)
     await options.afterStep?.('credentials')
     const { applyFederationDerived } = await import('./reset-derived.js')
     await applyFederationDerived(plan.derivedPlan)
@@ -405,7 +439,8 @@ export async function resetFederation(options) {
       if (!lock.owns()) fail('RESET_HOST_MUST_STOP')
       await checkedPath(path, 'file', true); await rm(path, { force: true }); await syncDirectory(dirname(path))
     }
-    await atomicWrite(join(home, epochName), randomUUID())
+    await atomicWrite(join(home, epochName), randomUUID(), options.afterAtomicTemp)
+    for (const temporary of temporaryFiles) await eraseResetTemporaryFile(temporary)
     await rm(marker); await syncDirectory(home)
     return { ...summary, dryRun: false, erased: true, complete: false,
       clearLaunchEnvironment: plan.envNames, launchEnvironmentCleanupPending: plan.envNames.length > 0, browserCleanup: 'Open and refresh every browser origin/tab connected to this client; each browser clears only its own communication storage.' }

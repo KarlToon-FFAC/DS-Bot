@@ -318,3 +318,38 @@ test('persistent search, custom derived routes and unresolved includes fail befo
     assert.equal((await federationResetStatus(f.home)).pending, false)
   }
 })
+
+test('a crash after fsync before manifest rename leaves no recovery temp after a confirmed rerun', async t => {
+  const f = await fixture(t)
+  let temporary
+  await assert.rejects(resetFederation({ ...f.options, afterAtomicTemp: ({ path, temporaryPath }) => {
+    if (path.endsWith('communication-reset.pending.json')) { temporary = temporaryPath; throw new Error('synthetic pre-rename power loss') }
+  } }), /synthetic pre-rename power loss/)
+  assert.ok(temporary)
+  assert.equal((await federationResetStatus(f.home)).pending, false)
+  const before = await readFile(temporary)
+  assert.ok(!before.toString().includes('synthetic-erased-key'))
+  const dry = await resetFederation({ ...f.options, confirm: undefined })
+  assert.equal(dry.temporaryFiles, 1); assert.deepEqual(await readFile(temporary), before)
+  const result = await resetFederation(f.options)
+  assert.equal(result.erased, true)
+  await assert.rejects(readFile(temporary), { code: 'ENOENT' })
+  assert.ok(!(await readdir(f.home)).some(name => name.startsWith('communication-reset.pending.json.reset-')))
+})
+
+test('old cleaned profile, credential and epoch temps are precisely removed, but unknown contents block with no erasure', async t => {
+  const f = await fixture(t)
+  await assert.rejects(resetFederation({ ...f.options, afterStep: step => { if (step === 'credentials') throw new Error('synthetic interrupted reset') } }), /synthetic interrupted reset/)
+  const suffix = '.reset-00000000-0000-4000-8000-000000000001'
+  const paths = [f.profile + suffix, f.credentials + suffix, join(f.home, 'communication-browser-epoch') + suffix]
+  await writeFile(paths[0], await readFile(f.profile)); await writeFile(paths[1], await readFile(f.credentials)); await writeFile(paths[2], '00000000-0000-4000-8000-000000000002')
+  const result = await resetFederation(f.options)
+  assert.equal(result.temporaryFiles, 3)
+  for (const path of paths) await assert.rejects(readFile(path), { code: 'ENOENT' })
+  const g = await fixture(t), unknown = join(g.home, 'communication-reset.pending.json') + suffix
+  await writeFile(unknown, 'unproven foreign contents')
+  const profile = await readFile(g.profile)
+  await assert.rejects(resetFederation(g.options), { code: 'RESET_TEMP_OWNERSHIP_UNPROVEN', target: unknown })
+  assert.equal(await readFile(unknown, 'utf8'), 'unproven foreign contents'); assert.deepEqual(await readFile(g.profile), profile)
+  assert.equal((await federationResetStatus(g.home)).pending, false)
+})
