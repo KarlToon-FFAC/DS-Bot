@@ -77,5 +77,8 @@ export function createRuntime(ctx, config = {}) {
     },
   }
   for (const module of MODULES) module.install(rt)
+  // Loading during installation may scope live Agents before later modules
+  // contribute their definitions. Reconcile once the full surface exists.
+  rt.syncScopedTools?.()
   return rt
 }

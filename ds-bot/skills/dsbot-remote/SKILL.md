@@ -763,3 +763,13 @@ work around this boundary.
 
 Help and tool consolidation remain documentation-only in this change. Existing
 names, identity separation, native/PTC transport and protocol stay compatible.
+
+The host reconciles owned tool definitions at normal request boundaries and retries
+missing registrations after reload. If that changes a schema snapshot already
+collected for a request, it rebuilds once through the supported DSH assembly API,
+keeping native/PTC presentation and other scope filters. Unresolved conflicts
+remain `partial`, rather than being reported as repaired. Diagnostics expose
+`tools.scopeRefresh` with observed state, failed names, refresh count and time;
+`lastReloadAt` stays null when the actual host reload time is unknown. Tool-scope
+recovery does not retry a message, change a pending approval's Hub/runtime, publish
+a Bot or unlock local tools inside an isolated remote Session.

@@ -53,6 +53,8 @@ test('apply registers listeners and effects in a fixed order', (t) => {
     'on agent/pre-step (prepend)',
     'on tools/execute',
     'effect ds-bot: scoped team tools',
+    'on agent/pre-step',
+    'on system-prompt/assemble',
     'tools guard',
     'on agent/created',
     'on session/event',

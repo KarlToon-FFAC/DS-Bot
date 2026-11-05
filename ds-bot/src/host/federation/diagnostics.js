@@ -46,7 +46,7 @@ export async function diagnoseCommunication(rt, state, { sessionId, agent } = {}
       }
     } catch (cause) { credential.error = communicationError(cause) }
   }
-  const listsKnown = reconciled
+  const listsKnown = Boolean(comm?.transport?.lastSynchronizedAt)
   const listStatus = knownCount => ({ count: listsKnown ? knownCount : null,
     state: !applied.enabled ? 'disabled' : !comm ? 'not-started' : !listsKnown ? 'not-synchronized' : connected ? 'authorized-snapshot' : 'cached-snapshot',
     why: !listsKnown ? 'No completed initial synchronization is known. An empty local list does not prove absence on the Hub.'
@@ -63,7 +63,7 @@ export async function diagnoseCommunication(rt, state, { sessionId, agent } = {}
     enabled: applied.enabled === true, connected, runtimeStarted: Boolean(comm),
     hub: { hubId: safeId(applied.hubId ?? comm?.transport?.welcome?.hubId), url: safeUrl(applied.url), instanceId: safeId(comm?.queue?.instanceId ?? applied.instanceId) },
     configuration: { source: 'loaded-plugin-configuration', reloadRequired: changedKeys.length > 0, changedKeys,
-      savedConfiguration: 'not-inspected', why: changedKeys.length ? 'Current in-memory settings differ from the loaded communication runtime. Wait for the supported host reload and recheck.' : 'No difference is known in this plugin instance. This does not prove that a disk edit, launcher environment or a different process has reloaded.' },
+      savedConfiguration: 'not-inspected', lastReloadAt: null, why: changedKeys.length ? 'Current in-memory settings differ from the loaded communication runtime. Wait for the supported host reload and recheck.' : 'No difference is known in this plugin instance. This does not prove that a disk edit, launcher environment or a different process has reloaded.' },
     publication: { localBotIds: publishedIds, executingBot: bot ? { localBotId: bot.id, displayName: bot.name, published: publishedIds.includes(bot.id) } : null,
       hubAcknowledgedAt: comm?.publicationSyncedAt ?? null,
       state: comm?.publicationSyncedAt ? connected ? 'acknowledged-on-connection' : 'last-acknowledgement-cached' : 'not-confirmed',
@@ -71,10 +71,10 @@ export async function diagnoseCommunication(rt, state, { sessionId, agent } = {}
     tools: { diagnose: 'local-own-chat-only', communication: applied.enabled ? 'enabled-with-identity-and-membership-checks' : 'not-registered',
       expectedNames: applied.enabled ? definitions : [], registeredNames,
       missingExpectedNames: registeredNames ? (applied.enabled ? definitions : []).filter(name => !registeredNames.includes(name)) : null,
-      actualServedNames: null,
+      actualServedNames: null, scopeRefresh: rt.teamToolScopeStatus?.(sessionId) ?? null,
       why: 'Tools are scoped to each Session and may be filtered by its preset or host. The registry is not proof of model-facing presentation: PTC mode accepts only run_code as a native call and can reject direct calls to registered tools as UNKNOWN_TOOL. Configuration reload replaces plugin scopes. Only currently advertised tools are callable; diagnostics cannot prove a model saw a schema. Remote Sessions deliberately exclude local management and execution.',
       nextActions: ['If a tool is absent or reported unknown, inspect the current tool list, run diagnose in your own local Bot chat and refresh after reload. Never bypass the isolated remote preset or fall back to Human credentials for a Bot send.'] },
-    synchronization: { reconciled, inProgress: Boolean(comm?.transport?.pumping), lastCompletedAt: comm?.transport?.lastSynchronizedAt ?? null,
+    synchronization: { reconciled, initialSyncComplete: listsKnown, inProgress: Boolean(comm?.transport?.pumping), lastCompletedAt: comm?.transport?.lastSynchronizedAt ?? null,
       lastConnectedAt: comm?.lastConnectedAt ?? null, transportRunning: comm?.transport?.running ?? false },
     tls: { required: applied.url ? safeUrl(applied.url)?.startsWith('wss:') ?? null : null,
       handshake: !applied.enabled ? 'not-started' : connected ? 'connected' : errorCode?.startsWith('HUB_TLS_') ? 'failed' : 'not-confirmed',
@@ -92,7 +92,7 @@ export async function diagnoseCommunication(rt, state, { sessionId, agent } = {}
     error, nextActions: error?.nextActions ?? (!applied.enabled ? communicationError({ code: 'COMMUNICATION_NOT_CONFIGURED' }).nextActions
       : bot && !publishedIds.includes(bot.id) ? communicationError({ code: 'BOT_NOT_PUBLISHED' }).nextActions
         : !connected ? ['Check the Hub address, approval and error category. Restore the connection without deleting retained queues or disabling TLS.']
-          : !reconciled ? ['Wait for initial synchronization, then recheck before treating empty lists as authoritative.']
+          : !listsKnown ? ['Wait for initial synchronization, then recheck before treating empty lists as authoritative.']
             : ['Resolve an authorized contact and send one message as the intended identity. Connection alone does not grant consent or publication.']),
   }
 }

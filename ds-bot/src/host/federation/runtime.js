@@ -520,7 +520,7 @@ export class CommunicationRuntime {
   snapshot() {
     const memberships = this.everReconciled ? this.queue.memberships().filter(member => member.principalId === this.human.principalId) : []
     const managementUrl = safeManagementUrl(this.transport.welcome?.managementUrl)
-    return { enabled: true, connected: this.transport.connected, reloadRequired: false, listState: !this.everReconciled ? 'not-synchronized' : this.transport.connected ? 'authorized-snapshot' : 'cached-snapshot', reconciled: this.everReconciled, instanceId: this.queue.instanceId, humanPrincipalId: this.human.principalId,
+    return { enabled: true, connected: this.transport.connected, reloadRequired: false, listState: !this.transport.lastSynchronizedAt ? 'not-synchronized' : this.transport.connected ? 'authorized-snapshot' : 'cached-snapshot', reconciled: this.everReconciled, instanceId: this.queue.instanceId, humanPrincipalId: this.human.principalId,
       hubUrl: this.settings.url, hubId: this.settings.hubId ?? this.transport.welcome?.hubId ?? null, queueScope:this.settings.queueScope??'legacy',
       attachmentsAvailable: this.transport.welcome?.capabilities?.includes(ATTACHMENT_CAPABILITY) === true,
       managementUrl, managementAvailable: managementUrl !== null,

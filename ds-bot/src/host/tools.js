@@ -757,19 +757,35 @@ export function install(rt) {
   // their next request would come without the team tools.
   /** @type {Map<string, {agent: any, relay: boolean, tools: boolean, restricted: boolean, filtered: boolean, disposers: Array<() => void>}>} */
   const scoped = new Map()
+  const refreshingAssemblies = new Set()
+  let stopped = false
   const unscope = (id) => {
     const held = scoped.get(id)
     if (held === undefined) return
-    scoped.delete(id)
+    held.retired = true
+    const failed = []
+    for (const [name, entry] of held.registrations ?? []) {
+      entry.active = false
+      try { entry.dispose?.(); held.registrations.delete(name) }
+      catch { held.blockedNames.add(name); failed.push(name) }
+    }
+    const pending = []
     for (const dispose of held.disposers) {
       try {
         dispose()
       } catch (error) {
+        pending.push(dispose)
         rt.warn('ds-bot: a scoped tool of %s was not removed: %s', id, error)
       }
     }
+    held.disposers = pending
+    held.failedNames = failed
+    held.tools = false
+    if (held.registrations?.size || pending.length) scoped.set(id, held)
+    else scoped.delete(id)
   }
   const syncScopedTools = () => {
+    if (stopped) return
     // unscope() deletes as it goes, which a Map keys iterator takes in stride.
     for (const id of scoped.keys()) {
       if (!rt.isBotSession(id) && rt.roomOf(id) === undefined) unscope(id)
@@ -780,10 +796,10 @@ export function install(rt) {
     // Session that stays unowned, and nothing twice for one already scoped.
     for (const agent of ctx.get?.('agents')?.list?.() ?? []) hideBotUnusedTools(agent)
   }
-  ctx.effect(() => () => { for (const id of scoped.keys()) unscope(id) }, 'ds-bot: scoped team tools')
+  ctx.effect(() => () => { stopped = true; for (const id of scoped.keys()) unscope(id) }, 'ds-bot: scoped team tools')
 
   const shareBotTools = (agent) => {
-    if (agent === undefined) return
+    if (stopped || agent === undefined) return
     const id = agent.session?.id
     const owns = rt.isBotSession(id)
     const relayOnly = !owns && rt.roomOf(id) !== undefined
@@ -791,32 +807,62 @@ export function install(rt) {
     let held = scoped.get(id)
     // A Session that left the team, a scope of the wrong kind, or a fresh Agent
     // for one Session all start over; a wanted scope is registered again below.
-    if (held !== undefined && (!wanted || held.agent !== agent || held.relay !== relayOnly)) {
+    if (held !== undefined && (held.retired || !wanted || held.agent !== agent || held.relay !== relayOnly)) {
       unscope(id)
-      held = undefined
+      held = scoped.get(id)
+      if (held) return
     }
-    if (!wanted || held?.tools === true) return
+    if (!wanted) return
     if (typeof agent.ctx?.tools?.register !== 'function') return
-    const disposers = []
-    const failed = []
-    for (const def of rt.teamTools) {
-      if (relayOnly && def.name !== 'group_relay') continue
-      try {
-        const dispose = agent.ctx.tools.register(def)
-        if (typeof dispose === 'function') disposers.push(dispose)
-      } catch (error) {
-        // A tool another plugin already scoped onto this agent stays missing
-        // rather than stopping the team; the rest still land.
-        failed.push(`${def.name}: ${error.message ?? error}`)
-      }
-    }
     held ??= { relay: relayOnly, tools: false, restricted: false, filtered: false, disposers: [] }
     held.agent = agent
     held.relay = relayOnly
-    held.tools = true
-    held.disposers.push(...disposers)
+    held.registrations ??= new Map()
+    held.blockedNames ??= new Set()
+    const desired = new Map(rt.teamTools.filter(def => !relayOnly || def.name === 'group_relay').map(def => [def.name, def]))
+    let changed = false
+    const failed = []
+    for (const [name, entry] of held.registrations) {
+      const missing = typeof ctx.tools.get === 'function' && ctx.tools.get(name, agent) !== entry.registered
+      if (desired.get(name) === entry.definition && !missing) { entry.active = true; held.blockedNames.delete(name); continue }
+      changed = true
+      entry.active = false
+      try { entry.dispose?.() }
+      catch { held.blockedNames.add(name); failed.push(name); continue }
+      held.registrations.delete(name)
+      held.blockedNames.delete(name)
+    }
+    for (const [name, def] of desired) {
+      if (held.registrations.has(name)) continue
+      changed = true
+      try {
+        const entry = { definition: def, active: true }
+        const registered = { ...def, execute: async (args, exec) => {
+          if (!entry.active || stopped || held.retired || scoped.get(id) !== held || held.agent !== agent
+            || exec.agent?.id !== id || rt.communication?.owners?.has(id)
+            || !(rt.isBotSession(id) || relayOnly && rt.roomOf(id) !== undefined)
+            || !rt.teamTools.includes(def)) {
+            throw Object.assign(new Error('This local Bot tool scope expired. Refresh this Session after the supported plugin reload; do not bypass identity or permissions.'), { code: 'BOT_TOOL_SCOPE_EXPIRED' })
+          }
+          return def.execute(args, exec)
+        } }
+        const dispose = agent.ctx.tools.register(registered)
+        Object.assign(entry, { registered, dispose: typeof dispose === 'function' ? dispose : undefined })
+        held.registrations.set(name, entry)
+      } catch {
+        // A conflict belongs to the other registration. Retry our missing
+        // definition at a later safe assembly without removing theirs.
+        failed.push(name)
+      }
+    }
+    held.tools = failed.length === 0
+    if (changed) {
+      held.lastRefreshedAt = new Date().toISOString()
+      held.refreshCount = (held.refreshCount ?? 0) + 1
+    }
+    if (failed.length > 0 && JSON.stringify(failed) !== JSON.stringify(held.failedNames)) rt.warn('ds-bot: team tools not served to %s: %s', id, failed.join('; '))
+    held.failedNames = failed
     scoped.set(id, held)
-    if (failed.length > 0) rt.warn('ds-bot: team tools not served to %s: %s', id, failed.join('; '))
   }
 
   // The standard preset registers `subagent` (model selection) in each Agent's own
@@ -873,6 +919,11 @@ export function install(rt) {
   // and delegation tools. The restricts are kept with the Session's scope, so they
   // lift with it.
   const hideBotUnusedTools = (agent) => {
+    if (stopped) return
+    if (rt.communication?.owners?.has(agent?.session?.id)) {
+      unscope(agent.session.id)
+      return
+    }
     shareBotTools(agent)
     const id = agent?.session?.id
     // The shell shadows go with the scope, so a reload or a Session that leaves
@@ -892,11 +943,44 @@ export function install(rt) {
     if (held.restricted === true || typeof agent.ctx?.tools?.restrict !== 'function') return
     maskHiddenTools(agent, held, new Set(ctx.tools.schemas(agent).map(schema => schema.name)))
   }
+  ctx.on('agent/pre-step', async ({ agent }, next) => {
+    if (!stopped) {
+      await rt.load()
+      hideBotUnusedTools(agent)
+    }
+    return next()
+  })
+  ctx.on('system-prompt/assemble', async function refreshBotToolAssembly(_assembly, context, next) {
+    if (!stopped) {
+      const id = context?.agent?.session?.id
+      const before = scoped.get(id)?.refreshCount ?? 0
+      await rt.load()
+      hideBotUnusedTools(context?.agent)
+      // DSH collects schemas before this waterfall. Rebuild through its public
+      // API, rather than injecting registry schemas that bypass PTC or filters.
+      if ((scoped.get(id)?.refreshCount ?? 0) !== before && typeof ctx.systemPrompt.assemble === 'function'
+        && !refreshingAssemblies.has(id)) {
+        refreshingAssemblies.add(id)
+        try { return await ctx.systemPrompt.assemble(context) }
+        finally { refreshingAssemblies.delete(id) }
+      }
+    }
+    return next()
+  })
+  rt.teamToolScopeStatus = sessionId => {
+    const held = scoped.get(sessionId)
+    const desired = held ? rt.teamTools.filter(def => !held.relay || def.name === 'group_relay') : []
+    const changed = held && (desired.length !== held.registrations?.size || desired.some(def => held.registrations?.get(def.name)?.definition !== def))
+    return { state: stopped ? 'stopped' : !held ? 'unscoped' : held.retired ? 'retired' : held.failedNames?.length ? 'partial' : changed ? 'stale' : 'current',
+      registeredNames: [...(held?.registrations?.keys() ?? [])], failedNames: held?.failedNames ?? [],
+      lastRefreshedAt: held?.lastRefreshedAt ?? null, refreshCount: held?.refreshCount ?? 0, lastReloadAt: null }
+  }
   // A new Bot, part, or group Session gets its Agent before ds-bot records it, so the
   // recording path resolves it again once the session is known as a Bot's; meanwhile
   // the guard refuses the question and delegation tools in any Bot Session, and a
   // goal made there is blocked.
   ctx.tools.guard((exec) => {
+    if (scoped.get(exec.agent?.id)?.blockedNames?.has(exec.name)) return 'This tool changed or was withdrawn, but its old registration could not be released. It is blocked until the host refreshes its scope. Retry after the supported reload; do not bypass permissions.'
     if (!rt.isBotSession(exec.agent?.id)) return undefined
     if (exec.name === BLOCKING_QUESTION_TOOL) return `Bots cannot use ${BLOCKING_QUESTION_TOOL}. Ask with ask_user in your own chat, or ask in your reply.`
     return DELEGATION_TOOLS.includes(exec.name) ? DELEGATION_REFUSAL : undefined

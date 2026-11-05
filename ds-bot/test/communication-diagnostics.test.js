@@ -6,6 +6,7 @@ import { diagnoseCommunication, communicationDiagnoseTool, communicationAvailabi
 import { legacyCredential } from '../src/host/federation/legacy-credential.js'
 import { connectHubSocket } from '../src/host/federation/onboarding.js'
 import { install } from '../src/host/communication.js'
+import { CommunicationRuntime } from '../src/host/federation/runtime.js'
 import { CommunicationTransport } from '../src/host/federation/transport.js'
 
 const fixture = settings => {
@@ -169,4 +170,28 @@ test('diagnose reports the actual scoped registry without equating registration 
   assert.equal(value.tools.actualServedNames, null)
   assert.match(value.tools.why, /PTC.*UNKNOWN_TOOL/)
   assert.doesNotMatch(JSON.stringify(value), /secret_other_tool/)
+})
+
+
+test('an initial onChange failure cannot turn unsynchronized empty caches into known zero counts', async () => {
+  const { rt, state } = fixture({ enabled: true, url: 'ws://127.0.0.1:3190/communication', publishedBotIds: [] })
+  rt.home = '/synthetic-owned-diagnostics'
+  rt.ctx.on = () => () => {}
+  rt.ctx.systemPrompt = { section: () => () => {} }
+  const start = CommunicationTransport.prototype.start
+  CommunicationTransport.prototype.start = () => {}
+  let runtime
+  try {
+    runtime = new CommunicationRuntime(rt, { ...state.settings, dataPath: ':memory:' }, () => 'synthetic-private-credential', [])
+    state.runtime = runtime
+    runtime.transport.request = async () => { throw Object.assign(Error('synthetic directory failure'), { code: 'CONNECTION_LOST' }) }
+    await assert.rejects(runtime.transport.onChange(), { code: 'CONNECTION_LOST' })
+    assert.equal(runtime.everReconciled, true, 'the legacy authorization flag is not a successful full-pump witness')
+    assert.equal(runtime.transport.lastSynchronizedAt, undefined)
+    const result = await diagnoseCommunication(rt, state)
+    assert.equal(result.synchronization.initialSyncComplete, false)
+    assert.equal(result.lists.contacts.count, null)
+    assert.equal(result.lists.contacts.state, 'not-synchronized')
+    assert.equal(runtime.snapshot().listState, 'not-synchronized')
+  } finally { CommunicationTransport.prototype.start = start; await runtime?.close() }
 })
