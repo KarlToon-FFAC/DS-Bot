@@ -1,0 +1,316 @@
+{
+  "status": "PASS",
+  "verified_at": "2026-11-05T14:44:25.718452+00:00",
+  "base_commit": "673b12bd436a440a4bb11e5df960b87eb8e39abd",
+  "tested_commit": "20b73d6ae10bff80c01dae5fd3e892d520ff5ca4",
+  "tested_tree": "210e1c97a629bd7ef65a6a99efb5a158a3728b6e",
+  "environment": {
+    "platform": "Linux",
+    "model": "local deterministic Mock only",
+    "network": "same-machine loopback; owned synthetic DSH profiles and Hub only"
+  },
+  "stages": [
+    {
+      "stage": "complete-reset",
+      "status": "PASS",
+      "finished_at": "2026-11-05T13:42:27Z",
+      "log_sha256": "ceffc2e32b6748a603410f296e1ca2073574ab1ba65e161d15713353f4ff3fb9",
+      "reported_cases": [
+        "real-legacy-static-DSH-group-Mock-reply-reset-and-same-profile-unconfigured-restart",
+        "old-enrolled-DSH-contact-group-attachment-and-Mock-reply",
+        "normal-Host-stop-and-exact-runtime-paths-verified",
+        "unproven-orphan-reports-incomplete-without-erasing-state",
+        "client-a-all-materialized-federation-data-erased-local-data-preserved",
+        "client-b-all-materialized-federation-data-erased-local-data-preserved",
+        "new-Hub-identity-empty-data-and-old-admin-static-enrolled-authentication-denied",
+        "actual-Node-remote-CLI-reconciles-reset-generation-without-reenrollment",
+        "old-Hub-code-cannot-enroll-and-failed-attempt-reset-again",
+        "same-profiles-new-enrollment-contact-group-and-real-DSH-Mock-reply"
+      ]
+    },
+    {
+      "stage": "rpc-fault",
+      "status": "PASS",
+      "finished_at": "2026-11-05T13:50:13Z",
+      "log_sha256": "eb8f4215a22da510b9b8a11d685cdd9654f3e077936af0bd0c5401bc5d876b00",
+      "reported_cases": [
+        "reconnect",
+        "revoked",
+        "new-epoch",
+        "user-cancel",
+        "model-error"
+      ]
+    },
+    {
+      "stage": "recovery",
+      "status": "PASS",
+      "finished_at": "2026-11-05T14:01:05Z",
+      "log_sha256": "ef00a34822c5c12779699d1148a1fe4609a7b1b2d396b5dd5e2834e3d1895393",
+      "reported_cases": [
+        "before-receive",
+        "after-receive",
+        "before-injection",
+        "before-admission",
+        "after-injection",
+        "before-export",
+        "after-export"
+      ]
+    },
+    {
+      "stage": "plugin",
+      "status": "PASS",
+      "finished_at": "2026-11-05T14:21:48Z",
+      "log_sha256": "2f787b96dd392c4d90a52fd9dfbb69ab9047d3c341d0e17f9bc27785bdd59293",
+      "counts": {
+        "tests": 1959,
+        "pass": 1955,
+        "fail": 0,
+        "skipped": 4,
+        "cancelled": 0
+      }
+    },
+    {
+      "stage": "lint",
+      "status": "PASS",
+      "finished_at": "2026-11-05T14:21:53Z",
+      "log_sha256": "3041b187dae01af1ae03a1dcfef8731dc5db0d9e43c86e0390f48dee96daa7ad"
+    },
+    {
+      "stage": "client",
+      "status": "PASS",
+      "finished_at": "2026-11-05T14:21:54Z",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "stage": "probe",
+      "status": "PASS",
+      "finished_at": "2026-11-05T14:21:56Z",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "stage": "whitespace",
+      "status": "PASS",
+      "finished_at": "2026-11-05T14:21:56Z",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "stage": "hub",
+      "status": "PASS",
+      "finished_at": "2026-11-05T14:22:26Z",
+      "log_sha256": "6cc889d17f7ba631f5c3fc1e90ebac8732d36a5923b79d3e7d9c99bbba0225b3",
+      "counts": {
+        "tests": 165,
+        "pass": 165,
+        "fail": 0,
+        "skipped": 0,
+        "cancelled": 0
+      }
+    },
+    {
+      "stage": "behavior",
+      "status": "PASS",
+      "finished_at": "2026-11-05T14:25:30Z",
+      "log_sha256": "d065d959eacfb930a5fb323be03308a110f230fc0365d7f82ea84834d7e90878",
+      "reported_cases": [
+        "DM-01-05-09",
+        "DM-02-05",
+        "DM-03-05",
+        "DM-04-05",
+        "DM-08",
+        "DM-06",
+        "GR-01-02-03-05-06",
+        "DM-07",
+        "AC-02-03-04",
+        "GR-08",
+        "CT-01"
+      ]
+    },
+    {
+      "stage": "native",
+      "status": "PASS",
+      "finished_at": "2026-11-05T14:30:55Z",
+      "log_sha256": "de3330c244fcf9b5a78842100cf794b5d77492dbc004b265d39cf4d67eb39fea",
+      "counts": {
+        "steps": 52,
+        "pass": 52,
+        "fail": 0
+      }
+    },
+    {
+      "stage": "network",
+      "status": "PASS",
+      "finished_at": "2026-11-05T14:33:10Z",
+      "log_sha256": "8d237c0a68bae6cb876d47873a693a32ba9d3415ca564e28021dfe6265d521a9",
+      "reported_cases": [
+        "before-commit-crash",
+        "after-commit-crash",
+        "ACK-loss-on-open-socket",
+        "offline-sender-host-restart",
+        "triple-plus-delayed-retransmit",
+        "repeated-reconnect",
+        "reordered-permanent-gap-then-incremental-repair",
+        "A-B-Hub-backlog-restarts"
+      ]
+    },
+    {
+      "stage": "contact-removal",
+      "status": "PASS",
+      "finished_at": "2026-11-05T14:34:31Z",
+      "log_sha256": "42156572178058ee011c24829f6a6422a36e9821a0f35ed7c80595cef2153d1c",
+      "counts": {
+        "cases": 6,
+        "pass": 6,
+        "fail": 0
+      },
+      "reported_cases": [
+        "two-independent-DSH-hosts-and-real-Mock-reply",
+        "contact-revoke-racing-old-snapshot-keeps-both-devices-trusted-and-connected",
+        "denied-DM-stays-failed-while-existing-group-continues-real-Mock-work",
+        "ordinary-network-reconnect-retains-device-identity-without-restoring-contact",
+        "normal-host-restart-retains-history-and-revoked-contact-state",
+        "actual-device-revocation-remains-terminal-and-does-not-affect-other-device"
+      ]
+    },
+    {
+      "stage": "hub-lifecycle",
+      "status": "PASS",
+      "finished_at": "2026-11-05T14:35:29Z",
+      "log_sha256": "25cefa0aab2b5ac2f9d82f8d8d028ae0e8482421e80f15b51472ec212a0410c2",
+      "reported_cases": [
+        "image-and-file-bytes-arrive-through-real-WSS-DSH-AttachmentStore-and-Mock-with-readonly-denial",
+        "real-signed-enrollment-admin-CLI-TLS-approval-contact-consent-and-DSH-group-reply",
+        "offline-disconnect-retains-identity-history-and-original-pending-message",
+        "new-Hub-requires-approval-has-new-user-code-no-old-history-publication-or-outbox",
+        "A-B-A-restores-same-identity-code-contacts-groups-original-outbox-and-DSH-reply-once",
+        "live-device-revocation-updates-host-local-disconnect-still-works-and-resume-stays-denied",
+        "signed-revoked-status-and-explicit-admin-repair-reuse-the-exact-key-without-restoring-memberships"
+      ]
+    },
+    {
+      "stage": "openai-mock",
+      "status": "PASS",
+      "finished_at": "2026-11-05T14:37:27Z",
+      "log_sha256": "7a65a3a8cd608bceada8b4fb992b4953dcbce4e222bb56c035d72d2106dd4024",
+      "counts": {
+        "cases": 7,
+        "pass": 7,
+        "fail": 0,
+        "mock_provider_requests": 6
+      }
+    },
+    {
+      "stage": "relationship",
+      "status": "PASS",
+      "finished_at": "2026-11-05T14:39:02Z",
+      "log_sha256": "fe9c9f0b252e8db8ec6067bfccc50d38ee010e412d22c574d5a6fedaa02d9805",
+      "counts": {
+        "cases": 6,
+        "pass": 6,
+        "fail": 0
+      },
+      "reported_cases": [
+        "model-tool-canonical-source-and-recall",
+        "actual-prompt-group-and-Bot-isolation",
+        "explicit-local-profile-and-storage-restart",
+        "rejoin-excludes-old-epoch-retains-explicit-profile",
+        "contact-reconsent-excludes-old-DM-memory-and-queued-send",
+        "actual-isolated-tool-view-keeps-local-tools-unavailable"
+      ]
+    },
+    {
+      "stage": "ip-notes",
+      "status": "PASS",
+      "finished_at": "2026-11-05T14:40:38Z",
+      "log_sha256": "95801e477a3ebb1042090e45296cf2b0dd6d40cbf381b30fac1a82e4f5ff6b6e",
+      "counts": {
+        "cases": 3,
+        "pass": 3,
+        "fail": 0
+      },
+      "reported_cases": [
+        "authenticated-local-save-with-no-Hub-peer-outbox-or-model-leak",
+        "invalid-address-and-stale-Hub-scope-rejected",
+        "real-host-restart-edit-normalization-and-durable-clear"
+      ]
+    },
+    {
+      "stage": "remote-im",
+      "status": "PASS",
+      "finished_at": "2026-11-05T14:43:18Z",
+      "log_sha256": "ed892b40b9758ab596527b674fddb1e8e0768241c1b61dd269cb7b63cecdb5aa",
+      "reported_cases": [
+        "isolated-ports-and-fresh-profiles",
+        "CLI-state-projections-same-IP-isolation-and-rename-restart",
+        "CLI-DM-history-reference-read-and-same-ID-retry",
+        "CLI-members-invites-roles-speech-title-routing-and-permission-failures",
+        "all-only-current-Bots-two-passive-granted-replies-no-Human-no-outside-no-nativeChief",
+        "all-original-request-retry-after-rename-and-member-removal-raw-conflict",
+        "passive-proactive-send-denied-and-removed-member-not-routed",
+        "CLI-transfer-leave-device-repair-no-owner-recovery-fresh-group-dissolve"
+      ]
+    }
+  ],
+  "prior_attempts": [
+    {
+      "stage": "plugin",
+      "concurrency": 4,
+      "counts": {
+        "tests": 1959,
+        "pass": 1954,
+        "fail": 1,
+        "skipped": 4
+      },
+      "failure": "OpenSSL spawnSync timed out at the synthetic RSA key-generation fixture before WSS product setup; per-child limit 15000ms.",
+      "log_sha256": "03e941e0d37f1021a32401d5a5db0c8a437fe7b666f832ed39424de47db8c6d0",
+      "source_changed_for_retry": false,
+      "isolated_recheck": {
+        "tests": 3,
+        "pass": 3,
+        "fail": 0,
+        "log_sha256": "4a0880aaa35f0ebdaca3a31b4f77a02ebe43cdc1b35821c9fee23463374ceda4"
+      },
+      "final_full_suite_concurrency": 1
+    }
+  ],
+  "scope": [
+    "Remove all retained group-owner recovery entry points and reject old queued reclaim operations.",
+    "Permanently delete one exact Hub device and its private relation, identity, operation and rate-limit residue while closing its shared owned groups.",
+    "Offline complete Hub and client reset with explicit config/session/attachment/storage roots, exact ownership validation, no backup and fail-closed unsupported residue.",
+    "Clear materialized federation Session logs, all verified scopes, local pairing credentials, attachment canonical/filename aliases, remote workspace and projection records.",
+    "Preserve local ordinary Bots/chats/model configuration and attachment bytes still referenced by ordinary Sessions.",
+    "Invalidate old browser communication state before React hydration, block stale mutations and late callbacks, and use automatic navigation/status refresh."
+  ],
+  "additional_boundaries": [
+    "Exact temporary-file ownership and protected input overlap; unknown or partial atomic-write leftovers report incomplete.",
+    "Pending retry revalidates Session identity and current retained attachment references.",
+    "Explicit provider/root mismatches, unsupported persistent search, unknown derived or attachment residue are blockers rather than false success.",
+    "Ordinary deleted-default-workspace identity is retained according to the public workspace lifecycle."
+  ],
+  "historical_evidence_preserved": [
+    "recovery-prompt-rpc-baseline-evidence.json",
+    "sync-scenario-evidence.json"
+  ],
+  "limitations": [
+    "No real Hub or user data was reset by this verification.",
+    "No paid or real model calls, GitHub Actions, physical cross-machine/TLS deployment, or custom unsupported storage providers were used.",
+    "The owned real-DSH reset acceptance does not observe a real browser; production browser hydration/race boundaries are exercised by automated browser/React tests.",
+    "Offline reset reports browser and launch-environment cleanup separately; every actual browser origin/tab and external launch source must satisfy the guide before a real deployment can be called fully reset.",
+    "The tested interruption cases do not prove every possible operating-system kill point."
+  ],
+  "publication": {
+    "target": "KarlToon-FFAC/DS-Bot:chore/federated-communication",
+    "method": "authorized equivalent commits, per-commit exact trees, normal fast-forward only",
+    "actions": "No Actions requested; verify exact published head separately."
+  },
+  "owned_fixed_ports": {
+    "checked": 52,
+    "released": 52,
+    "log_sha256": "e229ba98ef9b33d67a357b731ad8d525cfdf3ad29a19bd9fb07223da2ad1a4b3"
+  },
+  "history_privacy_audit": {
+    "source_head": "20b73d6ae10bff80c01dae5fd3e892d520ff5ca4",
+    "unique_changed_blobs": 152,
+    "unresolved": 0,
+    "log_sha256": "cb5f07f675ce2f57bec55054d050a1ec37bfe1b0e5c1e6f6ce48128d670af754"
+  }
+}
