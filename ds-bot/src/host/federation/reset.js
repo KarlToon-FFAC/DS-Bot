@@ -51,7 +51,7 @@ function yamlDocument(text) {
   if (doc.errors.length) fail('RESET_INVALID_YAML')
   return doc
 }
-function stripProfile(doc, envNames) {
+function stripProfile(doc, envNames, path) {
   if (!isSeq(doc.contents)) fail('RESET_PROFILE_NOT_PATCH_SEQUENCE')
   let count = 0
   const visit = node => {
@@ -68,7 +68,7 @@ function stripProfile(doc, envNames) {
         if (typeof env !== 'string' || !/^DSBOT_COMMUNICATION_[A-Z0-9_]+$/.test(env)) fail('RESET_INVALID_LEGACY_CREDENTIAL')
         envNames.add(env)
         // An arbitrary queue path cannot safely be guessed or silently retained.
-        if (comm.has('dataPath')) fail('RESET_CUSTOM_QUEUE_PATH_UNSUPPORTED')
+        if (comm.has('dataPath')) fail('RESET_CUSTOM_QUEUE_PATH_UNSUPPORTED', path)
         config.delete('communication'); count++
       }
     }
@@ -126,15 +126,15 @@ async function sessionTargets(root, home, bindingSessions, localIds) {
         const header = await firstHeader(join(path, log))
         const cwd = typeof header.cwd === 'string' ? resolve(header.cwd) : null
         const remote = cwd && inside(workspaceRoot, cwd)
-        if (bindingSessions.has(header.id) && (!remote || bindingSessions.get(header.id) !== cwd)) fail('RESET_SESSION_OWNERSHIP_UNPROVEN')
+        if (bindingSessions.has(header.id) && (!remote || bindingSessions.get(header.id) !== cwd)) fail('RESET_SESSION_OWNERSHIP_UNPROVEN', path)
         if (remote) {
-          if (!bindingSessions.has(header.id) && header.agentPreset !== 'ds-bot-communication') fail('RESET_SESSION_OWNERSHIP_UNPROVEN')
-          if (localIds.has(header.id)) fail('RESET_LOCAL_SESSION_CONFLICT')
-          if (header.agentPreset && header.agentPreset !== 'ds-bot-communication') fail('RESET_SESSION_OWNERSHIP_UNPROVEN')
+          if (!bindingSessions.has(header.id) && header.agentPreset !== 'ds-bot-communication') fail('RESET_SESSION_OWNERSHIP_UNPROVEN', path)
+          if (localIds.has(header.id)) fail('RESET_LOCAL_SESSION_CONFLICT', path)
+          if (header.agentPreset && header.agentPreset !== 'ds-bot-communication') fail('RESET_SESSION_OWNERSHIP_UNPROVEN', path)
           target = true
         } else ordinary = true
       }
-      if (target && ordinary) fail('RESET_SESSION_OWNERSHIP_UNPROVEN')
+      if (target && ordinary) fail('RESET_SESSION_OWNERSHIP_UNPROVEN', path)
       if (target) targets.push(path)
     }
   }
@@ -150,7 +150,7 @@ async function readPlan(options, pending) {
   for (const path of new Set(profiles)) {
     await checkedPath(path, 'file')
     const original = await readFile(path, 'utf8'), doc = yamlDocument(original)
-    const count = stripProfile(doc, envNames)
+    const count = stripProfile(doc, envNames, path)
     if (count) profileWrites.push({ path, text: doc.toString() })
   }
   await checkedPath(credentials, 'file', true)
@@ -172,9 +172,17 @@ async function readPlan(options, pending) {
     for (const suffix of ['', '-wal', '-shm', '-journal']) {
       if (await checkedPath(path + suffix, 'file', true)) queueFiles.push(path + suffix)
     }
-    if (!(await info(path))) return
+    if (!(await info(path))) {
+      if (queueFiles.some(file => file.startsWith(path + '-') && !pending?.files?.includes(file))) fail('RESET_QUEUE_OWNERSHIP_UNPROVEN', path)
+      return
+    }
     const db = new DatabaseSync(path, { readOnly: true })
     try {
+      const signature = { metadata: ['key', 'value'], outbox: ['id', 'type', 'payload', 'hash'], inbox: ['delivery_id', 'message_id', 'conversation_id', 'principal_id'] }
+      for (const [table, expected] of Object.entries(signature)) {
+        const columns = new Set(db.prepare(`PRAGMA table_info("${table}")`).all().map(column => column.name))
+        if (expected.some(name => !columns.has(name))) fail('RESET_NOT_A_COMMUNICATION_DATABASE', path)
+      }
       if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='bindings'").get()) return
       for (const row of db.prepare('SELECT id,sessions FROM bindings').all()) {
         if (typeof row.id !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(row.id)) fail('RESET_INVALID_BINDING')
@@ -182,7 +190,7 @@ async function readPlan(options, pending) {
         if (!Array.isArray(ids) || ids.some(id => typeof id !== 'string')) fail('RESET_INVALID_BINDING')
         for (const id of ids) {
           const cwd = join(home, 'communication-workspaces', row.id)
-          if (bindingSessions.has(id) && bindingSessions.get(id) !== cwd) fail('RESET_SESSION_OWNERSHIP_UNPROVEN')
+          if (bindingSessions.has(id) && bindingSessions.get(id) !== cwd) fail('RESET_SESSION_OWNERSHIP_UNPROVEN', path)
           bindingSessions.set(id, cwd)
         }
       }

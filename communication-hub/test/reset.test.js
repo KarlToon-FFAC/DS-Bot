@@ -123,3 +123,11 @@ test('failed Hub startup releases its lock rather than blocking a reset', async 
   await assert.rejects(startHub({ databasePath: f.databasePath, port: 0, tls: { key: 'invalid synthetic key', cert: 'invalid synthetic cert' }, peers: [{ instanceId: 'synthetic-peer', credential: 'x'.repeat(32) }] }))
   assert.equal(f.reset().reset, true)
 })
+
+test('a different valid SQLite database is never erased or reconfigured', async t => {
+  const f = fixture(t), db = new (await import('node:sqlite')).DatabaseSync(f.databasePath)
+  db.exec('CREATE TABLE personal_notes (text TEXT); INSERT INTO personal_notes VALUES (\'must remain\')'); db.close()
+  const before = readFileSync(f.databasePath), config = readFileSync(f.configPath)
+  assert.throws(() => f.reset(), { code: 'NOT_A_HUB_DATABASE' })
+  assert.deepEqual(readFileSync(f.databasePath), before); assert.deepEqual(readFileSync(f.configPath), config)
+})

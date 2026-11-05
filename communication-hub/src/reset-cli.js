@@ -12,7 +12,7 @@ export function main(argv = process.argv.slice(2), stdout = process.stdout, stde
     stdout.write(JSON.stringify({ ok: true, value: resetHub({ configPath: argv[1], confirmation: argv[3] }) }) + '\n')
     return 0
   } catch (error) {
-    stderr.write(JSON.stringify({ ok: false, incomplete: true, error: { code: error.code ?? 'RESET_FAILED' }, action: 'Stop the Hub normally, correct the error and rerun the same explicit reset command.' }) + '\n')
+    stderr.write(JSON.stringify({ ok: false, incomplete: true, error: { code: error.code ?? 'RESET_FAILED', ...(error.target ? { target: error.target } : {}) }, action: 'Stop the Hub normally, correct the error and rerun the same explicit reset command.' }) + '\n')
     return 2
   }
 }

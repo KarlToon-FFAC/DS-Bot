@@ -1,5 +1,7 @@
+import { DatabaseSync } from 'node:sqlite'
 import { readFileSync, readSync, writeFileSync, renameSync, unlinkSync, openSync, closeSync, fsyncSync, statSync, mkdirSync, existsSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { acquireDatabaseLock, safeFile, resetError } from './database-lock.js'
 
 export const RESET_CONFIRMATION = 'DELETE ALL HUB DATA'
@@ -26,6 +28,28 @@ export function resetHub({ configPath, confirmation, beforeStep } = {}) {
   mkdirSync(dirname(databasePath), { recursive: true })
   const lock = acquireDatabaseLock(databasePath, { reset: true })
   try {
+    // A correct SQLite header alone does not prove that this is a Hub database.
+    if (existsSync(databasePath) && statSync(databasePath).size) {
+      const signature = { instances: ['id', 'epoch', 'trusted', 'pairing_revision'], principals: ['id', 'instance_id', 'kind', 'local_id'],
+        conversations: ['id', 'kind', 'dm_key', 'seq'], messages: ['id', 'conversation_id', 'author_id', 'body'],
+        deliveries: ['id', 'message_id', 'recipient_id', 'membership_epoch'], operations: ['id', 'instance_id', 'hash', 'result'], schema_version: ['version'] }
+      const verify = path => {
+        const db = new DatabaseSync(path, { readOnly: true })
+        try {
+          for (const [table, expected] of Object.entries(signature)) {
+            const columns = new Set(db.prepare(`PRAGMA table_info("${table}")`).all().map(column => column.name))
+            if (expected.some(name => !columns.has(name))) throw resetError('NOT_A_HUB_DATABASE')
+          }
+        } finally { db.close() }
+      }
+      // A closed Hub may leave corrupt/stale sidecars. Immutable inspection proves
+      // the main file without replaying those. Fresh schema can still live in WAL.
+      try { verify(pathToFileURL(databasePath).href + '?immutable=1') }
+      catch {
+        try { verify(databasePath) }
+        catch { throw Object.assign(resetError('NOT_A_HUB_DATABASE'), { target: databasePath }) }
+      }
+    }
     lock.beginReset()
     beforeStep?.('config')
     const next = { ...config, peers: [] }

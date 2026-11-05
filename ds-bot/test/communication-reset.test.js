@@ -23,9 +23,9 @@ async function fixture(t) {
   for (const path of queues) {
     await mkdir(join(path, '..'), { recursive: true })
     const db = new DatabaseSync(path)
-    db.exec('CREATE TABLE bindings (id TEXT,sessions TEXT); CREATE TABLE outbox (payload TEXT);')
+    db.exec('CREATE TABLE bindings (id TEXT,sessions TEXT); CREATE TABLE outbox (id TEXT,type TEXT,payload TEXT,hash TEXT); CREATE TABLE metadata (key TEXT,value TEXT); CREATE TABLE inbox (delivery_id TEXT,message_id TEXT,conversation_id TEXT,principal_id TEXT);')
     db.prepare('INSERT INTO bindings VALUES (?,?)').run(binding, '["remote-one"]')
-    db.prepare('INSERT INTO outbox VALUES (?)').run('synthetic pending old message')
+    db.prepare('INSERT INTO outbox(payload) VALUES (?)').run('synthetic pending old message')
     db.close()
   }
   const journal = async (id, directory, preset, compressed = false) => {
@@ -198,4 +198,22 @@ test('a reset interrupted after journal erasure still deletes proven exclusive a
   const result = await resetFederation(f.options)
   assert.equal(result.erased, true); assert.equal(result.exclusiveAttachmentObjects, 1)
   await assert.rejects(readFile(object), { code: 'ENOENT' }); await assert.rejects(readFile(alias), { code: 'ENOENT' })
+})
+
+test('a foreign SQLite database at a communication path is not erased', async t => {
+  const f = await fixture(t)
+  await rm(f.queues[0]); const db = new DatabaseSync(f.queues[0]); db.exec('CREATE TABLE ordinary (value TEXT); INSERT INTO ordinary VALUES (\'preserve\')'); db.close()
+  const before = await readFile(f.queues[0]), config = await readFile(f.profile, 'utf8')
+  await assert.rejects(resetFederation(f.options), { code: 'RESET_NOT_A_COMMUNICATION_DATABASE', target: f.queues[0] })
+  assert.deepEqual(await readFile(f.queues[0]), before); assert.equal(await readFile(f.profile, 'utf8'), config)
+})
+
+// Orphan sidecars have no schema evidence unless a durable interrupted-reset plan owns them.
+test('unproven queue sidecars without a main database are not silently removed', async t => {
+  const f = await fixture(t)
+  await rm(f.queues[0]); await writeFile(f.queues[0] + '-wal', 'foreign-or-unproven')
+  const before = await readFile(f.profile)
+  await assert.rejects(resetFederation(f.options), { code: 'RESET_QUEUE_OWNERSHIP_UNPROVEN', target: f.queues[0] })
+  assert.equal(await readFile(f.queues[0] + '-wal', 'utf8'), 'foreign-or-unproven')
+  assert.deepEqual(await readFile(f.profile), before)
 })
