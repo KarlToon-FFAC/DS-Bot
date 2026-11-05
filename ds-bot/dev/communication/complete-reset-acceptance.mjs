@@ -233,7 +233,7 @@ async function clientReset(peer, confirm = false) {
 function snapshot(peer) {
   const logs = journals(peer), remoteDirectories = [...new Set(logs.filter(value => value.remote).map(value => value.directory))]
   const ordinaryFiles = files(peer.paths.sessions).filter(path => !remoteDirectories.includes(dirname(path)))
-  return { state: hash(readFileSync(join(peer.paths.home, 'state.json'))), profiles: peer.paths.profiles.map(path => ({ path, value: profileWithoutCommunication(parse(readFileSync(path, 'utf8'))) })), credentials: credentialRemainder(peer), remoteDirectories,
+  return { state: hash(readFileSync(join(peer.paths.home, 'state.json'))), profiles: peer.paths.profiles.map(path => ({ path, digest: hash(readFileSync(path)), value: profileWithoutCommunication(parse(readFileSync(path, 'utf8'))) })), credentials: credentialRemainder(peer), credentialDigest: hash(readFileSync(peer.paths.credentials)), remoteDirectories,
     ordinary: ordinaryFiles.map(path => ({ path, digest: hash(readFileSync(path)) })), attachments: files(join(peer.home, 'attachments/v1')).map(path => ({ path, digest: hash(readFileSync(path)) })) }
 }
 function preserved(peer, before) {
@@ -312,6 +312,8 @@ try {
     stage(`plain reset CLI dry-run and confirmed erasure: ${peer.id}`)
     const dry = await clientReset(peer)
     assert.equal(dry.dryRun, true); assert.ok(dry.pairingRecords > 0)
+    assert.equal(hash(readFileSync(peer.paths.credentials)), peer.before.credentialDigest, 'Dry run cannot change credentials')
+    for (const item of peer.before.profiles) assert.equal(hash(readFileSync(item.path)), item.digest, 'Dry run cannot change profile bytes')
     assert.ok(peer.before.remoteDirectories.every(existsSync)); preserved(peer, peer.before)
     const erased = await clientReset(peer, true)
     assert.equal(erased.erased, true); assert.equal(erased.dryRun, false); assert.equal(erased.browserCleanupPending, true)
