@@ -6,6 +6,7 @@
 
 - 本文按 `673b12b` 的数据布局以及本次新增的两个离线重置入口编写：`communication-hub/src/reset-cli.js`、`ds-bot/bin/dsbot-reset.mjs`。**必须先更新到包含这两个入口和配套 Host/浏览器代码的版本**。缺少命令时停下更新，不用旧 `forget-hub` 代替。
 - Hub 和所有客户端使用同一兼容版本，Node 24+。原有 Hub SQLite `user_version=4`、客户端通信库 `user_version=5`；不要手改 schema、身份、游标或配对版本。
+- 源码仓库首次运行客户端离线命令前，先准备其固定版本依赖：`npm --prefix ds-bot ci`、`npm --prefix ds-bot run harness`。也可按仓库规范将 `DSH_HARNESS` 指向兼容的现有 harness。它使用公开 Session 格式/导出接口做附件引用核查；不能拿缺失 SDK 的旧 CLI 跳过附件步骤。
 - 更新源码不等于更新运行副本。Windows 源码启动器 `start.ps1` 会构建并刷新 app 插件；手动更新按 [app/README.md](../../../app/README.md) 构建插件、刷新 `app/node_modules/ds-bot`，再重启。安装版必须运行新安装包，不能继续开旧程序。
 - 以下命令必须从**仓库根目录**执行。路径占位符全部换为实际绝对路径。Windows 用 `node.exe` / `npm.cmd`，Linux 用 `node` / `npm`。
 
@@ -76,24 +77,34 @@ node -e 'const f=require("node:fs"),p=require("node:path"),c=p.resolve(process.a
 先填写实际路径，默认只检查并返回范围统计，不删除。下面 `--profile` 的第二项仅在实际生效时添加；不存在的覆盖文件不要照抄。
 
 ```powershell
+$ErrorActionPreference = 'Stop'
 $PluginHome = 'D:\REPLACE\actual-data-location\bot'
 $Profile = 'D:\REPLACE\actual-data-location\profiles\ds-bot\cordis.patch.yml'
 $Credentials = 'D:\REPLACE\actual-credentials.yaml'
 $Sessions = 'D:\REPLACE\actual-session-jsonl-root'
 $AttachmentsHome = 'D:\REPLACE\actual-attachment-provider-home'
 node.exe ds-bot/bin/dsbot-reset.mjs --home $PluginHome --profile $Profile --credentials $Credentials --sessions $Sessions --attachments-home $AttachmentsHome
-# 核对成功后，使用完全相同路径执行。若有覆盖层，在两条命令中均加 --profile 'D:\actual\overlay.yml'。
-node.exe ds-bot/bin/dsbot-reset.mjs --home $PluginHome --profile $Profile --credentials $Credentials --sessions $Sessions --attachments-home $AttachmentsHome --confirm ERASE-ALL-FEDERATION-DATA
+if ($LASTEXITCODE -ne 0) { throw 'Dry-run失败，停止并核对错误。' }
 ```
 
 ```bash
+set -euo pipefail
 PLUGIN_HOME='/REPLACE/actual-data-location/bot'
 PROFILE='/REPLACE/actual-data-location/profiles/ds-bot/cordis.patch.yml'
 CREDENTIALS='/REPLACE/actual-credentials.yaml'
 SESSIONS='/REPLACE/actual-session-jsonl-root'
 ATTACHMENTS_HOME='/REPLACE/actual-attachment-provider-home'
 node ds-bot/bin/dsbot-reset.mjs --home "$PLUGIN_HOME" --profile "$PROFILE" --credentials "$CREDENTIALS" --sessions "$SESSIONS" --attachments-home "$ATTACHMENTS_HOME"
-# 核对成功后，使用完全相同路径执行。若有覆盖层，在两条命令中均加 --profile '/actual/overlay.yml'。
+```
+
+核对 dry-run 成功和上述实际路径后，**另行执行**删除命令。若有生效覆盖层，dry-run 和删除命令中都要加相同的 `--profile <绝对覆盖文件路径>`。
+
+```powershell
+node.exe ds-bot/bin/dsbot-reset.mjs --home $PluginHome --profile $Profile --credentials $Credentials --sessions $Sessions --attachments-home $AttachmentsHome --confirm ERASE-ALL-FEDERATION-DATA
+if ($LASTEXITCODE -ne 0) { throw '重置未完成；保持Host停止并核对错误。' }
+```
+
+```bash
 node ds-bot/bin/dsbot-reset.mjs --home "$PLUGIN_HOME" --profile "$PROFILE" --credentials "$CREDENTIALS" --sessions "$SESSIONS" --attachments-home "$ATTACHMENTS_HOME" --confirm ERASE-ALL-FEDERATION-DATA
 ```
 
@@ -108,7 +119,7 @@ node ds-bot/bin/dsbot-reset.mjs --home "$PLUGIN_HOME" --profile "$PROFILE" --cre
 
 另外从**实际启动来源**移除旧通信共享密钥注入：读取旧配置引用的精确 `credentialEnv` 名称，旧默认名为 `DSBOT_COMMUNICATION_CREDENTIAL`；检查原服务环境、启动脚本、项目/数据根 `.env`，只删除该项，不输出其值。退出旧 Host 会清掉其内存中的 legacy credential lease，不存在一个需要手删的通用 lease 文件。不要删除整个 `.env`、模型 API key 或所有 `DSBOT_*`。
 
-执行成功应返回 `erased:true`、`dryRun:false`；`clearLaunchEnvironment` 是还需移除的旧通信变量名。重跑同样的 dry-run，核对 `configurationFiles`、`pairingRecords`、`queueFiles`、`remoteDirectories` 均为 0。`browserCleanupPending:true` 提醒浏览器仍需刷新，不代表所有浏览器已处理。中断后的 `communication-reset.pending.json` 会阻止 Host 恢复旧工作；保持停机，纠正错误后用相同参数和确认词重跑，不手删标记。活动进程、路径/链接异常、格式不支持、Session 归属无法证实时必须停下核对；不要用 `rm -rf bot`、`sessions`、DSH_HOME、用户自己的 `~/.dsh` 或全新数据根替代。命令只认识显式指定的本地 provider，外置文件和其他机器副本须分别处理。
+执行成功应返回 `erased:true`、`dryRun:false`；`clearLaunchEnvironment` 是还需移除的旧通信变量名。重跑同样的 dry-run，核对 `configurationFiles`、`pairingRecords`、`queueFiles`、`remoteDirectories` 均为 0。`exclusiveAttachmentObjects` 报告本次要删除的联邦独占对象，`sharedAttachmentObjectsPreservedForOrdinarySessions` 只允许普通 Session 仍引用的共享对象。`browserCleanupPending:true` 提醒浏览器仍需刷新，不代表所有浏览器已处理。中断后的 `communication-reset.pending.json` 会阻止 Host 恢复旧工作；保持停机，纠正错误后用相同参数和确认词重跑，不手删标记。活动进程、路径/链接异常、格式不支持、Session 归属无法证实时必须停下核对；不要用 `rm -rf bot`、`sessions`、DSH_HOME、用户自己的 `~/.dsh` 或全新数据根替代。命令只认识显式指定的本地 provider，外置文件和其他机器副本须分别处理。
 
 **普通本地 Bot 身份、配置、普通本地聊天/群/记忆、模型凭据、团队工作区保留。** 共享附件必须按引用清理，不能删整个 `attachments` 损坏普通聊天，也不能把远程独占文件留在共享库里就称为完成。默认 provider 的对象位于其实际 `dshHome/attachments/v1`，请求图片缓存位于 `dshHome/cache/attachments/request-images`；自定义 backend、多个未覆盖的 Session root、损坏/未知日志或无法确认归属的孤儿对象都应明确报告具体残留与阻塞，**完整重置未完成**。配对已能重新申请不等于所有清理完成。
 
