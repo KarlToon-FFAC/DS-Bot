@@ -67,7 +67,7 @@ export const communicationDescriptions = {
   CONVERSATION_PENDING: 'The conversation is waiting for a connection.', COMMUNICATION_READ_ONLY: 'This instance is read-only.',
   UNAUTHENTICATED: 'The Hub rejected this device. Ask the Hub owner to check its pairing.',
   PEER_REVOKED: 'This device was unpaired. Ask the Hub owner to pair it again.',
-  AUTHORIZATION_PENDING: 'Membership is still syncing. Wait for the connection to recover.',
+  AUTHORIZATION_PENDING: 'Membership is still syncing. Wait briefly, then retry the same request.',
   HISTORY_GAP: 'Some history is missing. Wait for synchronization before sending.',
   STALE_CONNECTION: 'Another connection replaced this one. Close the duplicate instance and restart this one.',
   UNSUPPORTED_CAPABILITY: 'This device and the Hub use incompatible versions. Update them to the same revision.',
@@ -137,7 +137,7 @@ const details = {
     nextActions: ['Prefer the approved Hub code-join flow in Remote communication settings.', 'For legacy pairing, inject the named credential privately into the host launch environment and restart that host. Never paste or print the value. A plugin reload alone cannot import a new shell environment.'],
   },
   BOT_NOT_FOUND: { why: 'The configured publication refers to a Bot that does not exist in this local team.', nextActions: ['Refresh Published Bots, choose existing local Bots and save; wait for reload.'] },
-  AUTHORIZATION_PENDING: { why: 'The host has not completed its first authorized Hub synchronization.', nextActions: ['Check connected and synchronization state with diagnose. An empty cached list before synchronization is not proof that there are no contacts or conversations.'] },
+  AUTHORIZATION_PENDING: { why: 'The host has not yet reconciled the membership snapshot needed for this request.', nextActions: ['Wait for membership synchronization, then retry with the same message or operation ID. If this persists, check synchronization state with diagnose.'] },
   COMMUNICATION_READ_ONLY: { why: 'This host does not hold the writable team lease.', nextActions: ['Use the owning host or close the duplicate host normally, then refresh status. Do not delete locks or bypass read-only protection.'] },
   LOCAL_USER_SESSION_REQUIRED: { why: 'Instance diagnostics are local-owner information, outside an isolated remote or group conversation.', nextActions: ['Open your own local Bot chat and call communication_diagnose there.'] },
 }

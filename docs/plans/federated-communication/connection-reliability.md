@@ -116,3 +116,25 @@ Mock models. They do not access a real Hub or call a real model.
 
 The full plugin suite, Hub suite, generated-client freshness and lint remain
 required after integration with the UI and lifecycle changes.
+
+
+## Immediate targeting after another member accepts
+
+A sender can still hold the previous member list when the remote join operation
+has already committed. A locally unknown mention/activation target is therefore
+not retried by publishing blindly. Human API sends, Bot tool sends and staged
+reply targets perform at most one read of `conversation.members` using the exact
+original actor and membership epoch, then repeat only local validation. The
+refreshed response must match the conversation/kind, retain the original local
+epoch and socket generation, include that actor with the required speaking mode,
+and not regress the membership version. Closed/replaced connections, revocation
+and changed epochs fail before cache writes or queue insertion.
+
+Existing Human intents and Bot export journals return their original IDs without
+this read. A first failed Bot export transaction rolls back before the refresh;
+DM opening and other committed operations are not repeated. The candidate Bot
+message ID is held across the one preflight retry. Canonically unknown targets
+remain rejected, and `@all` still requires the local membership/version projection
+to match rather than expanding through an unresolved synchronization gap.
+`communication-target-refresh.test.js` covers these cases with disposable SQLite,
+including actual Hub acceptance followed immediately by the sender's first send.

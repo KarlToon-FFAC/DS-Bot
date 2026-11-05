@@ -337,7 +337,7 @@ const ZH = {
   'The action could not be confirmed. Refresh status before trying again.': '暂时无法确认操作结果，请刷新状态后再试。',
   'The Hub rejected this device. Ask the Hub owner to check its pairing.': '通信服务拒绝了本机，请管理者检查配对配置。',
   'This device was unpaired. Ask the Hub owner to pair it again.': '本机配对已撤销，请管理者重新配对。',
-  'Membership is still syncing. Wait for the connection to recover.': '成员资格仍在同步，请等待连接恢复。',
+  'Membership is still syncing. Wait briefly, then retry the same request.': '成员列表仍在同步。请稍候，并重试原请求。',
   'Some history is missing. Wait for synchronization before sending.': '部分历史尚未同步完整，请等待同步后再发送。',
   'Another connection replaced this one. Close the duplicate instance and restart this one.': '另一个连接替代了本机连接，请关闭重复实例后重启本机实例。',
   'This device and the Hub use incompatible versions. Update them to the same revision.': '本机与通信服务的版本不兼容，请更新到同一版本。',

@@ -414,6 +414,33 @@ export class CommunicationRuntime {
       ...(localUserIntent ? { localUserIntent } : {}),
       membershipEpoch: membershipEpoch ?? this.member(principalId, conversationId).membershipEpoch }
   }
+  async withFreshTargets(principalId, conversationId, epoch, work, botModes = ['active']) {
+    try { return work() } catch (error) {
+      if (!['UNKNOWN_MENTION', 'UNKNOWN_ACTIVATION_TARGET', 'AUTHORIZATION_PENDING'].includes(error.code)) throw error
+      const member = this.member(principalId, conversationId, epoch)
+      const originalEpoch = member.membershipEpoch, generation = this.transport.generation, socket = this.transport.socket
+      if (!this.transport.connected) fail('COMMUNICATION_AUTHORIZATION_UNKNOWN')
+      const info = await this.transport.request('conversation.members', { conversationId, principalId, membershipEpoch: originalEpoch })
+      if (this.closed || !this.transport.connected || this.transport.generation !== generation || this.transport.socket !== socket) fail('CONNECTION_LOST')
+      const current = this.member(principalId, conversationId, originalEpoch)
+      if (this.rt?.readOnly?.() !== undefined) fail('COMMUNICATION_READ_ONLY')
+      if (info?.conversationId !== conversationId || info.kind !== current.kind || !Number.isSafeInteger(info.membershipVersion) || !Array.isArray(info.members)) fail('INVALID_RESPONSE')
+      const actor = info.members.find(value => value.principalId === principalId)
+      if (!actor) fail('NOT_A_MEMBER')
+      if (info.kind === 'group' && !(principalId.startsWith('human:') ? ['speak'] : botModes).includes(actor.speakingMode)) fail('SPEAKING_FORBIDDEN')
+      if (info.membershipVersion < (current.membershipVersion ?? 0)
+        || info.membershipVersion < (this.conversations.get(conversationId)?.membershipVersion ?? 0)) fail('AUTHORIZATION_PENDING')
+      this.conversations.set(conversationId, info)
+      this.profileRefreshedAt ??= new Map()
+      this.profileRefreshedAt.set(conversationId, Date.now())
+      // Only local validation is retried. No RPC mutation or committed outbox is replayed.
+      return work()
+    }
+  }
+  sendHumanWithRefresh(input) {
+    return CommunicationRuntime.prototype.withFreshTargets.call(this, this.human.principalId, input.conversationId, input.membershipEpoch,
+      () => this.sendHuman(input))
+  }
   sendHuman(input) {
     if (typeof input.messageId !== 'string' || typeof input.clientCreatedAt !== 'string') fail('INVALID_REQUEST')
     if (input.responseToDeliveryId !== undefined || input.causationDeliveryId !== undefined || input.localUserIntent !== undefined) fail('INVALID_REQUEST')
@@ -486,10 +513,11 @@ export class CommunicationRuntime {
     }
     const output = { sourceKey, conversationId, parts: [{ part: 0, text: input.text }], mentions: input.mentions ?? [],
       activationIntent: { targets: input.activationTargets ?? input.mentions ?? [], allBots: input.allBots ?? false }, replyToMessageId }
-    const [messageId] = this.queue.commitExports(`tool:${exec.agent.id}`, [output], [], () => this.message(actor.principalId, conversationId, { ...input, replyToMessageId, inputUpdateIds,
+    const candidateMessageId = input.messageId ?? randomUUID()
+    const [messageId] = await CommunicationRuntime.prototype.withFreshTargets.call(this, actor.principalId, conversationId, member.membershipEpoch, () => this.queue.commitExports(`tool:${exec.agent.id}`, [output], [], () => this.message(actor.principalId, conversationId, { ...input, messageId: candidateMessageId, replyToMessageId, inputUpdateIds,
       activationTargets: CommunicationRuntime.prototype.targets.call(this, actor.principalId, conversationId, targeting, member.membershipEpoch),
       responseToDeliveryId: completesReply?causal.causationDeliveryId:undefined, causationDeliveryId: causal?.causationDeliveryId, localUserIntent: causal?.localUserIntent, membershipEpoch: member.membershipEpoch }),
-      completesReply?{bindingId:exec.communicationBinding.id,deliveryId:causal.causationDeliveryId}:undefined)
+      completesReply?{bindingId:exec.communicationBinding.id,deliveryId:causal.causationDeliveryId}:undefined))
     return { messageId, conversationId, status: this.queue.outboxStatus(messageId).state,
       completesCurrentReply:Boolean(exec.communicationBinding?.id&&causal?.causationDeliveryId&&this.queue.completedToolReply(exec.communicationBinding.id,causal.causationDeliveryId)===messageId&&this.queue.outboxStatus(messageId).state==='accepted') }
   }
@@ -504,6 +532,10 @@ export class CommunicationRuntime {
     const targets = [...new Set(ids)].filter(id => id !== principalId).sort()
     for (const id of targets) if (!contacts.some(item => item.principalId === id && (item.kind === 'bot' || id.startsWith('bot:')))) fail('UNKNOWN_ACTIVATION_TARGET')
     return targets
+  }
+  stageHandoffWithRefresh(actor, input, exec) {
+    return CommunicationRuntime.prototype.withFreshTargets.call(this, actor.principalId, exec.communicationBinding?.conversationId,
+      exec.communicationBinding?.membershipEpoch, () => this.stageHandoff(actor, input, exec), ['passive', 'active'])
   }
   stageHandoff(actor, input, exec) {
     const binding = exec.communicationBinding, cause = exec.communicationCausation

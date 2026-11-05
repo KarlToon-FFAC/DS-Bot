@@ -122,7 +122,7 @@ export function install(rt) {
       execute: execute((comm,actor,args,exec)=>comm.sendUpdate(actor,args,toolOperation('input-update',exec))) }),
     defineTool({ name: 'set_communication_reply_targets', description: 'Preferred for a natural group reply or handoff: stage exact Bot targets, then write one final answer addressed to them. Works for passive or active Bots. Does not send a message or grant proactive permission. Textual @ alone is display-only.',
       parameters: { replyToMessageId: { type: 'string', required: true, description: 'The exact current authorized input Message ID from host metadata' }, activationTargets: { type: 'array', items: { type: 'string' } }, allBots: { type: 'boolean' } }, output,
-      execute: execute((comm, actor, args, exec) => comm.stageHandoff(actor, args, exec)) }),
+      execute: execute((comm, actor, args, exec) => comm.stageHandoffWithRefresh(actor, args, exec)) }),
     defineTool({ name: 'read_communication_history', description: 'Read authorized canonical history from one communication conversation, without causing a new send or model delivery. Other chats and membership epochs are inaccessible.',
       parameters: { conversationId: { type: 'string', required: true }, after: { type: 'integer' }, before: { type: 'integer' }, limit: { type: 'integer' } }, output,
       execute: execute((comm, actor, args) => comm.history(actor.principalId, args)) }),
@@ -244,7 +244,7 @@ export function install(rt) {
             break
           }
           case 'read': value = comm.markRead(body); break
-          case 'send': value = comm.sendHuman(body); break
+          case 'send': value = await comm.sendHumanWithRefresh(body); break
           case 'profile-human': value = await profileHuman(comm, body); break
           case 'avatar': value = await readPrincipalAvatar(comm, body); break
           case 'rename-human': {
