@@ -22294,7 +22294,7 @@ function ContactManager({ request, operation, contacts, humanPrincipalId, instan
     } }, t("Refresh status")),
     liveError ? (0, import_react57.createElement)("p", { className: "bt-comm-reference", role: "status" }, t("Status may be out of date."), " ", liveError) : null,
     error ? (0, import_react57.createElement)("p", { className: "bt-comm-error", role: "alert" }, error) : null,
-    (0, import_react57.createElement)(ContactDirectory, { contacts, relations: data?.relations ?? [], humanPrincipalId, instanceId, request, addressNotes, connectionKnown, busy: busy || messageBusy, onMessage, confirm, onRemove: (item) => {
+    (0, import_react57.createElement)(ContactDirectory, { contacts, relations: data?.relations ?? [], humanPrincipalId, instanceId, request, addressNotes, connectionKnown: liveError ? false : connectionKnown, busy: busy || messageBusy, onMessage, confirm, onRemove: (item) => {
       const id = item.otherHumanPrincipalId;
       if (confirm !== id) setConfirm(id);
       else {

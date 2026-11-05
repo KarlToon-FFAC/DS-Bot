@@ -55,15 +55,19 @@ function render(value) {
       // Keep in-flight or unsaved edits and their original optimistic version.
       const retain = oldForm && oldForm.dataset.saved !== 'true' && (field.disabled || field.value !== oldForm.dataset.base || oldForm.contains(document.activeElement));
       const form = retain ? oldForm : renameForm(i); if (!retain) form.dataset.base = i.label;
-      const heading = i.label + ' — ' + (i.trusted ? 'approved' : 'revoked') + ' · ' + (i.connected === true ? 'Connected to Hub' : i.connected === false ? 'Disconnected from Hub' : 'Connection status unavailable');
+      const heading = i.label + ' — ' + (i.trusted ? 'approved' : 'revoked');
       if (retain) {
         row.querySelector('strong').textContent = heading;
         for (const child of [...row.children]) if (child.tagName === 'BUTTON') child.remove();
-      } else row.replaceChildren(text('strong', heading), text('small', i.instanceId), form);
+      } else {
+        const connection = text('small', ''); connection.className = 'instance-connection';
+        row.replaceChildren(text('strong', heading), text('small', i.instanceId), connection, form);
+      }
       if (i.trusted) row.append(button('Remove device', () => { if (confirm('Remove this device: revoke access, group memberships and pending deliveries; keep chat history. Owned groups retain the inactive owner until the same device is explicitly repaired. Continue?')) return api('revoke', {instanceId:i.instanceId}); }));
       if (!i.trusted && i.revision) row.append(button('Repair original device', () => { if (confirm('Restore trust for the same previously proved device key? Group memberships stay removed.')) return api('repair', {instanceId:i.instanceId, expectedRevision:i.revision}); }));
       row.dataset.signature = JSON.stringify(i);
     }
+    row.querySelector('.instance-connection').textContent = i.connected === true ? 'Connected to Hub' : i.connected === false ? 'Disconnected from Hub' : 'Connection status unavailable';
     return row;
   });
   reconcile($('instances'), instanceRows, 'No enrolled devices.');
@@ -100,6 +104,7 @@ function resume() {
       if (epoch !== watchEpoch) return;
       if (e.message === 'UNAUTHENTICATED') { csrf = undefined; $('content').hidden = true; $('login').hidden = false; error(Error('Sign in again to see current Hub status.')); return; }
       $('live-status').textContent = 'Status may be out of date. Reconnecting…';
+      for (const node of document.querySelectorAll('.instance-connection')) node.textContent = 'Connection status unavailable';
       delay = Math.min(30000, 1000 * 2 ** Math.min(failures++, 5)) * (0.8 + Math.random() * 0.4);
     }
     if (epoch === watchEpoch && csrf && document.visibilityState !== 'hidden') watchTimer = setTimeout(watch, delay);

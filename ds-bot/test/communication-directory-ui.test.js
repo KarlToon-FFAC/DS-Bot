@@ -519,3 +519,22 @@ test('cached contacts never appear connected when the observing Hub connection i
     assert.doesNotMatch(doc.body.textContent, /Connected to Hub/)
   })
 })
+
+
+test('failed live reads back off without hint storms postponing recovery and online resumes immediately', async () => {
+  await ui(async ({ exports: api, dom }) => {
+    const timers = new Map(); let sequence = 0, errors = 0
+    const controller = api.liveRefresh(async () => { throw Error('Synthetic unavailable') }, {
+      document: dom.window.document, window: dom.window, onError: () => { errors++ },
+      setTimer: (fn, delay) => { const id = ++sequence; timers.set(id, { fn, delay }); return id }, clearTimer: id => timers.delete(id),
+    })
+    await new Promise(resolve => setImmediate(resolve))
+    assert.equal(errors, 1); assert.equal([...timers.values()][0].delay, 10000)
+    const first = [...timers.keys()][0]
+    for (let i = 0; i < 100; i++) controller.wake()
+    assert.equal(timers.size, 1); assert.equal([...timers.keys()][0], first)
+    dom.window.dispatchEvent(new dom.window.Event('online'))
+    assert.ok([...timers.values()][0].delay <= 500)
+    controller.stop()
+  })
+})

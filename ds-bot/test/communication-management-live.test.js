@@ -69,3 +69,27 @@ test('Hub admin expires a live session without continuing to display approved de
     assert.match(dom.window.document.getElementById('error').textContent, /Sign in again/)
   } finally { dom.window.dispatchEvent(new dom.window.Event('pagehide')); await drain(); dom.window.close() }
 })
+
+
+test('Hub admin transient failures mark cached connectivity unknown and focus fully recalibrates it', async () => {
+  const dom = new JSDOM(managementPage, { url: 'http://127.0.0.1:3190/admin/', pretendToBeVisual: true })
+  let failed = false, changes = 0
+  const fetch = async (url, options) => {
+    const action = url.split('/').at(-1)
+    if (action === 'session') return { ok: true, json: async () => ({ ok: true, csrf: 'synthetic' }) }
+    if (action === 'state') return { ok: true, json: async () => ({ ok: true, revision: 'synthetic:1', value: { code: '', requests: [], instances: [{instanceId:'one',label:'Synthetic',nameVersion:0,trusted:1,connected:!failed}] } }) }
+    assert.equal(action, 'changes')
+    if (++changes === 1) { failed = true; throw TypeError('Synthetic network outage') }
+    return new Promise((resolve, reject) => options.signal.addEventListener('abort', () => reject(Error('Aborted')), { once: true }))
+  }
+  runInNewContext(managementScript, { document: dom.window.document, window: dom.window, navigator: dom.window.navigator, fetch, location: dom.window.location, confirm: () => true,
+    setTimeout, clearTimeout, AbortController, AbortSignal, Math })
+  try {
+    await drain()
+    assert.match(dom.window.document.getElementById('live-status').textContent, /out of date/)
+    assert.equal(dom.window.document.querySelector('.instance-connection').textContent, 'Connection status unavailable')
+    dom.window.dispatchEvent(new dom.window.Event('focus')); await drain()
+    assert.equal(dom.window.document.querySelector('.instance-connection').textContent, 'Disconnected from Hub')
+    assert.match(dom.window.document.getElementById('live-status').textContent, /up to date/)
+  } finally { dom.window.dispatchEvent(new dom.window.Event('pagehide')); await drain(); dom.window.close() }
+})
