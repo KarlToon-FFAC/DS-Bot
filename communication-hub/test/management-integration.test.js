@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { generateKeyPairSync, randomUUID, sign } from 'node:crypto'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import WebSocket from 'ws'
 import { startHub } from '../src/server.js'
 import { CAPABILITIES, PROTOCOL } from '../src/protocol.js'
@@ -65,6 +68,69 @@ test('actual HTTP approval, signed socket login, Human assignment and scoped con
   assert.equal((await a.signed.request('contacts.list', {})).length, 2)
   assert.ok((await a.signed.request('dm.open', { principalId: a.human, otherPrincipalId: b.human, operationId: randomUUID() })).conversationId)
   await assert.rejects(a.signed.request('contacts.list', { principalId: b.human }), { code: 'AUTHOR_MISMATCH' })
+})
+
+test('real sockets settle concurrent duplicate decisions and recover a lost cancellation response after restart', async t => {
+  const directory = mkdtempSync(join(tmpdir(), 'dsbot-contact-sockets-')), sockets = []
+  let loseCancelResponse = false, hub
+  const start = () => startHub({ databasePath: join(directory, 'hub.sqlite'), peers: [], port: 0,
+    management: { enabled: true, password: 'mock-contact-administrator' },
+    beforeResponse: ({ type, socket }) => {
+      if (type === 'contact.cancel' && loseCancelResponse) { loseCancelResponse = false; socket.terminate(); return false }
+    } })
+  t.after(async () => { for (const socket of sockets) socket.close(); await hub?.close(); rmSync(directory, { recursive: true, force: true }) })
+  hub = await start()
+  const connect = async () => { const socket = await client(hub.url); sockets.push(socket); return socket }
+  const login = async device => {
+    const socket = await connect(), challenge = await socket.request('enrollment.challenge', { purpose: 'login', instanceId: device.instanceId })
+    await socket.request('enrollment.prove', { challengeId: challenge.challengeId, signature: sign(null, Buffer.from(enrollmentTranscript(challenge)), device.pair.privateKey).toString('base64url'), capabilities: CAPABILITIES })
+    return socket
+  }
+  const enroll = async displayName => {
+    const pair = generateKeyPairSync('ed25519'), pending = await connect()
+    const challenge = await pending.request('enrollment.challenge', { purpose: 'join', publicKey: pair.publicKey.export({ format: 'pem', type: 'spki' }) })
+    const request = await pending.request('enrollment.prove', { challengeId: challenge.challengeId, signature: sign(null, Buffer.from(enrollmentTranscript(challenge)), pair.privateKey).toString('base64url'), displayName })
+    const approved = hub.management.decide({ requestId: request.requestId, expectedVersion: 1, action: 'approve' })
+    pending.close()
+    const device = { pair, instanceId: approved.instanceId, human: `human:${approved.instanceId}:local-user` }
+    device.socket = await login(device)
+    device.userCode = (await device.socket.request('contact.code', { principalId: device.human })).userCode
+    return device
+  }
+  const a = await enroll('Synthetic A'), b = await enroll('Synthetic B')
+  const request = (from, to) => from.socket.request('contact.request', { principalId: from.human, operationId: randomUUID(), userCode: to.userCode, botPrincipalIds: [] })
+  const [first, duplicate, crossed] = await Promise.all([request(a, b), request(a, b), request(b, a)])
+  const decision = (person, item, type) => person.socket.request(`contact.${type}`, { principalId: person.human, requestId: item.requestId, expectedVersion: 1, operationId: randomUUID() })
+  const outcomes = await Promise.allSettled([decision(b, first, 'accept'), decision(a, crossed, 'accept')])
+  assert.equal(outcomes.filter(result => result.status === 'fulfilled').length, 1)
+  assert.equal(outcomes.find(result => result.status === 'rejected').reason.code, 'CONTACT_VERSION_CONFLICT')
+  for (const person of [a, b]) {
+    const rows = await person.socket.request('contact.requests', { principalId: person.human })
+    assert.equal(rows.filter(row => row.status === 'accepted').length, 1)
+    assert.equal(rows.filter(row => row.status === 'cancelled').length, 2)
+    assert.equal(rows.find(row => row.requestId === duplicate.requestId).status, 'cancelled')
+    const [relation] = await person.socket.request('contact.relations', { principalId: person.human })
+    assert.equal(relation.active, true); assert.equal(relation.version, 1)
+  }
+  const competing = await request(a, b)
+  const raced = await Promise.allSettled([decision(a, competing, 'cancel'), decision(b, competing, 'accept')])
+  assert.equal(raced.filter(result => result.status === 'fulfilled').length, 1)
+  assert.equal(raced.find(result => result.status === 'rejected').reason.code, 'CONTACT_VERSION_CONFLICT')
+  const rejected = await request(a, b)
+  await decision(b, rejected, 'reject')
+  const row = (await a.socket.request('contact.requests', { principalId: a.human })).find(row => row.requestId === rejected.requestId)
+  assert.equal(row.status, 'pending'); assert.equal(row.version, 1)
+  const cancel = { principalId: a.human, requestId: row.requestId, expectedVersion: row.version, operationId: randomUUID() }
+  loseCancelResponse = true
+  await assert.rejects(a.socket.request('contact.cancel', cancel), /CONNECTION_LOST/)
+  await hub.close(); hub = undefined
+  hub = await start(); a.socket = await login(a); b.socket = await login(b)
+  assert.deepEqual(await a.socket.request('contact.cancel', cancel), { requestId: row.requestId, status: 'cancelled' })
+  const recovered = await a.socket.request('contact.requests', { principalId: a.human })
+  assert.equal(recovered.find(item => item.requestId === row.requestId).status, 'cancelled')
+  assert.equal(recovered.find(item => item.requestId === duplicate.requestId).status, 'cancelled')
+  assert.equal(recovered.some(item => item.status === 'pending'), false)
+  await assert.rejects(decision(b, rejected, 'accept'), { code: 'CONTACT_VERSION_CONFLICT' })
 })
 
 test('real socket departure survives a lost response, preserves history and releases only live quota',async t=>{

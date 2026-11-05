@@ -208,6 +208,193 @@ test('concurrent contact requests and exact retry cannot overwrite a newer scope
   assert.equal(m.canContact(bot, b.principalId), false)
 })
 
+test('accepting one duplicate settles same-direction and crossed requests without replacing its chosen scope', t => {
+  const { m, store } = fixture(t), a = enroll(m, 'A'), b = enroll(m, 'B'), c = enroll(m, 'C')
+  const bot = store.register(a.auth, { localId: 'shared', kind: 'bot', displayName: 'Shared Bot' }).principalId
+  const request = (from, to, bots = []) => m.requestContact(from.auth, { principalId: from.principalId, operationId: randomUUID(), userCode: m.code(to.auth, { principalId: to.principalId }).userCode, botPrincipalIds: bots })
+  const first = request(a, b, [bot]), duplicate = request(a, b), crossed = request(b, a), unrelated = request(a, c)
+  const input = { principalId: b.principalId, operationId: randomUUID(), requestId: first.requestId, expectedVersion: 1 }
+  m.respondContact(b.auth, input, 'accept')
+  for (const person of [a, b]) {
+    const rows = m.contactRequests(person.auth, { principalId: person.principalId })
+    assert.equal(rows.find(row => row.requestId === first.requestId).status, 'accepted')
+    for (const item of [duplicate, crossed]) assert.equal(rows.find(row => row.requestId === item.requestId).status, 'cancelled')
+  }
+  assert.equal(m.contactRequests(a.auth, { principalId: a.principalId }).find(row => row.requestId === unrelated.requestId).status, 'pending')
+  const relation = m.relations(a.auth, { principalId: a.principalId })[0]
+  assert.deepEqual(relation.botPrincipalIds, [bot]); assert.equal(relation.version, 1)
+  m.respondContact(b.auth, input, 'accept')
+  assert.deepEqual(m.relations(a.auth, { principalId: a.principalId })[0], relation)
+  assert.throws(() => m.respondContact(a.auth, { principalId: a.principalId, operationId: randomUUID(), requestId: crossed.requestId, expectedVersion: 1 }, 'accept'), { code: 'CONTACT_VERSION_CONFLICT' })
+})
+
+test('sender cancellation is terminal for valid, unknown and privately rejected requests, including a stale pre-rejection view', t => {
+  let now = 100000
+  const { m } = fixture(t, { now: () => now }), a = enroll(m, 'A'), b = enroll(m, 'B')
+  const request = userCode => m.requestContact(a.auth, { principalId: a.principalId, operationId: randomUUID(), userCode })
+  const code = m.code(b.auth, { principalId: b.principalId }).userCode
+  const pending = request(code), rejected = request(code), unknown = request('FFFF-FFFF-FFFF-FFFF-FFFF-FFFF')
+  const before = m.contactRequests(a.auth, { principalId: a.principalId }).find(row => row.requestId === rejected.requestId)
+  m.respondContact(b.auth, { principalId: b.principalId, operationId: randomUUID(), requestId: rejected.requestId, expectedVersion: 1 }, 'reject')
+  const outgoing = m.contactRequests(a.auth, { principalId: a.principalId })
+  const publicState = row => { const { requestId, ...state } = row; return state }
+  assert.deepEqual(publicState(outgoing.find(row => row.requestId === rejected.requestId)), publicState(outgoing.find(row => row.requestId === unknown.requestId)))
+  assert.deepEqual(outgoing.find(row => row.requestId === rejected.requestId), before)
+  for (const item of [pending, rejected, unknown]) {
+    const input = { principalId: a.principalId, operationId: randomUUID(), requestId: item.requestId, expectedVersion: 1 }
+    const result = m.respondContact(a.auth, input, 'cancel')
+    assert.equal(result.status, 'cancelled'); assert.deepEqual(m.respondContact(a.auth, input, 'cancel'), result)
+    const row = m.contactRequests(a.auth, { principalId: a.principalId }).find(row => row.requestId === item.requestId)
+    assert.equal(row.status, 'cancelled'); assert.equal(row.version, 2)
+    assert.throws(() => m.respondContact(b.auth, { principalId: b.principalId, operationId: randomUUID(), requestId: item.requestId, expectedVersion: 1 }, 'accept'), { code: 'CONTACT_VERSION_CONFLICT' })
+  }
+  now += 86400001
+  assert.ok(m.contactRequests(a.auth, { principalId: a.principalId }).every(row => row.status === 'cancelled'))
+  assert.deepEqual(m.relations(a.auth, { principalId: a.principalId }), [])
+})
+
+test('private-rejection cancellation rolls back atomically, rejects changed retry payloads and cannot cancel expired requests', t => {
+  let now = 100000
+  const { m, store } = fixture(t, { now: () => now }), a = enroll(m, 'A'), b = enroll(m, 'B')
+  const request = () => m.requestContact(a.auth, { principalId: a.principalId, operationId: randomUUID(), userCode: m.code(b.auth, { principalId: b.principalId }).userCode })
+  const rejected = request(), pending = request(), expiredRejection = request()
+  for (const item of [rejected, expiredRejection]) m.respondContact(b.auth, { principalId: b.principalId, operationId: randomUUID(), requestId: item.requestId, expectedVersion: 1 }, 'reject')
+  const input = { principalId: a.principalId, operationId: randomUUID(), requestId: rejected.requestId, expectedVersion: 1 }
+  store.beforeCommit = () => { throw Error('Synthetic cancellation failure') }
+  assert.throws(() => m.respondContact(a.auth, input, 'cancel'), /Synthetic cancellation failure/)
+  store.beforeCommit = undefined
+  assert.equal(m.db.prepare('SELECT status FROM hub_contact_requests WHERE id=?').get(rejected.requestId).status, 'rejected')
+  assert.equal(m.contactRequests(a.auth, { principalId: a.principalId }).find(row => row.requestId === rejected.requestId).status, 'pending')
+  m.respondContact(a.auth, input, 'cancel')
+  assert.throws(() => m.respondContact(a.auth, { ...input, requestId: pending.requestId }, 'cancel'), { code: 'OPERATION_ID_CONFLICT' })
+  now += 86400001
+  const rows = m.contactRequests(a.auth, { principalId: a.principalId })
+  for (const item of [pending, expiredRejection]) {
+    const row = rows.find(row => row.requestId === item.requestId)
+    assert.equal(row.status, 'expired'); assert.equal(row.version, 2)
+    assert.throws(() => m.respondContact(a.auth, { ...input, operationId: randomUUID(), requestId: item.requestId, expectedVersion: row.version }, 'cancel'), { code: 'CONTACT_VERSION_CONFLICT' })
+    assert.throws(() => m.respondContact(b.auth, { principalId: b.principalId, operationId: randomUUID(), requestId: item.requestId, expectedVersion: 1 }, 'accept'), { code: 'CONTACT_VERSION_CONFLICT' })
+  }
+  assert.equal(rows.find(row => row.requestId === rejected.requestId).status, 'cancelled')
+  assert.equal(m.canContact(a.principalId, b.principalId), false)
+})
+
+test('sender request quota cannot reveal a private rejection and explicit cancellation releases one slot', t => {
+  let now = 100000
+  const { m } = fixture(t, { now: () => now }), a = enroll(m, 'A'), b = enroll(m, 'B')
+  const code = m.code(b.auth, { principalId: b.principalId }).userCode
+  const request = (userCode = 'FFFF-FFFF-FFFF-FFFF-FFFF-FFFF') => m.requestContact(a.auth, { principalId: a.principalId, operationId: randomUUID(), userCode })
+  for (let i = 0; i < 19; i++) { if (i === 10) now += 60001; request() }
+  const valid = request(code)
+  now += 60001
+  assert.throws(() => request(), { code: 'CONTACT_LIMIT' })
+  m.respondContact(b.auth, { principalId: b.principalId, operationId: randomUUID(), requestId: valid.requestId, expectedVersion: 1 }, 'reject')
+  assert.equal(m.contactRequests(a.auth, { principalId: a.principalId }).filter(row => row.status === 'pending').length, 20)
+  assert.throws(() => request(), { code: 'CONTACT_LIMIT' })
+  m.respondContact(a.auth, { principalId: a.principalId, operationId: randomUUID(), requestId: valid.requestId, expectedVersion: 1 }, 'cancel')
+  request()
+  assert.throws(() => request(), { code: 'CONTACT_LIMIT' })
+})
+
+test('contact decisions and cancellation are ordered, authorized and cannot revive a competing terminal state', async t => {
+  for (const first of ['accept', 'reject', 'cancel']) await t.test(first, t => {
+    const { m } = fixture(t), a = enroll(m, 'A'), b = enroll(m, 'B'), c = enroll(m, 'C')
+    const request = m.requestContact(a.auth, { principalId: a.principalId, operationId: randomUUID(), userCode: m.code(b.auth, { principalId: b.principalId }).userCode })
+    const action = (person, kind, version = 1) => m.respondContact(person.auth, { principalId: person.principalId, operationId: randomUUID(), requestId: request.requestId, expectedVersion: version }, kind)
+    assert.throws(() => action(c, 'cancel'), { code: 'FORBIDDEN' })
+    assert.throws(() => action(b, 'cancel'), { code: 'FORBIDDEN' })
+    assert.throws(() => action(a, 'reject'), { code: 'FORBIDDEN' })
+    assert.throws(() => action(a, 'cancel', 7), { code: 'CONTACT_VERSION_CONFLICT' })
+    action(first === 'cancel' ? a : b, first)
+    if (first === 'reject') assert.equal(action(a, 'cancel').status, 'cancelled')
+    else assert.throws(() => action(first === 'cancel' ? b : a, first === 'cancel' ? 'accept' : 'cancel'), { code: 'CONTACT_VERSION_CONFLICT' })
+    assert.equal(m.contactRequests(a.auth, { principalId: a.principalId })[0].status, first === 'accept' ? 'accepted' : 'cancelled')
+    assert.equal(m.canContact(a.principalId, b.principalId), first === 'accept')
+  })
+})
+
+test('duplicate settlement rolls back with acceptance and revocation, then committed retries preserve later consent', t => {
+  const { m, store } = fixture(t), a = enroll(m, 'A'), b = enroll(m, 'B')
+  const request = (from, to) => m.requestContact(from.auth, { principalId: from.principalId, operationId: randomUUID(), userCode: m.code(to.auth, { principalId: to.principalId }).userCode })
+  const accepted = request(a, b), sibling = request(a, b)
+  const input = { principalId: b.principalId, operationId: randomUUID(), requestId: accepted.requestId, expectedVersion: 1 }
+  store.beforeCommit = () => { throw Error('Synthetic commit failure') }
+  assert.throws(() => m.respondContact(b.auth, input, 'accept'), /Synthetic commit failure/)
+  store.beforeCommit = undefined
+  assert.ok(m.db.prepare('SELECT * FROM hub_contact_requests').all().every(row => row.status === 'pending' && row.version === 1))
+  assert.equal(m.db.prepare('SELECT count(*) n FROM hub_management_operations WHERE id=?').get(input.operationId).n, 0)
+  assert.deepEqual(m.relations(a.auth, { principalId: a.principalId }), [])
+  m.respondContact(b.auth, input, 'accept')
+  const newer = request(a, b), crossed = request(b, a)
+  const relation = m.relations(a.auth, { principalId: a.principalId })[0]
+  const revoke = { principalId: a.principalId, operationId: randomUUID(), otherHumanPrincipalId: b.principalId, expectedVersion: relation.version }
+  store.beforeCommit = () => { throw Error('Synthetic commit failure') }
+  assert.throws(() => m.revokeContact(a.auth, revoke), /Synthetic commit failure/)
+  store.beforeCommit = undefined
+  assert.equal(m.relations(a.auth, { principalId: a.principalId })[0].active, true)
+  assert.ok(m.db.prepare("SELECT * FROM hub_contact_requests WHERE id IN (?,?)").all(newer.requestId, crossed.requestId).every(row => row.status === 'pending'))
+  m.revokeContact(a.auth, revoke)
+  for (const person of [a, b]) assert.ok(m.contactRequests(person.auth, { principalId: person.principalId }).every(row => row.status !== 'pending'))
+  m.respondContact(b.auth, input, 'accept')
+  assert.equal(m.relations(a.auth, { principalId: a.principalId })[0].active, false)
+  assert.throws(() => m.respondContact(b.auth, { ...input, operationId: randomUUID(), requestId: sibling.requestId }, 'accept'), { code: 'CONTACT_VERSION_CONFLICT' })
+  const renewed = request(a, b)
+  m.respondContact(b.auth, { ...input, operationId: randomUUID(), requestId: renewed.requestId }, 'accept')
+  const current = m.relations(a.auth, { principalId: a.principalId })[0]
+  m.revokeContact(a.auth, revoke)
+  assert.deepEqual(m.relations(a.auth, { principalId: a.principalId })[0], current)
+  assert.equal(current.active, true); assert.equal(current.version, 3)
+})
+
+test('acceptance and revocation settle visible private rejections without touching expired or unrelated requests', t => {
+  let now = 100000
+  const { m } = fixture(t, { now: () => now }), a = enroll(m, 'A'), b = enroll(m, 'B'), c = enroll(m, 'C')
+  const request = (from, to) => m.requestContact(from.auth, { principalId: from.principalId, operationId: randomUUID(), userCode: m.code(to.auth, { principalId: to.principalId }).userCode })
+  const reject = (person, item) => m.respondContact(person.auth, { principalId: person.principalId, operationId: randomUUID(), requestId: item.requestId, expectedVersion: 1 }, 'reject')
+  const earlier = request(a, b), unrelated = request(a, c)
+  reject(b, earlier); reject(c, unrelated)
+  const accepted = request(a, b)
+  m.respondContact(b.auth, { principalId: b.principalId, operationId: randomUUID(), requestId: accepted.requestId, expectedVersion: 1 }, 'accept')
+  assert.equal(m.contactRequests(a.auth, { principalId: a.principalId }).find(row => row.requestId === earlier.requestId).status, 'cancelled')
+  const expired = request(a, b), expiredRejection = request(b, a)
+  reject(a, expiredRejection)
+  now += 86400001
+  const recent = request(a, b), crossed = request(b, a)
+  reject(b, recent); reject(a, crossed)
+  const relation = m.relations(a.auth, { principalId: a.principalId })[0]
+  m.revokeContact(a.auth, { principalId: a.principalId, operationId: randomUUID(), otherHumanPrincipalId: b.principalId, expectedVersion: relation.version })
+  const rows = m.contactRequests(a.auth, { principalId: a.principalId })
+  for (const item of [earlier, recent, crossed]) assert.equal(rows.find(row => row.requestId === item.requestId).status, 'cancelled')
+  for (const item of [expired, unrelated]) assert.equal(rows.find(row => row.requestId === item.requestId).status, 'expired')
+  assert.equal(rows.find(row => row.requestId === expiredRejection.requestId).status, 'rejected')
+  assert.equal(m.contactRequests(b.auth, { principalId: b.principalId }).find(row => row.requestId === expiredRejection.requestId).status, 'expired')
+  assert.equal(m.db.prepare('SELECT status FROM hub_contact_requests WHERE id=?').get(unrelated.requestId).status, 'rejected')
+  assert.equal(m.canContact(a.principalId, b.principalId), false)
+})
+
+test('legacy cancelled and rejected records recover on restart without restoring contact authority', t => {
+  let now = 100000
+  const dir = mkdtempSync(join(tmpdir(), 'dsbot-contact-restart-')), path = join(dir, 'hub.sqlite')
+  let store = new HubStore(path), m = new HubManagement(store, { now: () => now })
+  t.after(() => { store.close(); rmSync(dir, { recursive: true, force: true }) })
+  const a = enroll(m, 'A'), b = enroll(m, 'B')
+  const request = () => m.requestContact(a.auth, { principalId: a.principalId, operationId: randomUUID(), userCode: m.code(b.auth, { principalId: b.principalId }).userCode })
+  const accepted = request(), duplicate = request(), rejected = request()
+  // These are the persisted terminal states written by the old implementation.
+  store.db.prepare("UPDATE hub_contact_requests SET status='accepted',version=3 WHERE id=?").run(accepted.requestId)
+  store.db.prepare("UPDATE hub_contact_requests SET status='cancelled',version=2 WHERE id=?").run(duplicate.requestId)
+  store.db.prepare("UPDATE hub_contact_requests SET status='rejected',version=2 WHERE id=?").run(rejected.requestId)
+  store.close(); store = new HubStore(path); m = new HubManagement(store, { now: () => now })
+  const rows = m.contactRequests(a.auth, { principalId: a.principalId })
+  assert.equal(rows.find(row => row.requestId === duplicate.requestId).status, 'cancelled')
+  assert.equal(rows.find(row => row.requestId === rejected.requestId).version, 1)
+  m.respondContact(a.auth, { principalId: a.principalId, operationId: randomUUID(), requestId: rejected.requestId, expectedVersion: 1 }, 'cancel')
+  assert.deepEqual(m.relations(a.auth, { principalId: a.principalId }), [])
+  assert.equal(m.canContact(a.principalId, b.principalId), false)
+  now += 86400001
+  assert.equal(m.contactRequests(a.auth, { principalId: a.principalId }).find(row => row.requestId === duplicate.requestId).status, 'cancelled')
+})
+
 test('legacy static peers remain visible while enrolled peers require consent', t => {
   const { store, m } = fixture(t), dynamic = enroll(m)
   const a = store.connect('legacy-a', 'A', CAPABILITIES), b = store.connect('legacy-b', 'B', CAPABILITIES)

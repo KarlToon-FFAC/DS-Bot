@@ -222,7 +222,8 @@ export class HubManagement {
       this.rate('contact:global', 100); this.rate(`contact:${auth.instanceId}`, 10)
       const scope = this.scope(auth, input.botPrincipalIds)
       this.cleanup()
-      requireThat(this.db.prepare("SELECT count(*) n FROM hub_contact_requests WHERE sender=? AND status='pending'").get(input.principalId).n < 20, 'CONTACT_LIMIT')
+      // A private rejection must not reveal itself by freeing a sender-visible slot.
+      requireThat(this.db.prepare("SELECT count(*) n FROM hub_contact_requests WHERE sender=? AND (status='pending' OR (status='rejected' AND expires_at>?))").get(input.principalId, this.now()).n < 20, 'CONTACT_LIMIT')
       const code = input.userCode.toUpperCase().replace(/[^A-F0-9]/g, '').match(/.{1,4}/g)?.join('-') ?? ''
       const found = this.db.prepare('SELECT principal_id FROM hub_user_codes WHERE code_hash=?').get(digest(code))?.principal_id
       let target = found && found !== input.principalId && !found.startsWith(`human:${auth.instanceId}:`) ? found : null
@@ -234,14 +235,24 @@ export class HubManagement {
       return { requestId: input.operationId, status: 'pending' }
     })
   }
+  contactRequestState(row, principalId) {
+    if (row.sender !== principalId) return { status: row.status, version: row.version }
+    const status = row.status === 'rejected' ? row.expires_at <= this.now() ? 'expired' : 'pending' : row.status
+    // Sender versions track visible transitions, so a private rejection cannot be
+    // inferred from a version change or prevent cancellation of the visible request.
+    return { status, version: status === 'pending' ? 1 : 2 }
+  }
   contactRequests(auth, input) {
     this.human(auth, input.principalId); this.cleanup()
     return this.db.prepare('SELECT * FROM hub_contact_requests WHERE sender=? OR target=? ORDER BY rowid DESC LIMIT 100').all(input.principalId, input.principalId).map(row => ({
       requestId: row.id, direction: row.target === input.principalId ? 'incoming' : 'outgoing',
-      status: row.sender === input.principalId && ['rejected', 'cancelled'].includes(row.status) ? row.expires_at <= this.now() ? 'expired' : 'pending' : row.status,
-      expiresAt: row.expires_at, version: row.version,
+      ...this.contactRequestState(row, input.principalId), expiresAt: row.expires_at,
       ...(row.target === input.principalId ? { senderPrincipalId: row.sender, senderName: this.db.prepare('SELECT name FROM principals WHERE id=?').get(row.sender).name } : {}),
     }))
+  }
+  cancelContactRequests(left, right, except = '') {
+    this.db.prepare("UPDATE hub_contact_requests SET status='cancelled',version=version+1 WHERE (status='pending' OR (status='rejected' AND expires_at>?)) AND id<>? AND ((sender=? AND target=?) OR (sender=? AND target=?))")
+      .run(this.now(), except, left, right, right, left)
   }
   respondContact(auth, input, action) {
     requireThat(['accept', 'reject', 'cancel'].includes(action), 'INVALID_REQUEST')
@@ -249,7 +260,8 @@ export class HubManagement {
       const scope = action === 'accept' ? this.scope(auth, input.botPrincipalIds) : '[]'
       this.cleanup()
       const row = this.db.prepare('SELECT * FROM hub_contact_requests WHERE id=?').get(input.requestId)
-      requireThat(row && row.status === 'pending' && row.version === input.expectedVersion, 'CONTACT_VERSION_CONFLICT')
+      const state = row && this.contactRequestState(row, input.principalId)
+      requireThat(state?.status === 'pending' && state.version === input.expectedVersion, 'CONTACT_VERSION_CONFLICT')
       requireThat(action === 'cancel' ? row.sender === input.principalId : row.target === input.principalId, 'FORBIDDEN')
       if (action === 'accept') {
         const senderInstance = this.db.prepare('SELECT instance_id FROM principals WHERE id=?').get(row.sender)?.instance_id
@@ -259,7 +271,7 @@ export class HubManagement {
         if (previous?.active) this.fenceDms(previous, 'contact.changed')
         this.db.prepare('INSERT INTO hub_contacts VALUES (?,?,?,?,?,1,?,1) ON CONFLICT(pair) DO UPDATE SET left_scope=excluded.left_scope,right_scope=excluded.right_scope,active=1,epoch=excluded.epoch,version=version+1').run(JSON.stringify(pair), ...pair, leftScope, rightScope, randomUUID())
         // Concurrent older requests must not silently replace an established scope.
-        this.db.prepare("UPDATE hub_contact_requests SET status='cancelled',version=version+1 WHERE status='pending' AND ((sender=? AND target=?) OR (sender=? AND target=?))").run(row.sender, row.target, row.target, row.sender)
+        this.cancelContactRequests(row.sender, row.target, row.id)
       }
       this.db.prepare('UPDATE hub_contact_requests SET status=?,version=version+1 WHERE id=?').run(action === 'accept' ? 'accepted' : action === 'reject' ? 'rejected' : 'cancelled', row.id)
       return { requestId: row.id, status: action === 'accept' ? 'accepted' : action === 'reject' ? 'rejected' : 'cancelled' }
@@ -267,12 +279,13 @@ export class HubManagement {
   }
   revokeContact(auth, input) {
     return this.op(auth, input, () => {
+      this.cleanup()
       const pair = [input.principalId, identifier(input.otherHumanPrincipalId)].sort()
       const row = this.db.prepare('SELECT * FROM hub_contacts WHERE pair=?').get(JSON.stringify(pair))
       requireThat(row && row.active && row.version === input.expectedVersion, 'CONTACT_VERSION_CONFLICT')
       this.db.prepare('UPDATE hub_contacts SET active=0,epoch=?,version=version+1 WHERE pair=?').run(randomUUID(), row.pair)
       this.fenceDms(row, 'contact.revoked')
-      this.db.prepare("UPDATE hub_contact_requests SET status='cancelled',version=version+1 WHERE status='pending' AND ((sender=? AND target=?) OR (sender=? AND target=?))").run(...pair, pair[1], pair[0])
+      this.cancelContactRequests(...pair)
       return { revoked: true }
     })
   }
