@@ -15,7 +15,8 @@ const evidence = { status: 'RUNNING', baseline: 'da47b17 plus test-only fixture 
   network: 'independent DSH A/B and persistent Hub on loopback', model: 'local deterministic Mock only', cases: [] }
 const output = join(topology.root, `${topology.prefix}-acceptance.json`), proofs = new Map()
 const save = () => writeFileSync(output, JSON.stringify(evidence, null, 2))
-const callCount = (peer, sessionId) => readFileSync(join(peer.home, 'mock.jsonl'), 'utf8').split('\n').filter(Boolean).map(JSON.parse).filter(call => call.session === sessionId).length
+const callsFor = (peer, sessionId) => readFileSync(join(peer.home, 'mock.jsonl'), 'utf8').split('\n').filter(Boolean).map(JSON.parse).filter(call => call.session === sessionId)
+const callCount = (peer, sessionId) => callsFor(peer, sessionId).length
 const inspect = (peer, conversationId) => peer.client.api({ operation: 'production-state', conversationId })
 const originalInputs = (state, messageId) => state.sessions.flatMap(session => session.events).filter(event => event.type === 'user/message'
   && event.data.source?.kind === 'ds-bot-communication' && event.data.source.messageId === messageId)
@@ -44,12 +45,15 @@ async function run(name) {
     const sent = await topology.send(a, conversationId, `COMM-MODEL-ERROR model-error-${nonce}`, [b.bot])
     const settled = await until(async () => { const state = await inspect(b, conversationId); return ends(state).some(end => end.kind === 'error' || end.kind === 'failed') && state }, 'an actual Mock provider request rejects and ends the turn')
     const sessionId = settled.sessions[0].sessionId, calls = callCount(b, sessionId)
-    assert.ok(calls > 0); assert.equal(settled.exports.length, 0)
+    const requestHeaders = settled.sessions.flatMap(session => session.events).filter(event => event.type === 'request/header').map(event => event.seq)
+    assert.ok(requestHeaders.length > 0, 'the error occurred after a real DSH model request header, not local admission')
+    assert.equal(calls, 1); assert.equal(callsFor(b, sessionId).filter(call => call.fail === true).length, 1)
+    assert.equal(settled.exports.length, 0)
     await reconnectAndReconcile(b); await reconnectAndReconcile(b)
     await topology.bench(b, 'stop'); await topology.startPeer(b)
     assert.equal(callCount(b, sessionId), calls, 'a provider error must not become a transport retry')
     assert.equal(originalInputs(await inspect(b, conversationId), sent.messageId).length, 1)
-    return { originalMessageId: sent.messageId, conversationId, modelRequests: calls, retryRequests: 0, terminalKinds: ends(settled) }
+    return { originalMessageId: sent.messageId, conversationId, requestHeaders, providerErrorRequests: 1, modelRequests: calls, retryRequests: 0, terminalKinds: ends(settled) }
   }
 
   await b.client.api({ operation: 'production-hold', point: 'after-injection', conversationId })
