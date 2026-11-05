@@ -1,0 +1,416 @@
+{
+  "status": "PASS_LOCAL",
+  "scope": "P0-P4 complete first, followed by explicitly requested group governance and prompt/privacy work",
+  "branch": "chore/federated-communication",
+  "baselineCommit": "6ede702b7d698a8d86261ecb6a2a5f1efc8e1e87",
+  "implementationCommit": null,
+  "platform": "native Windows on <Windows test host>",
+  "model": "local deterministic Mock",
+  "network": "loopback WS",
+  "integration": {
+    "status": "PASS",
+    "model": "local deterministic Mock",
+    "network": "loopback WS",
+    "cases": [
+      {
+        "id": "default-readOnly-passive",
+        "status": "PASS",
+        "conversationId": "a474e0b2-9db6-4213-89da-d7cd8876d1d9",
+        "humanMode": "readOnly"
+      },
+      {
+        "id": "real-passive-final-and-private-tool-boundary",
+        "status": "PASS",
+        "messageId": "2069670e-bf89-4fd9-8249-967f5f51af8a",
+        "replyMessageId": "e2ff8edc-7a3c-4d91-837f-2fc148d9677f",
+        "responseToDeliveryId": "794ee877-a9d0-476e-8ac5-0e2808b12976",
+        "privateCanaryLeaked": false
+      },
+      {
+        "id": "real-remote-read-of-other-DM-rejected",
+        "status": "PASS",
+        "conversationId": "a474e0b2-9db6-4213-89da-d7cd8876d1d9",
+        "privateConversationId": "83842a36-0a48-41c4-b3d3-ef804b0facdd",
+        "privateBodyLeaked": false
+      },
+      {
+        "id": "real-Bot-tool-passive-denied-active-allowed",
+        "status": "PASS"
+      },
+      {
+        "id": "real-concurrent-policy-and-admin-readOnly",
+        "status": "PASS"
+      },
+      {
+        "id": "queued-publish-rechecked-after-downgrade",
+        "status": "PASS",
+        "messageId": "2e680602-97b2-496c-b41e-bca801718ab2"
+      },
+      {
+        "id": "real-owner-transfer-no-old-owner-authority",
+        "status": "PASS"
+      }
+    ],
+    "ui": {
+      "conversationId": "3f0e08c9-9c6d-4f71-ac57-da2d146edfde",
+      "title": "Governance UI cf42b3ce",
+      "a": "http://127.0.0.1:3107/",
+      "b": "http://127.0.0.1:3108/"
+    }
+  },
+  "regression": {
+    "plugin": {
+      "tests": 1461,
+      "passed": 1459,
+      "skipped": 2,
+      "failed": 0
+    },
+    "communicationSpecificPluginTests": 27,
+    "additionalLocalPromptTest": 1,
+    "hubTests": 26,
+    "hostSmoke": {
+      "fixture": "smoke-governance",
+      "steps": 52,
+      "status": "PASS",
+      "stopped": true
+    },
+    "lint": "PASS",
+    "generatedClient": "PASS",
+    "cleanInstalledPlugin": "PASS; final tarball installed in a fresh consumer with complete pinned DSH; six production file hashes match working tree",
+    "cleanInstalledHub": "PASS; final clean tarball source hashes match; schema v2 startup/health/shutdown"
+  },
+  "p4Regression": {
+    "recovery": {
+      "status": "PASS",
+      "platform": "native Windows",
+      "model": "local deterministic Mock",
+      "cases": [
+        {
+          "id": "before-receive",
+          "status": "PASS",
+          "conversationId": "6451f303-df78-4e49-b8bc-9ab6ed596d98",
+          "messageId": "63490c2d-f344-4df3-b2f7-813b000707e8",
+          "deliveryId": "94668b24-962f-43ec-bbca-43fbcb65de7d",
+          "logicalInputs": 1,
+          "finalMessages": 1,
+          "modelCalls": 1,
+          "exportedMessageId": "334a0ba6-daed-4cae-b148-949e97ee9919"
+        },
+        {
+          "id": "after-receive",
+          "status": "PASS",
+          "conversationId": "d3eca8fc-5dd1-4ac9-b554-7011d8d2255d",
+          "messageId": "09a3b52c-8808-4adb-bc0c-f9cfc2787974",
+          "deliveryId": "6cd8bc32-8abb-484d-927f-c60ccaee5bfa",
+          "logicalInputs": 1,
+          "finalMessages": 1,
+          "modelCalls": 1,
+          "exportedMessageId": "bc0846f5-aaa9-4eb3-b6aa-f9b6269a8174"
+        },
+        {
+          "id": "before-injection",
+          "status": "PASS",
+          "conversationId": "32f91d92-2c02-498c-9824-c6ee3d2de428",
+          "messageId": "8bf87161-750f-40d2-b2f7-5a1e57b80a15",
+          "deliveryId": "6e0b3339-1e3c-4a91-aa5e-4e313eb5080d",
+          "logicalInputs": 1,
+          "finalMessages": 1,
+          "modelCalls": 1,
+          "exportedMessageId": "17fb1640-a12e-4404-b6b3-f19e01faeef2"
+        },
+        {
+          "id": "before-admission",
+          "status": "PASS",
+          "conversationId": "da54ee42-3acc-4b3b-86c6-0985a5c2af0f",
+          "messageId": "72f93353-b0ff-48ea-b0ba-77f3f4e39b11",
+          "deliveryId": "7e337026-83be-4055-819c-04f0c59f7395",
+          "logicalInputs": 1,
+          "finalMessages": 1,
+          "modelCalls": 1,
+          "exportedMessageId": "8ddec919-862b-49d5-9abf-67fb3c0534e6"
+        },
+        {
+          "id": "after-injection",
+          "status": "PASS",
+          "conversationId": "42df9f43-6039-491a-85de-3899e3712dab",
+          "messageId": "0ad9d29a-99b7-4072-9af2-217ee3fb2c5e",
+          "deliveryId": "3da03cb3-cd63-4a2c-8722-7a30733cefc5",
+          "logicalInputs": 1,
+          "finalMessages": 1,
+          "modelCalls": 2,
+          "exportedMessageId": "1d4404ad-c5ff-41f0-8daa-2be336f1c17d"
+        },
+        {
+          "id": "before-export",
+          "status": "PASS",
+          "conversationId": "7ba95b3b-6b58-4171-9a2f-7abbe8fdf42e",
+          "messageId": "51c782ec-9a41-48ff-9df7-e52fb25797bf",
+          "deliveryId": "e82077a5-5237-4932-a401-c8668d8efb28",
+          "logicalInputs": 1,
+          "finalMessages": 1,
+          "modelCalls": 1,
+          "exportedMessageId": "d431cff3-e2d1-400f-8b2a-57f76c2fa0b0"
+        },
+        {
+          "id": "after-export",
+          "status": "PASS",
+          "conversationId": "a1619d31-b1a3-417f-a8b5-b61447325e05",
+          "messageId": "ef4bd722-d50f-40ba-a37a-eb74cb6f9ebb",
+          "deliveryId": "dc3d856f-f0dd-4dc6-8456-3accafae59f8",
+          "logicalInputs": 1,
+          "finalMessages": 1,
+          "modelCalls": 1,
+          "exportedMessageId": "3e60b730-3b00-4c48-af61-eee67c44f7e8"
+        }
+      ]
+    },
+    "network": {
+      "status": "PASS",
+      "model": "local deterministic Mock",
+      "network": "loopback WS; independent persistent Hub process",
+      "cases": [
+        {
+          "id": "before-commit-crash",
+          "status": "PASS",
+          "messageId": "97a654d5-7336-4547-8ae5-a616e16a4f89",
+          "conversationId": "52e91f00-deb2-415e-800b-0a7104fafe1e",
+          "canonicalMessages": 1,
+          "conversationSeq": 32
+        },
+        {
+          "id": "after-commit-crash",
+          "status": "PASS",
+          "messageId": "2037281e-b9bf-4a10-b8fd-8aada862167f",
+          "conversationId": "52e91f00-deb2-415e-800b-0a7104fafe1e",
+          "canonicalMessages": 1,
+          "conversationSeq": 33
+        },
+        {
+          "id": "ACK-loss-on-open-socket",
+          "status": "PASS",
+          "messageId": "e9728e95-0095-4475-9219-38f880e55ec1",
+          "conversationSeq": 34
+        },
+        {
+          "id": "offline-sender-host-restart",
+          "status": "PASS",
+          "messageId": "9bbcf250-6007-494a-a318-8502ab8b14e9",
+          "payloadHashPreserved": true
+        },
+        {
+          "id": "triple-plus-delayed-retransmit",
+          "status": "PASS",
+          "messageId": "c51f4b7a-aa47-4c23-b8f0-cbf2d76e5f75",
+          "canonicalMessages": 1,
+          "recipientDeliveries": 1
+        },
+        {
+          "id": "repeated-reconnect",
+          "status": "PASS",
+          "reconnects": 3,
+          "newModelCalls": 0,
+          "duplicateMessages": 0
+        },
+        {
+          "id": "reordered-permanent-gap-then-incremental-repair",
+          "status": "PASS",
+          "conversationId": "4418523a-786e-4eea-b7c3-8f6cfe9651f5",
+          "messageIds": [
+            "62225675-6483-4f87-8f1a-9927fa11db5c",
+            "9cdf83c8-8c1f-4818-9327-0e66db66406d"
+          ],
+          "modelCallsWhileGap": 0,
+          "modelCallsAfterRepair": 2
+        },
+        {
+          "id": "A-B-Hub-backlog-restarts",
+          "status": "PASS",
+          "conversationId": "52e91f00-deb2-415e-800b-0a7104fafe1e",
+          "messageIds": [
+            "0a858d2f-ed19-492a-9cf0-c0700444aa36",
+            "2d0a9d62-aa9a-4706-894a-dcac1bb21b90"
+          ],
+          "canonicalDmPreserved": true
+        }
+      ]
+    },
+    "behavior": {
+      "status": "PASS",
+      "model": "local deterministic Mock",
+      "cases": [
+        {
+          "id": "DM-01-05-09",
+          "status": "PASS",
+          "conversationId": "f623564a-68cc-4f21-8bdb-1552e499fa0e",
+          "bidirectional": true,
+          "canonicalConcurrentOpen": true
+        },
+        {
+          "id": "DM-02-05",
+          "status": "PASS",
+          "conversationIds": [
+            "b326b222-d282-4a8e-8f0d-ef7b47249dd0",
+            "2f79b2cc-0ae7-4bbb-8425-31f7142367df"
+          ],
+          "bidirectional": true
+        },
+        {
+          "id": "DM-03-05",
+          "status": "PASS",
+          "conversationIds": [
+            "2f79b2cc-0ae7-4bbb-8425-31f7142367df",
+            "b326b222-d282-4a8e-8f0d-ef7b47249dd0"
+          ],
+          "actualExecutingBotAuthors": true
+        },
+        {
+          "id": "DM-04-05",
+          "status": "PASS",
+          "conversationId": "edae600c-53ef-4590-a385-82e88c71f914",
+          "bidirectional": true
+        },
+        {
+          "id": "DM-08",
+          "status": "PASS",
+          "forgedSenderRejected": true
+        },
+        {
+          "id": "DM-06",
+          "status": "PASS",
+          "conversationIds": [
+            "b326b222-d282-4a8e-8f0d-ef7b47249dd0",
+            "56594eae-d6fa-4ce9-a502-d266669d7914",
+            "edae600c-53ef-4590-a385-82e88c71f914"
+          ],
+          "privateCanaryPositive": true,
+          "otherConversationLeaks": 0
+        },
+        {
+          "id": "GR-01-02-03-05-06",
+          "status": "PASS",
+          "conversationId": "fafedd23-161f-4f3d-9e81-1df27283f27b",
+          "sameNameBots": true,
+          "actualBotToBotMentionsBothWays": true,
+          "plainBotBroadcasts": 0
+        },
+        {
+          "id": "DM-07",
+          "status": "PASS",
+          "conversationIds": [
+            "fafedd23-161f-4f3d-9e81-1df27283f27b",
+            "b326b222-d282-4a8e-8f0d-ef7b47249dd0"
+          ],
+          "groupMessageId": "015993e3-c115-481e-a85c-f943d39d3f44",
+          "dmMessageId": "14b7fa72-0b79-4fe0-9043-d37c37d5eb4a"
+        },
+        {
+          "id": "AC-02-03-04",
+          "status": "PASS",
+          "conversationId": "dc78d14c-2140-403d-8786-ef7a932faa3e",
+          "oldMessageId": "f1b2d3d0-1f83-460d-bf1d-6e57d38d1df1",
+          "newMessageId": "ebb2d2b0-2252-4e9f-8305-414f2191a1da",
+          "newJoinSeq": 8,
+          "oldInputConsumed": false,
+          "sharedHumanCacheLeak": false
+        },
+        {
+          "id": "GR-08",
+          "status": "PASS",
+          "crossConversationReplyRejected": true,
+          "unrelatedHumanCannotReadPrivateReference": true
+        },
+        {
+          "id": "CT-01",
+          "status": "PASS",
+          "messageId": "d84b5af4-3c6c-4481-91cb-ed2cf3b9f857",
+          "utf8Bytes": 65399,
+          "completeTextPreserved": true,
+          "attachmentsRejected": true,
+          "oversizeRejected": true
+        }
+      ]
+    },
+    "atomic": {
+      "status": "PASS",
+      "level": "independent native process, real production CommunicationQueue and SQLite WAL",
+      "cases": [
+        {
+          "point": "before-commit",
+          "status": "PASS",
+          "messageId": "message-e95f888e-c338-40af-bff1-63f9862846db",
+          "atomicTuple": [
+            1,
+            1,
+            1
+          ],
+          "newMessageGeneratedAfterReplay": true
+        },
+        {
+          "point": "after-commit",
+          "status": "PASS",
+          "messageId": "message-1d304a7e-0db9-4d5d-8342-4581e7ac49fc",
+          "atomicTuple": [
+            1,
+            1,
+            1
+          ],
+          "newMessageGeneratedAfterReplay": false
+        }
+      ]
+    }
+  },
+  "realBrowser": {
+    "status": "PASS_LOCAL",
+    "pages": [
+      "http://127.0.0.1:3107/",
+      "http://127.0.0.1:3108/"
+    ],
+    "title": "Governance UI 5a3986eb",
+    "verified": [
+      "New Human read-only with disabled composer and explicit status",
+      "Owner appoints an admin without granting speech; admin cannot modify owner or end group",
+      "Owner explicitly grants Human speech; actual Return send appears once at the other endpoint",
+      "Admin changes ordinary Bot from passive to active",
+      "Owner transfer and transfer back update both pages; former owner loses owner-only controls",
+      "Same-origin production frame widths 508/700/1024 have equal viewport and scrollWidth; 508px member row width 285"
+    ],
+    "screenshots": "Captured and visually inspected in the task tool record; no exported image file is claimed",
+    "nativeOsResize": "NOT_RUN",
+    "conversationId": "395b0dbd-698a-4977-97e9-823e0fe3ef5c",
+    "note": "Browser matrix used the earlier Governance UI 5a3986eb group; final automated rerun uses its own nonce."
+  },
+  "boundaries": [
+    "Owner identity can be Human or Bot creator; no inheritance by Human owner or Chief label",
+    "New invitees default Human readOnly / Bot passive; existing v1 speakers retained",
+    "Passive final requires one real stored AI delivery grant; references alone do not authorize",
+    "Remote Session tools are limited to current conversation and communication allowlist",
+    "Isolated workspace prevents private-project instruction import into fresh communication context",
+    "Real-model resistance is not proven by deterministic Mock"
+  ],
+  "notRun": [
+    "Different IP/WSS/NAT/public deployment",
+    "Real model semantic/injection robustness",
+    "Other operating systems"
+  ],
+  "cleanup": {
+    "ownedTestProcesses": "All 22 recorded processes in 11 named benches verified stopped",
+    "browser": "task-created pages closed; original user page retained",
+    "credentials": "Hub pairing values stayed in process memory; no persistent real account/model credential was added. Normal isolated DSH startup authentication remains only in ignored local test data/logs, never printed or published.",
+    "pushOrDeploy": false,
+    "testPortsReleased": true
+  },
+  "codeHashes": {
+    "communication-hub/src/store.js": "501a9c4b0199fc3eacd498232a25fc5fdc29edcb73db66593ce62502a64aea25",
+    "ds-bot/src/host/communication.js": "6ed2a4d6e0acb7a2fe12a4e4df7e7f4f21f5c48361a6afcd10b310160218c6b8",
+    "ds-bot/src/host/federation/runtime.js": "8edd4041e53f5686c67e33a151e2e0b8a74b6cabb70667ab111e14417c97e42b",
+    "ds-bot/src/host/federation/prompt.js": "ad2c62ba2fccf1866270435e52b5090e90b699b81991740c8f5a49430096c846",
+    "ds-bot/src/host/federation/tool-scope.js": "1a12ea8949dd9dffc6416f4b5be55702acc9250fdef60d9ea89a69661cfc317c",
+    "ds-bot/client.js": "7d26b78163d480b4928af2728e953a25aa0d8e05275a3fd388b41cd94720a205",
+    "ds-bot/src/host/prompt.js": "112b24bc8f9f54caef909d431e4b43fa599ae2c3bef7e3c2534d8fb1cc0647db"
+  },
+  "publication": {
+    "privacyMetadataRedacted": true,
+    "sourceHashesDescribeOriginalLocalSnapshots": true,
+    "pathPlaceholders": "CurrentUser / LOCALAPPDATA; raw local test artifacts remain untracked"
+  }
+}

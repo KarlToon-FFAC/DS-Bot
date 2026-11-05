@@ -11,8 +11,8 @@ $plugin = Join-Path $repo 'ds-bot'
 $appDir = Join-Path $repo 'app'
 if (-not [IO.Path]::IsPathRooted($DataRoot)) { $DataRoot = Join-Path $repo $DataRoot }
 $DataRoot = [IO.Path]::GetFullPath($DataRoot)
-$node = (Get-Command node -ErrorAction Stop).Source
-$npm = (Get-Command npm.cmd -ErrorAction Stop).Source
+$node = (Get-Command node.exe -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
+$npm = (Get-Command npm.cmd -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
 
 function Invoke-Npm {
     param([string]$Directory, [string[]]$Arguments)
@@ -87,7 +87,7 @@ try {
     }
     Write-Host "Persistent data: $DataRoot"
     if ($PrepareOnly) { Write-Host 'Ready. Run start.ps1 to open DS Bot.'; return }
-    Write-Host 'Starting DS Bot. Configure model providers in Settings; close the window to stop.'
+    Write-Host 'Starting DS Bot. Configure model providers in Settings; use Quit to stop the app.'
     Invoke-Npm $appDir @('start')
 } finally {
     foreach ($name in $envNames) {

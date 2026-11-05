@@ -1,0 +1,20 @@
+{
+  "execute": false,
+  "model": "gpt-6-luna",
+  "officialOrigin": "https://api.openai.com",
+  "api": "openai-responses",
+  "credentialEnv": "DSBOT_COMMUNICATION_OPENAI_TEST",
+  "localGuardCredentialEnv": "DSBOT_COMMUNICATION_OPENAI_LOCAL",
+  "budget": {
+    "maxRequests": 8,
+    "maxInputTokens": 12000,
+    "maxOutputTokens": 1024,
+    "maxTotalInputTokens": 96000,
+    "maxTotalOutputTokens": 8192,
+    "maxCostMicroUsd": 0
+  },
+  "reasoningEffort": "none",
+  "retryPolicy": { "mode": "normal", "maxRetries": 0 },
+  "pricesVerifiedAt": "2026-11-03",
+  "note": "Preparation only. Real execution disabled, account access unverified, spending not approved. Eight slots count metadata, exact token preflight and generation; at most four generations, or three after a metadata probe."
+}

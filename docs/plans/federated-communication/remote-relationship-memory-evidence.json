@@ -1,0 +1,42 @@
+{
+  "status": "PASS",
+  "verifiedAt": "2026-11-05T07:27:00Z",
+  "sourceBaseline": "9565e9d",
+  "execution": "local cloud computer only; no GitHub Actions or external model calls",
+  "unitTests": { "total": 1719, "passed": 1715, "failed": 0, "skipped": 4 },
+  "relationshipUnitTests": { "passed": 11, "failed": 0 },
+  "lint": { "exitCode": 0, "newRelationshipWarnings": 0, "existingWarningsRetained": true },
+  "generatedClientCheck": "PASS; no generated client changes",
+  "nativeMockSmoke": { "stepsPassed": 52, "stepsFailed": 0 },
+  "relationshipMock": {
+    "runtime": "two real isolated DSH instances plus local Hub",
+    "model": "local deterministic Mock",
+    "network": "same-machine loopback",
+    "status": "PASS",
+    "cases": [
+      "model-tool-canonical-source-and-recall",
+      "actual-prompt-group-and-Bot-isolation",
+      "explicit-local-profile-and-storage-restart",
+      "rejoin-excludes-old-epoch-retains-explicit-profile",
+      "actual-isolated-tool-view-keeps-local-tools-unavailable"
+    ],
+    "ownedProcessesStopped": true,
+    "launcher": "companion cloud launcher commit 3b11626 used for Linux verification, not duplicated in this feature"
+  },
+  "independentReview": {
+    "blockingFindingsRemaining": 0,
+    "targetedTestsIndependentlyPassed": 11,
+    "fixedFindings": [
+      "old-source replay cannot refresh historical leadership",
+      "contact profile saves query selected-Bot contacts instead of an instance-wide directory union"
+    ]
+  },
+  "limits": [
+    "No real-model behavioral compliance claim; synthetic real-model checks remain separate",
+    "No physical cross-machine network acceptance",
+    "No new GUI relationship editor",
+    "Soft collaboration guidance is not enforced task-assignment authorization",
+    "Existing own main-memory injection remains a separate option",
+    "Forgetting does not erase prior model requests, Session/tool history or published replies"
+  ]
+}

@@ -1,0 +1,232 @@
+{
+  "date": "2026-11-05",
+  "baseCommit": "115f6d9",
+  "environment": "DESKTOP-88GMTT4; isolated synthetic dual DSH instances and loopback durable Hub",
+  "model": "gpt-6-luna",
+  "credentialsIncluded": false,
+  "realConversationsUsed": false,
+  "runs": [
+    {
+      "runId": "dc013b8d",
+      "status": "PASS_REAL_DSH_HUB",
+      "requests": 12,
+      "generations": 6,
+      "reservedRequests": 71,
+      "cleanup": true,
+      "cases": [
+        {
+          "id": "real-human-a-b-a",
+          "status": "PASS",
+          "root": "1d3c709b-0639-48d2-9872-5d9947f5e64f",
+          "final": "ada8ff65-8594-47a8-87fa-d25f31f38b3c",
+          "aMessages": 2,
+          "bMessages": 1,
+          "inputCounts": [
+            0,
+            0
+          ]
+        },
+        {
+          "id": "real-roundtrip-replay-restart",
+          "status": "PASS",
+          "messages": 4,
+          "extraRequests": 0
+        }
+      ],
+      "modeledGenerationCostUsdUpperBound": 0.0058467499999999995,
+      "workStartedEvents": 3,
+      "publicMessages": [
+        {
+          "messageId": "1d3c709b-0639-48d2-9872-5d9947f5e64f",
+          "author": "human:b51bb524-faf4-4e36-9d81-477433970b06:a4581dc4-df0e-455e-975b-0b3d01f87da8",
+          "text": "StudyA: Delegate the arithmetic check 19+23 to StudyB (bot:519fc185-afdd-44cc-9ef1-c0e326c15af7:f500b16e-2ac1-4d1f-8523-5445249981ac) using set_communication_reply_targets, and ask StudyB to send the verified answer back to you (bot:b51bb524-faf4-4e36-9d81-477433970b06:a0dff482-8299-4183-b86c-945d011ba4f1) using the same structured target tool. Publish the request as your final message. When StudyB returns its answer, verify it and tell the human ROUNDTRIP_RESULT=42 without targeting any Bot. Do not just acknowledge.",
+          "activationTargets": []
+        },
+        {
+          "messageId": "90d40c3c-dd0c-463c-b2ed-b8ee495408d7",
+          "author": "bot:b51bb524-faf4-4e36-9d81-477433970b06:a0dff482-8299-4183-b86c-945d011ba4f1",
+          "text": "StudyB, please verify 19 + 23 and send the answer back to me.",
+          "activationTargets": [
+            {
+              "principalId": "bot:519fc185-afdd-44cc-9ef1-c0e326c15af7:f500b16e-2ac1-4d1f-8523-5445249981ac"
+            }
+          ]
+        },
+        {
+          "messageId": "3d8fa53b-3b68-496e-861b-5eef8d9eb0bd",
+          "author": "bot:519fc185-afdd-44cc-9ef1-c0e326c15af7:f500b16e-2ac1-4d1f-8523-5445249981ac",
+          "text": "19 + 23 = 42. Verified.",
+          "activationTargets": [
+            {
+              "principalId": "bot:b51bb524-faf4-4e36-9d81-477433970b06:a0dff482-8299-4183-b86c-945d011ba4f1"
+            }
+          ]
+        },
+        {
+          "messageId": "ada8ff65-8594-47a8-87fa-d25f31f38b3c",
+          "author": "bot:b51bb524-faf4-4e36-9d81-477433970b06:a0dff482-8299-4183-b86c-945d011ba4f1",
+          "text": "ROUNDTRIP_RESULT=42",
+          "activationTargets": []
+        }
+      ],
+      "aiDeliveries": 3,
+      "counterCorrection": "Original case inputCounts used the wrong source-kind string and reported [0,0]. Raw events independently show [2,1], matching the second complete run.",
+      "verifiedInputCounts": [
+        2,
+        1
+      ]
+    },
+    {
+      "runId": "89884c1b",
+      "status": "STOPPED",
+      "requests": 28,
+      "generations": 14,
+      "reservedRequests": 99,
+      "cleanup": true,
+      "cases": [
+        {
+          "id": "real-human-a-b-a",
+          "status": "PASS",
+          "root": "3d5bf67c-62f3-4fd5-98de-359a32d937e0",
+          "final": "e0d4303c-3020-4007-a457-7d54105570d3",
+          "aMessages": 2,
+          "bMessages": 1,
+          "inputCounts": [
+            2,
+            1
+          ]
+        },
+        {
+          "id": "real-roundtrip-replay-restart",
+          "status": "PASS",
+          "messages": 4,
+          "extraRequests": 0
+        },
+        {
+          "id": "memory-disable-does-not-retract-persisted-final",
+          "status": "PASS",
+          "extraRequests": 0,
+          "oldResultStillPublished": true
+        },
+        {
+          "id": "memory-disabled-existing-context",
+          "status": "PASS",
+          "earlierPublicFactRetained": true
+        },
+        {
+          "id": "memory-disabled-fresh-context",
+          "status": "PASS",
+          "unknown": true
+        }
+      ],
+      "modeledGenerationCostUsdUpperBound": 0.012575749999999998,
+      "failureCode": "ERR_ASSERTION",
+      "failureExplanation": "New epoch send raced the owner membership projection; targeted follow-up waits for current membershipVersion.",
+      "workStartedEvents": 3,
+      "publicMessages": [
+        {
+          "messageId": "3d5bf67c-62f3-4fd5-98de-359a32d937e0",
+          "author": "human:0441cb9b-5022-4ceb-988d-3c21e564ab52:57022155-6c0a-468b-9cff-98cc5e4ab886",
+          "text": "StudyA: Delegate the arithmetic check 19+23 to StudyB (bot:9ab5935a-e082-4da7-94b5-622bc20a2790:bc145297-dde0-4f8a-9bdd-0aaee8b9bfb2) using set_communication_reply_targets, and ask StudyB to send the verified answer back to you (bot:0441cb9b-5022-4ceb-988d-3c21e564ab52:a38c721c-d51a-4bc7-958f-a1020f579abf) using the same structured target tool. Publish the request as your final message. When StudyB returns its answer, verify it and tell the human ROUNDTRIP_RESULT=42 without targeting any Bot. Do not just acknowledge.",
+          "activationTargets": []
+        },
+        {
+          "messageId": "170df337-61ec-490d-bd54-f43e47f52bdb",
+          "author": "bot:0441cb9b-5022-4ceb-988d-3c21e564ab52:a38c721c-d51a-4bc7-958f-a1020f579abf",
+          "text": "StudyB, please verify the sum of 19 + 23 and send your answer back to me.",
+          "activationTargets": [
+            {
+              "principalId": "bot:9ab5935a-e082-4da7-94b5-622bc20a2790:bc145297-dde0-4f8a-9bdd-0aaee8b9bfb2"
+            }
+          ]
+        },
+        {
+          "messageId": "c681026a-74d0-4d56-aaf1-1b45769f664a",
+          "author": "bot:9ab5935a-e082-4da7-94b5-622bc20a2790:bc145297-dde0-4f8a-9bdd-0aaee8b9bfb2",
+          "text": "19 + 23 = 42.",
+          "activationTargets": [
+            {
+              "principalId": "bot:0441cb9b-5022-4ceb-988d-3c21e564ab52:a38c721c-d51a-4bc7-958f-a1020f579abf"
+            }
+          ]
+        },
+        {
+          "messageId": "e0d4303c-3020-4007-a457-7d54105570d3",
+          "author": "bot:0441cb9b-5022-4ceb-988d-3c21e564ab52:a38c721c-d51a-4bc7-958f-a1020f579abf",
+          "text": "ROUNDTRIP_RESULT=42",
+          "activationTargets": []
+        }
+      ],
+      "aiDeliveries": 3
+    },
+    {
+      "runId": "81091f2d",
+      "status": "PASS_REAL_DSH_HUB",
+      "requests": 8,
+      "generations": 4,
+      "reservedRequests": 107,
+      "cleanup": true,
+      "cases": [
+        {
+          "id": "real-revoked-final-not-published",
+          "status": "PASS",
+          "oldFinalPublished": false,
+          "extraRequests": 0
+        },
+        {
+          "id": "revoked-final-not-published-new-epoch-independent",
+          "status": "PASS",
+          "oldFinalPublished": false,
+          "newAnswer": true
+        }
+      ],
+      "modeledGenerationCostUsdUpperBound": 0.00313175
+    }
+  ],
+  "limitations": [
+    "Same machine only; no production incident root cause proven.",
+    "Disabled memory does not remove existing context or retract pending completed output.",
+    "Plain final text can restate visible memory; tool isolation is not a semantic output privacy filter.",
+    "Reliable supplemental updates/read-in receipts remain unimplemented."
+  ],
+  "cumulative": {
+    "reservedRequests": 107,
+    "actualExternalRequests": 106,
+    "estimatedGenerationUsdUpperBound": 0.04620175,
+    "invoiceVerified": false,
+    "priorBudgetPreserved": true
+  },
+  "validation": {
+    "localGroupAndRequestId": {
+      "passed": 81,
+      "failed": 0
+    },
+    "memoryOnboardingSecurityInitial": {
+      "passed": 107,
+      "failed": 0
+    },
+    "finalMemoryAndInjectionSecurity": {
+      "passed": 83,
+      "failed": 0
+    },
+    "fullUnit": {
+      "tests": 1687,
+      "passed": 1683,
+      "skipped": 2,
+      "failed": 2,
+      "preexistingFailures": [
+        "communication-usability.test.js:298 reply composer expected m2, got null",
+        "style-debt.test.js:32 existing communication-styles.js 7px radius"
+      ]
+    },
+    "smoke": {
+      "steps": 52,
+      "passed": 52,
+      "failed": 0
+    },
+    "lint": "PASS with existing warnings",
+    "generatedClient": "PASS",
+    "uiVerification": "DOM interaction tests; no new visual screenshot",
+    "ownedTestProcesses": "Stopped; ports 3121,3122,8821,8822,3196,3135,8835 verified free"
+  }
+}

@@ -1,0 +1,168 @@
+{
+  "status": "PASS_LOCAL_GUI_REVIEW",
+  "timestamp": "2026-11-03T16:45:15.209Z",
+  "baseline": "ce9d74395c1eca4afcb040bd3aae21dc4283ec29",
+  "committed": false,
+  "pushed": false,
+  "scope": "frontend communication usability only; no server, protocol or permission changes",
+  "tests": {
+    "total": 1494,
+    "pass": 1492,
+    "fail": 0,
+    "originalSkipped": 2,
+    "newUsabilityCases": 3,
+    "existingFocusedUiCases": 2
+  },
+  "checks": {
+    "build": true,
+    "lint": true,
+    "generatedClientFresh": true,
+    "gitDiffCheck": true
+  },
+  "browser": {
+    "surface": "ChatGPT in-app browser",
+    "source": "production CommunicationSurface, communicationCSS and themeCss; synthetic in-memory state; simplified Markdown primitive",
+    "viewports": [
+      {
+        "width": 1280,
+        "height": 720
+      },
+      {
+        "width": 390,
+        "height": 844,
+        "pageWidth": 390
+      },
+      {
+        "width": 700,
+        "height": 900,
+        "pageWidth": 700,
+        "composerWidth": 676
+      }
+    ],
+    "drawer": {
+      "scrolledPhoneCloseButton": {
+        "scrollTop": 203,
+        "top": 16,
+        "bottom": 48
+      },
+      "closeRestoresSummaryFocus": true
+    },
+    "checked": [
+      "light/dark theme",
+      "phone list/chat navigation",
+      "group name automatic focus",
+      "explicit local/remote Human/Bot selection",
+      "group role and speech modes",
+      "unconfigured pairing",
+      "offline queue guidance"
+    ],
+    "viewportReset": true,
+    "createdTabClosed": true
+  },
+  "cleanup": {
+    "syntheticPreviewPort": 3138,
+    "listeners": 0,
+    "realTrialProcessesTouched": false,
+    "realModelCalls": 0,
+    "c2Connections": 0,
+    "credentialsAccessed": false,
+    "screenshotDimensionsVerified": true
+  },
+  "sourceHashes": {
+    "ds-bot/src/client/communication.js": "9adc3b70137e76de89f734f248f17e49ea0ca15affd3e4f81ef57c07e05c16a0",
+    "ds-bot/src/client/communication-styles.js": "3161a4e71b852186b37f2290a9626b9b7fdd77af984b87556f1d2791a45b8398",
+    "ds-bot/src/client/sidebar.js": "8e63c4736321c072cb7a2cc3d4c3a1c4c3e19f53be77895da79ba217abceb8f2",
+    "ds-bot/src/client/i18n.js": "583e52f45e4cfa5f9ff818ce3bd35f8663a007c68c39d11423f6208f2c80e599",
+    "ds-bot/client.js": "467f91722406a808235cf43ae8198dcc4487fad2a8ac43079bf82d11b82c0d4f",
+    "ds-bot/test/communication-usability.test.js": "99c1ec29e6eecde5b8ec4bd81f97747a3084f08293484db4cf12a1ba369bd257"
+  },
+  "localArtifacts": {
+    "screenshots": [
+      {
+        "path": ".dsh-test-tools/ui-review/desktop.jpg",
+        "sha256": "2a8c062903366c787161432eaed3c514aa65f6393492ccb1781bb3eb96517bee",
+        "bytes": 65504,
+        "capturedAt": "2026-11-03T16:41:55.234Z",
+        "width": 1280,
+        "height": 720
+      },
+      {
+        "path": ".dsh-test-tools/ui-review/member-drawer.jpg",
+        "sha256": "ef95f75a92fba85619f26f6c1db5e3a2e453df827debeed64191616b4927c358",
+        "bytes": 88006,
+        "capturedAt": "2026-11-03T16:42:18.086Z",
+        "width": 1280,
+        "height": 720
+      },
+      {
+        "path": ".dsh-test-tools/ui-review/mobile-chat.jpg",
+        "sha256": "cee500f6cb5a43f1564a425e44a7d95718e7b63d112d87385b3b685f86675ecf",
+        "bytes": 39322,
+        "capturedAt": "2026-11-03T16:42:55.114Z",
+        "width": 390,
+        "height": 844
+      },
+      {
+        "path": ".dsh-test-tools/ui-review/mobile-members.jpg",
+        "sha256": "d8ed694a7615f0e2d5f5503ddb301c45fb7ad9afc68496f1e136c9c4879aacf9",
+        "bytes": 41840,
+        "capturedAt": "2026-11-03T16:46:57.812Z",
+        "width": 390,
+        "height": 844
+      },
+      {
+        "path": ".dsh-test-tools/ui-review/mobile-create.jpg",
+        "sha256": "c798e71890be680533293ebdcfab2112d421912914141fb8d6b194998aa51f65",
+        "bytes": 29349,
+        "capturedAt": "2026-11-03T16:43:11.012Z",
+        "width": 390,
+        "height": 844
+      },
+      {
+        "path": ".dsh-test-tools/ui-review/tablet-chat.jpg",
+        "sha256": "5386121ba573cf31b304345639eaa97b6f0ffa8eed8b276370e5d5656f7b8e3f",
+        "bytes": 47570,
+        "capturedAt": "2026-11-03T16:43:25.882Z",
+        "width": 700,
+        "height": 900
+      },
+      {
+        "path": ".dsh-test-tools/ui-review/dark.jpg",
+        "sha256": "19f6a59f780cc245a5775fe0b6a7ab3713dda5e0a53a4d6bb0c70a4c8b90a8ad",
+        "bytes": 64728,
+        "capturedAt": "2026-11-03T16:38:22.787Z",
+        "width": 1280,
+        "height": 720
+      },
+      {
+        "path": ".dsh-test-tools/ui-review/offline.jpg",
+        "sha256": "eb81b04c7ad76d06a59a8d6740083e75cca3b272933216f65129a5d7329a5a7b",
+        "bytes": 57726,
+        "capturedAt": "2026-11-03T16:35:49.204Z",
+        "width": 1280,
+        "height": 720
+      },
+      {
+        "path": ".dsh-test-tools/ui-review/setup.jpg",
+        "sha256": "50dbaace6294c246bdc6103329a18ce4fe71841eeef5ffefe26f770da6d55a73",
+        "bytes": 24965,
+        "capturedAt": "2026-11-03T16:38:15.958Z",
+        "width": 1280,
+        "height": 720
+      }
+    ],
+    "testLogSha256": "3aee789b559a608369b2c0a74dfda2d32a0c550353a8726c71d3cdf421d00121",
+    "lintLogSha256": "390ecf6947613fe201dec13e808f16623a7c0b66396f2fcba7ee4cf6127d7554"
+  },
+  "limitations": [
+    "Screenshot fixture is not a live DSH/Hub or two-machine acceptance test",
+    "Markdown rendering simplified in screenshot fixture",
+    "Running user app was not restarted to load the new client",
+    "Changes remain local and uncommitted"
+  ],
+  "publicationScan": {
+    "tree": "HEAD plus reviewed uncommitted GUI files",
+    "mustFix": 0,
+    "acceptedInformational": 628
+  }
+}

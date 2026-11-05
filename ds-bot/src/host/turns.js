@@ -316,16 +316,9 @@ export function install(rt) {
   // message to it is answered privately.
   const speaksInGroup = (id, info) => rt.groupOwners.has(id) && !(info !== undefined && expectsReply(info))
 
-  // The group hears what the member says while it works. A text with a tool call goes
-  // on at once; one without may be the turn's last, so it waits for the next text or the
-  // turn's end, which shows the rest as the turn's reply.
-  const showSteps = (id, entry, upTo) => {
-    const info = entry.info
-    if (entry.suppressedSubagent || !speaksInGroup(id, info) || (info?.role === 'room' && stoppedRoomTurns.has(info.exchangeId))) return
-    for (; entry.shown < upTo; entry.shown += 1) {
-      const text = stripWrittenCalls(entry.texts[entry.shown])
-      if (text !== '') void rt.roomStepText?.(id, info, text, entry.shown === 0)?.catch(error => rt.warn('ds-bot: step text from %s not posted: %s', id, error))
-    }
+  // Intermediate text remains in the execution Session. Only the final is public.
+  const excludeSteps = (id, entry, upTo) => {
+    if (speaksInGroup(id, entry.info)) entry.shown = Math.max(entry.shown, upTo)
   }
 
   // The reply a sender waits for, also when it wrote from a group, where it gets the
@@ -576,6 +569,7 @@ export function install(rt) {
         entry.since = event.time ?? Date.now()
         entry.texts = []
         entry.shown = 0
+        entry.publicPosted = false
         entry.step = undefined
         entry.info = undefined
         entry.toolCount = 0
@@ -602,6 +596,7 @@ export function install(rt) {
           entry.carry = undefined
           entry.texts = carry.texts
           entry.shown = carry.shown
+          entry.publicPosted = carry.publicPosted === true
           entry.answers = carry.answers
           entry.joined = carry.joined
           entry.later = carry.later
@@ -779,7 +774,7 @@ export function install(rt) {
         if (text !== '' && text !== HANDOFF_ACK) {
           // What a turn says goes on to the group or the sender, read from other folders.
           entry.texts.push(absoluteLinks(text, rt.sessionFolder?.(session)))
-          if (entry.turn !== undefined) showSteps(id, entry, called ? entry.texts.length : entry.texts.length - 1)
+          if (entry.turn !== undefined) excludeSteps(id, entry, called ? entry.texts.length : entry.texts.length - 1)
         }
         entry.lastText = text
         entry.lastCalled = called
@@ -795,13 +790,13 @@ export function install(rt) {
         const steerCut = cut !== undefined && event.data?.reason?.kind === 'aborted'
           && event.data.reason.reason?.kind === 'hook' && event.data.reason.reason.reason === STEER_CUT
         if (steerCut) {
-          entry.carry = { info: entry.info, joined: entry.joined ?? [], later: entry.later ?? [], texts: entry.texts.slice(0, cut.texts), shown: entry.shown, answers: entry.answers, toolCount: entry.toolCount ?? 0 }
+          entry.carry = { info: entry.info, joined: entry.joined ?? [], later: entry.later ?? [], texts: entry.texts.slice(0, cut.texts), shown: entry.shown, publicPosted: entry.publicPosted, answers: entry.answers, toolCount: entry.toolCount ?? 0 }
         }
         const info = entry.info
         const joined = entry.joined ?? []
-        // What the group already saw of the turn is not posted again.
+        // Exclude intermediate execution text from the public final.
         const texts = entry.texts.slice(entry.shown)
-        const shown = entry.shown > 0
+        const shown = entry.publicPosted === true
         const { lastText, lastCalled } = entry
         const toolCount = entry.toolCount ?? 0
         const suppressedSubagent = entry.suppressedSubagent === true
@@ -811,6 +806,7 @@ export function install(rt) {
         entry.info = undefined
         entry.texts = []
         entry.shown = 0
+        entry.publicPosted = false
         entry.step = undefined
         entry.toolCount = 0
         entry.suppressedSubagent = false
@@ -861,8 +857,6 @@ export function install(rt) {
         const retry = (wroteCall || promisedOnly) && info?.retried !== true && !(info?.role === 'room' && stoppedRoomTurns.has(info.exchangeId))
         if (retry) {
           if (promisedOnly) {
-            const opening = stripWrittenCalls(lastText ?? '')
-            if (opening !== '') void rt.roomStepText?.(id, info, opening, !shown)?.catch(() => {})
             roomWaiters.get(info.exchangeId)?.touch()
             void retryPromisedWork(id, info).catch(error => rt.warn('ds-bot: asking %s to run its promised work failed: %s', id, error))
           } else {

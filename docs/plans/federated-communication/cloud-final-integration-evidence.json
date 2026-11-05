@@ -1,0 +1,271 @@
+{
+  "status": "PASS_FINAL_INTEGRATION",
+  "verifiedAt": "2026-11-05T11:21:20.949792+00:00",
+  "testedCodeCommit": "233a01f8e17fe44a38b7b0110869e6ce3743a0b1",
+  "testedCodeTree": "c1610bad85c3d3f906d0aff00f48a457733f8bfc",
+  "evidenceParentCommit": "a5c89b9c8d20272f418d2a79890649be9e389950",
+  "applicationCodeUnchangedSinceTestedCommit": true,
+  "postTestChanges": "Documentation and verification JSON only.",
+  "branch": "chore/cloud-federation-followup",
+  "publishedBase": "d61b42a9d369b097143ad9b767847d8662439bf7",
+  "environment": {
+    "platform": "linux",
+    "node": "v24.22.1",
+    "network": "Same-machine loopback; independent persistent WS/WSS Hubs and isolated actual DSH hosts.",
+    "model": "Local deterministic Mock only."
+  },
+  "serialStages": [
+    {
+      "stage": "recovery",
+      "status": "PASS",
+      "completedAt": "2026-11-05T10:59:24Z"
+    },
+    {
+      "stage": "plugin",
+      "status": "PASS",
+      "completedAt": "2026-11-05T11:00:10Z"
+    },
+    {
+      "stage": "lint",
+      "status": "PASS",
+      "completedAt": "2026-11-05T11:00:11Z"
+    },
+    {
+      "stage": "client",
+      "status": "PASS",
+      "completedAt": "2026-11-05T11:00:11Z"
+    },
+    {
+      "stage": "probe",
+      "status": "PASS",
+      "completedAt": "2026-11-05T11:00:12Z"
+    },
+    {
+      "stage": "whitespace",
+      "status": "PASS",
+      "completedAt": "2026-11-05T11:00:12Z"
+    },
+    {
+      "stage": "hub",
+      "status": "PASS",
+      "completedAt": "2026-11-05T11:00:24Z"
+    },
+    {
+      "stage": "behavior",
+      "status": "PASS",
+      "completedAt": "2026-11-05T11:01:30Z"
+    },
+    {
+      "stage": "native",
+      "status": "PASS",
+      "completedAt": "2026-11-05T11:06:04Z"
+    },
+    {
+      "stage": "network",
+      "status": "PASS",
+      "completedAt": "2026-11-05T11:08:48Z"
+    },
+    {
+      "stage": "contact-removal",
+      "status": "PASS",
+      "completedAt": "2026-11-05T11:09:58Z"
+    },
+    {
+      "stage": "hub-lifecycle",
+      "status": "PASS",
+      "completedAt": "2026-11-05T11:10:49Z"
+    },
+    {
+      "stage": "openai-mock",
+      "status": "PASS",
+      "completedAt": "2026-11-05T11:11:59Z"
+    },
+    {
+      "stage": "relationship",
+      "status": "PASS",
+      "completedAt": "2026-11-05T11:13:04Z"
+    },
+    {
+      "stage": "ip-notes",
+      "status": "PASS",
+      "completedAt": "2026-11-05T11:14:26Z"
+    }
+  ],
+  "results": {
+    "plugin": {
+      "total": 1879,
+      "passed": 1875,
+      "failed": 0,
+      "skipped": 4
+    },
+    "hub": {
+      "total": 142,
+      "passed": 142,
+      "failed": 0,
+      "skipped": 0
+    },
+    "behavior": {
+      "passed": 11,
+      "failed": 0
+    },
+    "native": {
+      "passed": 52,
+      "failed": 0
+    },
+    "network": {
+      "passed": 8,
+      "failed": 0
+    },
+    "recovery": {
+      "passed": 7,
+      "failed": 0
+    },
+    "contact-removal": {
+      "passed": 6,
+      "failed": 0
+    },
+    "hub-lifecycle": {
+      "passed": 7,
+      "failed": 0
+    },
+    "openai-mock": {
+      "passed": 7,
+      "failed": 0
+    },
+    "relationship": {
+      "passed": 6,
+      "failed": 0
+    },
+    "ip-notes": {
+      "passed": 3,
+      "failed": 0
+    }
+  },
+  "pluginTestCommand": "node --import ./test/harness-resolve.mjs --test --test-concurrency=4 \"test/*.test.js\"",
+  "openaiMockLoopbackRequests": 6,
+  "recoveryPromptRpc": {
+    "status": "PASS",
+    "passed": 5,
+    "failed": 0,
+    "testedCommit": "233a01f8e17fe44a38b7b0110869e6ce3743a0b1",
+    "evidence": "docs/plans/federated-communication/recovery-prompt-rpc-evidence.json",
+    "evidenceSha256": "39433110e97a9c6e307106789254864c16e06fdf6f2205358f89f8bd5cc3afed",
+    "cases": [
+      {
+        "id": "reconnect",
+        "status": "PASS",
+        "normalHostRestartVerified": true
+      },
+      {
+        "id": "revoked",
+        "status": "PASS",
+        "normalHostRestartVerified": true
+      },
+      {
+        "id": "new-epoch",
+        "status": "PASS",
+        "normalHostRestartVerified": true
+      },
+      {
+        "id": "user-cancel",
+        "status": "PASS",
+        "normalHostRestartVerified": true
+      },
+      {
+        "id": "model-error",
+        "status": "PASS",
+        "normalHostRestartVerified": true
+      }
+    ],
+    "positive": "Two different recovery notices each suffer an exact held pre-request authorization RPC socket loss; one original input/epoch, one final message, unchanged final ID after cold restart and reconnect.",
+    "negative": "Revocation, new epoch, explicit user cancellation and actual provider error do not revive the old input through repeated reconnect and cold restart; a new current-epoch input works normally; provider error has a real request/header and exactly one same-session Mock400."
+  },
+  "staticChecks": {
+    "lint": "PASS_WITH_EXISTING_WARNINGS",
+    "generatedClient": "PASS",
+    "probeClient": "PASS",
+    "diffCheck": "PASS"
+  },
+  "independentSafetyReview": {
+    "blockingFindings": 0,
+    "reviewedCodeCommit": "233a01f8e17fe44a38b7b0110869e6ce3743a0b1",
+    "scope": "Static review of local error identity, owned guard, signal/connection generation, exact journal attempt boundaries, source/epoch authorization, notice chains and cancellation across cold restart. No extra test process was started."
+  },
+  "ownedCleanup": {
+    "serialRunnerExit": 0,
+    "rpcRunnerExit": 0,
+    "ownedBenchesStopped": true,
+    "loopbackPortsChecked": 37,
+    "portsStillBound": 0,
+    "unknownProcessesTerminated": false
+  },
+  "preservedFailures": {
+    "priorUiAndNative": "cloud-ui-ip-integration-evidence.json",
+    "priorFiniteMatrix": "cloud-final-base-integration-evidence.json",
+    "originalRpcFailure": "recovery-prompt-rpc-baseline-evidence.json",
+    "originalRpcFailureSha256": "cd067f85a7dc6e3b04ca65789bcf472bc569b843a2a4b1e843358c1ee231c237",
+    "policy": "Original failures and NOT_RUN ranges remain historical evidence; later passes do not rewrite them."
+  },
+  "sourceAudit": {
+    "scanner": "Unmodified scripts/scan.mjs",
+    "scope": "The complete staged Git tree including final documentation and this evidence JSON.",
+    "mustFix": 0,
+    "syntheticFixtureLabels": "Known self-created test credentials are explicitly labelled test; no scan rule was weakened."
+  },
+  "sourceSha256": {
+    "ds-bot/src/host/federation/runtime.js": "162e070307f167b11627267ad74d82fc4872e3cf7542d80927876b19ffa29cb7",
+    "ds-bot/src/host/federation/session-journal.js": "ca19a18f6a9e61dc245e84c040025604e9aea06a571d517ba5f84d3b5f721fb0",
+    "ds-bot/src/host/federation/transport.js": "0684d29e4d5c5941971a02755bd4975707934590e63507f5094b8e486383a583",
+    "ds-bot/src/host/federation/diagnostics.js": "acbcd751ecb09abb5e69da95b5890920e3d6bca4094f6947e2b799c4c525f8f0",
+    "ds-bot/src/host/federation/local-management.js": "0c6b4aa04d98b349b925467253fd8a0d1e69a09fc71055393acdba88d9102585",
+    "ds-bot/src/host/federation/relationship-memory.js": "d4f06cb83e5475714215ebe64ba9f1806a185868867c19f7c6e0a5df0b365b06",
+    "ds-bot/src/host/tools.js": "76425a6193943c5d8ddb7e8793e91c419756f5ca13c33998d7437f3bf29310d6",
+    "ds-bot/src/host/communication.js": "6f523953e383a50fdd7f996960e177fe2a4a7fb2ecef3a57c441b36afffa5c47",
+    "ds-bot/src/client/communication.js": "f8e353390106b13f2c2afcffa3cf213cd8e74262449283b61a3fb7ed7a1a614b",
+    "ds-bot/src/client/communication-onboarding.js": "f28d600aa7dc4e4a90e70abc5e26725403f088a72ab8593c2be264cb0bfb27dc",
+    "ds-bot/client.js": "3ba74a64fb99345eefaa0c8043844ea5a0125935dbdaaf66c08f51caff7607ff",
+    "communication-hub/src/store.js": "3422668f0df1c23eebcf6ba5222574265fb760d6ca15110b994b2897ee276556",
+    "communication-hub/src/server.js": "04e3e3c8248e563562c450df782944b8243f6917a795e3c4e27f5b1a2e8a0709",
+    "communication-hub/src/management-http.js": "bacf82defb9c59b82463d3e000611b8b6855507b40469db3671524c08e5b42c4",
+    "communication-hub/src/management-ui.js": "628d58a422a8aca55c69c12df90854cb88c176148c99cc74fc71175368e82899",
+    "ds-bot/dev/mock-llm.mjs": "0d2fa55ffe42228d6a076cdccf8e70bcc5bd46debdac0898650a3e46d7c3e874",
+    "ds-bot/dev/communication/bench-linux.mjs": "2f5556bd8fd657f97238dc8d20324054804b4cfdebc4141995f2edd314bd5803",
+    "ds-bot/dev/communication/openai-budget.mjs": "ccd56cc6c44a50b2484f8a638b6ffca31b469e2dd99bb84fdfb4f319c9348f77",
+    "ds-bot/dev/communication/recovery-prompt-rpc-acceptance.mjs": "50d07ba87f2c1f429937e5cb1925ffdeab09d98f96cf2c4b590588bf9e788ea7",
+    "ds-bot/dev/communication/probe-plugin/index.js": "8e2af45621982ba60a36ec639c482a2b7a8a308531c2a6da0deac7a9c14b8cee"
+  },
+  "stageLogSha256": {
+    "recovery": "ef00a34822c5c12779699d1148a1fe4609a7b1b2d396b5dd5e2834e3d1895393",
+    "plugin": "21d8a540577211f200b55960ec2f6ada478653a5b63abec834f2345d7d958581",
+    "lint": "d1dfe13267cb22c0bb5c0ea1c16280bc3c522d1ac4dabd3ac08e76307a939639",
+    "client": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "probe": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "whitespace": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "hub": "7a9a9c5a9cfe5f4243c333a258a345ff2223b011a50b42f2d43b3eea38905fc3",
+    "behavior": "d065d959eacfb930a5fb323be03308a110f230fc0365d7f82ea84834d7e90878",
+    "native": "8fd00b72ebf482904343f2b9ddeb6066aae2ea3d902244c5a4bb1c9ab42bece9",
+    "network": "8d237c0a68bae6cb876d47873a693a32ba9d3415ca564e28021dfe6265d521a9",
+    "contact-removal": "42156572178058ee011c24829f6a6422a36e9821a0f35ed7c80595cef2153d1c",
+    "hub-lifecycle": "814018b37a91fbe4ca42bd28d570f09cc0147c8f90a7dfc076f2137242b37e68",
+    "openai-mock": "7a65a3a8cd608bceada8b4fb992b4953dcbce4e222bb56c035d72d2106dd4024",
+    "relationship": "fe9c9f0b252e8db8ec6067bfccc50d38ee010e412d22c574d5a6fedaa02d9805",
+    "ip-notes": "95801e477a3ebb1042090e45296cf2b0dd6d40cbf381b30fac1a82e4f5ff6b6e"
+  },
+  "scope": {
+    "realModelCalls": false,
+    "credentialsRequestedReadOrTransferred": false,
+    "push": false,
+    "actionsTriggered": false,
+    "otherTrackedWorktreesModified": false
+  },
+  "remainingLimits": [
+    "Four existing skipped unit tests are not passes.",
+    "Native Windows runtime, physical cross-machine networking and real provider/model behavior were not verified.",
+    "Latest live-management UI has DOM regression evidence; this run does not establish independent live-DSH browser pixel/layout validation.",
+    "A relationship-memory GUI editor is not implemented; Mock tests do not prove soft collaboration guidance with a real model.",
+    "Retry is limited to proven local pre-model authorization connection failure. Timeouts, other authorization or middleware failures and extra journal events can fail closed.",
+    "The private retry proof is process-local. If the host is lost again after the error is durable, proof loss conservatively stops recovery.",
+    "Repeated genuine failures in the same pre-request window have transport scheduling/backoff but no total notice-retry limit; journal and notice-chain size can grow without eventual-completion or total-resource guarantees.",
+    "The proof excludes model/tool execution by the new failed recovery attempt. It does not guarantee exactly-once effects of the original interrupted model/tool work."
+  ]
+}

@@ -55,6 +55,8 @@
 // Non-streaming requests with web_search_* tools are treated as native search, and
 // POST /api/web_search is an Ollama-shaped search API for the searchApis config.
 import { createServer } from 'node:http'
+import { watchOwnedParent } from './communication/owned-parent.mjs'
+watchOwnedParent()
 import { createHash } from 'node:crypto'
 import { appendFileSync, mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
@@ -124,6 +126,64 @@ function decide(body) {
   }).filter(message => message.role !== 'user' || message.content.length > 0)
   const last = messages.at(-1)
   const blocks = Array.isArray(last?.content) ? last.content : []
+  if (tools.has('send_contact_message')) {
+    const communicationResults = isResults(last) && blocks.findLastIndex(block => block.type === 'tool_result')
+      > blocks.findLastIndex(block => block.type === 'text' && block.text.includes('[Communication delivery]'))
+    const current = textOf(last?.content)
+    const relationshipInput = textOf(messages.findLast(message => message.role === 'user' && textOf(message.content).includes('[Communication delivery]'))?.content)
+    const relationship = /^COMM-RELATIONSHIP (SAVE|READ|PROMPT) (\S+) (.+)$/m.exec(relationshipInput.split('Current message:\n').at(-1))
+    if (relationship) {
+      const [, action, tag, value] = relationship
+      if (action === 'PROMPT') return [text(`Relationship prompt ${tag} ${system.includes(value) ? 'PRESENT' : 'ABSENT'}`)]
+      if (communicationResults) {
+        const result = blocks.filter(block => block.type === 'tool_result').map(block => textOf(block.content)).join('\n')
+        return [text(action === 'SAVE' ? `Relationship saved ${tag}` : `Relationship recalled ${tag} ${result}`)]
+      }
+      const args = JSON.parse(value)
+      return [tool(action === 'SAVE' ? 'remember_communication_relationship' : 'read_communication_relationships',
+        { ...args, ...(action === 'SAVE' ? { sourceMessageId: /Message ID: ([^\n]+)/.exec(relationshipInput)?.[1] } : {}) })]
+    }
+    const receiptCommand=/^COMM-RECEIPT (\S+) (\S+) (\S+)$/m.exec(textOf(messages.findLast(message=>message.role==='user'&&textOf(message.content).includes('[Communication delivery]'))?.content))
+    if(receiptCommand)return communicationResults?[text('Sent @CollabB, status pending. Internal tool receipt.')]:[tool('send_contact_message',{conversationId:receiptCommand[1],activationTargets:[receiptCommand[2]],text:`COMM-COLLAB DONE ${receiptCommand[3]} @CollabB`})]
+    const recovering = current.startsWith('[Local transport recovery notice]')
+    const stagedHandoff = isResults(last) && blocks.some(block => block.type === 'tool_result' && JSON.stringify(block.content).includes('staged'));
+    const commandText = (recovering || stagedHandoff) ? messages.findLast(message => message.role === 'user' && textOf(message.content).includes('[Communication delivery]'))?.content : last?.content
+    const command = textOf(commandText).split('Current message:\n').at(-1).trimStart().split('\n')[0].trim()
+      const collaboration = /^COMM-COLLAB FINAL (\d+) (\S+) (\S+) (\S+)(?:\s+@\S+)*$/.exec(command)
+      if ((!communicationResults || stagedHandoff) && collaboration) {
+        const remaining = Number(collaboration[1]), [, , tag, nextName, returnName] = collaboration
+        if (remaining > 0 && !stagedHandoff) return [tool('set_communication_reply_targets', { allBots: true, replyToMessageId: /Message ID: ([^\n]+)/.exec(textOf(commandText))?.[1] })]
+        return [text(remaining > 0 ? `COMM-COLLAB FINAL ${remaining - 1} ${tag} ${returnName} ${nextName} @${nextName}` : `COMM-COLLAB DONE ${tag}`)]
+      }
+      const collaborationAll = /^COMM-COLLAB ALL (\S+)$/.exec(command)
+      if ((!communicationResults || stagedHandoff) && collaborationAll) return stagedHandoff ? [text(`COMM-COLLAB DONE ${collaborationAll[1]} @all`)] : [tool('set_communication_reply_targets', { allBots: true, replyToMessageId: /Message ID: ([^\n]+)/.exec(textOf(commandText))?.[1] })]
+      const collaborationDone = /^COMM-COLLAB DONE (\S+)(?:\s+@\S+)*$/.exec(command)
+      if (!communicationResults && collaborationDone) return [text(`Collaboration done ${collaborationDone[1]}`)]
+      const collaborationReply = /^COMM-COLLAB REPLY (\S+) (\S+) (\S+)$/.exec(command)
+      if (!communicationResults && collaborationReply) return [tool('send_contact_message', { conversationId: collaborationReply[1], replyToMessageId: collaborationReply[2], text: `COMM-ECHO ${collaborationReply[3]}`, mentions: [] })]
+      const collaborationBurst = /^COMM-COLLAB BURST (\S+) (\S+) (\d+) (\S+)$/.exec(command)
+      if (!communicationResults && collaborationBurst) {
+        const count = Number(collaborationBurst[3])
+        if (count < 1 || count > 40) return [text('Collaboration burst count rejected')]
+        return Array.from({ length: count }, (_, index) => tool('send_contact_message', { conversationId: collaborationBurst[1], text: `COMM-COLLAB DONE ${collaborationBurst[4]}-${index}`, mentions: [collaborationBurst[2]],continueReply:true }))
+      }
+    const restate = /^COMM-RESTATE (single|all|quote) (\S+)$/.exec(command)
+    if (!communicationResults && restate) return [text(`${restate[1] === 'quote' ? '> ' : ''}Summary ${restate[2]} ${restate[1] === 'all' ? '@all' : '@CollabB'}`)]
+    const send = /^COMM-SEND (\S+) ([^\n]+)$/.exec(command)
+    if (!communicationResults && send) return [tool('send_contact_message', { contactPrincipalId: send[1], text: `COMM-ECHO ${send[2]}` })]
+    const post = /^COMM-POST (\S+) (\S+) (.+)$/.exec(command)
+    if (!communicationResults && post) return [tool('send_contact_message', { conversationId: post[1], text: post[3], mentions: post[2] === '-' ? [] : post[2].split(',') })]
+    const history = /^COMM-READ (\S+)$/.exec(command)
+    if (!communicationResults && history) return [tool('read_communication_history', { conversationId: history[1], limit: 100 })]
+    if (!communicationResults && command === 'COMM-LIST') return [tool('list_communication_conversations', {})]
+    if (/^COMM-MODEL-ERROR (\S+)$/.test(command)) return 'fail'
+    const echo = /^COMM-ECHO ([^\n]+)$/.exec(command)
+      // Echoed mentions are quoted data; intentional delegation uses COMM-COLLAB.
+      if (!communicationResults && echo) return [text(`${echo[1].includes('@') ? '> ' : ''}Communication reply ${echo[1]}`)]
+    const delayed = /^COMM-DELAY-ECHO (\d+) ([^\n]+)$/.exec(command)
+    if (!communicationResults && delayed) return Object.assign([text(`Communication reply ${delayed[2]}`)], { delay: Number(delayed[1]) })
+    if (system.includes('This Session belongs only to one explicit communication conversation')) return [text('')]
+  }
   // A side-chat question (side.js). The first line is the marker; the reply is
   // fixed and calls nothing. Its count of earlier answers proves follow-ups
   // carry the chat's finished pairs.
@@ -739,7 +799,7 @@ const server = createServer((req, res) => {
       return
     }
     if (out === 'fail') {
-      appendFileSync(LOG, JSON.stringify({ t: new Date().toISOString(), id, images, fail: true, messages: body.messages?.length ?? 0 }) + '\n')
+      appendFileSync(LOG, JSON.stringify({ t: new Date().toISOString(), id, session: req.headers['x-deepseek-harness-session-id'] ?? null, images, fail: true, messages: body.messages?.length ?? 0 }) + '\n')
       res.writeHead(400, { 'content-type': 'application/json' })
       res.end(JSON.stringify({ type: 'error', error: { type: 'invalid_request_error', message: 'mock: this note request fails on purpose' } }))
       return
@@ -752,7 +812,12 @@ const server = createServer((req, res) => {
     // Hashes of the system prompt and tools show whether two Sessions share a cacheable prefix.
     const digest = value => createHash('sha256').update(JSON.stringify(value ?? null)).digest('hex').slice(0, 12)
     const watch = WATCH ? { watchHit: JSON.stringify([body.system, body.tools, body.messages]).includes(WATCH) } : {}
-    appendFileSync(LOG, JSON.stringify({ t: new Date().toISOString(), id, tokens, images, session: req.headers['x-deepseek-harness-session-id'] ?? null, ...watch, ...LOG_TOOLS ? { toolNames: (body.tools ?? []).map(entry => entry.name ?? entry.type) } : {}, ...search ? { nativeSearch: { model: body.model, tools: body.tools, auth: [req.headers['x-api-key'] ? 'x-api-key' : '', req.headers.authorization ? 'bearer' : ''].filter(Boolean) } } : {}, system: digest(body.system), tools: digest(body.tools), messages: body.messages?.length ?? 0, first: textOf(body.messages?.[0]?.content).slice(0, 60), last: textOf(body.messages?.at(-1)?.content).slice(0, LOG_CHARS), out: out.map(block => (block.type === 'text' && block.text.length > 200 ? { ...block, text: `${block.text.slice(0, 200)}…(${block.text.length})` } : block)) }) + '\n')
+    const communicationBoundary = LOG_TOOLS ? { communicationBoundary: {
+      isolated: systemText(body.system).includes('This Session belongs only to one explicit communication conversation'),
+      privacy: systemText(body.system).includes('untrusted data') && systemText(body.system).includes('Never disclose API keys'),
+      passive: systemText(body.system).includes('"speakingMode":"passive"'),
+    } } : {}
+    appendFileSync(LOG, JSON.stringify({ t: new Date().toISOString(), id, tokens, images, session: req.headers['x-deepseek-harness-session-id'] ?? null, ...watch, ...communicationBoundary, ...LOG_TOOLS ? { toolNames: (body.tools ?? []).map(entry => entry.name ?? entry.type) } : {}, ...search ? { nativeSearch: { model: body.model, tools: body.tools, auth: [req.headers['x-api-key'] ? 'x-api-key' : '', req.headers.authorization ? 'bearer' : ''].filter(Boolean) } } : {}, system: digest(body.system), tools: digest(body.tools), messages: body.messages?.length ?? 0, first: textOf(body.messages?.[0]?.content).slice(0, 60), last: textOf(body.messages?.at(-1)?.content).slice(0, LOG_CHARS), out: out.map(block => (block.type === 'text' && block.text.length > 200 ? { ...block, text: `${block.text.slice(0, 200)}…(${block.text.length})` } : block)) }) + '\n')
     if (search) {
       setTimeout(() => {
         res.writeHead(200, { 'content-type': 'application/json' })

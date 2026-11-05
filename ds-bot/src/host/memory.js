@@ -35,11 +35,12 @@ import { inside, pendingPath, read as readPending, record as pendingRecord, rela
 import { splitRef, unquote } from './text.js'
 import { speakerOf } from '../shared/mentions.js'
 import { output } from './tools.js'
+import { MEMORY_LIMITS } from '../shared/memory-limits.js'
+export { MEMORY_LIMITS } from '../shared/memory-limits.js'
 
 // Fixed sizes, in characters. Both MEMORY.md files ride in every request of every
-// part, so together they stay near 8,000 characters, a few thousand tokens. A topic is
-// read whole in one recall. An entry holds one fact.
-export const MEMORY_LIMITS = { entry: 300, main: 4_000, topic: 16_000, topics: 40 }
+// part, so each has the same 10,000-character capacity. A topic is read whole in one
+// recall and keeps its existing 16,000-character capacity. An entry holds one fact.
 
 const MAIN = 'MEMORY.md'
 const EMPTY_MAIN = '# Memory\n\n## Index\n'
@@ -459,6 +460,7 @@ export function install(rt) {
   if (config.memory === false) {
     Object.assign(rt, {
       memoryEnabled: false,
+      communicationMemory: () => '',
       renewMemory: () => {},
       archiveBotMemory: async () => {},
       archiveGroupMemory: async () => {},
@@ -1803,7 +1805,23 @@ export function install(rt) {
     throw new Error(`Unknown endpoint ${endpoint}`)
   }
 
+  function communicationMemory(botId) {
+    if (!rt.botOf(botId)) return ''
+    const pending = pendingChange()
+    if (pending.pending || pending.failed) return ''
+    const read = sectionRead(join(dirOf(ownScope(botId)), MAIN))
+    if (read.failed) return ''
+    // Only the executing Bot's main entries cross this opt-out boundary. Chat
+    // summaries, metadata, topic files, team memory and other scopes stay local.
+    return parseMemory(read.text).entries
+      .filter(entry => !['local', 'private', 'never'].includes(entry.meta.sharing?.toLowerCase()))
+      .map(entry => entry.text)
+      .filter(text => !secretEntry(text))
+      .map(text => `- ${text}`).join('\n').slice(0, 10000)
+  }
+
   Object.assign(rt, {
+    communicationMemory,
     memoryEnabled: true, renewMemory, archiveBotMemory, archiveGroupMemory, memoryEndpoint, memoryReviews,
     memoryNews: () => Object.fromEntries(news), botShot,
   })

@@ -34,5 +34,26 @@ node_modules/
 /.env
 /docker-compose.override.yml
 
+# Local credentials, encrypted vaults, TLS material and runtime databases.
+*.dpapi
+**/.credentials.yaml
+**/.env
+*.pem
+*.key
+*.p12
+*.pfx
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.db
+*.db-shm
+*.db-wal
+*.log
+*.err
+**/.credentials.yml
+**/.env.local
+**/.env.*.local
+/communication-hub/local/
+
 # Bytecode from the record-browser-gif encoder's local media tests.
 __pycache__/

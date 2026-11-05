@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -381,15 +381,23 @@ test('CDP accepts a direct Playwright artifacts directory under os.tmpdir()', as
 
 test('a relay download is cancelled if its accepted directory is swapped for an outside symlink', async t => {
   const { manager, handlers, views } = fixture()
-  t.after(() => manager.dispose())
   const rootPath = mkdtempSync(join(tmpdir(), 'bot-views-download-symlink-swap-'))
   const downloadPath = join(rootPath, 'downloads')
   const outsidePath = mkdtempSync(join(tmpdir(), 'bot-views-download-outside-'))
-  t.after(() => rmSync(outsidePath, { recursive: true, force: true }))
-  t.after(() => rmSync(rootPath, { recursive: true, force: true }))
+  let socket
+  t.after(() => {
+    try {
+      // Unlink the junction before its target; Windows cannot reliably remove it dangling.
+      if (lstatSync(downloadPath, { throwIfNoEntry: false })?.isSymbolicLink()) unlinkSync(downloadPath)
+      rmSync(rootPath, { recursive: true, force: true })
+      rmSync(outsidePath, { recursive: true, force: true })
+    } finally {
+      socket?.terminate()
+      manager.dispose()
+    }
+  })
   const entry = manager.create('a')
-  const socket = await openSocket(await manager.endpoint('a', { downloadRoots: [rootPath] }))
-  t.after(() => socket.close())
+  socket = await openSocket(await manager.endpoint('a', { downloadRoots: [rootPath] }))
   await request(socket, 1, 'Target.attachToTarget', { targetId: entry.tabId, flatten: true })
   const accepted = await request(socket, 2, 'Browser.setDownloadBehavior', {
     behavior: 'allowAndName',

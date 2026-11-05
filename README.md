@@ -7,6 +7,28 @@
 
 # DS Bot
 
+New DS-Bot learning suggestions for its own Skills and project AGENTS.md apply
+automatically after validation. Set plugin option `learningAutoApply: false` to
+keep manual review. Existing pending cards and other tool approvals are unchanged.
+See [learning policy and limits](docs/plans/learning-auto-apply.md).
+
+Remote communication in this branch provides authenticated contacts, private
+chats and groups between independently paired instances. The toolbar's + opens
+private/group pickers; personal settings contains pairing and profile controls.
+Each instance connects to one Hub at a time and retains separate Hub history and
+queues when switching. Signed Hub codes can carry private-CA trust without
+changing system trust. Images/files support at most four attachments and 64 KiB
+total per message. See the [Hub guide](communication-hub/README.md) and packaged
+[operator/Bot Skill](ds-bot/skills/dsbot-remote/SKILL.md) for permissions, setup,
+CLI commands, compatibility and recovery limits.
+
+Local Bots can help their owner inspect and manage Remote contacts and publish
+selected Bots from their own local chat, even before they are published. The host
+checks a direct local-user request; Remote messages cannot grant this authority.
+Contact changes and publication additionally require native approval for the exact action.
+Publication still determines whether a Bot can participate under its own Remote
+identity. Local Bot roles and all Hub membership/permission checks stay unchanged.
+
 English | [中文](README.zh.md)
 
 ![version](https://img.shields.io/badge/version-v0.2_preview-blue) ![DSH](https://img.shields.io/badge/DSH-0.2.1--rc.4-4D6BFE) ![license](https://img.shields.io/badge/license-Apache_2.0-green)
@@ -136,3 +158,8 @@ The plugin source is in [`ds-bot/`](ds-bot/). For options and internals, see [`d
 DS Bot is an independent community project. **It is not an official DeepSeek product**, and it is not affiliated with, endorsed by or sponsored by DeepSeek. "DeepSeek", "DeepSeek Harness" and the other names are trademarks of their owners. They are used here only to say what this plugin works with.
 
 Bots use your own model quota, and they read and write files and run commands when you ask them to. Check important actions yourself.
+
+
+## Remote communication diagnostics
+
+In a local Bot chat, `communication_diagnose` explains connection, the executing Bot’s publication, scoped tools, synchronization, TLS and credential/environment presence without exposing values. Operators can use the authenticated `dsbot-remote diagnose`. See the bundled dsbot-remote Skill, “Diagnostics and first message”. A configuration reload differs from a host process restart; unobserved state stays unknown.

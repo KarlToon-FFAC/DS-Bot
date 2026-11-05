@@ -175,6 +175,49 @@ function MemoryCard({ bot, actions }) {
 // A Bot's settings as grouped cards: who it is (avatar, name, label), what it runs on
 // (model), what it does (instructions), its memory and tasks, its Main Bot role, its
 // sidebar place, and copies.
+const publicProfileDraft = profile => ({ headline: profile?.headline ?? '', summary: profile?.summary ?? '',
+  expertise: (profile?.expertise ?? []).join(', '), languages: (profile?.languages ?? []).join(', ') })
+const publicProfileList = value => value.split(/[,，\n]/).map(item => item.trim()).filter(Boolean)
+
+export function BotPublicProfile({ bot, actions }) {
+  const [draft, setDraft] = useState(() => publicProfileDraft(bot.publicProfile))
+  const [base, setBase] = useState(() => ({ draft: publicProfileDraft(bot.publicProfile), revision: bot.publicProfile?.revision ?? 0 }))
+  const [busy, setBusy] = useState(false), [error, setError] = useState('')
+  const active = useRef(true), edits = useRef(0)
+  useEffect(() => { active.current = true; return () => { active.current = false } }, [])
+  const dirty = JSON.stringify(draft) !== JSON.stringify(base.draft)
+  useEffect(() => {
+    if (!dirty && !busy) {
+      const next = publicProfileDraft(bot.publicProfile)
+      setDraft(next); setBase({ draft: next, revision: bot.publicProfile?.revision ?? 0 })
+    }
+  }, [bot.publicProfile?.revision])
+  const change = (key, value) => { edits.current++; setDraft(current => ({ ...current, [key]: value })) }
+  const commit = async () => {
+    if (busy || !dirty) return
+    const submitted = draft, edit = edits.current
+    setBusy(true); setError('')
+    try {
+      const result = await actions.updateBot(bot.id, { expectedProfileRevision: base.revision,
+        publicProfile: { headline: submitted.headline, summary: submitted.summary,
+          expertise: publicProfileList(submitted.expertise), languages: publicProfileList(submitted.languages) } })
+      if (!active.current) return
+      setBase({ draft: submitted, revision: result?.publicProfile?.revision ?? base.revision + 1 })
+      if (edit === edits.current) setDraft(submitted)
+    } catch (failure) {
+      if (active.current) setError(failure?.message ?? t('Unable to update profile'))
+    } finally { if (active.current) setBusy(false) }
+  }
+  return h(Card, { title: t('Remote profile') },
+    h('p', { className: 'bt-set-hint' }, t('Saved on this device. Published Bots sync this profile to their authorized Remote audience. Keep private instructions and secrets out.')),
+    h(Row, { label: t('Headline'), stack: true }, h('input', { className: 'bt-bs-input', 'aria-label': t('Public headline'), value: draft.headline, maxLength: 80, onChange: event => change('headline', event.target.value) })),
+    h(Row, { label: t('About'), stack: true }, h('textarea', { className: 'bt-bs-input bt-bs-area', 'aria-label': t('Public summary'), value: draft.summary, maxLength: 1000, onChange: event => change('summary', event.target.value) })),
+    h(Row, { label: t('Skills'), hint: t('Separate keywords with commas'), stack: true }, h('input', { className: 'bt-bs-input', 'aria-label': t('Public skills'), value: draft.expertise, onChange: event => change('expertise', event.target.value) })),
+    h(Row, { label: t('Languages'), hint: t('Separate languages with commas'), stack: true }, h('input', { className: 'bt-bs-input', 'aria-label': t('Public languages'), value: draft.languages, onChange: event => change('languages', event.target.value) })),
+    h('button', { type: 'button', className: 'bt-soft bt-soft-sm', disabled: busy || !dirty, onClick: () => { void commit() } }, t(busy ? 'Saving…' : 'Save public profile')),
+    error ? h('p', { className: 'bt-comm-error', role: 'alert' }, error) : null)
+}
+
 export function BotSettingsForm({ bot, roster, actions, run }) {
   const [editing, setEditing] = useState(false)
   const [confirming, setConfirming] = useState(false)
@@ -224,6 +267,7 @@ export function BotSettingsForm({ bot, roster, actions, run }) {
         disabled: bot.private !== true && (isMainBot || inGroup || !bot.workDir),
         onChange: value => save({ private: value }),
       })),
+    h(BotPublicProfile, { key: bot.id, bot, actions }),
     h(Card, { title: t('Instructions') },
       h(Row, { label: t('What this Bot does'), hint: t('Its job on the team. Part of the Bot\'s system prompt.'), stack: true },
         h(InlineText, { label: t('Instructions'), value: bot.instructions, multiline: true, placeholder: t('What this Bot is responsible for…'), onSave: instructions => save({ instructions }) }))),

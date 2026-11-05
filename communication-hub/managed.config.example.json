@@ -1,0 +1,10 @@
+{
+  "host": "127.0.0.1",
+  "port": 3190,
+  "databasePath": "./data/hub.sqlite",
+  "management": {
+    "enabled": true,
+    "adminPasswordEnv": "DSBOT_HUB_ADMIN_PASSWORD"
+  },
+  "peers": []
+}

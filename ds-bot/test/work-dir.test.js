@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs'
 import { homedir, hostname, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { test } from 'node:test'
@@ -127,6 +127,10 @@ async function start({ services = {}, workspaces = [], llm, team: saved = TEAM, 
     await ctx.dispose()
     if (previousHome === undefined) delete process.env.DSH_HOME
     else process.env.DSH_HOME = previousHome
+    // Unlink fixture junctions while their targets still exist on Windows.
+    for (const link of [join(root, 'dsh-link'), join(root, 'team-link'), team]) {
+      if (lstatSync(link, { throwIfNoEntry: false })?.isSymbolicLink()) unlinkSync(link)
+    }
     rmSync(root, { recursive: true, force: true, maxRetries: 5 })
   }
   // Loading once fills the Session-owner indexes.
@@ -385,6 +389,64 @@ test('the approval counts every Session that would work in the folder', async (t
   t.after(third.stop)
   assert.equal(await third.tool('update_bot', { bot: 'Writer', work_dir: third.project }, 'a'), `Could not update the Bot: ${notAllowed(third.project)}`)
   assert.equal(later.requests.length, 1)
+})
+
+test('only a live local Main Bot may change another Bot workspace, including the underlying roster boundary', async t => {
+  const approved = approvalServices('allowed-once')
+  const host = await start({ services: approved.services })
+  t.after(host.stop)
+  const before = host.state()
+  assert.match(await host.tool('update_bot', { bot: 'Chief', work_dir: host.project }, 'b'), /^Only a Main Bot can change another Bot/)
+  await assert.rejects(rt.updateBot('a', { workDir: host.project }, 'b'), /Only a Main Bot can change another Bot/)
+  await assert.rejects(rt.updateBot('b', { workDir: host.project }, 'not-a-local-bot'), /Only a Main Bot can change another Bot/)
+  assert.equal(approved.requests.length, 0)
+  assert.deepEqual(host.state(), before)
+  assert.equal(await host.tool('update_bot', { bot: 'Writer', work_dir: host.project }, 'a'), `Updated Writer. It now works in ${host.project}.`)
+  assert.equal(approved.requests.length, 1)
+  await host.workingIn('b', host.project)
+  assert.equal(host.state().bots.b.workDir, host.project)
+  assert.equal(host.state().bots.a.workDir, undefined)
+  // The roster also checks current authority after the tool's awaited path/approval checks.
+  rt.state.mainBotIds = []
+  await assert.rejects(rt.updateBot('b', { workDir: '' }, 'a'), /Only a Main Bot can change another Bot/)
+  assert.equal(host.state().bots.b.workDir, host.project)
+})
+
+test('a Main Bot workspace assignment persists through restart, while the Human settings API keeps protected directories closed', async t => {
+  const approved = approvalServices('allowed-once')
+  const first = await start({ services: approved.services })
+  const savedRoot = first.root
+  // Reopen the roster read from the first isolated host; no user profile is used.
+  assert.match(await first.tool('update_bot', { bot: 'Writer', work_dir: first.project }, 'a'), /^Updated Writer/)
+  await first.workingIn('b', first.project)
+  const saved = first.state()
+  const expected = first.project
+  await first.stop()
+  const second = await start({ root: savedRoot, team: saved, services: approved.services })
+  t.after(second.stop)
+  assert.equal(second.state().bots.b.workDir, expected)
+  const forbidden = await second.call('update-bot', { id: 'b', workDir: second.dsh })
+  assert.equal(forbidden.ok, false)
+  assert.equal(second.state().bots.b.workDir, expected)
+  const cleared = await second.call('update-bot', { id: 'b', workDir: '' })
+  assert.equal(cleared.ok, true)
+  assert.equal(second.state().bots.b.workDir, undefined)
+})
+
+test('losing Main Bot authority during folder approval or asynchronous validation changes no target settings', async t => {
+  const approved = approvalServices('allowed-once')
+  const host = await start({ services: approved.services })
+  t.after(host.stop)
+  const targetBefore = structuredClone(rt.state.bots.b)
+  approved.services.approval.request = async () => { rt.state.mainBotIds = []; return 'allowed-once' }
+  assert.match(await host.tool('update_bot', { bot: 'Writer', work_dir: host.project }, 'a'), /Only a Main Bot can change another Bot/)
+  assert.deepEqual(rt.state.bots.b, targetBefore)
+  rt.state.mainBotIds = ['a']
+  const clean = rt.cleanWorkDir
+  rt.cleanWorkDir = async input => { const dir = await clean(input); rt.state.mainBotIds = []; return dir }
+  await assert.rejects(rt.updateBot('b', { workDir: host.project, role: 'Changed' }, 'a'), /Only a Main Bot can change another Bot/)
+  assert.deepEqual(rt.state.bots.b, targetBefore)
+  assert.equal(host.state().bots.b.workDir, undefined)
 })
 
 test('a Bot that joins a group with a folder needs the user\'s approval to work there', async (t) => {

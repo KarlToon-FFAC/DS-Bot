@@ -3,6 +3,8 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
+import { randomUUID } from 'node:crypto'
+import { CommunicationTransport } from '../src/host/federation/transport.js'
 import { createRuntime } from '../index.js'
 import { TEAM_TOOLS } from '../src/host/constants.js'
 import { fakeContext } from './fake-ctx.js'
@@ -65,6 +67,7 @@ const start = (team = TEAM, services = {}, globals = [], shared = {}) => {
       ctx: {
         tools: {
           register: (tool) => {
+            if (scoped.some(entry => entry.sessionId === sessionId && entry.name === tool.name)) throw new Error('DUPLICATE_SCOPE_TOOL')
             const entry = { sessionId, name: tool.name, tool }
             scoped.push(entry)
             // DSH's disposer unregisters; the fake drops the record.
@@ -129,7 +132,7 @@ const start = (team = TEAM, services = {}, globals = [], shared = {}) => {
   let route
   const register = ctx.connection.fetch.register
   ctx.connection.fetch.register = (options) => { route = options; return register(options) }
-  rt = createRuntime(ctx, { home })
+  rt = createRuntime(ctx, { home, ...shared.config })
   const call = async (endpoint, payload) => (await route.fetch(new Request('http://localhost/api/bot', {
     method: 'POST', body: JSON.stringify({ endpoint, payload }),
   }))).json()
@@ -148,7 +151,7 @@ const start = (team = TEAM, services = {}, globals = [], shared = {}) => {
     await unload()
     rmSync(home, { recursive: true, force: true, maxRetries: 5 })
   }
-  return { ctx, call, tool, emit, agentCreated, agentOf, scoped, restricted, home, unload, stop }
+  return { runtime: rt, ctx, call, tool, emit, agentCreated, agentOf, scoped, restricted, home, unload, stop }
 }
 
 const until = async (check, ms = 3000) => {
@@ -346,4 +349,279 @@ test('a live Bot Session gets its team tools back after a disable and re-enable'
   await second.call('state', {})
   assert.ok(hasShowView(second, 'a'), 'the scoped team tools are back')
   assert.ok(denied(second, 'a'), 'the blocking question tool is denied again')
+})
+
+test('the same live Session reconciles added, replaced and withdrawn tool definitions without rebuilding unrelated scopes', async t => {
+  const host = start()
+  t.after(host.stop)
+  await host.call('state', {})
+  await host.agentCreated('a')
+  const stable = host.scoped.find(entry => entry.sessionId === 'a' && entry.name === 'show_view')
+  let finish
+  const first = { name: 'publication_probe', execute: () => new Promise(resolve => { finish = resolve }) }
+  host.runtime.teamTools.push(first)
+  host.runtime.syncScopedTools()
+  const entry = host.scoped.find(entry => entry.sessionId === 'a' && entry.name === first.name)
+  assert.equal(entry.tool.name, first.name)
+  const executing = entry.tool.execute({}, { agent: host.agentOf('a') })
+  const replacement = { ...first, execute: async () => 'new-definition' }
+  host.runtime.teamTools[host.runtime.teamTools.indexOf(first)] = replacement
+  const assemble = host.ctx.listeners.get('system-prompt/assemble')[0]
+  assert.equal(await assemble({}, { agent: host.agentOf('a') }, async () => 'assembled'), 'assembled')
+  assert.equal(await host.scoped.find(entry => entry.sessionId === 'a' && entry.name === first.name).tool.execute({}, { agent: host.agentOf('a') }), 'new-definition')
+  assert.equal(host.scoped.find(entry => entry.sessionId === 'a' && entry.name === 'show_view'), stable)
+  finish('already-started-definition')
+  assert.equal(await executing, 'already-started-definition', 'an already dispatched call retains its definition')
+  host.runtime.teamTools.splice(host.runtime.teamTools.indexOf(replacement), 1)
+  host.runtime.syncScopedTools()
+  assert.equal(host.scoped.some(entry => entry.sessionId === 'a' && entry.name === first.name), false)
+  assert.equal(host.runtime.teamToolScopeStatus('a').lastReloadAt, null)
+})
+
+test('a temporary scoped registration conflict retries only missing tools at the next assembly', async t => {
+  const host = start()
+  t.after(host.stop)
+  await host.call('state', {})
+  await host.agentCreated('a')
+  const agent = host.agentOf('a'), register = agent.ctx.tools.register
+  const stable = host.scoped.find(entry => entry.sessionId === 'a' && entry.name === 'show_view')
+  let reject = true
+  agent.ctx.tools.register = definition => {
+    if (definition.name === 'publication_probe' && reject) throw Error('SYNTHETIC_CONFLICT')
+    return register(definition)
+  }
+  const definition = { name: 'publication_probe', execute: async () => 'available' }
+  host.runtime.teamTools.push(definition)
+  host.runtime.syncScopedTools()
+  assert.equal(host.runtime.teamToolScopeStatus('a').state, 'partial')
+  assert.deepEqual(host.runtime.teamToolScopeStatus('a').failedNames, ['publication_probe'])
+  reject = false
+  await host.ctx.listeners.get('system-prompt/assemble')[0]({}, { agent }, async () => ({}))
+  assert.equal(host.runtime.teamToolScopeStatus('a').state, 'current')
+  assert.equal(await host.scoped.find(entry => entry.sessionId === 'a' && entry.name === 'publication_probe').tool.execute({}, { agent }), 'available')
+  assert.equal(host.scoped.find(entry => entry.sessionId === 'a' && entry.name === 'show_view'), stable)
+})
+
+test('a removed registry entry is repaired from its owned definition without touching a foreign registration', async t => {
+  const host = start()
+  t.after(host.stop)
+  await host.call('state', {})
+  await host.agentCreated('a')
+  host.ctx.tools.get = (name, agent) => host.scoped.find(entry => entry.sessionId === agent.id && entry.name === name)?.tool
+  const prior = host.scoped.find(entry => entry.sessionId === 'a' && entry.name === 'communication_diagnose')
+  host.scoped.splice(host.scoped.indexOf(prior), 1)
+  host.runtime.syncScopedTools()
+  assert.equal(host.scoped.filter(entry => entry.sessionId === 'a' && entry.name === prior.name).length, 1)
+  assert.deepEqual(host.scoped.find(entry => entry.sessionId === 'a' && entry.name === prior.name).tool.parameters, prior.tool.parameters)
+  const restored = host.scoped.find(entry => entry.sessionId === 'a' && entry.name === prior.name)
+  host.scoped.splice(host.scoped.indexOf(restored), 1)
+  const foreign = { ...prior.tool, description: 'foreign owner', execute: async () => 'foreign' }
+  const disposeForeign = host.agentOf('a').ctx.tools.register(foreign)
+  t.after(disposeForeign)
+  host.runtime.syncScopedTools()
+  assert.equal(host.scoped.find(entry => entry.sessionId === 'a' && entry.name === prior.name).tool, foreign)
+  assert.equal(host.runtime.teamToolScopeStatus('a').state, 'partial', 'the foreign registration is retained, never stolen')
+})
+
+test('publication reload restores new communication definitions in the same live Session after overlapping old scopes clear', async t => {
+  const shared = { scoped: [], restricted: [], liveAgents: new Map(), config: { communication: { enabled: true, publishedBotIds: [] } } }
+  const first = start(TEAM, {}, [], shared)
+  shared.home = first.home
+  t.after(first.unload)
+  await first.call('state', {})
+  await first.agentCreated('a')
+  const oldSend = first.scoped.find(entry => entry.sessionId === 'a' && entry.name === 'send_contact_message').tool
+  shared.config = { communication: { enabled: true, publishedBotIds: ['a'] } }
+  const second = start(TEAM, {}, [], shared)
+  t.after(second.stop)
+  await second.call('state', {})
+  assert.equal(second.runtime.teamToolScopeStatus('a').state, 'partial', 'a still-owned old definition cannot be stolen')
+  await first.unload()
+  second.runtime.syncScopedTools()
+  const freshSend = second.scoped.find(entry => entry.sessionId === 'a' && entry.name === 'send_contact_message').tool
+  assert.notEqual(freshSend, oldSend)
+  assert.equal(second.runtime.teamToolScopeStatus('a').state, 'current')
+  first.runtime.syncScopedTools()
+  first.runtime.hideBotUnusedTools(first.agentOf('a'))
+  assert.equal(first.runtime.teamToolScopeStatus('a').state, 'stopped')
+  assert.equal(second.scoped.find(entry => entry.sessionId === 'a' && entry.name === 'send_contact_message').tool, freshSend)
+  assert.equal(second.runtime.config.communication.publishedBotIds.includes('a'), true)
+})
+
+test('an old runtime finishing an awaited load after unload cannot revive its Session scopes', async t => {
+  const shared = { scoped: [], restricted: [], liveAgents: new Map() }
+  const first = start(TEAM, {}, [], shared)
+  shared.home = first.home
+  t.after(first.unload)
+  await first.call('state', {})
+  await first.agentCreated('a')
+  const originalLoad = first.runtime.load
+  let release
+  first.runtime.load = () => new Promise(resolve => { release = resolve })
+  const pending = first.agentCreated('a')
+  await new Promise(resolve => setImmediate(resolve))
+  await first.unload()
+  const second = start(TEAM, {}, [], shared)
+  t.after(second.stop)
+  await second.call('state', {})
+  first.runtime.load = originalLoad
+  release()
+  await pending
+  const own = second.runtime.teamTools.find(definition => definition.name === 'show_view')
+  assert.equal(second.scoped.filter(entry => entry.sessionId === 'a' && entry.name === 'show_view').length, 1)
+  assert.equal(second.scoped.find(entry => entry.sessionId === 'a' && entry.name === 'show_view').tool.description, own.description)
+  assert.equal(first.runtime.teamToolScopeStatus('a').state, 'stopped')
+})
+
+test('a Session claimed by the isolated communication runtime loses local scopes and never gets them from refresh', async t => {
+  const host = start()
+  t.after(host.stop)
+  await host.call('state', {})
+  await host.agentCreated('a')
+  host.runtime.communication = { owners: new Map([['a', {}]]) }
+  host.runtime.syncScopedTools()
+  assert.deepEqual(scopedNames(host, 'a'), [])
+  const remote = { name: 'remote_conversation_only', execute: async () => 'scoped' }
+  const dispose = host.agentOf('a').ctx.tools.register(remote)
+  t.after(dispose)
+  host.runtime.syncScopedTools()
+  assert.deepEqual(scopedNames(host, 'a'), ['remote_conversation_only'])
+  assert.equal(host.runtime.teamToolScopeStatus('a').state, 'unscoped')
+})
+
+test('a repaired scope rebuilds the current model assembly through the public API and preserves native/PTC filtering', async t => {
+  const host = start()
+  t.after(host.stop)
+  await host.call('state', {})
+  await host.agentCreated('a')
+  const refresh = host.ctx.listeners.get('system-prompt/assemble').find(listener => listener.name === 'refreshBotToolAssembly')
+  const context = { agent: host.agentOf('a') }
+  let calls = 0, ptc = false
+  host.ctx.systemPrompt.assemble = async input => {
+    calls++
+    assert.equal(input, context)
+    const assembly = { sections: [{ name: 'preserved-filter' }], tools: ptc ? [{ name: 'run_code' }]
+      : host.scoped.filter(entry => entry.sessionId === 'a').map(entry => ({ name: entry.name })) }
+    return refresh(assembly, input, async () => assembly)
+  }
+  const definition = { name: 'publication_probe', execute: async () => 'available' }
+  host.runtime.teamTools.push(definition)
+  const stale = { tools: [], sections: [] }
+  const current = await refresh(stale, context, async () => stale)
+  assert.equal(calls, 1)
+  assert.ok(current.tools.some(tool => tool.name === definition.name), 'this request sees the repaired schema, not just the next request')
+  assert.deepEqual(current.sections, [{ name: 'preserved-filter' }])
+  host.runtime.teamTools.splice(host.runtime.teamTools.indexOf(definition), 1)
+  ptc = true
+  const rebuilt = await refresh(current, context, async () => current)
+  assert.equal(calls, 2)
+  assert.deepEqual(rebuilt.tools, [{ name: 'run_code' }], 'registry capabilities never bypass the host transport mode')
+  assert.equal(host.scoped.some(entry => entry.sessionId === 'a' && entry.name === definition.name), false)
+})
+
+test('reassembly is bounded when a conflicting tool remains unavailable', async t => {
+  const host = start()
+  t.after(host.stop)
+  await host.call('state', {})
+  await host.agentCreated('a')
+  const refresh = host.ctx.listeners.get('system-prompt/assemble').find(listener => listener.name === 'refreshBotToolAssembly')
+  const agent = host.agentOf('a'), register = agent.ctx.tools.register
+  agent.ctx.tools.register = definition => { if (definition.name === 'unavailable_probe') throw Error('SYNTHETIC_CONFLICT'); return register(definition) }
+  host.runtime.teamTools.push({ name: 'unavailable_probe', execute: async () => 'unavailable' })
+  let calls = 0
+  const assembly = { tools: [], sections: [] }, context = { agent }
+  host.ctx.systemPrompt.assemble = async input => { calls++; return refresh(assembly, { ...input }, async () => assembly) }
+  assert.equal(await refresh(assembly, context, async () => assembly), assembly)
+  assert.equal(calls, 1)
+  assert.equal(host.runtime.teamToolScopeStatus('a').state, 'partial')
+  assert.deepEqual(host.runtime.teamToolScopeStatus('a').failedNames, ['unavailable_probe'])
+})
+
+test('an interrupted disposer leaves a withdrawn tool blocked and retries cleanup without rejecting the request', async t => {
+  const host = start()
+  t.after(host.stop)
+  await host.call('state', {})
+  await host.agentCreated('a')
+  const agent = host.agentOf('a'), register = agent.ctx.tools.register
+  let reject = true
+  agent.ctx.tools.register = definition => {
+    const dispose = register(definition)
+    return () => { if (definition.name === 'withdrawn_probe' && reject) throw Error('SYNTHETIC_CLEANUP_FAILURE'); dispose() }
+  }
+  const definition = { name: 'withdrawn_probe', execute: async () => 'old' }
+  host.runtime.teamTools.push(definition)
+  host.runtime.syncScopedTools()
+  host.runtime.teamTools.splice(host.runtime.teamTools.indexOf(definition), 1)
+  host.runtime.syncScopedTools()
+  assert.equal(host.runtime.teamToolScopeStatus('a').state, 'partial')
+  assert.ok(host.ctx.guards.some(guard => guard({ agent, name: definition.name })), 'stale execution is denied while cleanup is uncertain')
+  const refresh = host.ctx.listeners.get('system-prompt/assemble').find(listener => listener.name === 'refreshBotToolAssembly')
+  assert.equal(await refresh({}, { agent }, async () => 'accepted'), 'accepted')
+  reject = false
+  host.runtime.syncScopedTools()
+  assert.equal(host.scoped.some(entry => entry.sessionId === 'a' && entry.name === definition.name), false)
+  assert.equal(host.runtime.teamToolScopeStatus('a').state, 'current')
+})
+
+test('publication and withdrawal reload the same live chat while the real runtime still enforces the executing Bot gate', async t => {
+  const key = `DSBOT_COMMUNICATION_SCOPE_${randomUUID().replaceAll('-', '').toUpperCase()}`
+  const startTransport = CommunicationTransport.prototype.start
+  CommunicationTransport.prototype.start = () => {}
+  t.after(() => { CommunicationTransport.prototype.start = startTransport; delete process.env[key] })
+  process.env[key] = 'synthetic-owned-scope-bootstrap'.repeat(2)
+  const preset = { list: async () => [], register: async () => () => {}, serviceFor: () => undefined }
+  const config = ids => ({ communication: { enabled: true, publishedBotIds: ids, url: 'ws://127.0.0.1:3190/communication', credentialEnv: key } })
+  const shared = { scoped: [], restricted: [], liveAgents: new Map(), config: config([]) }
+  const first = start(TEAM, { agentPresets: preset }, [], shared)
+  shared.home = first.home
+  t.after(first.unload)
+  await first.call('state', {})
+  await first.agentCreated('a')
+  // Unpublished local contact reads have a separate authenticated-owner path.
+  // Speaking as the Bot still requires its own publication after every reload.
+  const denied = JSON.parse(await first.tool('send_contact_message', { text: 'synthetic publication gate', contactPrincipalId: 'human:b:owner' }, 'a'))
+  assert.equal(denied.error.code, 'BOT_NOT_PUBLISHED')
+  assert.equal(denied.error.subject.localBotId, 'a')
+  const sameAgent = first.agentOf('a')
+  await first.unload()
+  shared.config = config(['a'])
+  const second = start(TEAM, { agentPresets: preset }, [], shared)
+  t.after(second.unload)
+  await second.call('state', {})
+  const offline = JSON.parse(await second.tool('list_contacts', {}, 'a'))
+  assert.equal(offline.error.code, 'CONNECTION_LOST', 'publication passes the actor gate but grants no connection or consent')
+  assert.equal(second.runtime.communication.actorForSession('a').localRef, 'a')
+  assert.equal(second.agentOf('a'), sameAgent)
+  await second.unload()
+  shared.config = config([])
+  const third = start(TEAM, { agentPresets: preset }, [], shared)
+  t.after(third.stop)
+  await third.call('state', {})
+  const withdrawn = JSON.parse(await third.tool('send_contact_message', { text: 'synthetic withdrawal gate', contactPrincipalId: 'human:b:owner' }, 'a'))
+  assert.equal(withdrawn.error.code, 'BOT_NOT_PUBLISHED')
+  assert.equal(third.agentOf('a'), sameAgent)
+  assert.ok(third.scoped.some(entry => entry.sessionId === 'a' && entry.name === 'send_contact_message'), JSON.stringify({ status: third.runtime.teamToolScopeStatus('a'), names: scopedNames(third, 'a'), botSession: third.runtime.isBotSession('a'), count: third.runtime.teamTools.length }))
+  assert.equal(third.runtime.teamToolScopeStatus('a').state, 'current')
+})
+
+test('failed cleanup after ownership removal or unload cannot execute an old team definition even without its guard', async t => {
+  const host = start()
+  t.after(host.stop)
+  const agent = host.agentOf('a'), register = agent.ctx.tools.register
+  let reject = true
+  agent.ctx.tools.register = definition => {
+    const dispose = register(definition)
+    return () => { if (definition.name === 'list_bots' && reject) throw Error('SYNTHETIC_UNSCOPE_FAILURE'); dispose() }
+  }
+  await host.call('state', {})
+  await host.agentCreated('a')
+  const old = host.scoped.find(entry => entry.sessionId === 'a' && entry.name === 'list_bots').tool
+  delete host.runtime.state.bots.a
+  await host.runtime.save()
+  assert.equal(host.runtime.teamToolScopeStatus('a').state, 'retired')
+  host.ctx.guards.splice(0)
+  await assert.rejects(old.execute({}, { agent }), { code: 'BOT_TOOL_SCOPE_EXPIRED' })
+  await host.unload()
+  await assert.rejects(old.execute({}, { agent }), { code: 'BOT_TOOL_SCOPE_EXPIRED' })
+  reject = false
 })

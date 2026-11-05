@@ -1,0 +1,102 @@
+{
+  "runId": "p0-cfeb62df-8b2b-476a-a310-6f61d7508ba5",
+  "sourceCommit": "6ede702b7d698a8d86261ecb6a2a5f1efc8e1e87",
+  "implementationBranch": "chore/federated-communication",
+  "implementationCommit": null,
+  "platform": "native Windows 11 10.0.22631 / PowerShell",
+  "versions": {
+    "node": "v24.13.0",
+    "dsh": "0.2.1-rc.4",
+    "plugin": "0.2.6",
+    "pnpm": "10.20.0 (optional project-local tool)"
+  },
+  "topology": {
+    "a": 3101,
+    "b": 3102,
+    "mockA": 8801,
+    "mockB": 8802,
+    "hub": null,
+    "differentIp": false
+  },
+  "checks": {
+    "independentInstancesAndChiefs": "PASS",
+    "sourceAndSessionIsolation": "PASS",
+    "followupAndSteer": "PASS",
+    "duplicateRetryWithoutNewModelCall": "PASS",
+    "oldSegmentOutputInspection": "PASS",
+    "durablePendingInbox": "PASS",
+    "processRestartAndColdInspection": "PASS"
+  },
+  "input": {
+    "conversationId": "p0-cfeb62df-8b2b-476a-a310-6f61d7508ba5-a-k",
+    "messageId": "p0-cfeb62df-8b2b-476a-a310-6f61d7508ba5-message",
+    "deliveryId": "p0-cfeb62df-8b2b-476a-a310-6f61d7508ba5-delivery",
+    "dshReceipt": {
+      "status": "admitted",
+      "sessionId": "session-3c7a95b1-a711-410c-8b06-ee053d6d0bcd",
+      "seq": 9,
+      "messageId": "9ba13153-891e-4b8c-a66b-04028591922d"
+    }
+  },
+  "outputs": [
+    {
+      "sourceKey": "[\"7af39aec-c8b9-4b42-841e-f1ae7da2cbb0\",\"session-3c7a95b1-a711-410c-8b06-ee053d6d0bcd\",16,\"69f4ab1d-3e55-4807-be62-08957227a9a5\"]",
+      "sessionId": "session-3c7a95b1-a711-410c-8b06-ee053d6d0bcd",
+      "seq": 16,
+      "messageId": "69f4ab1d-3e55-4807-be62-08957227a9a5",
+      "parts": [
+        {
+          "part": 0,
+          "utf8Bytes": 69,
+          "sha256": "28f804229be4923dbe7b168f3cbb0e68bc1ad06d18b577a54290ca03df1e1971"
+        },
+        {
+          "part": 1,
+          "utf8Bytes": 30,
+          "sha256": "faa4c7152aef4000b38c73ff1e984d8855301e4d741cd42e07e546f1baf7d6f9"
+        }
+      ]
+    }
+  ],
+  "gates": {
+    "unit": {
+      "exitCode": 0,
+      "tests": 1439,
+      "passed": 1437,
+      "failed": 0,
+      "skipped": 2
+    },
+    "lint": {
+      "exitCode": 0,
+      "warnings": "Existing files only; none in the new communication modules"
+    },
+    "buildAndGeneratedCheck": {
+      "exitCode": 0,
+      "generatedFilesChanged": false
+    },
+    "originalHostSmoke": {
+      "exitCode": 0,
+      "steps": 52
+    },
+    "packedJournalWithoutCheckoutDependencies": {
+      "exitCode": 0
+    }
+  },
+  "baselineIssue": {
+    "status": "Reproduced in unmodified git archive",
+    "tests": [
+      "privacy: link into private Bot folder",
+      "work-dir: team workspace contains DSH data",
+      "work-dir: workspace known by a link"
+    ],
+    "error": "Windows ENOTEMPTY during junction cleanup",
+    "fix": "Unlink only fixture junctions before deleting their targets; preserve all assertions"
+  },
+  "cleanup": "PASS: all three benches stopped; test data retained",
+  "limitations": [
+    "P0 is only partially complete: UI, Human delivery and exact mid-call crash reconciliation remain unverified",
+    "No Hub or production federation adapter/outbox/inbox store yet",
+    "Not the DM/GR/ST/AC acceptance suite",
+    "No browser UI, different-IP, TLS/WSS or real-model acceptance"
+  ]
+}

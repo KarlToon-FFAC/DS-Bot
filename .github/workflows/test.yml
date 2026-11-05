@@ -2,7 +2,7 @@ name: Test
 
 on:
   push:
-    branches: [main, dev]
+    branches: [main, dev, chore/federated-communication]
   pull_request:
 
 permissions:
@@ -39,6 +39,21 @@ jobs:
       - run: npm test
       - run: node scripts/build-client.mjs --check
       - run: npm run lint
+
+  communication:
+    name: Communication transport / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci --prefix communication-hub --no-fund --no-audit
+      - run: npm test --prefix communication-hub
 
   scan:
     name: Leak scan
@@ -351,8 +366,8 @@ jobs:
   # and fails unless the matrix, leak scan, app, mobile app, app package and Docker checks passed.
   result:
     name: Test result
-    needs: [test, scan, app, mobile, app-package, app-package-macos, app-package-linux, docker]
+    needs: [test, communication, scan, app, mobile, app-package, app-package-macos, app-package-linux, docker]
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - run: test "${{ needs.test.result }}" = success && test "${{ needs.scan.result }}" = success && test "${{ needs.app.result }}" = success && test "${{ needs.mobile.result }}" = success && test "${{ needs.app-package.result }}" = success && test "${{ needs.app-package-macos.result }}" = success && test "${{ needs.app-package-linux.result }}" = success && test "${{ needs.docker.result }}" = success
+      - run: test "${{ needs.test.result }}" = success && test "${{ needs.communication.result }}" = success && test "${{ needs.scan.result }}" = success && test "${{ needs.app.result }}" = success && test "${{ needs.mobile.result }}" = success && test "${{ needs.app-package.result }}" = success && test "${{ needs.app-package-macos.result }}" = success && test "${{ needs.app-package-linux.result }}" = success && test "${{ needs.docker.result }}" = success

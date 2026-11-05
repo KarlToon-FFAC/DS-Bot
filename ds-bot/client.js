@@ -42,6 +42,415 @@ module.exports = __toCommonJS(index_exports);
 // src/client/i18n.js
 var NAMESPACE = "ds-bot";
 var ZH = {
+  "Remote profile": "远程展示资料",
+  "Saved on this device. Published Bots sync this profile to their authorized Remote audience. Keep private instructions and secrets out.": "资料保存在本机，已发布的 Bot 会同步给获授权的远程联系人。请勿填写内部指令和秘密。",
+  "Headline": "职责或专业称号",
+  "Skills": "技能",
+  "Public headline": "对外称号",
+  "Public summary": "对外简介",
+  "Public skills": "对外技能",
+  "Public languages": "对外交流语言",
+  "Separate keywords with commas": "关键词用逗号分隔",
+  "Separate languages with commas": "交流语言用逗号分隔",
+  "Save public profile": "保存对外资料",
+  "Public profile changed elsewhere. Your draft is retained; reopen this Bot before saving again.": "对外资料已在其他位置修改，已保留编辑内容。请重新打开该 Bot，核对后再保存。",
+  "The public profile appears to contain private credentials. Remove them before saving.": "对外资料中可能包含私密凭据，请移除后再保存。",
+  "The public profile could not be synchronized. Check the Hub connection and try again.": "对外资料同步失败，请检查 Hub 连接后重试。",
+  "Unable to load profile details": "无法加载完整资料",
+  "Profile saved, but the latest details could not be loaded": "资料已保存，但无法加载最新详情",
+  "Loading profile details…": "正在加载完整资料…",
+  "Reload profile details": "重新加载完整资料",
+  "Directory filter": "目录筛选",
+  "Profile and Bots": "资料与 Bot",
+  "Expertise": "专长",
+  "Languages": "交流语言",
+  "Role or specialty": "职责或专长",
+  "Profile summary": "资料简介",
+  "Expertise (comma-separated)": "专长（用逗号分隔）",
+  "Languages (comma-separated)": "交流语言（用逗号分隔）",
+  "Describe your responsibilities and the help you can offer. Only share information intended for your contacts.": "介绍你的职责及可以提供的帮助，仅填写适合向联系人展示的信息。",
+  "Profile changed elsewhere. Your edits are kept. Review the latest profile before saving.": "资料已在其他位置修改，已保留你的编辑。请先核对最新资料再保存。",
+  "Unable to load the latest profile": "无法加载最新资料",
+  "Latest shared profile": "最新共享资料",
+  "No role or specialty": "尚未填写职责或专长",
+  "No profile summary": "尚未填写简介",
+  "Review latest profile": "核对最新资料",
+  "Upgrade the Hub to edit public profiles.": "请升级 Hub 以支持公开资料编辑。",
+  "The public profile is invalid. Check the field lengths and try again.": "公开资料无效，请检查字段长度后重试。",
+  "The Hub returned an invalid public profile. Refresh before trying again.": "Hub 返回的公开资料无效，请刷新后重试。",
+  "IP notes": "IP 备注",
+  "IP note": "IP 备注",
+  "IP address": "IP 地址",
+  "Add IP note": "添加 IP 备注",
+  "Edit IP note": "编辑 IP 备注",
+  "Edit note": "编辑备注",
+  "Add note": "添加备注",
+  "Save note": "保存备注",
+  "Clear note": "清除备注",
+  "Saved only on this device for this Hub. IP notes label addresses, not people or trusted identities. Shared IPs use the same note.": "备注仅保存在本机当前 Hub 下，用来标记地址，不代表人员身份或可信关系。共用 IP 的设备使用同一备注。",
+  "Enter a valid IPv4 or IPv6 address. Ports are optional; use brackets around IPv6 with a port.": "请输入有效的 IPv4 或 IPv6 地址。端口可省略；IPv6 带端口时请用方括号括起地址。",
+  "Use an IP note of at most 160 characters without line breaks or hidden control characters.": "IP 备注最多 160 个字符，不能包含换行或隐藏控制字符。",
+  "Up to 256 IP notes can be saved for this Hub. Clear an old note before adding another.": "当前 Hub 最多保存 256 条 IP 备注，请先清除旧备注再添加。",
+  "Discard publication changes": "放弃发布列表修改",
+  "Published Bots changed elsewhere. Your selection is retained. Discard your changes to review the current list before saving again.": "其他窗口已修改发布列表，已保留你的选择。请先放弃本次修改，核对当前列表后再重新保存。",
+  "Connection status unavailable": "连接状态未知",
+  "Disconnected from Hub": "未连接 Hub",
+  "Status may be out of date.": "状态可能已过期。",
+  "Saved approval. This is not a live connection check. The device configuration is saved through the app; current connection status is shown separately.": "已保存批准记录，不代表当前已连接。设备配置由应用保存；当前连接状态会单独显示。",
+  "This browser cannot create secure request identifiers. Nothing was sent. Use a supported browser and refresh.": "浏览器无法生成安全请求标识，未发送任何内容。请使用受支持的浏览器并刷新。",
+  "The API does not recognise this action. Update the plugin and restart its host process.": "接口不支持此操作。请更新插件并重启宿主进程。",
+  "The request was incomplete. Refresh before trying again.": "请求不完整，请刷新后再试。",
+  "Confirm the reviewed Hub identity and address before continuing.": "请核对并确认 Hub 身份和地址后继续。",
+  "This Hub address is not allowed. Ask its owner for a reachable WSS address.": "此 Hub 地址不被允许，请向所有者获取可达的 WSS 地址。",
+  "The Hub code is invalid. Obtain a fresh code through a trusted channel.": "Hub 码无效，请通过可信渠道获取新码。",
+  "The saved pairing does not match this Hub. Check saved Hubs before reusing an identity.": "保存的配对与此 Hub 不匹配，请先检查已保存的 Hub，不要直接复用身份。",
+  "The local credential store is unavailable or read-only. Check the instance configuration without sharing credentials.": "本机凭据存储不可用或只读，请检查实例配置，不要分享凭据。",
+  "The Hub rejected the enrollment exchange. Check versions and saved request status before continuing.": "Hub 拒绝了加入验证，请先检查版本和已保存的申请状态再继续。",
+  "This Hub has no approved access yet. Check the saved join request first.": "此 Hub 尚无已批准的访问权限，请先检查保存的加入申请。",
+  "Choose only local Bots that exist on this device.": "请选择此设备上存在的本地 Bot。",
+  "Only the local human user can perform this action.": "此操作仅限本机用户本人执行。",
+  "The sender identity does not match this authenticated session. Refresh without changing identities.": "发送者身份与当前认证会话不匹配，请刷新，不要替换身份。",
+  "Also permanently delete this Hub communication queue and cached files. DSH session journals and browser drafts are retained.": "同时永久删除此 Hub 的通信队列和缓存文件。DSH 会话日志及浏览器中未发送的内容仍保留。",
+  "Close replies": "关闭回复小窗",
+  "Reply in this thread": "在此消息链中回复",
+  "Send reply": "发送回复",
+  "Unable to save this reply on this device. Nothing was sent.": "无法在本机保存此回复，消息尚未发送。",
+  "Update read into task": "补充内容已读入原任务",
+  "Update stored; awaiting model step": "补充内容已保存，等待模型读入",
+  "Local memory in remote conversations": "远程会话使用本地记忆",
+  "Allow each Bot to use its own local memory": "允许每个 Bot 使用自己的本地记忆",
+  "Enabled by default for this Hub. Selected entries from each Bot’s own main memory are sent to its configured model service. Replies may share relevant facts with everyone in the conversation. Other chats, topic files and other Bots’ memory are not included.": "此 Hub 默认开启。每个 Bot 自身主记忆中选取的条目会发送给其配置的模型服务，回复可能向会话内所有成员分享相关事实。不包含其他聊天、主题文件和其他 Bot 的记忆。",
+  "Turning this off stops new memory reads after configuration reload. It does not erase existing model context, saved session records or messages already shared. Existing conversations and recovery may still contain earlier facts.": "关闭后，配置重载会停止新的记忆读取；不会清除已有模型上下文、已保存会话记录或已分享消息。既有会话及恢复过程仍可能包含先前的信息。",
+  "Saved. The configuration will reload.": "已保存，配置将重载。",
+  "Copy failed. Select the message text to copy it.": "复制失败，请选中消息文字后复制。",
+  "Leave this Hub": "退出此 Hub",
+  "Forget this Hub": "忘记此 Hub",
+  "Check revoked access": "核对访问是否已撤销",
+  "Confirm leaving": "确认退出",
+  "Confirm forgetting": "确认忘记",
+  "Access revoked. History is retained; this device cannot resume.": "访问已撤销。历史保留，此设备无法恢复连接。",
+  "Revoke server access and group memberships. Chat history stays. Transfer or dissolve groups owned by this device first.": "撤销服务端访问和群成员资格，保留聊天历史。请先转移或解散此设备拥有的群。",
+  "Delete this Hub configuration, device key and saved CA trust. Leave or cancel pending approval first. Other Hubs are unaffected. Retained history cannot be attached to a new identity.": "删除此 Hub 的本机配置、设备密钥和 CA 信任。请先退出或取消待审申请，不影响其他 Hub。保留的历史不会绑定到新身份。",
+  "Also permanently delete this Hub local message history and cached files.": "同时永久删除此 Hub 的本机消息历史和缓存文件。",
+  "Access to this Hub was revoked. Forget the saved identity before a new enrollment, or ask the administrator to explicitly repair the original device.": "此 Hub 的访问已撤销。重新申请前请忘记原身份，或请管理员明确修复原设备。",
+  "Confirm leaving this exact Hub. Its server memberships and access will be revoked; history is retained.": "请确认退出这个 Hub。服务端成员资格和访问将撤销，历史保留。",
+  "Confirm forgetting this exact Hub and explicitly choose whether local history should be deleted.": "请确认忘记这个 Hub，并明确选择是否删除本机历史。",
+  "Leave this Hub or check its revoked status before forgetting its saved device identity.": "忘记设备身份前，请先退出此 Hub 或核对访问已撤销。",
+  "Cancel the pending join request before forgetting this saved device identity.": "忘记身份前，请先取消待审加入申请。",
+  "This credential provider does not support deleting records. No credentials were forgotten.": "此凭据提供程序不支持删除记录，凭据未被删除。",
+  "Local credentials could not be deleted. Preserve the saved identity and check its status before retrying.": "无法删除本机凭据。请保留原身份，重试前先核对状态。",
+  "Local history cleanup was interrupted. Access remains revoked; check retained files before retrying.": "本机历史清理中断，访问仍已撤销。重试前请检查保留的文件。",
+  "Automatic application stopped. Review or discard this suggestion.": "自动应用已停止。请检查或放弃这条建议。",
+  "Wait for the current attachment to finish.": "请等待当前附件处理完成。",
+  "Attach images or files (64 KiB total)": "添加图片或文件（合计最多 64 KiB）",
+  "Attachments require a compatible Hub and clients.": "附件需要兼容此功能的 Hub 和客户端。",
+  "Attachment could not be verified.": "无法验证此附件。",
+  "Download {name}": "下载 {name}",
+  "Choose up to four files, at most 64 KiB total.": "请选择最多四个文件，合计不超过 64 KiB。",
+  "The attachment is invalid or unsafe. Choose a regular file or raster image.": "附件无效或不安全。请选择普通文件或位图图片。",
+  "The attachment bytes do not match their digest.": "附件内容与摘要不一致。",
+  "Switching pauses the current Hub and retains its data. A new Hub starts with a separate identity and no published Bots.": "切换会暂停当前 Hub 并保留数据。新 Hub 使用独立身份，默认不发布任何 Bot。",
+  "Select this Hub": "选择此 Hub",
+  "Current Hub": "当前 Hub",
+  "Disconnect this Hub": "断开此 Hub",
+  "Resume this Hub": "恢复连接此 Hub",
+  "Paused. Identity, trust and Hub history are retained separately.": "已暂停。该 Hub 的身份、信任和历史独立保留。",
+  "Local disconnect preserves server membership and queued work.": "本地断开会保留服务端成员身份和待处理工作。",
+  "Resume retained pending messages and work after the Hub checks authorization.": "经 Hub 重新核验权限后，恢复保留的待发消息和工作。",
+  "Confirming a new Hub selection or join creates its own device key. Disconnecting retains that key and Hub data; it does not revoke membership on the server. The default credential store is plaintext protected by your OS account permissions, not encrypted against the same user.": "确认选择或加入新 Hub 时会创建独立设备密钥。断开会保留密钥和该 Hub 的数据，不撤销服务端成员身份。默认凭据存储由系统账户权限保护，不能隔离同一用户下的程序。",
+  "Legacy shared-secret pairing cannot be safely assigned to another Hub. Keep this data and enroll through a separate profile first.": "旧式共享密钥配对无法安全归入另一个 Hub。请保留数据，先使用独立配置重新加入。",
+  "This Hub is paused locally. Its identity and queued work are retained; explicitly resume it in pairing settings.": "此 Hub 已在本地暂停，身份和待处理工作仍保留。请在配对设置中明确恢复。",
+  "The selected Hub changed. Refresh saved Hubs before continuing; no identity should be reused blindly.": "所选 Hub 已变化，请刷新已保存的 Hub 后继续，不要盲目复用身份。",
+  "Confirm that retained pending messages and work may resume before reconnecting this Hub.": "重新连接前，请确认恢复该 Hub 保留的待发消息和工作。",
+  "Select this saved Hub first. Only one Hub can be active at a time.": "请先选择此已保存的 Hub，同时只能启用一个 Hub。",
+  "This old enrollment has no proven queue binding. Its history was preserved; use a separate profile rather than guessing ownership.": "此旧配对没有可证明的队列归属。历史已保留，请使用独立配置，避免猜测数据归属。",
+  "Search conversations and contacts": "搜索会话与联系人",
+  "Search current conversations, contacts and recent message summaries.": "搜索当前可见会话、联系人及最近消息摘要。",
+  "No matching conversations or contacts.": "没有匹配的会话或联系人。",
+  "The Hub certificate authority is not trusted. Obtain a fresh signed Hub code through a trusted channel and explicitly update this Hub CA trust. Keep TLS verification enabled.": "尚未信任此 Hub 的证书机构。请通过可信渠道取得新版签名 Hub 码，明确更新此 Hub 的 CA 信任，并保持 TLS 验证开启。",
+  "The Hub code contains invalid CA trust. Obtain a fresh code from the owner through a trusted channel.": "Hub 码中的 CA 信任材料无效，请通过可信渠道向管理员取得新码。",
+  "This Hub CA or certificate has expired. Obtain a renewed code from the owner.": "此 Hub 的 CA 或证书已过期，请向管理员取得更新的 Hub 码。",
+  "This Hub code has expired or has an invalid lifetime. Obtain a fresh code from the owner.": "此 Hub 码已过期或有效期无效，请向管理员取得新码。",
+  "Saved CA trust belongs to a different Hub or address. Do not reuse it.": "保存的 CA 信任属于其他 Hub 或地址，请勿复用。",
+  "This Hub code signature is invalid. Obtain the code again through a trusted channel.": "Hub 码签名无效，请通过可信渠道重新取得。",
+  "This device already has a Hub identity. Explicitly update this Hub CA trust using the reviewed new code, then check the saved request.": "本设备已有 Hub 身份。请核对新码并明确更新此 Hub 的 CA 信任，再检查已有申请。",
+  "Accept this code only from a trusted channel. Its own certificate cannot authenticate an untrusted source.": "请只接受可信渠道提供的 Hub 码，码内证书不能证明不可信来源的身份。",
+  "Hub CA fingerprint": "Hub CA 指纹",
+  "Legacy code: ask the Hub owner for a v2 code to pair a private CA without environment settings.": "此为旧版 Hub 码。请向 Hub 管理者索取新版码，以免手动配置私有 CA。",
+  "Update this Hub CA trust": "更新此 Hub 的 CA 信任",
+  "This DSH runtime lacks the required isolated communication preset API. Check the supported DSH version.": "此 DSH 运行时缺少远程通信所需的隔离预设 API，请核对受支持的 DSH 版本。",
+  "An isolated communication preset is already registered. Check for duplicate DS Bot plugin instances; do not remove isolation.": "远程通信隔离预设已被注册，请检查是否重复加载 DS Bot 插件，勿移除隔离限制。",
+  "The stored communication database requires a different application version. Preserve the data and check the matching Hub/client versions.": "通信数据库与当前程序版本不匹配，请保留数据并核对 Hub 与客户端版本。",
+  "This runtime lacks a required Node built-in module. Use the supported Node and DSH versions.": "运行时缺少必要的 Node 内置模块，请使用受支持的 Node 与 DSH 版本。",
+  "Update this device and the Hub together: explicit Bot activation is required. Queued intents are retained.": "请将本实例和 Hub 一起升级，以支持结构化 Bot 唤醒。队列中的原始操作会保留。",
+  "The Hub connection was lost. Refresh status before retrying the same operation; it may already be committed.": "Hub 连接已断开。操作可能已完成，请先刷新状态；重试须沿用原操作。",
+  "The Hub response timed out. Refresh status before retrying the same operation; it may already be committed.": "等待 Hub 响应超时。操作可能已完成，请先刷新状态；重试须沿用原操作。",
+  "The Hub temporarily cannot store this operation. Its original request ID is retained.": "Hub 暂时无法保存操作，已保留原请求编号。",
+  "The Hub is busy. Its original request ID is retained.": "Hub 繁忙，已保留原请求编号。",
+  "Remote communication is not ready. Check connection status and refresh without repeating the operation.": "远程通信尚未就绪，请检查连接并刷新状态，不要重复提交操作。",
+  "This profile has no active Hub configuration. Check the approved device profile.": "当前资料没有生效的 Hub 配置，请核对已批准设备使用的资料。",
+  "The instance credential provider is unavailable. Restart with the intended private credential source; do not send its value.": "实例凭据提供器不可用。请使用原定的私密凭据来源重启，不要发送凭据值。",
+  "This DSH version has no supported configuration editor. Check the installed DSH version.": "此 DSH 版本缺少受支持的配置编辑器，请核对安装版本。",
+  "The active DS Bot configuration entry could not be identified. Check the loaded profile and plugin.": "无法确定当前 DS Bot 配置项，请核对已加载的资料与插件。",
+  "A home or command-line overlay blocks saving this setting. Review the launch configuration without exposing credentials.": "主目录或命令行覆盖阻止保存此设置，请检查启动配置，勿泄露凭据。",
+  "The configuration changed during reload. Refresh the published Bot selection before applying again.": "重载时配置发生变化，请先刷新已发布 Bot 状态。",
+  "The configuration plugin reloaded. Refresh the effective settings before applying again.": "配置插件已重载，请先刷新生效设置。",
+  "The configuration save could not be confirmed. Refresh the published Bot selection before applying again.": "无法确认配置保存结果，请先刷新已发布 Bot 状态。",
+  "Hide replies": "收起回复",
+  "Show {count} replies": "展开 {count} 条回复",
+  "Device identity is saved locally. No request ID exists yet; access has not been requested from the Hub.": "设备身份已在本机保存，尚无申请编号，还未向 Hub 提交加入申请。",
+  "The Hub certificate authority is not trusted. Verify its public CA fingerprint with the administrator and launch the app with NODE_EXTRA_CA_CERTS. Restart the app; keep TLS verification enabled.": "不信任 Hub 的证书颁发机构。请与管理员核对公开 CA 指纹，再通过 NODE_EXTRA_CA_CERTS 启动并完全重启应用；保留 TLS 校验。",
+  "The Hub address does not match the certificate. Ask its administrator for a certificate covering this exact reachable hostname or IP.": "Hub 地址与证书不匹配。请管理员提供包含此实际可达域名或 IP 的证书。",
+  "The Hub certificate has expired. Ask its administrator to renew it.": "Hub 证书已过期，请管理员更新证书。",
+  "The Hub certificate is not valid yet. Check both clocks and the certificate dates.": "Hub 证书尚未生效，请检查双方时钟与证书日期。",
+  "The Hub refused the connection. Check its listening address and existing network routing with the administrator.": "Hub 拒绝连接，请与管理员核对监听地址和现有网络路由。",
+  "The Hub connection timed out. Local code review does not establish reachability; check the actual address and network route.": "连接 Hub 超时。核对 Hub 码不代表网络可达，请检查实际地址和网络路由。",
+  "Request ID": "申请编号",
+  "Review only decodes the Hub code locally. It does not test network access or submit a request.": "核对仅在本地解析 Hub 码，不会测试网络连通性或提交申请。",
+  "Refresh saved request": "刷新本机申请状态",
+  "Cannot establish the Hub connection. Check its reachable WSS address and trusted certificate.": "无法建立 Hub 连接。请检查外网可达的 WSS 地址及受信任证书。",
+  "The Hub requires a trusted WSS connection.": "Hub 需要使用证书受信任的 WSS 连接。",
+  "The Hub address is not allowed. Ask its owner for a reachable trusted WSS address.": "此 Hub 地址不可用，请向管理员获取可访问且受信任的 WSS 地址。",
+  "Hub enrollment is disabled. Ask its administrator to enable management.": "Hub 尚未启用设备加入，请管理员启用管理功能。",
+  "The Hub has no saved request with this ID. You may explicitly request access again using the saved device identity.": "Hub 未保存此申请编号。现在可使用已保存的设备身份明确重新申请。",
+  "No request has been submitted. Fix the reported local or connection problem before requesting access.": "尚未提交申请。请先解决本机或连接问题，再申请加入。",
+  "The local credential service is unavailable. Check the app version and credential provider.": "本机凭据服务不可用，请检查应用版本和凭据提供程序。",
+  "The local credential store is read only. No new enrollment can be saved.": "本机凭据存储为只读，无法保存新申请。",
+  "The saved enrollment belongs to another identity or Hub. Preserve it and check the configured profile.": "已保存申请与当前身份或 Hub 不匹配。请保留数据并核对所用配置。",
+  "This profile is already bound to another Hub or instance. Use the intended separate profile.": "当前配置已绑定其他 Hub 或实例，请使用正确的独立配置。",
+  "Review and confirm the exact Hub address again.": "请重新核对并确认准确的 Hub 地址。",
+  "The Hub returned an invalid or different enrollment identity. Do not retry until the Hub is checked.": "Hub 返回的申请身份无效或不一致，请核实 Hub 后再操作。",
+  "Enrollment approval is saved, but a home or command-line overlay blocks configuration changes.": "申请批准结果已保存，但全局或命令行覆盖配置阻止了修改。",
+  "The app configuration editor is unavailable. Update the app before applying approved enrollment.": "应用配置编辑服务不可用，请更新应用后再应用已批准的申请。",
+  "The enrollment result is uncertain. Check the saved request and its approval before requesting access again.": "加入结果尚不确定。请先刷新本机申请状态并检查批准情况，不要重复申请。",
+  "The enrollment request timed out. Check the saved request and its approval before requesting access again.": "申请响应超时。请先刷新本机申请状态并检查批准情况，不要重复申请。",
+  "The connection failed before the enrollment exchange completed.": "申请交换完成前连接失败。",
+  "The Hub challenge could not be confirmed. Check the saved request before retrying.": "无法确认 Hub 的身份挑战，请先检查已保存的申请。",
+  "The saved local enrollment could not be read.": "无法读取本机已保存的申请。",
+  "The local enrollment could not be saved. Preserve existing data and check the credential provider.": "无法保存本机申请，请保留现有数据并检查凭据提供程序。",
+  "The local credential provider status is unavailable.": "无法获取本机凭据提供程序状态。",
+  "Saved local enrollments could not be listed.": "无法列出本机已保存的申请。",
+  "Enrollment approval may be saved, but app configuration could not be updated. Check approval before retrying.": "申请批准结果可能已保存，但应用配置未能更新。请先检查批准状态，不要重新申请。",
+  "Replies stay in this conversation.": "这里只显示当前会话中的同一回复链。",
+  "Personal settings": "个人设置",
+  "Your profile": "本人资料",
+  "Device identity": "设备身份",
+  "Connection and contacts": "连接与联系人",
+  "Message replies": "回复链",
+  "View replies": "查看回复链",
+  "Load more replies": "加载更多回复",
+  "Loading replies…": "正在加载回复…",
+  "Replies stay in this conversation. Select Reply to continue an exact message.": "这里只显示当前会话中的同一回复链。选择“回复”可继续回复某条消息。",
+  "Earlier context is outside your authorized history.": "更早的上下文不在你有权查看的历史范围内。",
+  "This reply chain is unavailable. Reopen it after synchronization.": "此回复链暂不可用，请在同步后重新打开。",
+  "Activity details": "活动详情",
+  "Hub management": "Hub 管理",
+  "Open setup guide": "打开配置指南",
+  "The Hub administrator has not provided an active management entry. Ask the administrator to start the Hub and enable its management page.": "Hub 管理员尚未提供已启用的管理入口。请管理员启动 Hub 并启用管理页面。",
+  "Dismiss notification": "关闭通知",
+  "This record belongs to an earlier membership.": "此记录属于较早的成员关系。",
+  "No activity needs attention.": "暂无需要处理的活动。",
+  "View participant": "查看成员",
+  "Participant information": "成员信息",
+  None: "无",
+  "Edit Human profile": "编辑本人资料",
+  "Human profile": "本人资料",
+  "Upload avatar": "上传头像",
+  "Reset avatar": "恢复默认头像",
+  "Save profile": "保存资料",
+  "Avatar preview": "头像预览",
+  "Unable to update profile": "资料保存未确认，请核对后重试。",
+  "Paste a Hub code from its owner. Review the actual address before requesting access. Devices are not discovered automatically.": "粘贴管理员提供的 Hub 码，核对实际地址后再申请接入。不会自动发现网络设备。",
+  "Hub code": "Hub 码",
+  "Review Hub": "核对 Hub",
+  "Confirm the Hub": "确认 Hub",
+  "Hub address": "Hub 地址",
+  "Device display name": "设备显示名称",
+  "Confirm and request access": "确认并申请接入",
+  "Pairing keys are created only when you confirm a request. The default local credential store is plaintext protected by your OS account permissions, not encryption or isolation from tools running as the same user.": "只有确认申请时才会创建配对密钥。默认本地凭据为操作系统账户权限保护的明文存储，未默认加密，也不隔离同一账户下运行的工具。",
+  "Credential storage": "凭据存储",
+  "Encrypted by provider": "由存储提供方加密",
+  "Not encrypted by default": "默认未加密",
+  "Unable to read pairing status": "暂时无法读取接入状态",
+  "Open Hub management": "打开 Hub 管理页面",
+  "Check approval": "检查审批",
+  "Cancel request": "取消申请",
+  "Approved. The device configuration is saved through the app and will reload. Existing settings are preserved.": "接入已批准。应用已保存设备配置并将重新加载，其他已有设置保留。",
+  "Status unavailable": "状态暂不可用",
+  "prepared": "已准备",
+  "pending": "待处理",
+  "approved": "已批准",
+  "rejected": "已拒绝",
+  "cancelled": "已取消",
+  "expired": "已过期",
+  "accepted": "已接受",
+  "Your user code": "我的用户码",
+  "Share this code with the person you want to add. Both people choose which local Bots to share; none are selected by default.": "把用户码发给要添加的联系人。双方分别勾选愿意共享的本机 Bot，默认均不共享。",
+  "Confirm code rotation": "确认更换用户码",
+  "Rotate user code": "更换用户码",
+  "Other user code": "对方用户码",
+  "Bots to share with this request": "随此申请共享的 Bot",
+  "Request contact": "申请添加联系人",
+  "Contact requests": "联系人申请",
+  "Outgoing request": "已发出的申请",
+  "Bots to share when accepting": "接受时共享的 Bot",
+  "Accept contact": "接受联系人",
+  "Reject contact": "拒绝联系人",
+  "Connected contacts": "已添加的联系人",
+  "Shared Bots": "已共享 Bot",
+  "Confirm contact removal": "确认移除联系人",
+  "Remove contact": "移除联系人",
+  "Published Bots": "已发布 Bot",
+  "Bots available to contacts": "可向联系人开放的 Bot",
+  "Save published Bots": "保存发布列表",
+  "Refresh contacts": "刷新联系人",
+  "Manage contacts": "管理联系人",
+  "Find a contact or Bot": "搜索联系人或 Bot",
+  "Contact details are not available in the current directory.": "当前目录暂时无法提供此联系人的资料。",
+  "Their Bots": "对方的 Bot",
+  "No Bots shared with you": "对方尚未向你共享 Bot",
+  "Contact details": "联系人资料",
+  "Human identity": "人类身份",
+  "Bots you share with this contact": "你向此联系人共享的 Bot",
+  "Other available Bots": "其他可联系的 Bot",
+  "No matching contacts or Bots.": "没有匹配的联系人或 Bot。",
+  "No contacts yet. Add someone with their user code.": "暂无联系人，可通过对方的用户码添加。",
+  "Add a contact": "添加联系人",
+  "No contact requests": "暂无联系人申请",
+  "Back to settings": "返回设置",
+  "Close dialog": "关闭对话框",
+  "No published Bots": "暂无已发布 Bot",
+  "Offline": "离线",
+  "Save group settings": "保存群设置",
+  "Group settings changed elsewhere. Your edits are retained. Close and reopen to review the current settings.": "群设置已在别处更改。你的编辑已保留；请关闭后重新打开以核对当前设置。",
+  "Jump to source message": "跳转到原消息",
+  "Loading reference…": "正在读取引用…",
+  "Participant": "成员",
+  "Upgrade the Hub to support bounded Bot collaboration. Your queued messages are retained.": "请升级 Hub 以支持有界 Bot 协作。排队消息已保留。",
+  "Bot collaboration stopped at the safety limit. Send a new Human message to continue.": "Bot 协作已达到安全限制。请由用户发送新消息继续。",
+  "Both Bot modes may @mention current group Bots in an authorized final reply. Reply-only Bots cannot initiate messages or send proactively with tools. Active Bots may also initiate with tools. Bot delegation chains stop at the server’s finite limit.": "两种 Bot 模式都可在获准的最终回复中 @当前群内 Bot。被动回复 Bot 不能主动发起消息或使用工具主动发送；主动 Bot 也可通过工具发起消息。Bot 委派链达到服务端的有限额度后会停止。",
+  "An operation is not confirmed. Check status, then retry the same action.": "有操作尚未确认。请核对状态，再重试同一操作。",
+  "Remove mention": "取消点名",
+  "Add a device": "添加设备",
+  "Remote communication": "远程通信",
+  "Human profile and connection": "本人资料与连接",
+  "Human name": "本人名称",
+  "Save Human name": "保存本人名称",
+  "Save group name": "保存群名称",
+  "Address unavailable": "地址暂不可用",
+  "Activity and send status": "操作与发送状态",
+  "Copy to draft": "复制到输入框",
+  // Explicit cross-instance communication.
+  "This browser session needs the instance startup login.": "此浏览器会话需要通过实例启动入口登录。",
+  "Cannot reach this instance": "暂时无法连接此实例",
+  "Open referenced message": "打开引用消息",
+  "Earlier message unavailable": "较早消息不可读",
+  "The referenced message is outside your authorized history.": "引用的消息不在你的授权历史范围内。",
+  "Communication": "通信",
+  "Not configured": "尚未配置",
+  "Connected to Hub": "已连接通信服务",
+  "Reconnecting to Hub": "正在重连通信服务",
+  "Connection needs attention": "连接需要处理",
+  "Connection status": "连接状态",
+  "Connection details": "连接详情",
+  "Refresh status": "刷新状态",
+  "Remote contacts": "远程联系人",
+  "This device": "本机实例",
+  "Your identity": "你的身份",
+  "Error code": "错误码",
+  "Close member settings": "关闭成员设置",
+  "New message": "发起私聊",
+  "New group": "创建群聊",
+  "Unread": "未读",
+  "Back to conversation": "返回会话",
+  "Cross-device conversations": "跨机器对话",
+  "Private conversation": "私聊会话",
+  "Start a conversation across devices": "开始跨机器对话",
+  "Pair this device to get started": "先配对这台设备",
+  "Ask the Hub owner to configure communication and pair this device.": "请通信服务的管理者为本机配置通信并完成配对。",
+  "Message a Human or Bot directly, or bring them together in a group.": "直接与人或 Bot 私聊，也可以邀请他们加入同一个群。",
+  "Local chats stay separate from communication conversations.": "本地对话与跨机器通信会话保持独立。",
+  "Your cross-device conversations will appear here.": "跨机器通信会话会显示在这里。",
+  "Remote contacts appear after the other device connects and publishes its identities.": "对方设备连接并发布身份后，远程联系人会显示在这里。",
+  "You will own this group. Invitees join after accepting.": "你将成为群主，受邀成员接受邀请后加入。",
+  "New members start read-only or reply-only. Change permissions in the member settings.": "新成员默认为只读或被动回复，可在成员设置中调整权限。",
+  "Group created. Some invitations were not sent. Open the member settings to invite them.": "群已创建，部分邀请未发出。请在成员设置中补充邀请。",
+  "Roles control group management. Speaking permissions control who can send.": "角色决定群管理权限，发言权限决定能否发送消息。",
+  "Reply-only Bots respond to admitted messages. Bots allowed to speak may also initiate messages.": "被动回复的 Bot 仅回应获准收取的消息，允许发言的 Bot 也可主动发送。",
+  "Queued messages send automatically when the connection returns.": "已排队的消息会在连接恢复后自动发送。",
+  "Waiting for the Hub": "等待通信服务",
+  "The action could not be confirmed. Refresh status before trying again.": "暂时无法确认操作结果，请刷新状态后再试。",
+  "The Hub rejected this device. Ask the Hub owner to check its pairing.": "通信服务拒绝了本机，请管理者检查配对配置。",
+  "This device was unpaired. Ask the Hub owner to pair it again.": "本机配对已撤销，请管理者重新配对。",
+  "Membership is still syncing. Wait briefly, then retry the same request.": "成员列表仍在同步。请稍候，并重试原请求。",
+  "Some history is missing. Wait for synchronization before sending.": "部分历史尚未同步完整，请等待同步后再发送。",
+  "Another connection replaced this one. Close the duplicate instance and restart this one.": "另一个连接替代了本机连接，请关闭重复实例后重启本机实例。",
+  "This device and the Hub use incompatible versions. Update them to the same revision.": "本机与通信服务的版本不兼容，请更新到同一版本。",
+  "This Hub address requires a secure connection. Ask the Hub owner for its trusted WSS address.": "此通信服务地址需要安全连接，请管理者提供可信的 WSS 地址。",
+  "Send not confirmed. Retry the same message to avoid sending it twice.": "尚未确认发送结果，请重试原消息以避免重复发送。",
+  "Enter to send · Shift+Enter for a new line": "Enter 发送 · Shift+Enter 换行",
+  "Stored means the destination saved the message. Read means a Human opened it. Bot admitted means processing was accepted, not that a reply is complete.": "落盘表示目标端已保存；已读表示人已打开；Bot 入箱表示已接受处理，不代表已经完成回复。",
+  "Human": "人",
+  "Local": "本地",
+  "Remote": "远程",
+  "Private message": "私聊",
+  "Back to local chats": "返回本地对话",
+  "Offline · sends stay queued": "离线 · 消息保留在发送队列",
+  "Communication conversations": "通信会话",
+  "Contacts": "联系人",
+  "Create communication group": "新建通信群",
+  "Create and invite": "创建并邀请",
+  "Invitations": "邀请",
+  "Accept invitation": "接受邀请",
+  "Operation failed": "操作失败",
+  "Operation queued": "操作已排队",
+  "Choose a contact or conversation": "选择联系人或会话",
+  "Group members and receiving rules": "群成员与收件规则",
+  "Group manager": "群管理者",
+  "Invite participant": "邀请成员",
+  "Invite": "邀请",
+  "Receiving rule": "收件规则",
+  "Mentions only": "仅点名时回复",
+  "Plain messages go to one Bot": "普通消息由指定 Bot 回复",
+  "Default reply Bot": "默认回复 Bot",
+  "Save receiving rule": "保存收件规则",
+  "Confirm leaving group": "确认退出群",
+  "Leave group": "退出群",
+  "Confirm ending group for everyone": "确认解散所有人的群",
+  "End group for everyone": "解散所有人的群",
+  "Communication messages": "通信消息",
+  "Load earlier messages": "加载更早消息",
+  "Show latest messages": "显示最新消息",
+  "Membership or receiving rule changed": "成员或收件规则已变更",
+  "You · Human": "你 · 人",
+  "Reply to": "回复",
+  "Hub accepted": "通信服务已接受",
+  "Send failed": "发送失败",
+  "Queued on this device": "已在本机排队",
+  "Cancel reply": "取消回复",
+  "Mention participant": "点名成员",
+  "Communication message": "通信消息",
+  "Retry same send": "重试原消息",
+  "Text and Markdown · attachments unavailable": "支持文本与 Markdown · 暂不支持附件",
+  "Bot delivery needs reconciliation": "Bot 收件结果需要核对",
+  "Choose a participant": "选择成员",
+  "Revoked": "已撤销",
+  "Bot admitted": "Bot 已入箱",
+  "Displayed": "已显示",
+  "Destination stored": "目标端已落盘",
+  "Waiting for destination": "等待目标端接收",
+  "Choose the exact participant in the mention picker.": "请在点名选择器中选择确切的成员。",
+  "Choose a current participant to mention.": "请选择当前会话的成员。",
+  "The message exceeds the text limit. Split it into separate messages.": "消息超过文本上限，请分成多条发送。",
+  "Only text and Markdown are supported.": "仅支持文本与 Markdown。",
+  "The send queue is full. Wait for the connection to recover.": "发送队列已满，请等待连接恢复。",
+  "You are no longer a member of this conversation.": "你已不再是此会话的成员。",
+  "Your membership changed. Refresh the conversation.": "成员资格已变更，请刷新会话。",
+  "You do not have permission for this group operation.": "你没有执行此群操作的权限。",
+  "That message is not an authorized reply target in this conversation.": "无法引用此会话中未获授权的消息。",
+  "The conversation is waiting for a connection.": "会话正在等待连接。",
+  "This instance is read-only.": "此实例处于只读状态。",
+  "Communication is unavailable. Retry the same send when the connection returns.": "通信暂不可用，连接恢复后请重试原消息。",
   // Shared
   "Main Bot": "主 Bot",
   Working: "工作中",
@@ -1224,6 +1633,29 @@ var HOST_ZH = {
   "DS Bot is still loading this chat.": "DS Bot 还在加载这个对话。"
 };
 Object.assign(ZH, HOST_ZH);
+Object.assign(ZH, {
+  "Group owner": "群主",
+  "Group admin": "群管理员",
+  "Group member": "群成员",
+  "Group role": "群角色",
+  "Speaking permission": "发言权限",
+  "Read only": "只读",
+  "Can speak": "可发言",
+  "Reply only": "被动回复",
+  "Save member permissions": "保存成员权限",
+  "Transfer ownership to": "移交群主给",
+  "Transfer ownership": "移交群主",
+  "Confirm ownership transfer": "确认移交群主",
+  "Transfer ownership before leaving": "请先移交群主再退出",
+  "Restore retained ownership": "恢复原群主身份",
+  "You have read-only access to this group.": "你在此群中只有只读权限。",
+  "This Bot can only reply to an authorized message.": "此 Bot 只能被动回复已授权的消息。",
+  "Group settings changed. Review the current members and try again.": "群设置已变更，请核对当前成员后重试。",
+  "Transfer ownership before leaving or removing the owner.": "退出或移除群主前，请先移交群主身份。",
+  "Restore your retained ownership first.": "请先恢复原群主身份。",
+  "The owner is unavailable. Ownership stays with that identity.": "群主暂不可用，群主身份仍保留给原身份。",
+  "This legacy group has no retained owner. No automatic takeover is allowed.": "此旧群没有保留的群主身份，不允许自动接管。"
+});
 var fill = (text, params) => params ? text.replace(/\{(\w+)\}/g, (match, name) => name in params ? String(params[name]) : match) : text;
 var service = null;
 var bound = null;
@@ -1477,8 +1909,8 @@ function bodyOf(def, paint, flat = false) {
     return "";
   }
 }
-var eyeMarkup = ([cx, cy, w, h50, tilt]) => `<g transform="translate(${cx} ${cy}) rotate(${tilt})"><rect class="bt-eye" x="${-w / 2}" y="${-h50 / 2}" width="${w}" height="${h50}" rx="${w / 2}"/></g>`;
-var happyEyeMarkup = ([cx, cy, w, h50, tilt]) => `<g transform="translate(${cx} ${cy}) rotate(${tilt})"><path class="bt-eye-happy" opacity="0" d="M${-w * 0.62} ${h50 * 0.14}Q0 ${-h50 * 0.42} ${w * 0.62} ${h50 * 0.14}" fill="none" stroke="#000" stroke-width="${w * 0.5}" stroke-linecap="round"/></g>`;
+var eyeMarkup = ([cx, cy, w, h62, tilt]) => `<g transform="translate(${cx} ${cy}) rotate(${tilt})"><rect class="bt-eye" x="${-w / 2}" y="${-h62 / 2}" width="${w}" height="${h62}" rx="${w / 2}"/></g>`;
+var happyEyeMarkup = ([cx, cy, w, h62, tilt]) => `<g transform="translate(${cx} ${cy}) rotate(${tilt})"><path class="bt-eye-happy" opacity="0" d="M${-w * 0.62} ${h62 * 0.14}Q0 ${-h62 * 0.42} ${w * 0.62} ${h62 * 0.14}" fill="none" stroke="#000" stroke-width="${w * 0.5}" stroke-linecap="round"/></g>`;
 var maskBox = (size) => `maskUnits="userSpaceOnUse" x="${-size}" y="${-size}" width="${size * 3}" height="${size * 3}"`;
 var holes = (def, eyes) => `<rect x="${-def.size}" y="${-def.size}" width="${def.size * 3}" height="${def.size * 3}" fill="#fff"/>${eyes}`;
 var MASK_ID = "%MASK%";
@@ -1597,9 +2029,9 @@ function teamActions({ call: call2, after, partFor, roster, ui: ui2, live, cards
     },
     toggleDetails: (id, force) => {
       ui2.set((state) => {
-        const details = force || state.details !== id || state.view !== "details" ? id : null;
-        if (details === null && panelFolded?.("details") === true) return { ...state, renaming: false, tab: null, details: id, view: "details", panelYield: true };
-        return { ...state, renaming: false, tab: null, details, view: "details" };
+        const details2 = force || state.details !== id || state.view !== "details" ? id : null;
+        if (details2 === null && panelFolded?.("details") === true) return { ...state, renaming: false, tab: null, details: id, view: "details", panelYield: true };
+        return { ...state, renaming: false, tab: null, details: details2, view: "details" };
       });
     },
     // The open panel follows the main view; a subject with no browser (a group
@@ -1932,7 +2364,7 @@ function referenceSpans(text, labels = []) {
   }
   return spans.sort((a, b) => a.start - b.start);
 }
-function mentionSpans(text, bots, { references = [] } = {}) {
+function mentionSpans(text, bots, { references = [], unknown = false, reservedAllFirst = false } = {}) {
   const value = String(text ?? "");
   const skip = [
     ...[...value.matchAll(LITERAL)].map((match) => ({ start: match.index, end: match.index + match[0].length })),
@@ -1942,9 +2374,16 @@ function mentionSpans(text, bots, { references = [] } = {}) {
   const spans = [];
   for (let at = value.indexOf("@"); at !== -1; at = value.indexOf("@", at + 1)) {
     if (at > 0 && ADDRESS_BEFORE.test(value[at - 1]) || overlaps(skip, at, at + 1)) continue;
-    const bot = byLength.find((candidate) => fitsAt(value, at + 1, candidate.name));
-    const all = bot ? void 0 : ALL_WORDS.find((word) => fitsAt(value, at + 1, word));
-    if (!bot && !all) continue;
+    const reserved = reservedAllFirst && ALL_WORDS.find((word) => fitsAt(value, at + 1, word));
+    const bot = reserved ? void 0 : byLength.find((candidate) => fitsAt(value, at + 1, candidate.name));
+    const all = reserved || (bot ? void 0 : ALL_WORDS.find((word) => fitsAt(value, at + 1, word)));
+    if (!bot && !all) {
+      if (unknown) {
+        const token = value.slice(at + 1).match(/^[^\s@,.;:!?，。；：！？()[\]{}<>/\\]+/u)?.[0];
+        if (token && !NAME_GOES_ON.test(value.slice(at + 1 + token.length))) spans.push({ start: at, end: at + 1 + token.length, unknown: token });
+      }
+      continue;
+    }
     const end = at + 1 + (bot ? bot.name.length : all.length);
     spans.push(bot ? { start: at, end, bot } : { start: at, end, all: true });
     at = end - 1;
@@ -2225,24 +2664,24 @@ function liveSprings(apply2) {
   const values = /* @__PURE__ */ new Map();
   let frame = 0;
   let last = 0;
-  const read = () => Object.fromEntries([...values].map(([key, value]) => [key, value.x]));
+  const read2 = () => Object.fromEntries([...values].map(([key, value]) => [key, value.x]));
   const step = (now) => {
     const dt = Math.min(0.5, Math.max(1e-3, (now - last) / 1e3));
     last = now;
     const steps = Math.ceil(dt * 240);
-    const h50 = dt / steps;
+    const h62 = dt / steps;
     let moving = false;
     for (const value of values.values()) {
       for (let index = 0; index < steps; index += 1) {
-        value.v += (-value.k * (value.x - value.to) - value.c * value.v) * h50;
-        value.x += value.v * h50;
+        value.v += (-value.k * (value.x - value.to) - value.c * value.v) * h62;
+        value.x += value.v * h62;
       }
       if (Math.abs(value.x - value.to) < 0.05 && Math.abs(value.v) < 1) {
         value.x = value.to;
         value.v = 0;
       } else moving = true;
     }
-    apply2(read());
+    apply2(read2());
     frame = moving ? requestAnimationFrame(step) : 0;
   };
   return {
@@ -2257,7 +2696,7 @@ function liveSprings(apply2) {
       if (jump) {
         cancelAnimationFrame(frame);
         frame = 0;
-        apply2(read());
+        apply2(read2());
         return;
       }
       if (!frame) {
@@ -3815,14 +4254,14 @@ function RoomAvatar({ room: room2, roster, size = 36 }) {
       people.length > 3 ? (0, import_react2.createElement)("span", { className: "bt-stack-more" }, `+${people.length - 3}`) : null
     );
   }
-  const seats = clusterSeats(Math.min(people.length, 4), size);
+  const seats2 = clusterSeats(Math.min(people.length, 4), size);
   const overflow = people.length > 4 ? people.length - 3 : 0;
   const gap = size / 14;
-  const rings = seats.map(([x, y, s]) => ({ cx: x + s / 2, cy: y + s / 2, r: s * 0.48 + gap }));
+  const rings = seats2.map(([x, y, s]) => ({ cx: x + s / 2, cy: y + s / 2, r: s * 0.48 + gap }));
   return (0, import_react2.createElement)(
     "span",
     { className: "bt-cluster", style: { width: size, height: size } },
-    seats.map(([x, y, s], index) => {
+    seats2.map(([x, y, s], index) => {
       const holes2 = rings.slice(index + 1).filter((ring) => Math.hypot(ring.cx - x - s / 2, ring.cy - y - s / 2) < ring.r + s * 0.46).map((ring) => `radial-gradient(circle at ${ring.cx - x}px ${ring.cy - y}px,transparent ${ring.r}px,#000 ${ring.r + 0.5}px)`);
       const style = { left: x, top: y, width: s, height: s };
       if (holes2.length > 0) Object.assign(style, { WebkitMaskImage: holes2.join(","), maskImage: holes2.join(","), WebkitMaskComposite: "source-in", maskComposite: "intersect" });
@@ -4567,10 +5006,10 @@ function parse(source) {
     if (!isOp(value)) fail(peek() ? `expected "${value}" at ${peek().at + 1}` : `expected "${value}" at the end`);
     index += 1;
   };
-  const nest = (read) => {
+  const nest = (read2) => {
     depth += 1;
     if (depth > MAX_NESTING) fail(`nested more than ${MAX_NESTING} levels`);
-    const node = read();
+    const node = read2();
     depth -= 1;
     return node;
   };
@@ -6984,7 +7423,7 @@ function SecretCard({ sessionId, bot, request, roster, actions, inline = false }
   };
   const cancel = () => run2(() => actions.secretCancel(request.id));
   const long = value.trim().length >= MIN_VALUE;
-  const save = () => {
+  const save2 = () => {
     if (long && !busy) void run2(() => actions.secretSet({ requestId: request.id, value, scope }));
   };
   const allow = () => {
@@ -7009,7 +7448,7 @@ function SecretCard({ sessionId, bot, request, roster, actions, inline = false }
       (0, import_react14.createElement)("label", { className: "bt-q-field bt-secret-field" }, (0, import_react14.createElement)(MaskedInput, { value, onChange: (next) => {
         hold();
         setValue(next);
-      }, onEnter: save, label: t("Value of {name}", { name: request.name }), autoFocus: replacing })),
+      }, onEnter: save2, label: t("Value of {name}", { name: request.name }), autoFocus: replacing })),
       request.kind === "fill" ? (0, import_react14.createElement)(ScopeSwitch, { value: scope, onChange: (next) => {
         hold();
         setScope(next);
@@ -7033,7 +7472,7 @@ function SecretCard({ sessionId, bot, request, roster, actions, inline = false }
         setReplacing(true);
       } }, t("Replace value")) : null,
       (0, import_react14.createElement)("button", { type: "button", className: "bt-q-btn", disabled: busy, onClick: cancel }, t("Cancel")),
-      filling ? (0, import_react14.createElement)("button", { type: "button", className: "bt-q-submit", disabled: !long || busy, onClick: save }, busy ? t("Saving…") : t("Save")) : (0, import_react14.createElement)("button", { type: "button", className: "bt-q-submit", disabled: busy, onClick: allow }, busy ? t("Allowing…") : t("Allow"))
+      filling ? (0, import_react14.createElement)("button", { type: "button", className: "bt-q-submit", disabled: !long || busy, onClick: save2 }, busy ? t("Saving…") : t("Save")) : (0, import_react14.createElement)("button", { type: "button", className: "bt-q-submit", disabled: busy, onClick: allow }, busy ? t("Allowing…") : t("Allow"))
     )
   );
 }
@@ -7137,7 +7576,7 @@ function ValueEditor({ secret, onSave }) {
   const [value, setValue] = (0, import_react14.useState)("");
   const [replaced, setReplaced] = (0, import_react14.useState)(false);
   const long = value.trim().length >= MIN_VALUE;
-  const save = () => {
+  const save2 = () => {
     if (!long) return;
     void Promise.resolve(onSave(value)).then((ok) => {
       if (ok) {
@@ -7157,8 +7596,8 @@ function ValueEditor({ secret, onSave }) {
     (0, import_react14.createElement)(
       "div",
       { className: "bt-secret-inline" },
-      (0, import_react14.createElement)("label", { className: "bt-q-field bt-secret-field" }, (0, import_react14.createElement)(MaskedInput, { value, onChange: edit, onEnter: save, label: t("New value of {name}", { name: secret.name }) })),
-      (0, import_react14.createElement)("button", { type: "button", className: "bt-soft bt-soft-sm", disabled: !long, onClick: save }, t("Replace"))
+      (0, import_react14.createElement)("label", { className: "bt-q-field bt-secret-field" }, (0, import_react14.createElement)(MaskedInput, { value, onChange: edit, onEnter: save2, label: t("New value of {name}", { name: secret.name }) })),
+      (0, import_react14.createElement)("button", { type: "button", className: "bt-soft bt-soft-sm", disabled: !long, onClick: save2 }, t("Replace"))
     ),
     value !== "" && !long ? (0, import_react14.createElement)("div", { className: "bt-set-hint" }, t("At least {count} characters.", { count: MIN_VALUE })) : replaced ? (0, import_react14.createElement)("div", { className: "bt-set-hint bt-secret-ok", role: "status" }, (0, import_react14.createElement)(CheckIcon), t("Replaced. Bots get the new value from their next command.")) : null
   );
@@ -7212,7 +7651,7 @@ function AddSecret({ actions, run: run2, onDone }) {
   const [purpose, setPurpose] = (0, import_react14.useState)("");
   const [value, setValue] = (0, import_react14.useState)("");
   const ready = /^[A-Za-z][\w-]{0,63}$/.test(name.trim()) && value.trim().length >= MIN_VALUE;
-  const save = () => {
+  const save2 = () => {
     if (!ready) return;
     void run2(actions.secretSet({ name, purpose, value, scope: "all" })).then((ok) => {
       if (ok) {
@@ -7226,13 +7665,13 @@ function AddSecret({ actions, run: run2, onDone }) {
     { className: "bt-set-row bt-set-paste bt-secret-add" },
     (0, import_react14.createElement)("input", { className: "bt-input", "aria-label": t("Key name"), placeholder: t("NAME, e.g. GITHUB_TOKEN"), value: name, spellCheck: false, autoComplete: "off", autoFocus: true, onChange: (event) => setName(event.target.value.toUpperCase()) }),
     (0, import_react14.createElement)("input", { className: "bt-input", "aria-label": t("What it is for"), placeholder: t("What it is for"), value: purpose, autoComplete: "off", onChange: (event) => setPurpose(event.target.value) }),
-    (0, import_react14.createElement)("label", { className: "bt-q-field bt-secret-field" }, (0, import_react14.createElement)(MaskedInput, { value, onChange: setValue, onEnter: save, label: t("Value") })),
+    (0, import_react14.createElement)("label", { className: "bt-q-field bt-secret-field" }, (0, import_react14.createElement)(MaskedInput, { value, onChange: setValue, onEnter: save2, label: t("Value") })),
     (0, import_react14.createElement)(
       "div",
       { className: "bt-secret-row-actions" },
       (0, import_react14.createElement)("span", { className: "bt-set-hint" }, t("New keys are for all Bots; narrow it down afterwards.")),
       (0, import_react14.createElement)("button", { type: "button", className: "bt-soft bt-soft-sm", onClick: onDone }, t("Cancel")),
-      (0, import_react14.createElement)("button", { type: "button", className: "bt-soft bt-soft-sm", disabled: !ready, onClick: save }, t("Save key"))
+      (0, import_react14.createElement)("button", { type: "button", className: "bt-soft bt-soft-sm", disabled: !ready, onClick: save2 }, t("Save key"))
     )
   );
 }
@@ -7487,7 +7926,7 @@ function foldPreview(text, limit = FOLD_AT, markdown = true) {
 var stripLongNote = (text) => text.replace(/^\[A long message: \d+ characters\.[^\]\n]*\]\n/, "");
 function useFold(text, { limit = FOLD_AT, whole, live = false, markdown = true } = {}) {
   const [open, setOpen] = (0, import_react15.useState)(false);
-  const [read, setRead] = (0, import_react15.useState)();
+  const [read2, setRead] = (0, import_react15.useState)();
   const cut = whole !== void 0 && whole.length > text.length;
   const view = (0, import_react15.useMemo)(() => live ? null : foldView(text, cut ? ALWAYS : limit, markdown), [text, live, limit, markdown, cut]);
   if (view === null) return { shown: text, control: null };
@@ -7497,14 +7936,14 @@ function useFold(text, { limit = FOLD_AT, whole, live = false, markdown = true }
   if (!open) {
     const show2 = async () => {
       setOpen(true);
-      if (!cut || read !== void 0 || whole.load === void 0) return;
+      if (!cut || read2 !== void 0 || whole.load === void 0) return;
       setRead("loading");
       setRead(await whole.load() ?? { whole: false });
     };
     return { shown, folded: true, code, codeHead: view.codeHead, control: (0, import_react15.createElement)("span", { className: "bt-fold" }, (0, import_react15.createElement)("button", { type: "button", className: "bt-more", onClick: show2 }, t("Show all · {count} characters", { count }))) };
   }
-  const loaded = typeof read?.text === "string" ? read : void 0;
-  const note = !cut || read === void 0 || read === "loading" || loaded?.whole ? null : loaded !== void 0 && loaded.text.length > text.length ? t("Showing the first {count} characters", { count: loaded.text.length.toLocaleString() }) : t("Only the start of this message is kept here");
+  const loaded = typeof read2?.text === "string" ? read2 : void 0;
+  const note = !cut || read2 === void 0 || read2 === "loading" || loaded?.whole ? null : loaded !== void 0 && loaded.text.length > text.length ? t("Showing the first {count} characters", { count: loaded.text.length.toLocaleString() }) : t("Only the start of this message is kept here");
   return {
     shown: loaded?.text ?? text,
     control: (0, import_react15.createElement)(
@@ -7799,13 +8238,13 @@ function useTurnFacts(sessionId, actions) {
   const [facts, setFacts] = (0, import_react16.useState)(() => actions.turnFacts(sessionId));
   (0, import_react16.useEffect)(() => {
     let live = true;
-    const read = () => {
+    const read2 = () => {
       if (!live) return;
       const next = actions.turnFacts(sessionId);
       setFacts((current) => current.turns === next.turns && current.openTurn === next.openTurn ? current : next);
     };
-    read();
-    const off = actions.watchTurns(sessionId, read);
+    read2();
+    const off = actions.watchTurns(sessionId, read2);
     return () => {
       live = false;
       off();
@@ -9294,7 +9733,7 @@ function installFrameWatch(frame) {
   let raf = 0;
   const watched = /* @__PURE__ */ new Set();
   const observer = typeof ResizeObserver === "function" ? new ResizeObserver(() => schedule()) : null;
-  const read = () => {
+  const read2 = () => {
     const column = document.querySelector('[class*="_sidebarCol"]');
     const animating = column?.closest("[data-animating]") != null;
     const width = animating ? null : sidebarTrackWidth();
@@ -9314,7 +9753,7 @@ function installFrameWatch(frame) {
         }
       }
     }
-    read();
+    read2();
   };
   const schedule = () => {
     if (raf === 0) raf = requestAnimationFrame(() => {
@@ -9544,11 +9983,11 @@ function AgentRow({ agent, actions, useSessions, useSessionStatus, useUi, wide, 
     running: map.get(id)?.running === true,
     unread: map.get(id)?.completionUnread === true
   }))));
-  const statuses = Object.fromEntries(JSON.parse(statusInfo).map((entry) => [entry.id, entry]));
+  const statuses2 = Object.fromEntries(JSON.parse(statusInfo).map((entry) => [entry.id, entry]));
   const sessions = JSON.parse(info).map((session) => ({
     ...session,
-    running: statuses[session.id]?.running ?? session.running,
-    unread: statuses[session.id]?.unread ?? false,
+    running: statuses2[session.id]?.running ?? session.running,
+    unread: statuses2[session.id]?.unread ?? false,
     title: session.title === "" ? t("New session") : session.title
   }));
   const renaming = useUi((value) => value.renameAgent);
@@ -9915,6 +10354,7 @@ function TeamSidebar(props) {
     "div",
     { className: wideContent ? "bt-side" : "bt-side bt-rail", onKeyDown: typeToSearch },
     top,
+    (0, import_react19.createElement)("button", { type: "button", className: "bt-soft", onClick: actions.openCommunication, "aria-label": t("Remote communication"), title: t("Remote communication") }, wideContent ? t("Remote communication") : "↔"),
     wideContent && roster.readOnly ? (0, import_react19.createElement)("div", { className: "bt-hint bt-read-only", role: "status" }, hostText(roster.readOnly)) : null,
     (0, import_react19.createElement)(
       "div",
@@ -11081,7 +11521,7 @@ function SideEntry({ chatId, entry, actions }) {
 function SideChatView({ subject, chat, actions }) {
   const scroll = (0, import_react22.useRef)(null);
   const [draft, setDraft] = (0, import_react22.useState)("");
-  const [fail2, setFail] = (0, import_react22.useState)(null);
+  const [fail3, setFail] = (0, import_react22.useState)(null);
   const entries2 = Array.isArray(chat?.entries) ? chat.entries : [];
   const busy = entries2.some((entry) => entry?.status === "answering");
   const last = entries2.at(-1);
@@ -11121,7 +11561,7 @@ function SideChatView({ subject, chat, actions }) {
         "aria-label": t("Ask about the work so far"),
         onChange: (event) => {
           setDraft(event.target.value);
-          if (fail2 !== null) setFail(null);
+          if (fail3 !== null) setFail(null);
         },
         onKeyDown: (event) => {
           if (event.key !== "Enter" || event.shiftKey || event.nativeEvent?.isComposing) return;
@@ -11129,7 +11569,7 @@ function SideChatView({ subject, chat, actions }) {
           ask();
         }
       }),
-      fail2 !== null ? (0, import_react22.createElement)("p", { className: "bt-side-fail" }, fail2) : null
+      fail3 !== null ? (0, import_react22.createElement)("p", { className: "bt-side-fail" }, fail3) : null
     )
   );
 }
@@ -11980,7 +12420,7 @@ function ModelKeyCard({ model, actions }) {
   const [error, setError] = (0, import_react25.useState)("");
   const label = t("{provider} API key", { provider: model.providerName ?? model.provider });
   const ready = value.trim() !== "" && !busy;
-  const save = () => {
+  const save2 = () => {
     if (!ready) return;
     setBusy(true);
     setError("");
@@ -11990,13 +12430,13 @@ function ModelKeyCard({ model, actions }) {
     "div",
     { className: "bt-q bt-model-key", role: "group", "aria-label": label },
     (0, import_react25.createElement)("div", { className: "bt-model-key-title" }, (0, import_react25.createElement)(KeyIcon), label),
-    (0, import_react25.createElement)("label", { className: "bt-q-field bt-secret-field" }, (0, import_react25.createElement)(MaskedInput, { value, onChange: setValue, onEnter: save, label, autoFocus: true })),
+    (0, import_react25.createElement)("label", { className: "bt-q-field bt-secret-field" }, (0, import_react25.createElement)(MaskedInput, { value, onChange: setValue, onEnter: save2, label, autoFocus: true })),
     error ? (0, import_react25.createElement)("div", { className: "bt-secret-error", role: "alert" }, error) : null,
     (0, import_react25.createElement)(
       "div",
       { className: "bt-q-foot" },
       actions.openModels ? (0, import_react25.createElement)("button", { type: "button", className: "bt-q-btn bt-model-key-other", onClick: actions.openModels }, t("Another provider")) : null,
-      (0, import_react25.createElement)("button", { type: "button", className: "bt-q-submit", disabled: !ready, onClick: save }, busy ? t("Saving…") : t("Save"))
+      (0, import_react25.createElement)("button", { type: "button", className: "bt-q-submit", disabled: !ready, onClick: save2 }, busy ? t("Saving…") : t("Save"))
     )
   );
 }
@@ -12764,7 +13204,7 @@ function CapabilitiesPage({ roster, actions, run: run2 }) {
 function BotCapabilitiesCard({ bot, roster, actions, run: run2, Card: Card3, SwitchRow: SwitchRow2 }) {
   const items = [...roster.capabilities ?? []].sort((a, b) => Number(b.kind === "pack") - Number(a.kind === "pack") || a.name.localeCompare(b.name));
   const attached = new Set(bot.capabilities ?? []);
-  const statuses = roster.capabilityStatuses?.[bot.id] ?? {};
+  const statuses2 = roster.capabilityStatuses?.[bot.id] ?? {};
   if (items.length === 0) return null;
   return (0, import_react28.createElement)(
     Card3,
@@ -12772,7 +13212,7 @@ function BotCapabilitiesCard({ bot, roster, actions, run: run2, Card: Card3, Swi
     items.map((item) => (0, import_react28.createElement)(SwitchRow2, {
       key: item.name,
       label: item.name,
-      hint: attached.has(item.name) ? statusText(statuses[item.name]) : void 0,
+      hint: attached.has(item.name) ? statusText(statuses2[item.name]) : void 0,
       on: attached.has(item.name),
       onChange: (enabled) => void run2(actions.setBotCapability(bot.id, item.name, enabled))
     }))
@@ -13560,6 +14000,74 @@ function MemoryCard({ bot, actions }) {
     )
   );
 }
+var publicProfileDraft = (profile) => ({
+  headline: profile?.headline ?? "",
+  summary: profile?.summary ?? "",
+  expertise: (profile?.expertise ?? []).join(", "),
+  languages: (profile?.languages ?? []).join(", ")
+});
+var publicProfileList = (value) => value.split(/[,，\n]/).map((item) => item.trim()).filter(Boolean);
+function BotPublicProfile({ bot, actions }) {
+  const [draft, setDraft] = (0, import_react31.useState)(() => publicProfileDraft(bot.publicProfile));
+  const [base, setBase] = (0, import_react31.useState)(() => ({ draft: publicProfileDraft(bot.publicProfile), revision: bot.publicProfile?.revision ?? 0 }));
+  const [busy, setBusy] = (0, import_react31.useState)(false), [error, setError] = (0, import_react31.useState)("");
+  const active = (0, import_react31.useRef)(true), edits = (0, import_react31.useRef)(0);
+  (0, import_react31.useEffect)(() => {
+    active.current = true;
+    return () => {
+      active.current = false;
+    };
+  }, []);
+  const dirty = JSON.stringify(draft) !== JSON.stringify(base.draft);
+  (0, import_react31.useEffect)(() => {
+    if (!dirty && !busy) {
+      const next = publicProfileDraft(bot.publicProfile);
+      setDraft(next);
+      setBase({ draft: next, revision: bot.publicProfile?.revision ?? 0 });
+    }
+  }, [bot.publicProfile?.revision]);
+  const change = (key, value) => {
+    edits.current++;
+    setDraft((current) => ({ ...current, [key]: value }));
+  };
+  const commit = async () => {
+    if (busy || !dirty) return;
+    const submitted = draft, edit = edits.current;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await actions.updateBot(bot.id, {
+        expectedProfileRevision: base.revision,
+        publicProfile: {
+          headline: submitted.headline,
+          summary: submitted.summary,
+          expertise: publicProfileList(submitted.expertise),
+          languages: publicProfileList(submitted.languages)
+        }
+      });
+      if (!active.current) return;
+      setBase({ draft: submitted, revision: result?.publicProfile?.revision ?? base.revision + 1 });
+      if (edit === edits.current) setDraft(submitted);
+    } catch (failure) {
+      if (active.current) setError(failure?.message ?? t("Unable to update profile"));
+    } finally {
+      if (active.current) setBusy(false);
+    }
+  };
+  return (0, import_react31.createElement)(
+    Card2,
+    { title: t("Remote profile") },
+    (0, import_react31.createElement)("p", { className: "bt-set-hint" }, t("Saved on this device. Published Bots sync this profile to their authorized Remote audience. Keep private instructions and secrets out.")),
+    (0, import_react31.createElement)(Row, { label: t("Headline"), stack: true }, (0, import_react31.createElement)("input", { className: "bt-bs-input", "aria-label": t("Public headline"), value: draft.headline, maxLength: 80, onChange: (event) => change("headline", event.target.value) })),
+    (0, import_react31.createElement)(Row, { label: t("About"), stack: true }, (0, import_react31.createElement)("textarea", { className: "bt-bs-input bt-bs-area", "aria-label": t("Public summary"), value: draft.summary, maxLength: 1e3, onChange: (event) => change("summary", event.target.value) })),
+    (0, import_react31.createElement)(Row, { label: t("Skills"), hint: t("Separate keywords with commas"), stack: true }, (0, import_react31.createElement)("input", { className: "bt-bs-input", "aria-label": t("Public skills"), value: draft.expertise, onChange: (event) => change("expertise", event.target.value) })),
+    (0, import_react31.createElement)(Row, { label: t("Languages"), hint: t("Separate languages with commas"), stack: true }, (0, import_react31.createElement)("input", { className: "bt-bs-input", "aria-label": t("Public languages"), value: draft.languages, onChange: (event) => change("languages", event.target.value) })),
+    (0, import_react31.createElement)("button", { type: "button", className: "bt-soft bt-soft-sm", disabled: busy || !dirty, onClick: () => {
+      void commit();
+    } }, t(busy ? "Saving…" : "Save public profile")),
+    error ? (0, import_react31.createElement)("p", { className: "bt-comm-error", role: "alert" }, error) : null
+  );
+}
 function BotSettingsForm({ bot, roster, actions, run: run2 }) {
   const [editing, setEditing] = (0, import_react31.useState)(false);
   const [confirming, setConfirming] = (0, import_react31.useState)(false);
@@ -13575,7 +14083,7 @@ function BotSettingsForm({ bot, roster, actions, run: run2 }) {
   const inGroup = (roster.rooms ?? []).some((room2) => room2.members?.includes(bot.id));
   const privateHint = t("Other Bots cannot read its folder, memory or chats, and you approve what it shares with them.");
   const privacyHint = bot.private === true ? privateHint : isMainBot ? t("A Main Bot cannot be private.") : inGroup ? t("Leave its group chats before making it private.") : !bot.workDir ? t("Choose a working folder of its own first.") : privateHint;
-  const save = (patch) => run2(actions.updateBot(bot.id, patch));
+  const save2 = (patch) => run2(actions.updateBot(bot.id, patch));
   const duplicate = () => run2(actions.duplicateBot(bot.id).then((copy2) => actions.openSession(copy2.id)));
   const remove = () => {
     if (confirming) void run2(actions.deleteBot(bot.id));
@@ -13611,8 +14119,8 @@ function BotSettingsForm({ bot, roster, actions, run: run2 }) {
     (0, import_react31.createElement)(
       Card2,
       { title: t("Profile") },
-      (0, import_react31.createElement)(Row, { label: t("Name") }, (0, import_react31.createElement)(InlineText, { label: t("Name"), value: bot.name, placeholder: "Bob", required: true, maxLength: 40, onSave: (name) => save({ name }) })),
-      (0, import_react31.createElement)(Row, { label: t("Label"), hint: t("Optional. Shown under the name.") }, (0, import_react31.createElement)(InlineText, { label: t("Label"), value: bot.role, placeholder: t("Research, admin…"), maxLength: 24, onSave: (role) => save({ role }) }))
+      (0, import_react31.createElement)(Row, { label: t("Name") }, (0, import_react31.createElement)(InlineText, { label: t("Name"), value: bot.name, placeholder: "Bob", required: true, maxLength: 40, onSave: (name) => save2({ name }) })),
+      (0, import_react31.createElement)(Row, { label: t("Label"), hint: t("Optional. Shown under the name.") }, (0, import_react31.createElement)(InlineText, { label: t("Label"), value: bot.role, placeholder: t("Research, admin…"), maxLength: 24, onSave: (role) => save2({ role }) }))
     ),
     (0, import_react31.createElement)(
       Card2,
@@ -13631,7 +14139,7 @@ function BotSettingsForm({ bot, roster, actions, run: run2 }) {
         "div",
         { className: "bt-set-row bt-bs-row" },
         (0, import_react31.createElement)("span", { className: "bt-set-copy" }, (0, import_react31.createElement)("span", { className: "bt-bs-label" }, t("Folder"))),
-        (0, import_react31.createElement)(FolderMenu, { value: bot.workDir, actions, run: run2, onPick: (workDir) => save({ workDir }) })
+        (0, import_react31.createElement)(FolderMenu, { value: bot.workDir, actions, run: run2, onPick: (workDir) => save2({ workDir }) })
       )
     ),
     (0, import_react31.createElement)(
@@ -13642,16 +14150,17 @@ function BotSettingsForm({ bot, roster, actions, run: run2 }) {
         hint: privacyHint,
         on: bot.private === true,
         disabled: bot.private !== true && (isMainBot || inGroup || !bot.workDir),
-        onChange: (value) => save({ private: value })
+        onChange: (value) => save2({ private: value })
       })
     ),
+    (0, import_react31.createElement)(BotPublicProfile, { key: bot.id, bot, actions }),
     (0, import_react31.createElement)(
       Card2,
       { title: t("Instructions") },
       (0, import_react31.createElement)(
         Row,
         { label: t("What this Bot does"), hint: t("Its job on the team. Part of the Bot's system prompt."), stack: true },
-        (0, import_react31.createElement)(InlineText, { label: t("Instructions"), value: bot.instructions, multiline: true, placeholder: t("What this Bot is responsible for…"), onSave: (instructions) => save({ instructions }) })
+        (0, import_react31.createElement)(InlineText, { label: t("Instructions"), value: bot.instructions, multiline: true, placeholder: t("What this Bot is responsible for…"), onSave: (instructions) => save2({ instructions }) })
       )
     ),
     (0, import_react31.createElement)(BotCapabilitiesCard, { bot, roster, actions, run: run2, Card: Card2, SwitchRow }),
@@ -14271,13 +14780,13 @@ var VOICE_LABELS = {
   unsupported: "Voice chat is not available in this browser"
 };
 var CAPTURE_NOTES = { blocked: "Microphone access is blocked", unavailable: "Voice chat is not available in this browser", "too-long": "That was too long to recognize" };
-function watchReply(read, watch, consume) {
+function watchReply(read2, watch, consume) {
   let off = () => {
   };
   let consumed = false;
   const attempt = () => {
     if (consumed) return;
-    const text = read();
+    const text = read2();
     if (text === void 0) return;
     consumed = true;
     off();
@@ -16671,7 +17180,7 @@ function KeyEditor({ provider, apply: apply2, actions }) {
   const [value, setValue] = (0, import_react44.useState)("");
   const [saved, setSaved] = (0, import_react44.useState)(false);
   const ready = value.trim() !== "";
-  const save = () => {
+  const save2 = () => {
     if (!ready) return;
     void apply2(actions.setProviderKey(provider.id, value)).then((ok) => {
       if (ok) {
@@ -16692,8 +17201,8 @@ function KeyEditor({ provider, apply: apply2, actions }) {
     (0, import_react44.createElement)(
       "div",
       { className: "bt-secret-inline" },
-      (0, import_react44.createElement)("label", { className: "bt-q-field bt-secret-field" }, (0, import_react44.createElement)(KeyIcon), (0, import_react44.createElement)(MaskedInput, { value, onChange: edit, onEnter: save, label })),
-      (0, import_react44.createElement)("button", { type: "button", className: "bt-soft bt-soft-sm", disabled: !ready, onClick: save }, t("Save")),
+      (0, import_react44.createElement)("label", { className: "bt-q-field bt-secret-field" }, (0, import_react44.createElement)(KeyIcon), (0, import_react44.createElement)(MaskedInput, { value, onChange: edit, onEnter: save2, label })),
+      (0, import_react44.createElement)("button", { type: "button", className: "bt-soft bt-soft-sm", disabled: !ready, onClick: save2 }, t("Save")),
       provider.key.configured ? (0, import_react44.createElement)("button", { type: "button", className: "bt-soft bt-soft-sm bt-secret-danger", onClick: () => apply2(actions.setProviderKey(provider.id, null)) }, t("Remove key")) : null
     ),
     saved ? (0, import_react44.createElement)("div", { className: "bt-set-hint bt-secret-ok", role: "status" }, (0, import_react44.createElement)(CheckIcon), t("Saved.")) : null
@@ -16879,12 +17388,12 @@ function Choice({ label, value, options, pick: pick2 }) {
     }
   }, t(text))));
 }
-function WidthSlider({ label, value, save }) {
+function WidthSlider({ label, value, save: save2 }) {
   const [width, setWidth] = (0, import_react45.useState)(value);
   const pending = (0, import_react45.useRef)(null);
   const timer = (0, import_react45.useRef)(0);
-  const saveRef = (0, import_react45.useRef)(save);
-  saveRef.current = save;
+  const saveRef = (0, import_react45.useRef)(save2);
+  saveRef.current = save2;
   (0, import_react45.useEffect)(() => {
     if (pending.current === null) setWidth(value);
   }, [value]);
@@ -19041,6 +19550,21 @@ function Overlays({ useRoster, useUi, useSessions, useSessionStatus, useActivity
   );
 }
 
+// src/client/random-id.js
+function randomId(source = globalThis.crypto) {
+  try {
+    if (typeof source?.randomUUID === "function") return source.randomUUID();
+    if (typeof source?.getRandomValues !== "function") throw new Error();
+    const bytes = source.getRandomValues(new Uint8Array(16));
+    bytes[6] = bytes[6] & 15 | 64;
+    bytes[8] = bytes[8] & 63 | 128;
+    const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  } catch {
+    throw Object.assign(new Error("Secure random identifiers are unavailable."), { code: "SECURE_RANDOM_UNAVAILABLE" });
+  }
+}
+
 // src/client/read-page.js
 var READ_LIMITS = {
   chars: 4e5,
@@ -19377,7 +19901,7 @@ var READ_PAGE_SCRIPT = readPageScript();
 
 // src/client/shared-map.js
 function sharedMap(key, storage = globalThis.localStorage) {
-  const read = (fallback = {}) => {
+  const read2 = (fallback = {}) => {
     if (!storage) return fallback;
     try {
       const value = JSON.parse(storage.getItem(key) ?? "{}");
@@ -19387,7 +19911,7 @@ function sharedMap(key, storage = globalThis.localStorage) {
     }
   };
   const update = (change, fallback = {}) => {
-    const base = read(fallback);
+    const base = read2(fallback);
     const next = change(base);
     if (next === base) return next;
     try {
@@ -19396,7 +19920,7 @@ function sharedMap(key, storage = globalThis.localStorage) {
     }
     return next;
   };
-  return { key, read, update };
+  return { key, read: read2, update };
 }
 function setEntry(map, id, value) {
   if (value === void 0) {
@@ -19596,13 +20120,13 @@ function createBotBrowsers({ bridge, createSource: createSource2, storage = glob
     const botId = owner.get(tabId);
     return { ...state, [tabId]: { ...EMPTY, ...savedTab(botId, tabId), ...state[tabId], ...patch } };
   });
-  const save = (botId, entry) => {
+  const save2 = (botId, entry) => {
     saved = store.update((stored) => setEntry(stored, botId, entry), saved);
   };
   const persist = (botId) => {
     const state = tabs.getSnapshot()[botId];
     const snapshot = pages.getSnapshot();
-    save(botId, state && {
+    save2(botId, state && {
       tabs: state.ids.map((id) => ({ id, url: snapshot[id]?.url ?? "", title: snapshot[id]?.title ?? "" })),
       active: state.active
     });
@@ -19893,7 +20417,7 @@ function createBotBrowsers({ bridge, createSource: createSource2, storage = glob
       const { [botId]: _, ...rest } = snapshot;
       return rest;
     });
-    save(botId, void 0);
+    save2(botId, void 0);
     seen.delete(botId);
     await bridge.forget?.(`bot:${botId}`)?.catch((error) => console.warn("[ds-bot] browser forget", error));
   }
@@ -19977,7 +20501,7 @@ function createBotBrowsers({ bridge, createSource: createSource2, storage = glob
   };
 }
 var sleep = (ms) => new Promise((resolve2) => setTimeout(resolve2, ms));
-function serveBrowserReads({ browsers, post, clientId = globalThis.crypto.randomUUID(), retryMs = 1e3 }) {
+function serveBrowserReads({ browsers, post, clientId = randomId(), retryMs = 1e3 }) {
   let stopped = false;
   let poll;
   let reported = "";
@@ -20009,8 +20533,8 @@ function serveBrowserReads({ browsers, post, clientId = globalThis.crypto.random
         const response = await post("browser-wait", { clientId, open }, poll.signal);
         browsers.setHolds?.(response?.holds);
         failures = 0;
-        const requests = Array.isArray(response) ? response : response?.requests;
-        for (const request of Array.isArray(requests) ? requests : []) void answer(request);
+        const requests2 = Array.isArray(response) ? response : response?.requests;
+        for (const request of Array.isArray(requests2) ? requests2 : []) void answer(request);
       } catch {
         if (stopped) return;
         if (poll.signal.aborted) continue;
@@ -20129,6 +20653,7 @@ function ProposalCard({ proposal, initialError = "", onFailure, onResolved, acti
       (0, import_react51.createElement)(ProposalHead, { titleId, icon: PencilIcon, title: t("AGENTS.md update") }),
       (0, import_react51.createElement)(FileBox, { name: "AGENTS.md", path: proposal.folder, state: proposal.exists === false ? "Added" : "Modified", blocks }),
       proposal.edits.map((edit, index) => edit.why ? (0, import_react51.createElement)("p", { className: "bt-learning-why", key: index }, edit.why) : null),
+      proposal.autoApplyFailed ? (0, import_react51.createElement)("p", { className: "bt-learning-why", role: "status" }, t("Automatic application stopped. Review or discard this suggestion.")) : null,
       error ? (0, import_react51.createElement)("div", { className: "bt-learning-error", role: "alert" }, error) : null,
       (0, import_react51.createElement)(ProposalFoot, { busy, answer })
     );
@@ -20140,6 +20665,7 @@ function ProposalCard({ proposal, initialError = "", onFailure, onResolved, acti
     (0, import_react51.createElement)(ProposalHead, { titleId, title: proposal.name, kind: t(update ? "Skill update" : "New skill"), detail: proposal.description, oldDetail }),
     (0, import_react51.createElement)(FileBox, { name: "SKILL.md", path: `skills/${proposal.name}`, state: update ? "Updated" : "Added", blocks: [rows2] }),
     proposal.why ? (0, import_react51.createElement)("p", { className: "bt-learning-why" }, proposal.why) : null,
+    proposal.autoApplyFailed ? (0, import_react51.createElement)("p", { className: "bt-learning-why", role: "status" }, t("Automatic application stopped. Review or discard this suggestion.")) : null,
     error ? (0, import_react51.createElement)("div", { className: "bt-learning-error", role: "alert" }, error) : null,
     (0, import_react51.createElement)(ProposalFoot, { busy, answer })
   );
@@ -20544,6 +21070,3775 @@ function listedOpener({ list, open, refresh, current }) {
     drop = off;
     refresh?.();
   };
+}
+
+// src/shared/ip-address.js
+function normalizeIpAddress(value) {
+  if (typeof value !== "string" || value.length > 128) return null;
+  let address = value.trim(), port;
+  const bracket = /^\[([^\]]+)\](?::([0-9]+))?$/.exec(address);
+  if (bracket) {
+    address = bracket[1];
+    port = bracket[2];
+  } else {
+    const ipv4Port = /^([0-9.]+):([0-9]+)$/.exec(address);
+    if (ipv4Port) {
+      address = ipv4Port[1];
+      port = ipv4Port[2];
+    }
+  }
+  if (port !== void 0 && (!/^[0-9]{1,5}$/.test(port) || Number(port) < 1 || Number(port) > 65535)) return null;
+  if (/^(?:0|[1-9][0-9]{0,2})(?:\.(?:0|[1-9][0-9]{0,2})){3}$/.test(address)) {
+    return address.split(".").every((part) => Number(part) <= 255) && !bracket ? address : null;
+  }
+  if (!address.includes(":") || !/^[0-9a-fA-F:.]+$/.test(address)) return null;
+  try {
+    const canonical = new URL(`http://[${address}]/`).hostname.slice(1, -1);
+    const mapped = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(canonical);
+    if (mapped) return mapped.slice(1).flatMap((part) => {
+      const word = parseInt(part, 16);
+      return [word >> 8, word & 255];
+    }).join(".");
+    return canonical;
+  } catch {
+    return null;
+  }
+}
+
+// src/client/communication-model.js
+function contactLabels(contacts) {
+  const name = (contact) => contact.displayName ?? contact.principalId;
+  const origin = (contact) => contact.instanceLabel ?? contact.homeInstanceId ?? contact.principalId;
+  return new Map(contacts.map((contact) => {
+    const sameName = contacts.filter((other) => name(other) === name(contact));
+    let label = name(contact);
+    if (sameName.length > 1) {
+      label += " · " + origin(contact);
+      if (sameName.filter((other) => origin(other) === origin(contact)).length > 1) label += " · " + contact.principalId.slice(-8);
+    }
+    return [contact.principalId, label];
+  }));
+}
+function deliveryPhase(delivery) {
+  if (delivery.revoked) return "Revoked";
+  if (delivery.updateRead) return "Update read into task";
+  if (delivery.inputUpdate && delivery.targetStored) return "Update stored; awaiting model step";
+  if (delivery.aiAccepted) return "Bot admitted";
+  if (delivery.humanRead) return "Read";
+  if (delivery.uiApplied) return "Displayed";
+  if (delivery.targetStored) return "Destination stored";
+  return "Waiting for destination";
+}
+function contactsByAddress(contacts, addressNotes = {}) {
+  const groups = /* @__PURE__ */ new Map(), seen = /* @__PURE__ */ new Set();
+  for (const contact of contacts) {
+    if (seen.has(contact.principalId)) continue;
+    seen.add(contact.principalId);
+    const address = normalizeIpAddress(contact.ipAddress) || contact.ipAddress || "Address unavailable";
+    if (!groups.has(address)) groups.set(address, /* @__PURE__ */ new Map());
+    const instances = groups.get(address);
+    if (!instances.has(contact.homeInstanceId)) instances.set(contact.homeInstanceId, { instanceId: contact.homeInstanceId, label: contact.instanceLabel ?? contact.homeInstanceId, contacts: [] });
+    instances.get(contact.homeInstanceId).contacts.push(contact);
+  }
+  return [...groups].sort(([a], [b]) => a.localeCompare(b)).map(([address, instances]) => ({ address, ...addressNotes[address] ? { note: addressNotes[address] } : {}, instances: [...instances.values()].sort((a, b) => a.instanceId.localeCompare(b.instanceId)) }));
+}
+function conversationTitle(member, humanId, labels) {
+  return member.kind === "group" ? member.title : member.info?.members.filter((person) => person.principalId !== humanId).map((person) => labels.get(person.principalId) ?? person.displayName).join(", ") || "Private message";
+}
+function principalAvatar(principalId, displayName = "") {
+  let hash2 = 0;
+  for (const char of String(principalId)) hash2 = hash2 * 31 + char.codePointAt(0) >>> 0;
+  const chars = [...displayName.trim() || "?"];
+  return { initials: /\p{Script=Han}/u.test(chars[0]) ? chars[0] : chars.slice(0, 2).join("").toUpperCase(), variant: hash2 % 4 };
+}
+var communicationScope = (state) => state?.queueScope && state.queueScope !== "legacy" ? `${state.hubId ?? state.hubUrl}:${state.instanceId}` : state?.instanceId;
+function mentionQuery(text, caret) {
+  const before = text.slice(0, caret);
+  if (/^\s*>/.test(before.split("\n").at(-1)) || (before.match(/```/g)?.length ?? 0) % 2 || (before.replace(/```[\s\S]*?```/g, "").match(/`/g)?.length ?? 0) % 2) return null;
+  const match = /(?:^|[\s(])@([^@\n]*)$/.exec(before);
+  return match ? { start: caret - match[1].length - 1, end: caret, query: match[1] } : null;
+}
+function mentionChoices(members, query, allLabel = "All Bots") {
+  const needle = query.toLocaleLowerCase();
+  return [
+    ...members.some((person) => person.kind === "bot") ? [{ principalId: "@all", displayName: allLabel, all: true }] : [],
+    ...members
+  ].filter((person) => (person.all ? `all ${person.displayName}` : person.displayName ?? "").toLocaleLowerCase().includes(needle));
+}
+function insertMention(draft, range, person) {
+  const name = person.all ? "all" : person.displayName;
+  const manual = !person.all && mentionSpans("@" + name, []).some((span) => span.start === 0 && span.all);
+  const token = (manual ? "" : "@") + name + " ";
+  const text = draft.text.slice(0, range.start) + token + draft.text.slice(range.end);
+  return {
+    text,
+    mentions: person.all ? draft.mentions ?? [] : [.../* @__PURE__ */ new Set([...draft.mentions ?? [], person.principalId])],
+    manualMentions: manual ? [.../* @__PURE__ */ new Set([...draft.manualMentions ?? [], person.principalId])] : draft.manualMentions ?? [],
+    caret: range.start + token.length
+  };
+}
+function retainedMentions(text, selected, members, manualMentions = []) {
+  const literalQuotes = text.replace(/^[\t ]*>[^\n]*/gm, (line) => " ".repeat(line.length));
+  const spans = mentionSpans(literalQuotes, members.map((person) => ({ ...person, name: person.displayName })));
+  return (selected ?? []).filter((id) => {
+    const person = members.find((member) => member.principalId === id);
+    return person && (manualMentions.includes(id) || spans.some((span) => span.bot?.name.toLocaleLowerCase() === person.displayName.toLocaleLowerCase()));
+  });
+}
+function collaborationStops(events, outbox) {
+  const stopped = /* @__PURE__ */ new Map();
+  for (const event of events) {
+    if (event.type === "message" && event.dispatchSuppressed === "CAUSAL_LIMIT") stopped.set(event.message.messageId, event.causality);
+  }
+  for (const item of outbox) {
+    if (item.state === "accepted" && item.result?.dispatchSuppressed === "CAUSAL_LIMIT" && !stopped.has(item.id)) stopped.set(item.id, item.result.causality);
+  }
+  return [...stopped].map(([messageId, causality]) => ({ messageId, causality }));
+}
+function groupSettingsValues(member) {
+  return {
+    title: member.title ?? "",
+    routing: { mode: member.routingMode ?? "mentionsOnly", adminBotPrincipalId: member.adminBotPrincipalId ?? null },
+    policies: Object.fromEntries((member.info?.members ?? []).map((person) => [person.principalId, { role: person.role, speakingMode: person.speakingMode }]))
+  };
+}
+function groupSettingsChanges(base, draft) {
+  const changes = {};
+  if (draft.title !== base.title) changes.title = draft.title;
+  if (JSON.stringify(draft.routing) !== JSON.stringify(base.routing)) changes.routing = draft.routing;
+  const policies = [];
+  for (const [targetPrincipalId, policy] of Object.entries(draft.policies)) {
+    const before = base.policies[targetPrincipalId];
+    if (!before) continue;
+    const change = { targetPrincipalId };
+    if (policy.role !== before.role) change.role = policy.role;
+    if (policy.speakingMode !== before.speakingMode) change.speakingMode = policy.speakingMode;
+    if (Object.keys(change).length > 1) policies.push(change);
+  }
+  if (policies.length) changes.policies = policies;
+  return changes;
+}
+function referenceExcerpt(text, limit = 160) {
+  const chars = [...String(text ?? "").replace(/\s+/g, " ").trim()];
+  return chars.length > limit ? chars.slice(0, limit - 1).join("") + "…" : chars.join("");
+}
+function messageMentionSpans(message, members) {
+  const text = String(message?.content?.text ?? "");
+  const selected = new Set((message?.mentions ?? []).map((value) => typeof value === "string" ? value : value.principalId));
+  const candidates = members.filter((person) => selected.has(person.principalId) && person.displayName).map((person) => ({ ...person, name: person.displayName }));
+  let fence = "", quoted2 = false;
+  const masked = text.split(/(?<=\n)/).map((line) => {
+    const marker = line.match(/^\s{0,3}(`{3,}|~{3,})/);
+    if (fence) {
+      if (marker && marker[1][0] === fence[0] && marker[1].length >= fence.length) fence = "";
+      return line.replace(/[^\n]/g, " ");
+    }
+    if (marker) {
+      fence = marker[1];
+      return line.replace(/[^\n]/g, " ");
+    }
+    if (!line.trim()) quoted2 = false;
+    if (/^\s*>/.test(line)) quoted2 = true;
+    return quoted2 || /[\[\]<>`$]/.test(line) || /^(?: {4}|\t)/.test(line) ? line.replace(/[^\n]/g, " ") : line;
+  }).join("");
+  return mentionSpans(masked, candidates, { reservedAllFirst: true }).flatMap((span) => {
+    const slash = text.slice(0, span.start).match(/\\+$/)?.[0].length ?? 0;
+    if (slash % 2) return [];
+    const people = span.all ? candidates.filter((person) => person.kind === "bot") : candidates.filter((person) => person.name.toLowerCase() === span.bot.name.toLowerCase());
+    if (!people.length || !span.all && people.length !== 1) return [];
+    return [{ start: span.start, end: span.end, all: Boolean(span.all), people }];
+  });
+}
+function communicationLogEvents(events) {
+  const seen = /* @__PURE__ */ new Set();
+  return events.filter((event) => {
+    if (event.type === "message") return true;
+    if (event.type !== "bot.work.started" || !event.deliveryId || event.eventId !== `bot-work-started:${event.deliveryId}` || !event.messageId || !event.principalId?.startsWith("bot:") || !event.serverStartedAt || seen.has(event.eventId)) return false;
+    seen.add(event.eventId);
+    return true;
+  });
+}
+
+// src/shared/communication-diagnostics.js
+var communicationDescriptions = {
+  PUBLIC_PROFILE_SECRET_REFUSED: "The public profile appears to contain private credentials. Remove them before saving.",
+  PUBLIC_PROFILE_SYNC_FAILED: "The public profile could not be synchronized. Check the Hub connection and try again.",
+  PUBLIC_PROFILE_VERSION_CONFLICT: "Profile changed elsewhere. Your edits are kept. Review the latest profile before saving.",
+  PROFILE_VERSION_CONFLICT: "Profile changed elsewhere. Your edits are kept. Review the latest profile before saving.",
+  PUBLIC_PROFILE_CAPABILITY_REQUIRED: "Upgrade the Hub to edit public profiles.",
+  INVALID_PUBLIC_PROFILE: "The public profile is invalid. Check the field lengths and try again.",
+  INVALID_PUBLIC_PROFILE_RESPONSE: "The Hub returned an invalid public profile. Refresh before trying again.",
+  INVALID_IP_ADDRESS: "Enter a valid IPv4 or IPv6 address. Ports are optional; use brackets around IPv6 with a port.",
+  INVALID_IP_NOTE: "Use an IP note of at most 160 characters without line breaks or hidden control characters.",
+  IP_NOTE_LIMIT: "Up to 256 IP notes can be saved for this Hub. Clear an old note before adding another.",
+  SECURE_RANDOM_UNAVAILABLE: "This browser cannot create secure request identifiers. Nothing was sent. Use a supported browser and refresh.",
+  UNKNOWN_OPERATION: "The API does not recognise this action. Update the plugin and restart its host process.",
+  OPERATION_ID_REQUIRED: "The request was incomplete. Refresh before trying again.",
+  INVALID_REQUEST: "The request was incomplete. Refresh before trying again.",
+  HUB_CONFIRMATION_REQUIRED: "Confirm the reviewed Hub identity and address before continuing.",
+  HUB_ADDRESS_FORBIDDEN: "This Hub address is not allowed. Ask its owner for a reachable WSS address.",
+  INVALID_HUB_CODE: "The Hub code is invalid. Obtain a fresh code through a trusted channel.",
+  COMMUNICATION_CREDENTIAL_MISMATCH: "The saved pairing does not match this Hub. Check saved Hubs before reusing an identity.",
+  COMMUNICATION_PAIRING_CONFLICT: "The saved pairing does not match this Hub. Check saved Hubs before reusing an identity.",
+  CREDENTIAL_STORAGE_UNAVAILABLE: "The local credential store is unavailable or read-only. Check the instance configuration without sharing credentials.",
+  COMMUNICATION_STORAGE_UNAVAILABLE: "The local credential store is unavailable or read-only. Check the instance configuration without sharing credentials.",
+  CREDENTIAL_STORAGE_READ_ONLY: "The local credential store is unavailable or read-only. Check the instance configuration without sharing credentials.",
+  ENROLLMENT_CONFLICT: "The Hub rejected the enrollment exchange. Check versions and saved request status before continuing.",
+  INVALID_ENROLLMENT_CHALLENGE: "The Hub rejected the enrollment exchange. Check versions and saved request status before continuing.",
+  INVALID_ENROLLMENT_RESPONSE: "The Hub rejected the enrollment exchange. Check versions and saved request status before continuing.",
+  JOIN_NOT_SUBMITTED: "This Hub has no approved access yet. Check the saved join request first.",
+  COMMUNICATION_NOT_APPROVED: "This Hub has no approved access yet. Check the saved join request first.",
+  INVALID_BOT_SCOPE: "Choose only local Bots that exist on this device.",
+  HUMAN_REQUIRED: "Only the local human user can perform this action.",
+  AUTHOR_MISMATCH: "The sender identity does not match this authenticated session. Refresh without changing identities.",
+  ATTACHMENT_CAPABILITY_REQUIRED: "Attachments require a compatible Hub and clients.",
+  ATTACHMENT_TOO_LARGE: "Choose up to four files, at most 64 KiB total.",
+  INVALID_ATTACHMENT: "The attachment is invalid or unsafe. Choose a regular file or raster image.",
+  INVALID_ATTACHMENT_IMAGE: "The attachment is invalid or unsafe. Choose a regular file or raster image.",
+  ATTACHMENT_INTEGRITY_FAILED: "The attachment bytes do not match their digest.",
+  HUB_PAUSED: "This Hub is paused locally. Its identity and queued work are retained; explicitly resume it in pairing settings.",
+  HUB_LEFT: "Access to this Hub was revoked. Forget the saved identity before a new enrollment, or ask the administrator to explicitly repair the original device.",
+  HUB_LEAVE_CONFIRMATION_REQUIRED: "Confirm leaving this exact Hub. Its server memberships and access will be revoked; history is retained.",
+  HUB_FORGET_CONFIRMATION_REQUIRED: "Confirm forgetting this exact Hub and explicitly choose whether local history should be deleted.",
+  HUB_LEAVE_REQUIRED: "Leave this Hub or check its revoked status before forgetting its saved device identity.",
+  HUB_CANCEL_REQUIRED: "Cancel the pending join request before forgetting this saved device identity.",
+  CREDENTIAL_DELETE_UNAVAILABLE: "This credential provider does not support deleting records. No credentials were forgotten.",
+  COMMUNICATION_CREDENTIAL_DELETE_FAILED: "Local credentials could not be deleted. Preserve the saved identity and check its status before retrying.",
+  COMMUNICATION_CACHE_DELETE_FAILED: "Local history cleanup was interrupted. Access remains revoked; check retained files before retrying.",
+  HUB_SELECTION_CHANGED: "The selected Hub changed. Refresh saved Hubs before continuing; no identity should be reused blindly.",
+  HUB_RESUME_CONFIRMATION_REQUIRED: "Confirm that retained pending messages and work may resume before reconnecting this Hub.",
+  HUB_NOT_SELECTED: "Select this saved Hub first. Only one Hub can be active at a time.",
+  LEGACY_HUB_SWITCH_REQUIRES_REENROLLMENT: "Legacy shared-secret pairing cannot be safely assigned to another Hub. Keep this data and enroll through a separate profile first.",
+  LEGACY_HUB_PROFILE_UNBOUND: "This old enrollment has no proven queue binding. Its history was preserved; use a separate profile rather than guessing ownership.",
+  INVALID_HUB_TRUST: "The Hub code contains invalid CA trust. Obtain a fresh code from the owner through a trusted channel.",
+  HUB_TRUST_EXPIRED: "This Hub CA or certificate has expired. Obtain a renewed code from the owner.",
+  HUB_CODE_EXPIRED: "This Hub code has expired or has an invalid lifetime. Obtain a fresh code from the owner.",
+  HUB_TRUST_BINDING_MISMATCH: "Saved CA trust belongs to a different Hub or address. Do not reuse it.",
+  INVALID_HUB_CODE_SIGNATURE: "This Hub code signature is invalid. Obtain the code again through a trusted channel.",
+  HUB_TRUST_UPDATE_REQUIRED: "This device already has a Hub identity. Explicitly update this Hub CA trust using the reviewed new code, then check the saved request.",
+  HUB_TLS_UNTRUSTED: "The Hub certificate authority is not trusted. Obtain a fresh signed Hub code through a trusted channel and explicitly update this Hub CA trust. Keep TLS verification enabled.",
+  HUB_TLS_HOSTNAME_MISMATCH: "The Hub address does not match the certificate. Ask its administrator for a certificate covering this exact reachable hostname or IP.",
+  HUB_TLS_CERT_EXPIRED: "The Hub certificate has expired. Ask its administrator to renew it.",
+  HUB_TLS_CERT_TIME_INVALID: "The Hub certificate is not valid yet. Check both clocks and the certificate dates.",
+  HUB_CONNECTION_REFUSED: "The Hub refused the connection. Check its listening address and existing network routing with the administrator.",
+  HUB_CONNECTION_TIMEOUT: "The Hub connection timed out. Local code review does not establish reachability; check the actual address and network route.",
+  HUB_UNREACHABLE: "Cannot establish the Hub connection. Check its reachable WSS address and trusted certificate.",
+  INSTANCE_AUTHENTICATION_REQUIRED: "This browser session needs the instance startup login.",
+  AMBIGUOUS_MENTION: "Choose the exact participant in the mention picker.",
+  UNKNOWN_MENTION: "Choose a current participant to mention.",
+  PAYLOAD_TOO_LARGE: "The message exceeds the text limit. Split it into separate messages.",
+  UNSUPPORTED_CONTENT: "Only text and Markdown are supported.",
+  OUTBOX_FULL: "The send queue is full. Wait for the connection to recover.",
+  NOT_A_MEMBER: "You are no longer a member of this conversation.",
+  MEMBERSHIP_REVOKED: "Your membership changed. Refresh the conversation.",
+  FORBIDDEN: "You do not have permission for this group operation.",
+  INVALID_REPLY_TARGET: "That message is not an authorized reply target in this conversation.",
+  REFERENCE_NOT_AVAILABLE: "The referenced message is outside your authorized history.",
+  SPEAKING_FORBIDDEN: "You have read-only access to this group.",
+  PASSIVE_REPLY_REQUIRED: "This Bot can only reply to an authorized message.",
+  PASSIVE_REPLY_ONLY: "This Bot can only reply to an authorized message.",
+  GROUP_VERSION_CONFLICT: "Group settings changed. Review the current members and try again.",
+  OWNER_TRANSFER_REQUIRED: "Transfer ownership before leaving or removing the owner.",
+  OWNER_RECLAIM_REQUIRED: "Restore your retained ownership first.",
+  CONVERSATION_PENDING: "The conversation is waiting for a connection.",
+  COMMUNICATION_READ_ONLY: "This instance is read-only.",
+  UNAUTHENTICATED: "The Hub rejected this device. Ask the Hub owner to check its pairing.",
+  PEER_REVOKED: "This device was unpaired. Ask the Hub owner to pair it again.",
+  AUTHORIZATION_PENDING: "Membership is still syncing. Wait briefly, then retry the same request.",
+  HISTORY_GAP: "Some history is missing. Wait for synchronization before sending.",
+  STALE_CONNECTION: "Another connection replaced this one. Close the duplicate instance and restart this one.",
+  UNSUPPORTED_CAPABILITY: "This device and the Hub use incompatible versions. Update them to the same revision.",
+  BOUNDED_COLLABORATION_REQUIRED: "Upgrade the Hub to support bounded Bot collaboration. Your queued messages are retained.",
+  EXPLICIT_ACTIVATION_REQUIRED: "Update this device and the Hub together: explicit Bot activation is required. Queued intents are retained.",
+  CONNECTION_LOST: "The Hub connection was lost. Refresh status before retrying the same operation; it may already be committed.",
+  REQUEST_TIMEOUT: "The Hub response timed out. Refresh status before retrying the same operation; it may already be committed.",
+  STORAGE_UNAVAILABLE: "The Hub temporarily cannot store this operation. Its original request ID is retained.",
+  BACKPRESSURE: "The Hub is busy. Its original request ID is retained.",
+  COMMUNICATION_UNAVAILABLE: "Remote communication is not ready. Check connection status and refresh without repeating the operation.",
+  COMMUNICATION_NOT_CONFIGURED: "This profile has no active Hub configuration. Check the approved device profile.",
+  CREDENTIAL_UNAVAILABLE: "The instance credential provider is unavailable. Restart with the intended private credential source; do not send its value.",
+  COMMUNICATION_PRESET_UNAVAILABLE: "This DSH runtime lacks the required isolated communication preset API. Check the supported DSH version.",
+  COMMUNICATION_PRESET_CONFLICT: "An isolated communication preset is already registered. Check for duplicate DS Bot plugin instances; do not remove isolation.",
+  SCHEMA_VERSION_UNSUPPORTED: "The stored communication database requires a different application version. Preserve the data and check the matching Hub/client versions.",
+  ERR_UNKNOWN_BUILTIN_MODULE: "This runtime lacks a required Node built-in module. Use the supported Node and DSH versions.",
+  CONFIG_EDITOR_UNAVAILABLE: "This DSH version has no supported configuration editor. Check the installed DSH version.",
+  CONFIG_ENTRY_UNAVAILABLE: "The active DS Bot configuration entry could not be identified. Check the loaded profile and plugin.",
+  CONFIG_EDIT_OVERLAID: "A home or command-line overlay blocks saving this setting. Review the launch configuration without exposing credentials.",
+  CONFIG_EDIT_ENTRY_CHANGED: "The configuration changed during reload. Refresh the published Bot selection before applying again.",
+  CONFIG_EDIT_NOT_ACTIVE: "The configuration plugin reloaded. Refresh the effective settings before applying again.",
+  COMMUNICATION_CONFIG_WRITE_FAILED: "The configuration save could not be confirmed. Refresh the published Bot selection before applying again.",
+  TLS_REQUIRED: "This Hub address requires a secure connection. Ask the Hub owner for its trusted WSS address.",
+  UNKNOWN_TOOL: "This tool is unavailable through the current call surface. Check current Session scope, configuration reload and native/PTC presentation. A registered tool may require the approved run_code SDK transport in PTC mode; never bypass scope or permissions.",
+  BOT_NOT_PUBLISHED: "The executing local Bot is not published to this Hub. In Remote communication > Personal settings > Published Bots, select this Bot and save. Wait for the configuration reload, then check diagnose before retrying. Publishing another Bot does not publish this one.",
+  LOCAL_USER_SESSION_REQUIRED: "Open your own local Bot chat to inspect or manage this instance. Local diagnostics and management are unavailable in group and remote Sessions.",
+  LOCAL_USER_AUTHORIZATION_REQUIRED: "This management action requires a current direct request in your own local Bot chat. Remote messages, handoffs and schedules cannot authorize it.",
+  LOCAL_MANAGEMENT_REJECTED: "The local user rejected this management change. Ask again only if they request it.",
+  LOCAL_MANAGEMENT_CANCELLED: "The local management action was cancelled. Check current status before requesting another change.",
+  LOCAL_MANAGEMENT_APPROVAL_UNAVAILABLE: "Native approval is unavailable. No management change was authorized.",
+  PUBLICATION_CHANGED: "The published Bot selection changed while approval was pending. Review the current list and request approval for the intended selection.",
+  CONTACT_VERSION_CONFLICT: "The contact request or relation changed. Refresh its current status before deciding again.",
+  OPERATION_ID_CONFLICT: "This operation ID was already used for different input. Reconcile the original action before creating another request.",
+  CONTACT_LIMIT: "The pending contact request limit was reached. Review existing requests or wait for expiry.",
+  CONTACT_UNAVAILABLE: "This contact is unavailable in the current authorized view. Refresh status before retrying.",
+  JOIN_ALREADY_PENDING: "A join request is already pending for this device. Check its saved status before submitting another.",
+  JOIN_LIMIT: "The join request limit was reached. Review pending requests with the Hub owner before retrying.",
+  JOIN_VERSION_CONFLICT: "The join request changed. Refresh its current status before deciding again.",
+  RATE_LIMITED: "Too many requests were made. Wait before explicitly retrying the same action.",
+  INVALID_RELATIONSHIP_MEMORY: "The relationship fact has invalid fields or scope. Use the exact current conversation and supported fields.",
+  MEMBERSHIP_EPOCH_REQUIRED: "This conversation action requires the exact current membership epoch. Refresh its current authorized state first.",
+  RELATIONSHIP_MEMORY_FULL: "This relationship memory scope is full. Review existing facts before adding another.",
+  RELATIONSHIP_SECRET_REFUSED: "This relationship fact may contain a secret and was not saved. Do not store credentials or private documents here.",
+  RELATIONSHIP_SHARING_CONFIRMATION_REQUIRED: "Saving this profile across conversations requires explicit local-user sharing confirmation.",
+  RELATIONSHIP_SOURCE_REQUIRED: "The relationship fact needs an exact visible canonical source message in this conversation.",
+  RELATIONSHIP_SUBJECT_NOT_VISIBLE: "This relationship subject is outside the current authorized members. Use an exact visible identity.",
+  HUB_TLS_HANDSHAKE_FAILED: "The secure Hub handshake failed. Check compatible TLS versions and the Hub listener with its administrator; keep certificate verification enabled.",
+  HUB_WEBSOCKET_HANDSHAKE_FAILED: "The Hub did not accept the WebSocket upgrade. Check the exact communication URL and reverse proxy WebSocket routing with its administrator.",
+  COMMUNICATION_STOPPED: "This communication runtime stopped during a configuration reload. Refresh diagnostics in the current local Bot chat before retrying.",
+  COMMUNICATION_SESSION_MIGRATION_REQUIRED: "This conversation needs a fresh isolated Session. Finish or recover its pending work and retry through the supported host; never remove isolation.",
+  COMMUNICATION_AUTHORIZATION_UNKNOWN: "The Hub is disconnected, so current conversation authorization cannot be verified. Restore the connection before acting.",
+  COMMUNICATION_TOOL_NOT_ALLOWED: "This isolated communication Session cannot use that tool. Use only the tools currently advertised here; local management and execution stay in your own local chat.",
+  CONVERSATION_SCOPE_MISMATCH: "This tool call targets a different conversation. Use only this Session’s exact authorized conversation and membership epoch."
+};
+var details = {
+  BOT_NOT_PUBLISHED: {
+    why: "Communication sends authenticate the executing Bot, not another published Bot or the local Human. This Bot has no loaded publication entry.",
+    nextActions: ["In Remote communication > Personal settings > Published Bots, select the executing local Bot and save.", "Allow the configuration reload, then run communication_diagnose in the same local Bot chat. Confirm loaded publication and Hub connection before sending."]
+  },
+  COMMUNICATION_NOT_CONFIGURED: {
+    why: "Remote communication is disabled in the currently loaded plugin configuration.",
+    nextActions: ["Open Remote communication > Personal settings > Add a device and join the intended Hub.", "After approval and reload, run communication_diagnose before sending."]
+  },
+  CREDENTIAL_UNAVAILABLE: {
+    why: "The running host has no usable credential lease. An environment variable configured in a launcher or another shell does not prove this process received it.",
+    nextActions: ["Prefer the approved Hub code-join flow in Remote communication settings.", "For legacy pairing, inject the named credential privately into the host launch environment and restart that host. Never paste or print the value. A plugin reload alone cannot import a new shell environment."]
+  },
+  BOT_NOT_FOUND: { why: "The configured publication refers to a Bot that does not exist in this local team.", nextActions: ["Refresh Published Bots, choose existing local Bots and save; wait for reload."] },
+  AUTHORIZATION_PENDING: { why: "The host has not yet reconciled the membership snapshot needed for this request.", nextActions: ["Wait for membership synchronization, then retry with the same message or operation ID. If this persists, check synchronization state with diagnose."] },
+  COMMUNICATION_READ_ONLY: { why: "This host does not hold the writable team lease.", nextActions: ["Use the owning host or close the duplicate host normally, then refresh status. Do not delete locks or bypass read-only protection."] },
+  LOCAL_USER_SESSION_REQUIRED: { why: "Instance diagnostics are local-owner information, outside an isolated remote or group conversation.", nextActions: ["Open your own local Bot chat and call communication_diagnose there."] }
+};
+var phases = /* @__PURE__ */ new Set([
+  "ENROLLMENT_CONNECT_FAILED",
+  "ENROLLMENT_CHALLENGE_FAILED",
+  "ENROLLMENT_PROOF_FAILED",
+  "COMMUNICATION_CREDENTIAL_READ_FAILED",
+  "COMMUNICATION_CREDENTIAL_WRITE_FAILED",
+  "COMMUNICATION_CREDENTIAL_DESCRIBE_FAILED",
+  "COMMUNICATION_CREDENTIAL_LIST_FAILED",
+  "COMMUNICATION_CREDENTIAL_DELETE_FAILED",
+  "COMMUNICATION_CONFIG_WRITE_FAILED",
+  "CONFIG_EDIT_OVERLAID",
+  "CONFIG_EDIT_ENTRY_CHANGED",
+  "CONFIG_EDIT_NOT_ACTIVE",
+  "CONFIG_EDIT_INVALID_DOCUMENT"
+]);
+var knownCodes = /* @__PURE__ */ new Set([
+  ...Object.keys(communicationDescriptions),
+  ...phases,
+  "AI_MAPPING_CONFLICT",
+  "ATTACHMENT_CAPABILITY_REQUIRED",
+  "ATTACHMENT_SERVICE_UNAVAILABLE",
+  "AUTHORIZATION_PENDING",
+  "AUTHOR_MISMATCH",
+  "AVATAR_CAPABILITY_REQUIRED",
+  "AVATAR_SYNC_FAILED",
+  "BACKPRESSURE",
+  "BOT_NOT_FOUND",
+  "BOT_NOT_PUBLISHED",
+  "BOUNDED_COLLABORATION_REQUIRED",
+  "COMMUNICATION_AUTHORIZATION_UNKNOWN",
+  "COMMUNICATION_CACHE_DELETE_FAILED",
+  "COMMUNICATION_CONFIG_WRITE_FAILED",
+  "COMMUNICATION_CREDENTIAL_DELETE_FAILED",
+  "COMMUNICATION_CREDENTIAL_DESCRIBE_FAILED",
+  "COMMUNICATION_CREDENTIAL_LIST_FAILED",
+  "COMMUNICATION_CREDENTIAL_MISMATCH",
+  "COMMUNICATION_CREDENTIAL_READ_FAILED",
+  "COMMUNICATION_CREDENTIAL_WRITE_FAILED",
+  "COMMUNICATION_INPUT_SOURCE_UNKNOWN",
+  "COMMUNICATION_NOT_APPROVED",
+  "COMMUNICATION_NOT_CONFIGURED",
+  "COMMUNICATION_OUTPUT_SOURCE_UNKNOWN",
+  "COMMUNICATION_PAIRING_CONFLICT",
+  "COMMUNICATION_PRESET_CONFLICT",
+  "COMMUNICATION_PRESET_UNAVAILABLE",
+  "COMMUNICATION_READ_ONLY",
+  "COMMUNICATION_SESSION_MIGRATION_REQUIRED",
+  "COMMUNICATION_STOPPED",
+  "COMMUNICATION_STORAGE_UNAVAILABLE",
+  "COMMUNICATION_TOOL_NOT_ALLOWED",
+  "COMMUNICATION_UNAVAILABLE",
+  "COMMUNICATION_WORKSPACE_UNAVAILABLE",
+  "CONFIG_EDITOR_UNAVAILABLE",
+  "CONFIG_EDIT_ENTRY_CHANGED",
+  "CONFIG_EDIT_INVALID_DOCUMENT",
+  "CONFIG_EDIT_NOT_ACTIVE",
+  "CONFIG_EDIT_OVERLAID",
+  "CONFIG_ENTRY_UNAVAILABLE",
+  "CONNECTION_LOST",
+  "CONTACT_REQUIRED",
+  "CONVERSATION_PENDING",
+  "CONVERSATION_REQUIRED",
+  "CONVERSATION_SCOPE_MISMATCH",
+  "CREDENTIAL_DELETE_UNAVAILABLE",
+  "CREDENTIAL_STORAGE_READ_ONLY",
+  "CREDENTIAL_STORAGE_UNAVAILABLE",
+  "CREDENTIAL_UNAVAILABLE",
+  "DELIVERY_ID_CONFLICT",
+  "ENOENT",
+  "ENROLLMENT_CHALLENGE_FAILED",
+  "ENROLLMENT_CONFLICT",
+  "ENROLLMENT_CONNECT_FAILED",
+  "ENROLLMENT_PROOF_FAILED",
+  "ENROLLMENT_REQUEST_FAILED",
+  "EVENT_CONFLICT",
+  "EXPLICIT_ACTIVATION_REQUIRED",
+  "EXPORT_REJECTED",
+  "EXPORT_SOURCE_CONFLICT",
+  "EXPORT_UNKNOWN",
+  "FORBIDDEN",
+  "HANDOFF_ALREADY_SET",
+  "HISTORY_GAP",
+  "HUB_ADDRESS_FORBIDDEN",
+  "HUB_CANCEL_REQUIRED",
+  "HUB_CODE_EXPIRED",
+  "HUB_CONFIRMATION_REQUIRED",
+  "HUB_CONNECTION_REFUSED",
+  "HUB_CONNECTION_TIMEOUT",
+  "HUB_FORGET_CONFIRMATION_REQUIRED",
+  "HUB_LEAVE_CONFIRMATION_REQUIRED",
+  "HUB_LEAVE_REQUIRED",
+  "HUB_LEFT",
+  "HUB_NOT_SELECTED",
+  "HUB_PAUSED",
+  "HUB_RESUME_CONFIRMATION_REQUIRED",
+  "HUB_SELECTION_CHANGED",
+  "HUB_TLS_CERT_EXPIRED",
+  "HUB_TLS_CERT_TIME_INVALID",
+  "HUB_TLS_HANDSHAKE_FAILED",
+  "HUB_TLS_HOSTNAME_MISMATCH",
+  "HUB_TLS_UNTRUSTED",
+  "HUB_TRUST_BINDING_MISMATCH",
+  "HUB_TRUST_EXPIRED",
+  "HUB_TRUST_UPDATE_REQUIRED",
+  "HUB_UNREACHABLE",
+  "HUB_WEBSOCKET_HANDSHAKE_FAILED",
+  "HUMAN_REQUIRED",
+  "INJECTION_UNKNOWN",
+  "INPUT_CANCELED",
+  "INPUT_UPDATES_PENDING",
+  "INSTANCE_ID_MISMATCH",
+  "INVALID_AI_MAPPING",
+  "INVALID_AI_STATE",
+  "INVALID_ATTACHMENT",
+  "INVALID_AVATAR",
+  "INVALID_AVATAR_RESPONSE",
+  "INVALID_BOT_SCOPE",
+  "INVALID_CONFIG",
+  "INVALID_CURSOR",
+  "INVALID_ENROLLMENT_CHALLENGE",
+  "INVALID_ENROLLMENT_RESPONSE",
+  "INVALID_EVENT",
+  "INVALID_HUB_CODE",
+  "INVALID_HUB_CODE_SIGNATURE",
+  "INVALID_HUB_TRUST",
+  "INVALID_INPUT_UPDATE",
+  "INVALID_MEMBERSHIP",
+  "INVALID_PRINCIPAL",
+  "INVALID_RECEIPT",
+  "INVALID_REQUEST",
+  "INVALID_RESPONSE",
+  "INVALID_RESPONSE_GRANT",
+  "JOIN_NOT_FOUND",
+  "JOIN_NOT_SUBMITTED",
+  "LEGACY_HUB_PROFILE_UNBOUND",
+  "LEGACY_HUB_SWITCH_REQUIRES_REENROLLMENT",
+  "LEGACY_RECONCILIATION_REQUIRED",
+  "LOCAL_MANAGEMENT_APPROVAL_CANCELLED",
+  "LOCAL_MANAGEMENT_APPROVAL_REJECTED",
+  "LOCAL_MANAGEMENT_APPROVAL_UNAVAILABLE",
+  "LOCAL_USER_AUTHORIZATION_REQUIRED",
+  "MEMBERSHIP_REVOKED",
+  "MESSAGE_ID_CONFLICT",
+  "MODEL_UNAVAILABLE",
+  "NOT_A_MEMBER",
+  "OPERATION_ID_REQUIRED",
+  "OUTBOX_FULL",
+  "PASSIVE_REPLY_ONLY",
+  "PAYLOAD_TOO_LARGE",
+  "PRINCIPAL_ID_MISMATCH",
+  "PROTOCOL_VERSION_UNSUPPORTED",
+  "PUBLICATION_CHANGED",
+  "RECIPIENT_UNAVAILABLE",
+  "RECOVERY_UNKNOWN",
+  "REFERENCE_NOT_AVAILABLE",
+  "REQUEST_TIMEOUT",
+  "RESPONSE_ALREADY_SENT",
+  "RESPONSE_NOT_ACCEPTED",
+  "RESPONSE_NOT_COMPLETED",
+  "SCHEMA_VERSION_UNSUPPORTED",
+  "SESSION_UNAVAILABLE",
+  "SPEAKING_FORBIDDEN",
+  "STALE_CONNECTION",
+  "STORAGE_UNAVAILABLE",
+  "TLS_REQUIRED",
+  "TOOL_SOURCE_UNKNOWN",
+  "UNAUTHENTICATED",
+  "UNKNOWN_ACTIVATION_TARGET",
+  "UNKNOWN_BINDING",
+  "UNKNOWN_OPERATION",
+  "UNSUPPORTED_CAPABILITY",
+  "UNSUPPORTED_CONTENT",
+  "WORK_START_NOT_RECORDED"
+]);
+function communicationError(error, { bot, reloadRequired = false } = {}) {
+  const code = knownCodes.has(error?.code) ? error.code : "COMMUNICATION_UNAVAILABLE";
+  const message = communicationDescriptions[code] ?? "The communication operation could not be completed.";
+  const detail = details[code];
+  return {
+    code,
+    message,
+    why: detail?.why ?? message,
+    nextActions: detail?.nextActions ?? [message, "Check communication_diagnose in your own local Bot chat or dsbot-remote diagnose through the authenticated local API before retrying."],
+    docsHint: "dsbot-remote Skill: Outcomes and recovery; An uncertain join or certificate failure",
+    ...phases.has(error?.phase) ? { phase: error.phase } : {},
+    ...code === "BOT_NOT_PUBLISHED" ? { reloadRequired, configurationChangeRequired: !reloadRequired, reloadRequiredAfterPublicationChange: true } : {},
+    ...code === "BOT_NOT_PUBLISHED" && bot ? { subject: { kind: "local-bot", localBotId: bot.id, displayName: bot.name } } : {}
+  };
+}
+
+// src/client/communication-errors.js
+var knownCommunicationFailure = (error) => Object.hasOwn(communicationDescriptions, error?.code ?? "");
+var communicationFailure = (error) => knownCommunicationFailure(error) ? t(communicationDescriptions[error.code]) + ` [${error.code}]` : t("The action could not be confirmed. Refresh status before trying again.");
+var definitive = /* @__PURE__ */ new Set([
+  "PUBLIC_PROFILE_VERSION_CONFLICT",
+  "PROFILE_VERSION_CONFLICT",
+  "INVALID_PUBLIC_PROFILE",
+  "PUBLIC_PROFILE_SECRET_REFUSED",
+  "PUBLIC_PROFILE_CAPABILITY_REQUIRED",
+  "INSTANCE_AUTHENTICATION_REQUIRED",
+  "AMBIGUOUS_MENTION",
+  "UNKNOWN_MENTION",
+  "PAYLOAD_TOO_LARGE",
+  "UNSUPPORTED_CONTENT",
+  "NOT_A_MEMBER",
+  "MEMBERSHIP_REVOKED",
+  "FORBIDDEN",
+  "INVALID_REPLY_TARGET",
+  "REFERENCE_NOT_AVAILABLE",
+  "SPEAKING_FORBIDDEN",
+  "PASSIVE_REPLY_REQUIRED",
+  "PASSIVE_REPLY_ONLY",
+  "GROUP_VERSION_CONFLICT",
+  "OWNER_TRANSFER_REQUIRED",
+  "OWNER_RECLAIM_REQUIRED",
+  "INVALID_REQUEST",
+  "INVALID_OPERATION",
+  "UNAUTHENTICATED",
+  "PEER_REVOKED",
+  "MEMBERSHIP_LIMIT",
+  "BOT_NOT_PUBLISHED",
+  "CONTACT_REQUIRED",
+  "UNKNOWN_PRINCIPAL",
+  "OPERATION_ID_CONFLICT"
+]);
+var operationOutcomeUncertain = (error) => !definitive.has(error?.code);
+
+// src/client/communication-profile.js
+var import_react53 = require("react");
+var images = /* @__PURE__ */ new Map(), requests = /* @__PURE__ */ new Map(), authorized = /* @__PURE__ */ new Map();
+var avatarScope = "legacy";
+function safeAvatarImage(value) {
+  return typeof value === "string" && value.length <= 16e4 && /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/]+={0,2}$/.test(value) ? value : null;
+}
+function syncAvatarDirectory(contacts, scope = "legacy") {
+  if (scope !== avatarScope) {
+    avatarScope = scope;
+    images.clear();
+    requests.clear();
+  }
+  authorized.clear();
+  for (const person of contacts) if (person.avatar?.imageRevision) authorized.set(person.principalId, person.avatar.imageRevision);
+  for (const key of images.keys()) {
+    const [, principalId, revision] = JSON.parse(key);
+    if (authorized.get(principalId) !== revision) images.delete(key);
+  }
+}
+function CommunicationAvatar({ person, request, allowed: allowed2 = true, size = 28 }) {
+  const revision = allowed2 ? person.avatar?.imageRevision : null;
+  const scope = avatarScope, key = JSON.stringify([scope, person.principalId, revision]);
+  const [loaded, setLoaded] = (0, import_react53.useState)(null);
+  (0, import_react53.useEffect)(() => {
+    let active = true;
+    setLoaded(null);
+    if (!revision) return void 0;
+    const cached = images.get(key);
+    if (cached) {
+      setLoaded({ key, image: cached });
+      return void 0;
+    }
+    if (!requests.has(key)) {
+      const promise = request({ endpoint: "avatar", principalId: person.principalId, revision }).then((value2) => {
+        const image2 = value2.principalId && value2.principalId !== person.principalId || value2.revision && value2.revision !== revision ? null : safeAvatarImage(value2.image);
+        if (image2 && scope === avatarScope && authorized.get(person.principalId) === revision) images.set(key, image2);
+        return image2;
+      }).catch(() => null).finally(() => requests.delete(key));
+      requests.set(key, promise);
+    }
+    void requests.get(key).then((image2) => {
+      if (active && image2) setLoaded({ key, image: image2 });
+    });
+    return () => {
+      active = false;
+    };
+  }, [key, request, revision, person.principalId]);
+  const image = loaded?.key === key ? loaded.image : null;
+  const bot = person.kind === "bot" || person.principalId?.startsWith("bot:");
+  const value = principalAvatar(person.kind === "human" || person.principalId?.startsWith("human:") ? person.displayName ?? "Human" : person.principalId, person.displayName ?? "");
+  return (0, import_react53.createElement)(
+    "span",
+    {
+      className: "bt-comm-avatar",
+      "data-avatar": value.variant,
+      "data-kind": bot ? "bot" : person.kind,
+      "data-avatar-id": person.principalId,
+      "data-initials": !bot && !image ? value.initials : void 0,
+      "data-has-image": Boolean(image),
+      "aria-hidden": true,
+      style: { width: size, height: size, flexBasis: size, fontSize: Math.min(11, size * 0.45), lineHeight: 1, overflow: "hidden" }
+    },
+    bot ? (0, import_react53.createElement)(BotMark, { bot: { id: person.avatar?.seed ?? person.principalId, color: person.avatar?.color, avatar: { shape: person.avatar?.shape, ...image ? { image } : {} } }, size }) : image ? (0, import_react53.createElement)("img", { src: image, alt: "", width: size, height: size, draggable: false }) : null
+  );
+}
+var profileValues = (value) => ({
+  headline: value?.headline ?? "",
+  summary: value?.summary ?? "",
+  expertise: value?.expertise ?? [],
+  languages: value?.languages ?? []
+});
+var profileDraft = (value) => ({ ...profileValues(value), expertise: (value?.expertise ?? []).join(", "), languages: (value?.languages ?? []).join(", ") });
+var profileTerms = (value) => [...new Set(value.split(/[,，\n]/).map((term) => term.trim()).filter(Boolean))];
+var submittedProfile = (draft) => ({ headline: draft.headline.trim(), summary: draft.summary.trim(), expertise: profileTerms(draft.expertise), languages: profileTerms(draft.languages) });
+function PublicProfileFields({ profile, onChange, disabled = false }) {
+  const field = (key, label, limit, multiline = false) => (0, import_react53.createElement)(
+    "label",
+    { className: "bt-comm-field" },
+    t(label),
+    (0, import_react53.createElement)(multiline ? "textarea" : "input", {
+      value: profile[key],
+      "aria-label": t(label),
+      disabled,
+      maxLength: limit,
+      ...multiline ? { rows: 4 } : {},
+      onChange: (event) => onChange(key, event.target.value)
+    })
+  );
+  return (0, import_react53.createElement)(
+    "div",
+    { className: "bt-comm-public-profile-fields" },
+    field("headline", "Role or specialty", 80),
+    field("summary", "Profile summary", 1e3, true),
+    field("expertise", "Expertise (comma-separated)", 500),
+    field("languages", "Languages (comma-separated)", 280)
+  );
+}
+function HumanProfile({ human, request, operation, onSaved, convertImage = avatarImage }) {
+  const [name, setName] = (0, import_react53.useState)(human.displayName ?? "Human"), [avatar, setAvatar] = (0, import_react53.useState)(void 0);
+  const [busy, setBusy] = (0, import_react53.useState)(false), [error, setError] = (0, import_react53.useState)("");
+  const generation = (0, import_react53.useRef)(0), fileOrder = (0, import_react53.useRef)(0), edits = (0, import_react53.useRef)(0), loadedInfo = (0, import_react53.useRef)(false);
+  const [base, setBase] = (0, import_react53.useState)({ name: human.displayName ?? "Human" });
+  const [profile, setProfile] = (0, import_react53.useState)(() => profileDraft(human.publicProfile));
+  const [profileBase, setProfileBase] = (0, import_react53.useState)(() => ({ ...profileValues(human.publicProfile), version: human.publicProfile?.version ?? 0 }));
+  const [conflict, setConflict] = (0, import_react53.useState)(false), [latest, setLatest] = (0, import_react53.useState)(null);
+  const [profileReady, setProfileReady] = (0, import_react53.useState)(false), [profileLoading, setProfileLoading] = (0, import_react53.useState)(true), [profileLoadError, setProfileLoadError] = (0, import_react53.useState)("");
+  (0, import_react53.useEffect)(() => () => {
+    generation.current += 1;
+    fileOrder.current += 1;
+  }, []);
+  const infoDirty = JSON.stringify(submittedProfile(profile)) !== JSON.stringify(profileValues(profileBase));
+  const identityDirty = name !== base.name || avatar !== void 0;
+  const dirty = identityDirty || infoDirty;
+  const checkedInfo = (result) => {
+    const value = result?.publicProfile;
+    if (result?.principalId !== human.principalId || !value || value.truncated || !Number.isSafeInteger(value.version) || value.version < 0) throw new Error("INVALID_PUBLIC_PROFILE_RESPONSE");
+    return value;
+  };
+  (0, import_react53.useEffect)(() => {
+    let active = true;
+    loadedInfo.current = false;
+    setProfileReady(false);
+    setProfileLoading(true);
+    setProfileLoadError("");
+    void request({ endpoint: "human-profile-info" }).then((result) => {
+      if (!active) return;
+      const value = checkedInfo(result);
+      setProfile(profileDraft(value));
+      setProfileBase({ ...profileValues(value), version: value.version });
+      setProfileReady(true);
+      loadedInfo.current = true;
+    }).catch((failure) => {
+      if (active) setProfileLoadError(knownCommunicationFailure(failure) ? communicationFailure(failure) : t("Unable to load profile details"));
+    }).finally(() => {
+      if (active) setProfileLoading(false);
+    });
+    return () => {
+      active = false;
+    };
+  }, [human.principalId, request]);
+  const upload = async (file) => {
+    if (!file) return;
+    const order = ++fileOrder.current;
+    try {
+      const image = await convertImage(file);
+      if (!safeAvatarImage(image)) throw new Error(t("Choose a PNG, JPEG, WebP, or GIF image"));
+      if (order === fileOrder.current) {
+        edits.current += 1;
+        setAvatar({ image });
+        setError("");
+      }
+    } catch (failure) {
+      if (order === fileOrder.current) setError(failure.message ?? t("Unable to update profile"));
+    }
+  };
+  const commit = async () => {
+    if (busy || !dirty || conflict || infoDirty && !profileReady) return;
+    const token = generation.current, revision = edits.current, submittedName = name;
+    const payload = { ...name === base.name ? {} : { displayName: name }, ...avatar === void 0 ? {} : { avatar } };
+    const info = submittedProfile(profile);
+    setBusy(true);
+    setError("");
+    try {
+      if (identityDirty) {
+        const result = await operation("profile-human", payload);
+        if (token !== generation.current) return;
+        if (result.status === "queued") {
+          setError(t("An operation is not confirmed. Check status, then retry the same action."));
+          return;
+        }
+        setBase({ name: submittedName });
+        if (revision === edits.current) setAvatar(void 0);
+      }
+      if (infoDirty) {
+        const result = await operation("profile-human-info", { expectedVersion: profileBase.version, profile: info });
+        if (token !== generation.current) return;
+        if (result.status === "queued") {
+          setError(t("An operation is not confirmed. Check status, then retry the same action."));
+          return;
+        }
+        if (!result.publicProfile || !Number.isSafeInteger(result.publicProfile.version)) throw new Error("INVALID_PUBLIC_PROFILE_RESPONSE");
+        setProfileBase({ ...profileValues(result.publicProfile), version: result.publicProfile.version });
+        setLatest(null);
+        try {
+          const current = checkedInfo(await request({ endpoint: "human-profile-info" }));
+          if (token !== generation.current) return;
+          if (current.version < result.publicProfile.version) throw new Error("INVALID_PUBLIC_PROFILE_RESPONSE");
+          if (current.version > result.publicProfile.version) {
+            setLatest(profileValues(current));
+            setConflict(true);
+            setError(t("Profile changed elsewhere. Your edits are kept. Review the latest profile before saving."));
+          } else setProfileBase({ ...profileValues(current), version: current.version });
+        } catch {
+          if (token !== generation.current) return;
+          setProfileReady(false);
+          setProfileLoadError(t("Profile saved, but the latest details could not be loaded"));
+        }
+      }
+      onSaved?.();
+    } catch (failure) {
+      if (token !== generation.current) return;
+      if (["PROFILE_VERSION_CONFLICT", "PUBLIC_PROFILE_VERSION_CONFLICT"].includes(failure.code) || ["PROFILE_VERSION_CONFLICT", "PUBLIC_PROFILE_VERSION_CONFLICT"].includes(failure.message)) {
+        setConflict(true);
+        setError(t("Profile changed elsewhere. Your edits are kept. Review the latest profile before saving."));
+      } else setError(knownCommunicationFailure(failure) ? communicationFailure(failure) : t("Unable to update profile"));
+    } finally {
+      if (token === generation.current) setBusy(false);
+    }
+  };
+  const reviewLatest = async () => {
+    if (busy) return;
+    const token = generation.current;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await request({ endpoint: "human-profile-info" });
+      if (token !== generation.current) return;
+      const value = checkedInfo(result);
+      if (!loadedInfo.current) setProfile(profileDraft(value));
+      setProfileBase({ ...profileValues(value), version: value.version });
+      setLatest(profileValues(value));
+      setConflict(false);
+      setProfileReady(true);
+      setProfileLoadError("");
+      loadedInfo.current = true;
+    } catch {
+      if (token === generation.current) setError(t("Unable to load the latest profile"));
+    } finally {
+      if (token === generation.current) setBusy(false);
+    }
+  };
+  return (0, import_react53.createElement)(
+    "section",
+    { className: "bt-comm-profile" },
+    (0, import_react53.createElement)("div", { className: "bt-comm-profile-preview" }, avatar?.image ? (0, import_react53.createElement)("img", { src: avatar.image, alt: t("Avatar preview"), width: 64, height: 64 }) : (0, import_react53.createElement)(CommunicationAvatar, { person: { ...human, displayName: name, ...avatar === null ? { avatar: {} } : {} }, request, size: 64 })),
+    (0, import_react53.createElement)("label", { className: "bt-comm-field" }, t("Human name"), (0, import_react53.createElement)("input", { value: name, "aria-label": t("Human name"), onChange: (event) => {
+      edits.current += 1;
+      setName(event.target.value);
+    } })),
+    (0, import_react53.createElement)("label", { className: "bt-comm-field" }, t("Upload avatar"), (0, import_react53.createElement)("input", { type: "file", accept: "image/png,image/jpeg,image/webp,image/gif", "aria-label": t("Upload avatar"), onChange: (event) => {
+      void upload(event.target.files?.[0]);
+      event.target.value = "";
+    } })),
+    (0, import_react53.createElement)("button", { type: "button", onClick: () => {
+      fileOrder.current += 1;
+      edits.current += 1;
+      setAvatar(null);
+    } }, t("Reset avatar")),
+    (0, import_react53.createElement)("p", { className: "bt-comm-reference" }, t("Describe your responsibilities and the help you can offer. Only share information intended for your contacts.")),
+    profileLoading ? (0, import_react53.createElement)("p", { className: "bt-comm-reference", role: "status" }, t("Loading profile details…")) : null,
+    profileLoadError ? (0, import_react53.createElement)("p", { className: "bt-comm-error", role: "alert" }, profileLoadError) : null,
+    (0, import_react53.createElement)(PublicProfileFields, { profile, disabled: busy || !profileReady, onChange: (key, value) => setProfile((current) => ({ ...current, [key]: value })) }),
+    latest ? (0, import_react53.createElement)(
+      "section",
+      { className: "bt-comm-latest-profile", "aria-label": t("Latest shared profile") },
+      (0, import_react53.createElement)("h3", null, t("Latest shared profile")),
+      (0, import_react53.createElement)("p", null, latest.headline || t("No role or specialty")),
+      (0, import_react53.createElement)("p", null, latest.summary || t("No profile summary")),
+      (0, import_react53.createElement)("p", null, latest.expertise.join(", ")),
+      (0, import_react53.createElement)("p", null, latest.languages.join(", "))
+    ) : null,
+    conflict || profileLoadError ? (0, import_react53.createElement)("button", { type: "button", disabled: busy, onClick: () => {
+      void reviewLatest();
+    } }, t(conflict ? "Review latest profile" : "Reload profile details")) : null,
+    (0, import_react53.createElement)("button", { type: "button", disabled: busy || !dirty || !name.trim() || conflict || infoDirty && !profileReady, onClick: () => {
+      void commit();
+    }, "data-dirty": dirty, "aria-label": t("Save profile") }, t("Save profile")),
+    error ? (0, import_react53.createElement)("p", { className: "bt-comm-error", role: "alert" }, error) : null
+  );
+}
+
+// src/client/communication-contacts.js
+var import_react54 = require("react");
+function contactDirectory(contacts, relations = [], humanPrincipalId) {
+  const people = [...new Map(contacts.map((person) => [person.principalId, person])).values()];
+  const humans = people.filter((person) => person.kind === "human").sort((a, b) => a.principalId < b.principalId ? -1 : a.principalId > b.principalId ? 1 : 0);
+  const owners = /* @__PURE__ */ new Map();
+  for (const human of humans) if (human.homeInstanceId && !owners.has(human.homeInstanceId)) owners.set(human.homeInstanceId, human.principalId);
+  const active = new Map(relations.filter((item) => item.active).map((item) => [item.otherHumanPrincipalId, item]));
+  const directory = new Map(humans.filter((person) => person.principalId !== humanPrincipalId).map((person) => [person.principalId, { person, available: true, bots: [], relation: active.get(person.principalId) }]));
+  for (const [id, relation] of active) if (id !== humanPrincipalId && !directory.has(id)) directory.set(id, { person: { principalId: id, displayName: id, kind: "human" }, available: false, bots: [], relation });
+  const otherBots = [];
+  for (const bot of people.filter((person) => person.kind === "bot")) {
+    const ownerId = Object.hasOwn(bot, "ownerPrincipalId") ? bot.ownerPrincipalId : owners.get(bot.homeInstanceId);
+    const owner = directory.get(ownerId);
+    if (owner?.available) owner.bots.push(bot);
+    else otherBots.push(bot);
+  }
+  return { people: [...directory.values()], otherBots };
+}
+var normalized = (value) => String(value ?? "").normalize("NFKC").toLocaleLowerCase();
+var profileValues2 = (profile) => [profile?.headline, profile?.summary, ...Array.isArray(profile?.expertise) ? profile.expertise : [], ...Array.isArray(profile?.languages) ? profile.languages : []];
+function contactMatches(person, query, { label, addressNotes = {} } = {}) {
+  const needle = normalized(query).trim();
+  return !needle || [
+    label,
+    person.displayName,
+    person.principalId,
+    person.instanceLabel,
+    person.homeInstanceId,
+    person.ipAddress,
+    addressNotes[normalizeIpAddress(person.ipAddress)],
+    ...profileValues2(person.publicProfile)
+  ].some((value) => normalized(value).includes(needle));
+}
+function ContactDirectory({ contacts, relations, humanPrincipalId, instanceId, request, busy, onMessage, onRemove, confirm, addressNotes = {}, connectionKnown }) {
+  const [query, setQuery] = (0, import_react54.useState)(""), [view, setView] = (0, import_react54.useState)("all");
+  const labels = contactLabels(contacts), { people, otherBots } = contactDirectory(contacts, relations, humanPrincipalId);
+  const needle = query.trim(), matches = (person) => contactMatches(person, query, { label: labels.get(person.principalId), addressNotes });
+  const shown = people.filter((item) => matches(item.person) || item.bots.some(matches));
+  const allBots = [...people.flatMap((item) => item.bots), ...otherBots];
+  const bots = (view === "bots" ? allBots : otherBots).filter(matches);
+  const connection = (person) => t(connectionKnown === false || typeof person.connected !== "boolean" ? "Connection status unavailable" : person.connected ? "Connected to Hub" : "Disconnected from Hub");
+  const identity = (person, allowed2 = true) => (0, import_react54.createElement)(
+    "span",
+    { className: "bt-comm-directory-person" },
+    (0, import_react54.createElement)(CommunicationAvatar, { person, request, allowed: allowed2, size: 36 }),
+    (0, import_react54.createElement)(
+      "span",
+      null,
+      (0, import_react54.createElement)("strong", null, labels.get(person.principalId) ?? person.displayName ?? person.principalId),
+      person.publicProfile?.headline ? (0, import_react54.createElement)("span", { className: "bt-comm-directory-headline" }, person.publicProfile.headline) : null,
+      (0, import_react54.createElement)(
+        "small",
+        null,
+        t(person.kind === "bot" ? "Bot" : "Human"),
+        person.homeInstanceId && instanceId ? ` · ${t(person.homeInstanceId === instanceId ? "Local" : "Remote")}` : "",
+        person.instanceLabel ? ` · ${person.instanceLabel}` : "",
+        " · ",
+        connection(person)
+      )
+    )
+  );
+  const message = (person) => onMessage ? (0, import_react54.createElement)("button", { type: "button", disabled: busy, "aria-label": `${t("Message")} ${labels.get(person.principalId) ?? person.displayName}`, onClick: () => onMessage(person.principalId) }, t("Message")) : null;
+  const profile = (person) => {
+    const value = person.publicProfile, expertise = Array.isArray(value?.expertise) ? value.expertise : [], languages = Array.isArray(value?.languages) ? value.languages : [];
+    return value?.summary || expertise.length || languages.length ? (0, import_react54.createElement)(
+      "div",
+      { className: "bt-comm-directory-profile" },
+      value.summary ? (0, import_react54.createElement)("p", { className: "bt-comm-directory-summary" }, value.summary) : null,
+      expertise.length ? (0, import_react54.createElement)("ul", { className: "bt-comm-directory-skills", "aria-label": t("Expertise") }, expertise.map((item) => (0, import_react54.createElement)("li", { key: item }, item))) : null,
+      languages.length ? (0, import_react54.createElement)("p", { className: "bt-comm-reference" }, t("Languages"), ": ", languages.join(", ")) : null
+    ) : null;
+  };
+  const botRow = (person) => (0, import_react54.createElement)(
+    "li",
+    { key: person.principalId, "data-principal-id": person.principalId, className: "bt-comm-directory-bot" },
+    (0, import_react54.createElement)("div", { className: "bt-comm-directory-row" }, identity(person), message(person)),
+    profile(person)
+  );
+  const filter = (value, label, count) => (0, import_react54.createElement)("button", { key: value, type: "button", "aria-pressed": view === value, "aria-label": t(label), onClick: () => setView(value) }, t(label), (0, import_react54.createElement)("span", { className: "bt-comm-count", "aria-hidden": true }, count));
+  const showPeople = view !== "bots", showBots = view !== "contacts";
+  return (0, import_react54.createElement)(
+    "section",
+    { className: "bt-comm-directory bt-comm-directory-list", "aria-label": t("Connected contacts") },
+    (0, import_react54.createElement)("div", { className: "bt-comm-directory-heading" }, (0, import_react54.createElement)("h3", null, t("Connected contacts")), (0, import_react54.createElement)("span", { className: "bt-comm-count" }, people.length)),
+    (0, import_react54.createElement)("label", { className: "bt-comm-field" }, t("Find a contact or Bot"), (0, import_react54.createElement)("input", { type: "search", value: query, "aria-label": t("Find a contact or Bot"), onChange: (event) => setQuery(event.target.value) })),
+    (0, import_react54.createElement)("div", { className: "bt-comm-directory-filters", role: "group", "aria-label": t("Directory filter") }, filter("all", "All", people.length + allBots.length), filter("contacts", "Contacts", people.length), filter("bots", "Published Bots", allBots.length)),
+    showPeople ? shown.map(({ person, available, bots: ownedBots, relation }) => {
+      const visibleBots = matches(person) ? ownedBots : ownedBots.filter(matches);
+      return (0, import_react54.createElement)(
+        "article",
+        { key: person.principalId, className: "bt-comm-contact-card", "data-contact-id": person.principalId },
+        (0, import_react54.createElement)("div", { className: "bt-comm-contact-card-head" }, identity(person, available), available ? message(person) : null),
+        !available ? (0, import_react54.createElement)("p", { className: "bt-comm-reference", role: "status" }, t("Contact details are not available in the current directory.")) : null,
+        (0, import_react54.createElement)(
+          "details",
+          { className: "bt-comm-directory-about", open: Boolean(needle) },
+          (0, import_react54.createElement)("summary", null, t("Profile and Bots"), (0, import_react54.createElement)("span", { className: "bt-comm-count" }, visibleBots.length)),
+          profile(person),
+          (0, import_react54.createElement)("h4", null, t("Their Bots")),
+          visibleBots.length ? (0, import_react54.createElement)("ul", { className: "bt-comm-contact-bots" }, visibleBots.map(botRow)) : (0, import_react54.createElement)("p", { className: "bt-comm-reference" }, t("No Bots shared with you"))
+        ),
+        (0, import_react54.createElement)(
+          "details",
+          { className: "bt-comm-contact-info" },
+          (0, import_react54.createElement)("summary", null, t("Contact details")),
+          person.homeInstanceId ? (0, import_react54.createElement)("p", { className: "bt-comm-reference" }, person.instanceLabel ?? person.homeInstanceId, " · ", t(person.ipAddress || "Address unavailable")) : null,
+          addressNotes[normalizeIpAddress(person.ipAddress)] ? (0, import_react54.createElement)("p", { className: "bt-comm-ip-note" }, t("IP note"), ": ", addressNotes[normalizeIpAddress(person.ipAddress)]) : null,
+          (0, import_react54.createElement)(
+            "dl",
+            null,
+            (0, import_react54.createElement)("dt", null, t("Human identity")),
+            (0, import_react54.createElement)("dd", null, (0, import_react54.createElement)("code", null, person.principalId)),
+            person.homeInstanceId ? (0, import_react54.createElement)(import_react54.Fragment, null, (0, import_react54.createElement)("dt", null, t("Device identity")), (0, import_react54.createElement)("dd", null, (0, import_react54.createElement)("code", null, person.homeInstanceId))) : null,
+            relation ? (0, import_react54.createElement)(import_react54.Fragment, null, (0, import_react54.createElement)("dt", null, t("Bots you share with this contact")), (0, import_react54.createElement)("dd", null, (relation.botPrincipalIds ?? []).map((id) => labels.get(id) ?? id).join(", ") || t("None"))) : null
+          ),
+          ownedBots.length ? (0, import_react54.createElement)("ul", { className: "bt-comm-bot-identities" }, ownedBots.map((bot) => (0, import_react54.createElement)("li", { key: bot.principalId }, labels.get(bot.principalId) ?? bot.displayName, ": ", (0, import_react54.createElement)("code", null, bot.principalId)))) : null,
+          relation && onRemove ? (0, import_react54.createElement)("button", { type: "button", className: "bt-comm-danger", disabled: busy, onClick: () => onRemove(relation) }, t(confirm === person.principalId ? "Confirm contact removal" : "Remove contact")) : null
+        )
+      );
+    }) : null,
+    showBots && bots.length ? (0, import_react54.createElement)("section", { className: "bt-comm-contact-card bt-comm-directory-bot-list" }, (0, import_react54.createElement)("h3", null, t(view === "bots" ? "Published Bots" : "Other available Bots")), (0, import_react54.createElement)("ul", { className: "bt-comm-contact-bots" }, bots.map(botRow))) : null,
+    !(showPeople && shown.length || showBots && bots.length) ? (0, import_react54.createElement)("p", { className: "bt-comm-reference", role: "status" }, t(needle ? "No matching contacts or Bots." : view === "bots" ? "No Bots shared with you" : "No contacts yet. Add someone with their user code.")) : null
+  );
+}
+
+// src/client/communication-address-notes.js
+var import_react55 = require("react");
+function AddressNotes({ contacts, notes = {}, onSave, busy }) {
+  const [editing, setEditing] = (0, import_react55.useState)(false), [address, setAddress] = (0, import_react55.useState)(""), [note, setNote] = (0, import_react55.useState)("");
+  const [saving, setSaving] = (0, import_react55.useState)(false), [error, setError] = (0, import_react55.useState)("");
+  const locked = (0, import_react55.useRef)(false), live = (0, import_react55.useRef)(true), editor = (0, import_react55.useRef)(null), opener = (0, import_react55.useRef)(null), addButton = (0, import_react55.useRef)(null);
+  (0, import_react55.useEffect)(() => {
+    live.current = true;
+    return () => {
+      live.current = false;
+    };
+  }, []);
+  (0, import_react55.useEffect)(() => {
+    if (editing) editor.current?.focus();
+    else if (opener.current) (opener.current.isConnected ? opener.current : addButton.current)?.focus();
+  }, [editing]);
+  const addresses = [.../* @__PURE__ */ new Set([...Object.keys(notes), ...contacts.map((person) => normalizeIpAddress(person.ipAddress)).filter(Boolean)])].sort();
+  const edit = (value, trigger) => {
+    opener.current = trigger;
+    setAddress(value);
+    setNote(notes[value] ?? "");
+    setError("");
+    setEditing(true);
+  };
+  const save2 = async (value) => {
+    if (locked.current || busy || !onSave) return;
+    locked.current = true;
+    setSaving(true);
+    setError("");
+    try {
+      await onSave(address, value);
+      if (live.current) {
+        setEditing(false);
+        setNote("");
+      }
+    } catch (failure) {
+      if (live.current) setError(communicationFailure(failure));
+    } finally {
+      locked.current = false;
+      if (live.current) setSaving(false);
+    }
+  };
+  return (0, import_react55.createElement)(
+    "section",
+    { className: "bt-comm-ip-notes", "aria-label": t("IP notes") },
+    (0, import_react55.createElement)("h3", null, t("IP notes")),
+    (0, import_react55.createElement)("p", { className: "bt-comm-reference" }, t("Saved only on this device for this Hub. IP notes label addresses, not people or trusted identities. Shared IPs use the same note.")),
+    addresses.map((value) => (0, import_react55.createElement)(
+      "div",
+      { key: value, className: "bt-comm-ip-note-row" },
+      (0, import_react55.createElement)("span", null, (0, import_react55.createElement)("code", null, value), notes[value] ? (0, import_react55.createElement)("span", { className: "bt-comm-ip-note" }, notes[value]) : null),
+      (0, import_react55.createElement)("button", { type: "button", disabled: busy || saving || !onSave, "aria-label": `${t("Edit IP note")} ${value}`, onClick: (event) => edit(value, event.currentTarget) }, t(notes[value] ? "Edit note" : "Add note"))
+    )),
+    !editing ? (0, import_react55.createElement)("button", { ref: addButton, type: "button", disabled: busy || saving || !onSave, onClick: (event) => edit("", event.currentTarget) }, t("Add IP note")) : (0, import_react55.createElement)(
+      "form",
+      { className: "bt-comm-ip-note-editor", onSubmit: (event) => {
+        event.preventDefault();
+        void save2(note);
+      } },
+      (0, import_react55.createElement)("label", { className: "bt-comm-field" }, t("IP address"), (0, import_react55.createElement)("input", { ref: editor, value: address, maxLength: 128, disabled: saving, "aria-label": t("IP address"), onChange: (event) => setAddress(event.target.value) })),
+      (0, import_react55.createElement)("label", { className: "bt-comm-field" }, t("IP note"), (0, import_react55.createElement)("input", { value: note, maxLength: 160, disabled: saving, "aria-label": t("IP note"), onChange: (event) => setNote(event.target.value) })),
+      (0, import_react55.createElement)(
+        "div",
+        null,
+        (0, import_react55.createElement)("button", { type: "submit", disabled: busy || saving || !address.trim() }, t("Save note")),
+        notes[normalizeIpAddress(address)] ? (0, import_react55.createElement)("button", { type: "button", disabled: busy || saving, onClick: () => {
+          void save2("");
+        } }, t("Clear note")) : null,
+        (0, import_react55.createElement)("button", { type: "button", disabled: saving, onClick: () => {
+          setEditing(false);
+          setError("");
+        } }, t("Cancel"))
+      )
+    ),
+    error ? (0, import_react55.createElement)("p", { className: "bt-comm-error", role: "alert" }, error) : null
+  );
+}
+
+// src/client/communication-live.js
+var import_react56 = require("react");
+function liveRefresh(work, { onError = () => {
+}, intervalMs = 5e3, minRefreshMs = Math.min(500, intervalMs), document: doc = globalThis.document, window: win = globalThis.window, setTimer = setTimeout, clearTimer = clearTimeout } = {}) {
+  let stopped = false, running = false, dirty = false, timer, dueAt = Infinity, lastStarted = 0, failures = 0;
+  const visible = () => doc?.visibilityState !== "hidden";
+  const clear = () => {
+    clearTimer(timer);
+    timer = void 0;
+    dueAt = Infinity;
+  };
+  const schedule = (delay, earlierOnly = false) => {
+    delay = Math.max(delay, minRefreshMs - (Date.now() - lastStarted));
+    const due = Date.now() + delay;
+    if (earlierOnly && timer !== void 0 && dueAt <= due) return;
+    clear();
+    if (!stopped && visible()) {
+      dueAt = due;
+      timer = setTimer(() => {
+        timer = void 0;
+        dueAt = Infinity;
+        void run2();
+      }, delay);
+    }
+  };
+  const run2 = async () => {
+    if (stopped || !visible()) return;
+    if (running) {
+      dirty = true;
+      return;
+    }
+    running = true;
+    dirty = false;
+    lastStarted = Date.now();
+    try {
+      await work();
+      failures = 0;
+    } catch (error) {
+      failures += 1;
+      if (!stopped) onError(error);
+    } finally {
+      running = false;
+      schedule(dirty && !failures ? 100 : Math.min(3e4, intervalMs * 2 ** Math.min(failures, 3)));
+    }
+  };
+  const wake = () => {
+    if (stopped) return;
+    if (!visible()) {
+      clear();
+      return;
+    }
+    if (running) dirty = true;
+    else schedule(failures ? Math.min(3e4, intervalMs * 2 ** Math.min(failures, 3)) : 100, true);
+  };
+  const resume = () => {
+    if (visible()) failures = 0;
+    wake();
+  };
+  doc?.addEventListener("visibilitychange", resume);
+  win?.addEventListener("online", resume);
+  win?.addEventListener("focus", resume);
+  void run2();
+  return { wake, stop() {
+    stopped = true;
+    clear();
+    doc?.removeEventListener("visibilitychange", resume);
+    win?.removeEventListener("online", resume);
+    win?.removeEventListener("focus", resume);
+  } };
+}
+function useLiveRefresh(work, onError, request, revision, intervalMs = 5e3) {
+  const latest = (0, import_react56.useRef)({ work, onError }), live = (0, import_react56.useRef)(null), previous = (0, import_react56.useRef)(revision);
+  latest.current = { work, onError };
+  (0, import_react56.useEffect)(() => {
+    const controller = liveRefresh(() => latest.current.work(), { intervalMs, onError: (error) => latest.current.onError(error) });
+    live.current = controller;
+    return () => {
+      controller.stop();
+      if (live.current === controller) live.current = null;
+    };
+  }, [request, intervalMs]);
+  (0, import_react56.useEffect)(() => {
+    if (previous.current !== revision) {
+      previous.current = revision;
+      live.current?.wake();
+    }
+  }, [revision]);
+}
+
+// src/client/communication-onboarding.js
+var import_react57 = require("react");
+var statuses = /* @__PURE__ */ new Set(["prepared", "pending", "approved", "rejected", "cancelled", "expired", "accepted"]);
+var statusLabel = (value) => t(statuses.has(value) ? value : "Status unavailable");
+var failureLabel2 = (error) => t(communicationFailure(error ?? {}));
+var enrollmentErrors = {
+  HUB_TLS_UNTRUSTED: "The Hub certificate authority is not trusted. Obtain a fresh signed Hub code through a trusted channel and explicitly update this Hub CA trust. Keep TLS verification enabled.",
+  HUB_TLS_HOSTNAME_MISMATCH: "The Hub address does not match the certificate. Ask its administrator for a certificate covering this exact reachable hostname or IP.",
+  HUB_TLS_CERT_EXPIRED: "The Hub certificate has expired. Ask its administrator to renew it.",
+  HUB_TLS_CERT_TIME_INVALID: "The Hub certificate is not valid yet. Check both clocks and the certificate dates.",
+  HUB_CONNECTION_REFUSED: "The Hub refused the connection. Check its listening address and existing network routing with the administrator.",
+  HUB_CONNECTION_TIMEOUT: "The Hub connection timed out. Local code review does not establish reachability; check the actual address and network route.",
+  HUB_UNREACHABLE: "Cannot establish the Hub connection. Check its reachable WSS address and trusted certificate.",
+  TLS_REQUIRED: "The Hub requires a trusted WSS connection.",
+  HUB_ADDRESS_FORBIDDEN: "The Hub address is not allowed. Ask its owner for a reachable trusted WSS address.",
+  MANAGEMENT_DISABLED: "Hub enrollment is disabled. Ask its administrator to enable management.",
+  JOIN_NOT_FOUND: "The Hub has no saved request with this ID. You may explicitly request access again using the saved device identity.",
+  JOIN_NOT_SUBMITTED: "No request has been submitted. Fix the reported local or connection problem before requesting access.",
+  CREDENTIAL_STORAGE_UNAVAILABLE: "The local credential service is unavailable. Check the app version and credential provider.",
+  CREDENTIAL_STORAGE_READ_ONLY: "The local credential store is read only. No new enrollment can be saved.",
+  COMMUNICATION_CREDENTIAL_MISMATCH: "The saved enrollment belongs to another identity or Hub. Preserve it and check the configured profile.",
+  COMMUNICATION_PAIRING_CONFLICT: "This profile is already bound to another Hub or instance. Use the intended separate profile.",
+  HUB_CONFIRMATION_REQUIRED: "Review and confirm the exact Hub address again.",
+  INVALID_ENROLLMENT_CHALLENGE: "The Hub returned an invalid or different enrollment identity. Do not retry until the Hub is checked.",
+  CONFIG_EDIT_OVERLAID: "Enrollment approval is saved, but a home or command-line overlay blocks configuration changes.",
+  CONFIG_EDITOR_UNAVAILABLE: "The app configuration editor is unavailable. Update the app before applying approved enrollment.",
+  CONNECTION_LOST: "The enrollment result is uncertain. Check the saved request and its approval before requesting access again.",
+  REQUEST_TIMEOUT: "The enrollment request timed out. Check the saved request and its approval before requesting access again."
+};
+var enrollmentPhases = {
+  ENROLLMENT_CONNECT_FAILED: "The connection failed before the enrollment exchange completed.",
+  ENROLLMENT_CHALLENGE_FAILED: "The Hub challenge could not be confirmed. Check the saved request before retrying.",
+  ENROLLMENT_PROOF_FAILED: "The enrollment result is uncertain. Check the saved request and its approval before requesting access again.",
+  COMMUNICATION_CREDENTIAL_READ_FAILED: "The saved local enrollment could not be read.",
+  COMMUNICATION_CREDENTIAL_WRITE_FAILED: "The local enrollment could not be saved. Preserve existing data and check the credential provider.",
+  COMMUNICATION_CREDENTIAL_DESCRIBE_FAILED: "The local credential provider status is unavailable.",
+  COMMUNICATION_CREDENTIAL_LIST_FAILED: "Saved local enrollments could not be listed.",
+  COMMUNICATION_CONFIG_WRITE_FAILED: "Enrollment approval may be saved, but app configuration could not be updated. Check approval before retrying."
+};
+function enrollmentFailure(error) {
+  const code = typeof error?.code === "string" && Object.hasOwn(enrollmentErrors, error.code) ? error.code : ["TimeoutError", "AbortError"].includes(error?.name) ? "REQUEST_TIMEOUT" : null;
+  const phase = typeof error?.phase === "string" && Object.hasOwn(enrollmentPhases, error.phase) ? error.phase : null;
+  const shared2 = communicationFailure(error);
+  const message = code ? enrollmentErrors[code] : knownCommunicationFailure(error) ? shared2 : phase ? enrollmentPhases[phase] : shared2;
+  return t(message) + (code || phase ? ` [${[code, phase].filter(Boolean).join(" · ")}]` : "");
+}
+function hubManagementAddress(value) {
+  if (typeof value !== "string") return null;
+  try {
+    const url = new URL(value);
+    if (url.username || url.password || url.search || url.hash) return null;
+    if (url.protocol !== "https:" && !(url.protocol === "http:" && ["127.0.0.1", "[::1]"].includes(url.hostname))) return null;
+    return url.href;
+  } catch {
+    return null;
+  }
+}
+function AddDevice({ request, displayName = "Human", revision }) {
+  const [code, setCode] = (0, import_react57.useState)(""), [name, setName] = (0, import_react57.useState)(displayName), [hub, setHub] = (0, import_react57.useState)(null);
+  const [storage, setStorage] = (0, import_react57.useState)(null), [enrollments, setEnrollments] = (0, import_react57.useState)([]), [busy, setBusy] = (0, import_react57.useState)(false), [error, setError] = (0, import_react57.useState)("");
+  const [absentHub, setAbsentHub] = (0, import_react57.useState)(null);
+  const [uncertainHub, setUncertainHub] = (0, import_react57.useState)(null);
+  const [selectedHub, setSelectedHub] = (0, import_react57.useState)(null), [resumeConfirmed, setResumeConfirmed] = (0, import_react57.useState)({});
+  const [lifecycle, setLifecycle] = (0, import_react57.useState)(null), [deleteHistory, setDeleteHistory] = (0, import_react57.useState)(false);
+  const [liveError, setLiveError] = (0, import_react57.useState)("");
+  const generation = (0, import_react57.useRef)(0), loadOrder = (0, import_react57.useRef)(0), working = (0, import_react57.useRef)(false);
+  (0, import_react57.useEffect)(() => () => {
+    generation.current += 1;
+    loadOrder.current += 1;
+  }, [request]);
+  useLiveRefresh(async () => {
+    if (working.current) return;
+    const token = generation.current;
+    await refreshStorage(token);
+    const pending = enrollments.filter((item) => item.requestId && ["prepared", "pending"].includes(item.status) && !item.paused && !item.departed && (!selectedHub?.hubId || selectedHub.hubId === item.hubId));
+    for (const item of pending) {
+      if (token !== generation.current || working.current) return;
+      const value = await request({ endpoint: "hub-join-status", hubId: item.hubId });
+      if (token === generation.current && !working.current) update(value);
+    }
+    if (token === generation.current) setLiveError("");
+  }, (failure) => setLiveError(enrollmentFailure(failure)), request, revision);
+  const run2 = async (work) => {
+    if (working.current) return;
+    working.current = true;
+    loadOrder.current += 1;
+    const token = ++generation.current;
+    setBusy(true);
+    setError("");
+    setLiveError("");
+    try {
+      await work(token);
+    } catch (failure) {
+      if (token === generation.current) {
+        setError(enrollmentFailure(failure));
+        try {
+          await refreshStorage(token);
+        } catch {
+        }
+      }
+    } finally {
+      working.current = false;
+      if (token === generation.current) setBusy(false);
+    }
+  };
+  const update = (value) => setEnrollments((current) => [...current.filter((item) => item.hubId !== value.hubId), value]);
+  const refreshStorage = async (token) => {
+    const order = ++loadOrder.current;
+    const value = await request({ endpoint: "onboarding-storage" });
+    if (token !== generation.current || order !== loadOrder.current) return;
+    setStorage(value.storage ?? storage);
+    setSelectedHub(value.selectedHub ?? (value.configured && value.hubId ? { hubId: value.hubId, url: value.url } : null));
+    if (hub) setUncertainHub((current) => current === hub.hubId ? null : current);
+    if (value.enrollments) setEnrollments(value.enrollments);
+    else if (value.hubId) update(value);
+  };
+  const existingRequest = hub && enrollments.some((item) => item.hubId === hub.hubId && item.requestId && ["prepared", "pending", "approved"].includes(item.status)) && absentHub !== hub.hubId;
+  const differentHub = Boolean(hub && selectedHub?.url && (selectedHub.hubId !== hub.hubId || selectedHub.url !== hub.url));
+  const select = async (value, token, hubCode) => {
+    await request({
+      endpoint: "switch-hub",
+      ...hubCode ? { hubCode, displayName: name } : { hubId: value.hubId },
+      ...selectedHub?.hubId ? { expectedCurrentHubId: selectedHub.hubId } : {},
+      confirmedHubId: value.hubId,
+      confirmedUrl: value.url,
+      ...value.trustFingerprint ? { confirmedTrustFingerprint: value.trustFingerprint } : {}
+    });
+    if (token === generation.current) {
+      setResumeConfirmed({});
+      await refreshStorage(token);
+    }
+  };
+  return (0, import_react57.createElement)(
+    "div",
+    { className: "bt-comm-onboarding" },
+    (0, import_react57.createElement)("p", null, t("Paste a Hub code from its owner. Review the actual address before requesting access. Devices are not discovered automatically.")),
+    (0, import_react57.createElement)("p", { className: "bt-comm-reference" }, t("Review only decodes the Hub code locally. It does not test network access or submit a request.")),
+    (0, import_react57.createElement)("label", { className: "bt-comm-field" }, t("Hub code"), (0, import_react57.createElement)("textarea", { value: code, rows: 2, maxLength: 65536, "aria-label": t("Hub code"), onChange: (event) => {
+      generation.current += 1;
+      loadOrder.current += 1;
+      setBusy(false);
+      setCode(event.target.value);
+      setHub(null);
+      setError("");
+    } })),
+    (0, import_react57.createElement)("button", { type: "button", disabled: busy || !code.trim(), onClick: () => {
+      void run2(async (token) => {
+        const value = await request({ endpoint: "decode-hub-code", hubCode: code });
+        if (token === generation.current) setHub(value);
+      });
+    } }, t("Review Hub")),
+    hub ? (0, import_react57.createElement)(
+      "section",
+      { className: "bt-comm-set-card" },
+      (0, import_react57.createElement)("h3", null, t("Confirm the Hub")),
+      (0, import_react57.createElement)("p", null, t("Hub address"), ": ", (0, import_react57.createElement)("code", null, hub.url)),
+      (0, import_react57.createElement)("p", null, "Hub ID: ", (0, import_react57.createElement)("code", null, hub.hubId)),
+      (0, import_react57.createElement)("p", { className: "bt-comm-reference" }, t("Accept this code only from a trusted channel. Its own certificate cannot authenticate an untrusted source.")),
+      hub.trustFingerprint ? (0, import_react57.createElement)("p", null, t("Hub CA fingerprint"), ": ", (0, import_react57.createElement)("code", null, hub.trustFingerprint)) : (0, import_react57.createElement)("p", null, t("Legacy code: ask the Hub owner for a v2 code to pair a private CA without environment settings.")),
+      (0, import_react57.createElement)("label", { className: "bt-comm-field" }, t("Device display name"), (0, import_react57.createElement)("input", { value: name, maxLength: 100, "aria-label": t("Device display name"), onChange: (event) => setName(event.target.value) })),
+      differentHub ? (0, import_react57.createElement)("p", { className: "bt-comm-reference" }, t("Switching pauses the current Hub and retains its data. A new Hub starts with a separate identity and no published Bots.")) : null,
+      differentHub && selectedHub?.legacy ? (0, import_react57.createElement)("p", { role: "status" }, t("Legacy shared-secret pairing cannot be safely assigned to another Hub. Keep this data and enroll through a separate profile first.")) : null,
+      differentHub ? (0, import_react57.createElement)("button", { type: "button", disabled: busy || !name.trim() || selectedHub?.legacy, onClick: () => {
+        void run2((token) => select(hub, token, code));
+      } }, t("Select this Hub")) : null,
+      (0, import_react57.createElement)("button", { type: "button", disabled: busy || differentHub || !name.trim() || !storage || existingRequest || uncertainHub === hub.hubId, onClick: () => {
+        void run2(async (token) => {
+          setAbsentHub(null);
+          setUncertainHub(hub.hubId);
+          const value = await request({ endpoint: "join-hub", hubCode: code, displayName: name, confirmedHubId: hub.hubId, confirmedUrl: hub.url, ...hub.trustFingerprint ? { confirmedTrustFingerprint: hub.trustFingerprint } : {} });
+          if (token === generation.current) {
+            update(value);
+            setUncertainHub(null);
+          }
+        });
+      } }, t("Confirm and request access")),
+      hub.trustFingerprint && enrollments.some((item) => item.hubId === hub.hubId && item.url === hub.url) ? (0, import_react57.createElement)("button", { type: "button", disabled: busy, onClick: () => {
+        void run2(async (token) => {
+          const value = await request({ endpoint: "update-hub-trust", hubCode: code, confirmedHubId: hub.hubId, confirmedUrl: hub.url, confirmedTrustFingerprint: hub.trustFingerprint });
+          if (token === generation.current) update(value);
+        });
+      } }, t("Update this Hub CA trust")) : null
+    ) : null,
+    (0, import_react57.createElement)("button", { type: "button", disabled: busy, onClick: () => {
+      void run2((token) => refreshStorage(token));
+    } }, t("Refresh saved request")),
+    (0, import_react57.createElement)("p", { className: "bt-comm-storage-note" }, t("Confirming a new Hub selection or join creates its own device key. Disconnecting retains that key and Hub data; it does not revoke membership on the server. The default credential store is plaintext protected by your OS account permissions, not encrypted against the same user.")),
+    storage ? (0, import_react57.createElement)("p", { className: "bt-comm-reference" }, t("Credential storage"), ": ", storage.defaultProvider, " · ", t(storage.encryptedByDefault ? "Encrypted by provider" : "Not encrypted by default")) : null,
+    selectedHub?.legacy ? (0, import_react57.createElement)(
+      "section",
+      { className: "bt-comm-address" },
+      (0, import_react57.createElement)("h3", null, t("Current Hub")),
+      (0, import_react57.createElement)("code", null, selectedHub.url),
+      (0, import_react57.createElement)("p", { className: "bt-comm-reference" }, t("Local disconnect preserves server membership and queued work.")),
+      selectedHub.enabled ? (0, import_react57.createElement)("button", { type: "button", disabled: busy, onClick: () => {
+        void run2(async (token) => {
+          await request({ endpoint: "disconnect-hub", confirmedUrl: selectedHub.url, ...selectedHub.hubId ? { hubId: selectedHub.hubId } : {} });
+          await refreshStorage(token);
+        });
+      } }, t("Disconnect this Hub")) : (0, import_react57.createElement)(
+        import_react57.Fragment,
+        null,
+        (0, import_react57.createElement)("label", { className: "bt-comm-check" }, (0, import_react57.createElement)("input", { type: "checkbox", checked: Boolean(resumeConfirmed.legacy), onChange: (event) => setResumeConfirmed({ legacy: event.target.checked }) }), t("Resume retained pending messages and work after the Hub checks authorization.")),
+        (0, import_react57.createElement)("button", { type: "button", disabled: busy || !resumeConfirmed.legacy, onClick: () => {
+          void run2(async (token) => {
+            await request({ endpoint: "resume-hub", confirmedUrl: selectedHub.url, confirmResume: true, ...selectedHub.hubId ? { hubId: selectedHub.hubId } : {} });
+            setResumeConfirmed({});
+            await refreshStorage(token);
+          });
+        } }, t("Resume this Hub"))
+      )
+    ) : null,
+    enrollments.map((item) => (0, import_react57.createElement)(
+      "section",
+      { key: item.hubId, className: "bt-comm-address" },
+      (0, import_react57.createElement)("p", null, (0, import_react57.createElement)("code", null, item.hubId), " · ", statusLabel(item.status)),
+      (0, import_react57.createElement)("p", { className: "bt-comm-reference" }, item.url),
+      item.requestId ? (0, import_react57.createElement)("p", { className: "bt-comm-reference" }, t("Request ID"), ": ", (0, import_react57.createElement)("code", null, item.requestId)) : null,
+      item.departed ? (0, import_react57.createElement)("p", { role: "status" }, t("Access revoked. History is retained; this device cannot resume.")) : item.paused ? (0, import_react57.createElement)("p", { role: "status" }, t("Paused. Identity, trust and Hub history are retained separately.")) : item.status === "approved" ? (0, import_react57.createElement)("p", { role: "status" }, t("Saved approval. This is not a live connection check. The device configuration is saved through the app; current connection status is shown separately.")) : null,
+      item.status === "approved" ? (0, import_react57.createElement)(
+        import_react57.Fragment,
+        null,
+        !item.departed ? (0, import_react57.createElement)("button", { type: "button", disabled: busy, onClick: () => setLifecycle({ kind: "leave", item }) }, t("Leave this Hub")) : null,
+        (0, import_react57.createElement)("button", { type: "button", disabled: busy, onClick: () => {
+          void run2(async (token) => {
+            await request({ endpoint: "hub-leave-status", hubId: item.hubId, confirmedUrl: item.url });
+            await refreshStorage(token);
+          });
+        } }, t("Check revoked access"))
+      ) : null,
+      (0, import_react57.createElement)("button", { type: "button", disabled: busy, onClick: () => {
+        setDeleteHistory(false);
+        setLifecycle({ kind: "forget", item });
+      } }, t("Forget this Hub")),
+      selectedHub?.hubId !== item.hubId ? (0, import_react57.createElement)("button", { type: "button", disabled: busy, onClick: () => {
+        void run2((token) => select(item, token));
+      } }, t("Select this Hub")) : null,
+      selectedHub?.hubId === item.hubId && selectedHub.enabled ? (0, import_react57.createElement)("button", { type: "button", disabled: busy, onClick: () => {
+        void run2(async (token) => {
+          await request({ endpoint: "disconnect-hub", hubId: item.hubId });
+          if (token === generation.current) await refreshStorage(token);
+        });
+      } }, t("Disconnect this Hub")) : null,
+      selectedHub?.hubId === item.hubId && item.paused && item.status === "approved" && !item.departed ? (0, import_react57.createElement)(
+        import_react57.Fragment,
+        null,
+        (0, import_react57.createElement)("label", { className: "bt-comm-check" }, (0, import_react57.createElement)("input", { type: "checkbox", checked: Boolean(resumeConfirmed[item.hubId]), onChange: (event) => setResumeConfirmed((current) => ({ ...current, [item.hubId]: event.target.checked })) }), t("Resume retained pending messages and work after the Hub checks authorization.")),
+        (0, import_react57.createElement)("button", { type: "button", disabled: busy || !resumeConfirmed[item.hubId], onClick: () => {
+          void run2(async (token) => {
+            const value = await request({ endpoint: "resume-hub", hubId: item.hubId, confirmedUrl: item.url, confirmResume: true });
+            if (token === generation.current) {
+              update(value);
+              setResumeConfirmed({});
+              await refreshStorage(token);
+            }
+          });
+        } }, t("Resume this Hub"))
+      ) : null,
+      item.requestId ? (0, import_react57.createElement)("button", { type: "button", disabled: busy || Boolean(selectedHub?.hubId && selectedHub.hubId !== item.hubId), onClick: () => {
+        void run2(async (token) => {
+          try {
+            const value = await request({ endpoint: "hub-join-status", hubId: item.hubId });
+            if (token === generation.current) update(value);
+          } catch (failure) {
+            if (token === generation.current && failure.code === "JOIN_NOT_FOUND") setAbsentHub(item.hubId);
+            throw failure;
+          }
+        });
+      } }, t("Check approval")) : (0, import_react57.createElement)("p", { role: "status" }, t("Device identity is saved locally. No request ID exists yet; access has not been requested from the Hub.")),
+      item.requestId && ["prepared", "pending"].includes(item.status) ? (0, import_react57.createElement)("button", { type: "button", disabled: busy, onClick: () => {
+        void run2(async (token) => {
+          const value = await request({ endpoint: "cancel-hub-join", hubId: item.hubId });
+          if (token === generation.current) update(value);
+        });
+      } }, t("Cancel request")) : null
+    )),
+    lifecycle ? (0, import_react57.createElement)(
+      "section",
+      { className: "bt-comm-address", role: "alertdialog", "aria-label": t(lifecycle.kind === "leave" ? "Leave this Hub" : "Forget this Hub") },
+      (0, import_react57.createElement)("h3", null, t(lifecycle.kind === "leave" ? "Leave this Hub" : "Forget this Hub")),
+      (0, import_react57.createElement)("code", null, lifecycle.item.hubId),
+      (0, import_react57.createElement)("p", null, lifecycle.item.url),
+      (0, import_react57.createElement)("p", null, t(lifecycle.kind === "leave" ? "Revoke server access and group memberships. Chat history stays. Transfer or dissolve groups owned by this device first." : "Delete this Hub configuration, device key and saved CA trust. Leave or cancel pending approval first. Other Hubs are unaffected. Retained history cannot be attached to a new identity.")),
+      lifecycle.kind === "forget" ? (0, import_react57.createElement)("label", { className: "bt-comm-check" }, (0, import_react57.createElement)("input", { type: "checkbox", checked: deleteHistory, onChange: (event) => setDeleteHistory(event.target.checked) }), t("Also permanently delete this Hub communication queue and cached files. DSH session journals and browser drafts are retained.")) : null,
+      (0, import_react57.createElement)("button", { type: "button", disabled: busy, onClick: () => {
+        void run2(async (token) => {
+          const item = lifecycle.item;
+          await request(lifecycle.kind === "leave" ? { endpoint: "leave-hub", hubId: item.hubId, confirmedUrl: item.url, confirmLeave: true } : { endpoint: "forget-hub", hubId: item.hubId, confirmedUrl: item.url, confirmForget: true, deleteLocalHistory: deleteHistory, ...deleteHistory ? { confirmDeleteLocalHistory: true } : {} });
+          if (token === generation.current) {
+            setLifecycle(null);
+            await refreshStorage(token);
+          }
+        });
+      } }, t(lifecycle.kind === "leave" ? "Confirm leaving" : "Confirm forgetting")),
+      (0, import_react57.createElement)("button", { type: "button", disabled: busy, onClick: () => setLifecycle(null) }, t("Cancel"))
+    ) : null,
+    liveError ? (0, import_react57.createElement)("p", { className: "bt-comm-reference", role: "status" }, t("Status may be out of date."), " ", liveError) : null,
+    error ? (0, import_react57.createElement)("p", { className: "bt-comm-error", role: "alert" }, error) : null
+  );
+}
+function BotChoices({ bots, selected, onChange, label }) {
+  return (0, import_react57.createElement)("fieldset", { className: "bt-comm-bot-choices" }, (0, import_react57.createElement)("legend", null, t(label)), bots.length ? bots.map((bot) => (0, import_react57.createElement)(
+    "label",
+    { key: bot.id, className: "bt-comm-check" },
+    (0, import_react57.createElement)("input", { type: "checkbox", checked: selected.includes(bot.id), onChange: (event) => onChange(event.target.checked ? [...selected, bot.id] : selected.filter((id) => id !== bot.id)), "data-local-bot-id": bot.id }),
+    (0, import_react57.createElement)(BotMark, { bot, size: 24 }),
+    bot.name,
+    (0, import_react57.createElement)("span", { className: "bt-comm-reference" }, bot.id)
+  )) : (0, import_react57.createElement)("p", { className: "bt-comm-reference" }, t("No published Bots")));
+}
+function ContactManager({ request, operation, contacts, humanPrincipalId, instanceId, onMessage, messageBusy, addressNotes, onSaveAddressNote, revision, connectionKnown }) {
+  const [data, setData] = (0, import_react57.useState)(null), [code, setCode] = (0, import_react57.useState)(""), [userCode, setUserCode] = (0, import_react57.useState)("");
+  const [published, setPublished] = (0, import_react57.useState)([]), [share, setShare] = (0, import_react57.useState)([]), [incomingShares, setIncomingShares] = (0, import_react57.useState)({});
+  const [busy, setBusy] = (0, import_react57.useState)(false), [error, setError] = (0, import_react57.useState)(""), [confirm, setConfirm] = (0, import_react57.useState)("");
+  const generation = (0, import_react57.useRef)(0), loadOrder = (0, import_react57.useRef)(0), working = (0, import_react57.useRef)(false), publicationDirty = (0, import_react57.useRef)(false), publicationBase = (0, import_react57.useRef)(null);
+  const [liveError, setLiveError] = (0, import_react57.useState)("");
+  const load = async () => {
+    const token = generation.current, order = ++loadOrder.current;
+    const results = await Promise.allSettled([
+      request({ endpoint: "user-code" }),
+      request({ endpoint: "contact-requests" }),
+      request({ endpoint: "contact-relations" }),
+      request({ endpoint: "available-bots" })
+    ]);
+    if (token !== generation.current || order !== loadOrder.current) return;
+    const [ownCode, requests2, relations, available2] = results.map((result) => result.status === "fulfilled" ? result.value : null);
+    if (ownCode) setCode(ownCode.userCode);
+    if (available2 && !publicationDirty.current) setPublished(available2.publishedBotIds ?? []);
+    setData((previous) => ({ requests: requests2 ?? previous?.requests ?? [], relations: relations ?? previous?.relations ?? [], available: available2 ?? previous?.available ?? { bots: [], publishedBotIds: [] } }));
+    const failed = results.find((result) => result.status === "rejected");
+    if (failed) throw failed.reason;
+  };
+  (0, import_react57.useEffect)(() => () => {
+    generation.current += 1;
+    loadOrder.current += 1;
+  }, [request]);
+  useLiveRefresh(async () => {
+    if (working.current) return;
+    const token = generation.current;
+    await load();
+    if (token === generation.current) setLiveError("");
+  }, (failure) => setLiveError(failureLabel2(failure)), request, revision);
+  const run2 = async (work) => {
+    if (working.current) return;
+    working.current = true;
+    loadOrder.current += 1;
+    const token = ++generation.current;
+    setBusy(true);
+    setError("");
+    setLiveError("");
+    try {
+      await work();
+      if (token === generation.current) await load();
+    } catch (failure) {
+      if (token === generation.current) {
+        setError(failure.code === "PUBLICATION_CHANGED" ? t("Published Bots changed elsewhere. Your selection is retained. Discard your changes to review the current list before saving again.") : enrollmentFailure(failure));
+        if (["CONTACT_VERSION_CONFLICT", "PUBLICATION_CHANGED"].includes(failure.code)) {
+          try {
+            await load();
+          } catch {
+          }
+        }
+      }
+    } finally {
+      working.current = false;
+      if (token === generation.current) setBusy(false);
+    }
+  };
+  const available = data?.available ?? { bots: [], publishedBotIds: [] };
+  const sharedBots = available.bots.filter((bot) => available.publishedBotIds.includes(bot.id));
+  const pending = (data?.requests ?? []).filter((item) => item.status === "pending").length;
+  return (0, import_react57.createElement)(
+    "div",
+    { className: "bt-comm-contact-manager" },
+    (0, import_react57.createElement)("button", { type: "button", disabled: busy, onClick: () => {
+      void run2(async () => {
+      });
+    } }, t("Refresh status")),
+    liveError ? (0, import_react57.createElement)("p", { className: "bt-comm-reference", role: "status" }, t("Status may be out of date."), " ", liveError) : null,
+    error ? (0, import_react57.createElement)("p", { className: "bt-comm-error", role: "alert" }, error) : null,
+    (0, import_react57.createElement)(ContactDirectory, { contacts, relations: data?.relations ?? [], humanPrincipalId, instanceId, request, addressNotes, connectionKnown: liveError ? false : connectionKnown, busy: busy || messageBusy, onMessage, confirm, onRemove: (item) => {
+      const id = item.otherHumanPrincipalId;
+      if (confirm !== id) setConfirm(id);
+      else {
+        setConfirm("");
+        void run2(() => operation("revoke-contact", { otherHumanPrincipalId: id, expectedVersion: item.version }));
+      }
+    } }),
+    (0, import_react57.createElement)(AddressNotes, { contacts, notes: addressNotes, onSave: onSaveAddressNote, busy: busy || messageBusy }),
+    (0, import_react57.createElement)(
+      "details",
+      { className: "bt-comm-contact-section" },
+      (0, import_react57.createElement)("summary", null, t("Add a contact")),
+      (0, import_react57.createElement)("h3", null, t("Your user code")),
+      (0, import_react57.createElement)("p", { className: "bt-comm-user-code", tabIndex: 0 }, code || t("Loading…")),
+      (0, import_react57.createElement)("p", { className: "bt-comm-reference" }, t("Share this code with the person you want to add. Both people choose which local Bots to share; none are selected by default.")),
+      (0, import_react57.createElement)("button", { type: "button", disabled: busy || !code, onClick: () => {
+        if (confirm !== "rotate") setConfirm("rotate");
+        else {
+          setConfirm("");
+          void run2(() => operation("rotate-user-code", {}));
+        }
+      } }, t(confirm === "rotate" ? "Confirm code rotation" : "Rotate user code")),
+      (0, import_react57.createElement)("label", { className: "bt-comm-field" }, t("Other user code"), (0, import_react57.createElement)("input", { value: userCode, maxLength: 64, "aria-label": t("Other user code"), onChange: (event) => setUserCode(event.target.value) })),
+      (0, import_react57.createElement)(BotChoices, { bots: sharedBots, selected: share, onChange: setShare, label: "Bots to share with this request" }),
+      (0, import_react57.createElement)("button", { type: "button", disabled: busy || !userCode.trim(), onClick: () => {
+        void run2(async () => {
+          await operation("request-contact", { userCode, localBotIds: share });
+          setUserCode("");
+          setShare([]);
+        });
+      } }, t("Request contact"))
+    ),
+    (0, import_react57.createElement)(
+      "details",
+      { className: "bt-comm-contact-section" },
+      (0, import_react57.createElement)("summary", null, t("Contact requests"), pending ? (0, import_react57.createElement)("span", { className: "bt-comm-count", "aria-label": `${pending} ${t("pending")}` }, pending) : null),
+      (data?.requests ?? []).map((item) => (0, import_react57.createElement)(
+        "section",
+        { key: item.requestId, className: "bt-comm-address" },
+        (0, import_react57.createElement)("p", { title: item.senderPrincipalId ?? item.requestId }, item.senderPrincipalId ? (0, import_react57.createElement)(CommunicationAvatar, { person: contacts.find((person) => person.principalId === item.senderPrincipalId) ?? { principalId: item.senderPrincipalId, displayName: item.senderName, kind: "human" }, request, allowed: contacts.some((person) => person.principalId === item.senderPrincipalId) }) : null, item.senderName ?? t("Outgoing request"), " · ", statusLabel(item.status)),
+        item.status === "pending" && item.direction === "incoming" ? (0, import_react57.createElement)(
+          import_react57.Fragment,
+          null,
+          (0, import_react57.createElement)(BotChoices, { bots: sharedBots, selected: incomingShares[item.requestId] ?? [], label: "Bots to share when accepting", onChange: (ids) => setIncomingShares((current) => ({ ...current, [item.requestId]: ids })) }),
+          (0, import_react57.createElement)("button", { type: "button", disabled: busy, onClick: () => {
+            void run2(() => operation("accept-contact", { requestId: item.requestId, expectedVersion: item.version, localBotIds: incomingShares[item.requestId] ?? [] }));
+          } }, t("Accept contact")),
+          (0, import_react57.createElement)("button", { type: "button", disabled: busy, onClick: () => {
+            void run2(() => operation("reject-contact", { requestId: item.requestId, expectedVersion: item.version }));
+          } }, t("Reject contact"))
+        ) : item.status === "pending" ? (0, import_react57.createElement)("button", { type: "button", disabled: busy, onClick: () => {
+          void run2(() => operation("cancel-contact", { requestId: item.requestId, expectedVersion: item.version }));
+        } }, t("Cancel request")) : null
+      )),
+      !(data?.requests ?? []).length ? (0, import_react57.createElement)("p", { className: "bt-comm-reference" }, t("No contact requests")) : null
+    ),
+    (0, import_react57.createElement)(
+      "details",
+      { className: "bt-comm-contact-section" },
+      (0, import_react57.createElement)("summary", null, t("Published Bots")),
+      (0, import_react57.createElement)(BotChoices, { bots: available.bots, selected: published, onChange: (value) => {
+        if (!publicationDirty.current) publicationBase.current = [...available.publishedBotIds];
+        publicationDirty.current = true;
+        setPublished(value);
+      }, label: "Bots available to contacts" }),
+      (0, import_react57.createElement)("button", { type: "button", disabled: busy || JSON.stringify([...published].sort()) === JSON.stringify([...available.publishedBotIds].sort()), "data-dirty": JSON.stringify([...published].sort()) !== JSON.stringify([...available.publishedBotIds].sort()), onClick: () => {
+        void run2(async () => {
+          await operation("publish-bots", { localBotIds: published, expectedPublishedBotIds: publicationBase.current ?? available.publishedBotIds });
+          publicationDirty.current = false;
+          publicationBase.current = null;
+        });
+      } }, t("Save published Bots")),
+      publicationDirty.current ? (0, import_react57.createElement)("button", { type: "button", disabled: busy, onClick: () => {
+        publicationDirty.current = false;
+        publicationBase.current = null;
+        setPublished([...available.publishedBotIds]);
+        setError("");
+      } }, t("Discard publication changes")) : null
+    )
+  );
+}
+
+// src/client/communication-attachments.js
+var import_react58 = require("react");
+var MAX_BYTES = 65536, MAX_FILES = 4;
+var EMPTY2 = [];
+var raster = /^(image\/(png|jpeg|gif|webp))$/;
+var fail2 = (code) => {
+  throw Object.assign(new Error(code), { code });
+};
+var hash = async (bytes) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map((b) => b.toString(16).padStart(2, "0")).join("");
+async function selectedAttachments(files, existing = []) {
+  if (existing.length + files.length > MAX_FILES) fail2("INVALID_ATTACHMENT");
+  let total = existing.reduce((sum, file) => sum + file.size, 0);
+  const added = [];
+  for (const file of files) {
+    total += file.size;
+    if (file.size < 1 || total > MAX_BYTES) fail2("ATTACHMENT_TOO_LARGE");
+    if (!file.name || file.name.length > 180 || /[\u0000-\u001f\u007f/\\\u202a-\u202e\u2066-\u2069]/u.test(file.name)) fail2("INVALID_ATTACHMENT");
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    let raw = "";
+    for (const byte of bytes) raw += String.fromCharCode(byte);
+    added.push({ name: file.name, mime: raster.test(file.type) ? file.type : "application/octet-stream", size: bytes.length, sha256: await hash(bytes), data: window.btoa(raw) });
+  }
+  return [...existing, ...added];
+}
+function CommunicationAttachments({ files = EMPTY2 }) {
+  const [verified, setVerified] = (0, import_react58.useState)([]), [error, setError] = (0, import_react58.useState)(false);
+  (0, import_react58.useEffect)(() => {
+    let active = true;
+    setVerified([]);
+    setError(false);
+    void (async () => {
+      if (!Array.isArray(files) || files.length > MAX_FILES) throw Error();
+      let total = 0;
+      const result = [];
+      for (const file of files) {
+        if (typeof file.data !== "string" || file.data.length > 87384 || typeof file.name !== "string" || file.name.length > 180 || !Number.isInteger(file.size) || file.size < 1) throw Error();
+        total += file.size;
+        if (total > MAX_BYTES) throw Error();
+        const bytes = Uint8Array.from(window.atob(file.data), (char) => char.charCodeAt(0));
+        if (bytes.length !== file.size || await hash(bytes) !== file.sha256) throw Error();
+        result.push({ ...file, bytes });
+      }
+      if (active) setVerified(result);
+    })().catch(() => {
+      if (active) setError(true);
+    });
+    return () => {
+      active = false;
+    };
+  }, [files]);
+  const download2 = (file) => {
+    const url = URL.createObjectURL(new window.Blob([file.bytes], { type: "application/octet-stream" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = file.name;
+    link.rel = "noopener";
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1e3);
+  };
+  return (0, import_react58.createElement)(
+    "div",
+    { className: "bt-comm-attachments" },
+    error ? (0, import_react58.createElement)("span", { role: "status" }, t("Attachment could not be verified.")) : null,
+    verified.map((file, index) => (0, import_react58.createElement)(
+      "div",
+      { className: "bt-comm-attachment", key: index },
+      raster.test(file.mime) ? (0, import_react58.createElement)("img", { src: `data:${file.mime};base64,${file.data}`, alt: file.name, loading: "lazy", onLoad: (event) => {
+        if (event.target.naturalWidth * event.target.naturalHeight > 2e7) event.target.hidden = true;
+      } }) : null,
+      (0, import_react58.createElement)("button", { type: "button", onClick: () => download2(file), "aria-label": t("Download {name}", { name: file.name }) }, (0, import_react58.createElement)("span", null, file.name), (0, import_react58.createElement)("small", null, `${file.size} B`))
+    ))
+  );
+}
+
+// src/client/communication-message.js
+var import_react59 = require("react");
+var import_react_dom10 = require("react-dom");
+function CommunicationMessage({ message, members, request, onInspect }) {
+  const [namespace] = (0, import_react59.useState)(() => {
+    try {
+      return randomId();
+    } catch {
+      return null;
+    }
+  }), wrapper = (0, import_react59.useRef)(null);
+  const [slots, setSlots] = (0, import_react59.useState)([]);
+  const labels = contactLabels(members);
+  const projection = (0, import_react59.useMemo)(() => {
+    const spans = namespace ? messageMentionSpans(message, members) : [];
+    let text = "", start = 0;
+    const entries2 = spans.map((span, index) => {
+      const url = `https://remote-mentions.dsbot.invalid/${namespace}/${index}`;
+      text += message.content.text.slice(start, span.start) + `[⁠](${url})`;
+      start = span.end;
+      return { ...span, url };
+    });
+    return { text: text + message.content.text.slice(start), entries: entries2 };
+  }, [message, members]);
+  (0, import_react59.useLayoutEffect)(() => {
+    const entries2 = projection.entries.flatMap((entry) => {
+      const node = [...wrapper.current.querySelectorAll("a")].find((anchor) => anchor.getAttribute("href") === entry.url || anchor.dataset.remoteMention === entry.url);
+      if (!node) return [];
+      node.removeAttribute("href");
+      node.dataset.remoteMention = entry.url;
+      node.classList.add("bt-comm-inline-mention");
+      node.setAttribute("role", "button");
+      node.setAttribute("tabindex", "0");
+      const label = entry.all ? t("All Bots") : labels.get(entry.people[0].principalId);
+      node.setAttribute("aria-label", `${t("View participant")}: ${label}`);
+      node.title = entry.people.map((person) => `${person.displayName} (${person.principalId})`).join(", ");
+      return [{ ...entry, node, label }];
+    });
+    setSlots(entries2);
+  }, [projection]);
+  const covered = new Set(slots.flatMap((slot) => slot.people.map((person) => person.principalId)));
+  const selected = new Set((message.mentions ?? []).map((value) => typeof value === "string" ? value : value.principalId));
+  const unmatched = [...new Map(members.filter((person) => selected.has(person.principalId) && !covered.has(person.principalId)).map((person) => [person.principalId, person])).values()];
+  const activate = (event) => {
+    const slot = slots.find((entry) => entry.node.contains(event.target));
+    if (!slot) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.type === "click" || event.type === "keydown" && ["Enter", " "].includes(event.key)) onInspect(slot.people.map((person) => person.principalId));
+  };
+  return (0, import_react59.createElement)(
+    "div",
+    { ref: wrapper, onClickCapture: activate, onAuxClickCapture: activate, onContextMenuCapture: activate, onKeyDownCapture: (event) => {
+      if (["Enter", " "].includes(event.key)) activate(event);
+    } },
+    (0, import_react59.createElement)(import_dsh_client_ui_primitives.MarkdownText, { text: projection.text, labels: mdLabels2(), variant: "compact" }),
+    message.attachments?.length ? (0, import_react59.createElement)(CommunicationAttachments, { files: message.attachments }) : null,
+    slots.map((slot) => (0, import_react_dom10.createPortal)((0, import_react59.createElement)(
+      "span",
+      { className: "bt-comm-inline-mention-content", "aria-hidden": true },
+      slot.all ? null : (0, import_react59.createElement)(CommunicationAvatar, { person: slot.people[0], request, size: 16 }),
+      (0, import_react59.createElement)("span", { className: "bt-comm-mention-label" }, slot.label)
+    ), slot.node, slot.url)),
+    unmatched.length ? (0, import_react59.createElement)("span", { className: "bt-comm-mention-targets" }, unmatched.map((person) => (0, import_react59.createElement)(
+      "button",
+      {
+        type: "button",
+        key: person.principalId,
+        className: "bt-comm-inline-mention bt-comm-unmatched-mention",
+        "data-mention-principal-id": person.principalId,
+        title: `${person.displayName} (${person.principalId})`,
+        "aria-label": `${t("View participant")}: ${labels.get(person.principalId)}`,
+        onClick: () => onInspect([person.principalId])
+      },
+      (0, import_react59.createElement)("span", { className: "bt-comm-inline-mention-content", "aria-hidden": true }, (0, import_react59.createElement)(CommunicationAvatar, { person, request, size: 16 }), (0, import_react59.createElement)("span", { className: "bt-comm-mention-label" }, labels.get(person.principalId)))
+    ))) : null
+  );
+}
+function BotWorkStarted({ event, members, request, onInspect }) {
+  const person = members.find((member) => member.principalId === event.principalId && member.kind === "bot");
+  const name = person ? contactLabels(members).get(person.principalId) : t("Bot");
+  const content = [(0, import_react59.createElement)(CommunicationAvatar, { key: "avatar", person: person ?? { principalId: "bot:unknown", kind: "bot", displayName: t("Bot") }, request, size: 16 }), (0, import_react59.createElement)("span", { key: "label" }, t("{name} started on it", { name }))];
+  return (0, import_react59.createElement)("div", { className: "bt-comm-work-started", "data-work-event-id": event.eventId }, person ? (0, import_react59.createElement)("button", { type: "button", title: person.principalId, "aria-label": `${t("{name} started on it", { name })} · ${t("View participant")}`, onClick: () => onInspect([person.principalId]) }, ...content) : (0, import_react59.createElement)("span", null, ...content));
+}
+
+// src/client/communication-list.js
+var import_react60 = require("react");
+var seats = (count, size) => count < 2 ? [[0, 0, size]] : count === 2 ? [[0, 0, size * 2 / 3], [size / 3, size / 3, size * 2 / 3]] : count === 3 ? [[size * 2 / 9, 0, size * 5 / 9], [0, size * 4 / 9, size * 5 / 9], [size * 4 / 9, size * 4 / 9, size * 5 / 9]] : [[0, 0, size / 2], [size / 2, 0, size / 2], [0, size / 2, size / 2], [size / 2, size / 2, size / 2]];
+function ConversationAvatar({ conversation, humanId, request, size = 36 }) {
+  const members = conversation.info?.members ?? [];
+  const people = conversation.kind === "group" ? members : members.filter((person) => person.principalId !== humanId).slice(0, 1);
+  if (conversation.kind !== "group" && people.length) return (0, import_react60.createElement)(CommunicationAvatar, { person: people[0], request, size });
+  if (!people.length) return (0, import_react60.createElement)("span", { className: "bt-comm-room-avatar bt-comm-room-empty", style: { width: size, height: size }, "aria-hidden": true }, (0, import_react60.createElement)("span", null, "◇"));
+  const positions = seats(Math.min(people.length, 4), size), gap = size / 14;
+  const rings = positions.map(([x, y, width]) => ({ x: x + width / 2, y: y + width / 2, r: width * 0.48 + gap }));
+  return (0, import_react60.createElement)("span", { className: "bt-cluster bt-comm-room-avatar", style: { width: size, height: size }, "aria-hidden": true }, positions.map(([x, y, width], index) => {
+    const holes2 = rings.slice(index + 1).filter((ring) => Math.hypot(ring.x - x - width / 2, ring.y - y - width / 2) < ring.r + width * 0.46).map((ring) => `radial-gradient(circle at ${ring.x - x}px ${ring.y - y}px,transparent ${ring.r}px,#000 ${ring.r + 0.5}px)`);
+    const style = { left: x, top: y, width, height: width, ...holes2.length ? { WebkitMaskImage: holes2.join(","), maskImage: holes2.join(","), WebkitMaskComposite: "source-in", maskComposite: "intersect" } : {} };
+    return (0, import_react60.createElement)("span", { key: people[index].principalId, style }, people.length > 4 && index === 3 ? (0, import_react60.createElement)("span", { className: "bt-comm-room-more" }, `+${people.length - 3}`) : (0, import_react60.createElement)(CommunicationAvatar, { person: people[index], request, size: width }));
+  }));
+}
+function ConversationRow({ conversation, humanId, labels, selected, request, onChoose, disabled }) {
+  const name = conversationTitle(conversation, humanId, labels);
+  const preview = conversation.lastMessage?.summary ?? "";
+  const author = conversation.lastMessage?.author;
+  const current = (conversation.info?.members ?? []).find((person) => person.principalId === author?.principalId);
+  const sender = current ? contactLabels(conversation.info.members).get(current.principalId) : null;
+  const summary = preview && conversation.kind === "group" && sender ? `${sender}: ${preview}` : preview;
+  const accessibleName = [name, summary, conversation.unread > 0 ? `${conversation.unread} ${t("Unread")}` : ""].filter(Boolean).join(", ");
+  return (0, import_react60.createElement)(
+    "button",
+    {
+      type: "button",
+      className: "bt-comm-conversation-row",
+      disabled,
+      "aria-label": accessibleName,
+      "aria-pressed": selected,
+      "aria-current": selected ? "page" : void 0,
+      title: `${name}
+${conversation.conversationId}`,
+      "data-conversation-id": conversation.conversationId,
+      onClick: () => onChoose(conversation.conversationId)
+    },
+    (0, import_react60.createElement)(ConversationAvatar, { conversation, humanId, request }),
+    (0, import_react60.createElement)("span", { className: "bt-row-body bt-comm-conversation-body" }, (0, import_react60.createElement)("span", { className: "bt-row-name bt-comm-conversation-name" }, name), (0, import_react60.createElement)("span", { className: "bt-row-preview bt-comm-conversation-preview", title: summary }, summary)),
+    conversation.unread > 0 ? (0, import_react60.createElement)("span", { className: "bt-comm-unread", "aria-hidden": true }) : null
+  );
+}
+
+// src/client/communication-activity.js
+var import_react61 = require("react");
+function CommunicationActivity({ state, member, events, outbox, operations, operationPending, pendingAttempt, error, pollError, friendly, labels, onRefresh, onRetry, onCopy, copyDisabled, busy }) {
+  const failures = (state?.errors ?? []).filter((item) => !member || item.conversationId === member.conversationId);
+  const exports = (state?.exportFailures ?? []).filter((item) => !member || item.conversationId === member.conversationId);
+  const stops = collaborationStops(events, outbox);
+  const notice = (value) => (0, import_react61.createElement)("p", { role: "status" }, t(value));
+  return (0, import_react61.createElement)(
+    "div",
+    { className: "bt-comm-activity" },
+    member ? (0, import_react61.createElement)("p", { className: "bt-comm-reference" }, member.title ?? t("Private conversation")) : null,
+    (0, import_react61.createElement)("button", { type: "button", disabled: busy, onClick: onRefresh }, t("Refresh status")),
+    error ? notice(error) : null,
+    state?.error ? notice(friendly({ code: state.error })) : null,
+    pollError ? notice(pollError) : null,
+    pendingAttempt ? (0, import_react61.createElement)("section", null, notice("Send not confirmed. Retry the same message to avoid sending it twice."), (0, import_react61.createElement)("button", { type: "button", onClick: onRetry, disabled: busy }, t("Retry same send"))) : null,
+    operationPending ? notice("An operation is not confirmed. Check status, then retry the same action.") : null,
+    operations.map((item) => (0, import_react61.createElement)("section", { key: item.id }, !member && item.conversationId ? (0, import_react61.createElement)("p", { className: "bt-comm-reference" }, item.conversationId) : null, notice(item.state === "failed" ? "Operation failed" : "Operation queued"), item.error ? notice(friendly({ code: item.error })) : notice("Waiting for the Hub"))),
+    outbox.filter((item) => item.state !== "accepted").map((item) => (0, import_react61.createElement)(
+      "section",
+      { key: item.id, "data-activity-message-id": item.id },
+      !member && item.conversationId ? (0, import_react61.createElement)("p", { className: "bt-comm-reference" }, item.conversationId) : null,
+      notice(item.state === "failed" ? "Send failed" : item.state === "accepted" ? "Hub accepted" : "Queued on this device"),
+      (0, import_react61.createElement)("p", { className: "bt-comm-pending-text" }, item.text),
+      item.error ? notice(friendly({ code: item.error })) : null,
+      item.membershipEpoch && item.membershipEpoch !== member?.membershipEpoch ? notice("This record belongs to an earlier membership.") : null,
+      (item.deliveries ?? []).filter((delivery) => delivery.recipientPrincipalId !== state?.humanPrincipalId).map((delivery) => (0, import_react61.createElement)("p", { key: delivery.deliveryId, className: "bt-comm-reference" }, `${labels.get(delivery.recipientPrincipalId) ?? t("Participant")}: ${t(deliveryPhase(delivery))}`)),
+      item.state === "failed" ? (0, import_react61.createElement)("button", { type: "button", disabled: copyDisabled || busy, onClick: () => onCopy(item) }, t("Copy to draft")) : null
+    )),
+    events.filter((event) => event.type === "bot.input.read").map((event) => (0, import_react61.createElement)("p", { key: event.eventId, role: "status" }, `${labels.get(event.principalId) ?? t("Participant")}: ${t("Update read into task")}`)),
+    stops.map((item) => (0, import_react61.createElement)("p", { key: item.messageId, role: "status", "data-causal-stop": item.messageId }, t("Bot collaboration stopped at the safety limit. Send a new Human message to continue."))),
+    failures.map((item) => (0, import_react61.createElement)("p", { key: item.bindingId, role: "status" }, t("Bot delivery needs reconciliation"), ": ", item.code)),
+    exports.map((item) => (0, import_react61.createElement)("p", { key: item.messageId, role: "status" }, t("Send failed"), ": ", item.code)),
+    !error && !state?.error && !pollError && !pendingAttempt && !operationPending && !operations.length && !outbox.some((item) => item.state !== "accepted") && !stops.length && !failures.length && !exports.length ? notice("No activity needs attention.") : null
+  );
+}
+
+// src/client/communication-message-actions.js
+var import_react62 = require("react");
+function CommunicationMessageActions({ message, onReply, onThread, children }) {
+  const [copied, setCopied] = (0, import_react62.useState)(false), [failed, setFailed] = (0, import_react62.useState)(false);
+  const timer = (0, import_react62.useRef)(), mounted = (0, import_react62.useRef)(false);
+  (0, import_react62.useEffect)(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      clearTimeout(timer.current);
+    };
+  }, []);
+  const button = (label, Icon, onClick) => (0, import_react62.createElement)("button", { type: "button", className: "bt-tool", title: t(label), "aria-label": t(label), onClick }, (0, import_react62.createElement)(Icon));
+  const copy2 = async () => {
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
+      await navigator.clipboard.writeText(message.content.text);
+      if (!mounted.current) return;
+      setCopied(true);
+      setFailed(false);
+      clearTimeout(timer.current);
+      timer.current = setTimeout(() => setCopied(false), 1200);
+    } catch {
+      if (mounted.current) setFailed(true);
+    }
+  };
+  return (0, import_react62.createElement)(
+    "div",
+    { className: "bt-comm-message-actions" },
+    children,
+    button(copied ? "Copied" : "Copy", copied ? CheckIcon : CopyIcon, () => {
+      void copy2();
+    }),
+    onReply ? button("Reply", ReplyIcon, (event) => onReply(message, event.currentTarget)) : null,
+    onThread ? button("View replies", ChatsIcon, (event) => onThread(message, event.currentTarget)) : null,
+    failed ? (0, import_react62.createElement)("span", { role: "status" }, t("Copy failed. Select the message text to copy it.")) : null
+  );
+}
+
+// src/client/communication-thread.js
+var import_react63 = require("react");
+function CommunicationThread({ member, messageId, request, canSpeak, onReply, onInspect, selectedBranch = false }) {
+  const [page, setPage] = (0, import_react63.useState)(null), [error, setError] = (0, import_react63.useState)(false), [loading, setLoading] = (0, import_react63.useState)(false);
+  const [collapsed, setCollapsed] = (0, import_react63.useState)(/* @__PURE__ */ new Set());
+  const order = (0, import_react63.useRef)(0), current = (0, import_react63.useRef)(null);
+  current.current = page;
+  const members = member.info?.members ?? [], labels = contactLabels(members);
+  (0, import_react63.useEffect)(() => {
+    const token = ++order.current;
+    setPage(null);
+    setCollapsed(/* @__PURE__ */ new Set());
+    setError(false);
+    setLoading(true);
+    void request({ endpoint: "thread", conversationId: member.conversationId, membershipEpoch: member.membershipEpoch, messageId }).then(async (value) => {
+      if (selectedBranch && !value.events?.some((event) => event.message?.messageId === messageId)) {
+        const selected = await request({ endpoint: "reference", conversationId: member.conversationId, membershipEpoch: member.membershipEpoch, messageId });
+        if (selected.message?.messageId === messageId) value = { ...value, events: [...value.events ?? [], selected] };
+      }
+      if (token === order.current && value.conversationId === member.conversationId && value.membershipEpoch === member.membershipEpoch && value.messageId === messageId) setPage(value);
+    }).catch(() => {
+      if (token === order.current) {
+        setPage(null);
+        setError(true);
+      }
+    }).finally(() => {
+      if (token === order.current) setLoading(false);
+    });
+    return () => {
+      order.current += 1;
+    };
+  }, [member.conversationId, member.membershipEpoch, member.watermark, messageId, request, selectedBranch]);
+  const more = async () => {
+    if (loading || !page?.hasMore) return;
+    const token = ++order.current, base = page;
+    setLoading(true);
+    setError(false);
+    try {
+      const value = await request({ endpoint: "thread", conversationId: member.conversationId, membershipEpoch: member.membershipEpoch, messageId, after: page.nextAfter, watermark: page.watermark });
+      if (token === order.current && current.current === base && value.conversationId === member.conversationId && value.membershipEpoch === member.membershipEpoch && value.rootMessageId === base.rootMessageId && value.watermark === base.watermark) setPage({ ...value, events: [...new Map([...base.events, ...value.events].map((event) => [event.message.messageId, event])).values()] });
+    } catch {
+      if (token === order.current) {
+        setPage(null);
+        setError(true);
+      }
+    } finally {
+      if (token === order.current) setLoading(false);
+    }
+  };
+  const messages = new Map((page?.events ?? []).map((event) => [event.message.messageId, event.message]));
+  const children = /* @__PURE__ */ new Map();
+  for (const event of page?.events ?? []) {
+    const parent = event.message.replyToMessageId;
+    if (!messages.has(parent) || parent === event.message.messageId) continue;
+    const branch = children.get(parent) ?? [];
+    branch.push(event);
+    children.set(parent, branch);
+  }
+  const rendered = /* @__PURE__ */ new Set();
+  const renderBranch = (event, level = 0) => {
+    const message = event.message;
+    if (rendered.has(message.messageId)) return null;
+    rendered.add(message.messageId);
+    const person = members.find((item) => item.principalId === message.author.principalId) ?? { ...message.author, displayName: t("Participant") };
+    const parent = messages.get(message.replyToMessageId);
+    const replies = selectedBranch ? [] : (children.get(message.messageId) ?? []).filter((child) => !rendered.has(child.message.messageId));
+    const hidden = collapsed.has(message.messageId);
+    return (0, import_react63.createElement)(
+      "li",
+      { key: message.messageId, "data-thread-depth": level, "data-thread-deep": level > 4 || void 0 },
+      (0, import_react63.createElement)(
+        "article",
+        { "data-thread-message-id": message.messageId, "data-thread-selected": message.messageId === messageId, style: { "--reply-depth": Math.min(level, 4) } },
+        (0, import_react63.createElement)("div", { className: "bt-comm-person-label" }, (0, import_react63.createElement)(CommunicationAvatar, { person, request, allowed: members.includes(person), size: 24 }), (0, import_react63.createElement)("strong", { title: person.principalId }, labels.get(person.principalId) ?? t("Participant"))),
+        parent && !selectedBranch ? (0, import_react63.createElement)("p", { className: "bt-comm-thread-parent" }, t("Reply to"), " ", labels.get(parent.author.principalId) ?? t("Participant"), ": ", referenceExcerpt(parent.content.text)) : null,
+        (0, import_react63.createElement)("div", { className: "bt-comm-body" }, (0, import_react63.createElement)(CommunicationMessage, { message, members, request, onInspect })),
+        (0, import_react63.createElement)(
+          CommunicationMessageActions,
+          { message, onReply: canSpeak ? onReply : void 0 },
+          (0, import_react63.createElement)("time", null, new Date(event.serverAcceptedAt).toLocaleString()),
+          replies.length ? (0, import_react63.createElement)("button", { type: "button", "aria-expanded": !hidden, onClick: () => setCollapsed((old) => {
+            const next = new Set(old);
+            if (hidden) next.delete(message.messageId);
+            else next.add(message.messageId);
+            return next;
+          }) }, t(hidden ? "Show {count} replies" : "Hide replies", { count: replies.length })) : null
+        )
+      ),
+      replies.length && !hidden ? (0, import_react63.createElement)("ol", { className: "bt-comm-thread-branches" }, replies.map((child) => renderBranch(child, level + 1))) : null
+    );
+  };
+  let roots = (page?.events ?? []).filter((event) => !messages.has(event.message.replyToMessageId) || event.message.replyToMessageId === event.message.messageId);
+  if (selectedBranch) {
+    const visible = /* @__PURE__ */ new Set(), pending = [messageId];
+    while (pending.length) {
+      const id = pending.pop();
+      if (visible.has(id)) continue;
+      visible.add(id);
+      for (const event of children.get(id) ?? []) pending.push(event.message.messageId);
+    }
+    roots = (page?.events ?? []).filter((event) => visible.has(event.message.messageId)).sort((a, b) => a.conversationSeq - b.conversationSeq);
+  }
+  return (0, import_react63.createElement)(
+    "div",
+    { className: "bt-comm-thread" },
+    (0, import_react63.createElement)("p", { className: "bt-comm-reference" }, t(canSpeak ? "Replies stay in this conversation. Select Reply to continue an exact message." : "Replies stay in this conversation.")),
+    page?.earlierUnavailable ? (0, import_react63.createElement)("p", { role: "status" }, t("Earlier context is outside your authorized history.")) : null,
+    loading ? (0, import_react63.createElement)("p", { role: "status" }, t("Loading replies…")) : null,
+    error ? (0, import_react63.createElement)("p", { role: "status" }, t("This reply chain is unavailable. Reopen it after synchronization.")) : null,
+    (0, import_react63.createElement)(
+      "div",
+      { className: "bt-comm-thread-log", role: "log", "aria-label": t("Message replies") },
+      (0, import_react63.createElement)("ol", { className: "bt-comm-thread-roots" }, roots.map((event) => renderBranch(event)))
+    ),
+    page?.hasMore ? (0, import_react63.createElement)("button", { type: "button", disabled: loading, onClick: () => {
+      void more();
+    } }, t("Load more replies")) : null
+  );
+}
+function ThreadReplyComposer({ storageKey, member, target, request, onSent, attachmentsAvailable }) {
+  const initial = () => {
+    try {
+      const value = JSON.parse(localStorage.getItem(storageKey));
+      if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+      if (value.attempt && (value.attempt.conversationId !== member.conversationId || value.attempt.membershipEpoch !== member.membershipEpoch)) return {};
+      return value;
+    } catch {
+      return {};
+    }
+  };
+  const [draft, setDraft] = (0, import_react63.useState)(initial), [busy, setBusy] = (0, import_react63.useState)(false), [error, setError] = (0, import_react63.useState)("");
+  const [completion, setCompletion] = (0, import_react63.useState)(null), [index, setIndex] = (0, import_react63.useState)(0);
+  const input = (0, import_react63.useRef)(null), composing = (0, import_react63.useRef)(false), flight = (0, import_react63.useRef)(false), alive = (0, import_react63.useRef)(true);
+  (0, import_react63.useEffect)(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+  const members = member.info?.members ?? [], labels = contactLabels(members);
+  const currentTarget = draft.attempt?.replyToMessageId ?? target?.messageId;
+  const choices = completion ? mentionChoices(members, completion.query, t("All Bots")) : [];
+  const update = (value) => {
+    const next = { ...draft, ...value };
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(next));
+      setDraft(next);
+      return next;
+    } catch {
+      setError(t("Unable to save this reply on this device. Nothing was sent."));
+      return null;
+    }
+  };
+  const submit = async () => {
+    if (flight.current || busy || !currentTarget || !draft.text?.trim() && !draft.attachments?.length) return;
+    let attempt;
+    try {
+      attempt = draft.attempt ?? {
+        endpoint: "send",
+        conversationId: member.conversationId,
+        membershipEpoch: member.membershipEpoch,
+        messageId: randomId(),
+        clientCreatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        text: draft.text ?? "",
+        mentions: draft.mentions ?? [],
+        replyToMessageId: currentTarget,
+        ...draft.attachments?.length ? { attachments: draft.attachments } : {}
+      };
+    } catch (failure) {
+      setError(communicationFailure(failure));
+      return;
+    }
+    if (!update({ attempt, replyTarget: draft.replyTarget ?? { author: target.author, content: { text: referenceExcerpt(target.content?.text ?? "") } } })) return;
+    flight.current = true;
+    setBusy(true);
+    setError("");
+    setCompletion(null);
+    try {
+      await request(attempt);
+      localStorage.removeItem(storageKey);
+      if (alive.current) {
+        setDraft({});
+        await onSent?.();
+        input.current?.focus();
+      }
+    } catch (failure) {
+      if (alive.current) {
+        if (!operationOutcomeUncertain(failure)) update({ attempt: void 0, replyTarget: void 0 });
+        setError(communicationFailure(failure));
+      }
+    } finally {
+      flight.current = false;
+      if (alive.current) setBusy(false);
+    }
+  };
+  const attach = async (files) => {
+    if (flight.current || draft.attempt || !attachmentsAvailable) return;
+    flight.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      const attachments = await selectedAttachments([...files], draft.attachments ?? []);
+      if (alive.current) update({ attachments });
+    } catch (failure) {
+      if (alive.current) setError(communicationFailure(failure));
+    } finally {
+      flight.current = false;
+      if (alive.current) setBusy(false);
+    }
+  };
+  const complete = (person) => {
+    const result = insertMention(draft, completion, person);
+    update({ text: result.text, mentions: result.mentions, manualMentions: result.manualMentions });
+    setCompletion(null);
+    requestAnimationFrame(() => {
+      input.current?.focus();
+      input.current?.setSelectionRange(result.caret, result.caret);
+    });
+  };
+  const query = (node) => {
+    setCompletion(mentionQuery(node.value, node.selectionStart));
+    setIndex(0);
+  };
+  return (0, import_react63.createElement)(
+    "div",
+    { className: "bt-comm-thread-composer" },
+    (0, import_react63.createElement)("p", { className: "bt-comm-reference" }, t("Reply to"), " ", labels.get((draft.replyTarget ?? target)?.author?.principalId) ?? t("Participant"), ": ", referenceExcerpt((draft.replyTarget ?? target)?.content?.text ?? "")),
+    choices.length ? (0, import_react63.createElement)("div", { className: "bt-comm-completion", role: "listbox", "aria-label": t("Mention participant") }, choices.map((person, at) => (0, import_react63.createElement)("button", { type: "button", key: person.principalId, role: "option", "aria-selected": index === at, onMouseDown: (event) => event.preventDefault(), onClick: () => complete(person) }, person.all ? t("All Bots") : labels.get(person.principalId) ?? person.displayName))) : null,
+    (0, import_react63.createElement)("textarea", {
+      ref: input,
+      rows: 2,
+      "aria-label": t("Reply in this thread"),
+      value: draft.text ?? "",
+      disabled: busy || Boolean(draft.attempt),
+      onChange: (event) => {
+        update({ text: event.target.value, mentions: retainedMentions(event.target.value, draft.mentions ?? [], members, draft.manualMentions ?? []) });
+        if (!composing.current) query(event.target);
+      },
+      onClick: (event) => query(event.target),
+      onCompositionStart: () => {
+        composing.current = true;
+        setCompletion(null);
+      },
+      onCompositionEnd: (event) => {
+        composing.current = false;
+        query(event.target);
+      },
+      onKeyDown: (event) => {
+        event.stopPropagation();
+        if (event.nativeEvent.isComposing || composing.current || event.keyCode === 229) return;
+        if (choices.length) {
+          if (["ArrowDown", "ArrowUp"].includes(event.key)) {
+            event.preventDefault();
+            setIndex((at) => (at + (event.key === "ArrowDown" ? 1 : -1) + choices.length) % choices.length);
+            return;
+          }
+          if (event.key === "Escape") {
+            event.preventDefault();
+            setCompletion(null);
+            return;
+          }
+          if (["Enter", "Tab"].includes(event.key)) {
+            event.preventDefault();
+            complete(choices[Math.min(index, choices.length - 1)]);
+            return;
+          }
+        }
+        if (event.key === "Enter" && !event.shiftKey) {
+          event.preventDefault();
+          void submit();
+        }
+      },
+      onPaste: (event) => {
+        if (event.clipboardData?.files.length) {
+          event.preventDefault();
+          event.stopPropagation();
+          if (attachmentsAvailable) void attach(event.clipboardData.files);
+        }
+      },
+      onDragOver: (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      },
+      onDrop: (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (attachmentsAvailable) void attach(event.dataTransfer.files);
+      }
+    }),
+    attachmentsAvailable ? (0, import_react63.createElement)("label", { className: "bt-comm-attach-picker", title: t("Attach images or files (64 KiB total)") }, (0, import_react63.createElement)(PlusIcon), (0, import_react63.createElement)("input", { type: "file", multiple: true, disabled: busy || Boolean(draft.attempt), "aria-label": t("Attach images or files (64 KiB total)"), onChange: (event) => {
+      void attach(event.target.files);
+      event.target.value = "";
+    } })) : null,
+    draft.attachments?.length ? (0, import_react63.createElement)("div", { className: "bt-comm-attachment-drafts" }, draft.attachments.map((file, at) => (0, import_react63.createElement)("span", { key: at }, file.name, (0, import_react63.createElement)("button", { type: "button", disabled: busy || Boolean(draft.attempt), "aria-label": t("Remove {name}", { name: file.name }), onClick: () => update({ attachments: draft.attachments.filter((_, i) => i !== at) }) }, (0, import_react63.createElement)(CloseIcon))))) : null,
+    (0, import_react63.createElement)("button", { type: "button", className: "bt-comm-send", disabled: busy || !currentTarget || !draft.text?.trim() && !draft.attachments?.length, "aria-label": t(draft.attempt ? "Retry same send" : "Send reply"), title: t(draft.attempt ? "Retry same send" : "Send reply"), onClick: () => {
+      void submit();
+    } }, (0, import_react63.createElement)(ArrowUpIcon), (0, import_react63.createElement)("span", { className: "bt-sr" }, t(draft.attempt ? "Retry same send" : "Send reply"))),
+    error ? (0, import_react63.createElement)("p", { role: "alert", className: "bt-comm-thread-send-error" }, error) : null
+  );
+}
+
+// src/client/communication-memory.js
+var import_react64 = require("react");
+function CommunicationMemory({ request }) {
+  const [value, setValue] = (0, import_react64.useState)(null);
+  const [busy, setBusy] = (0, import_react64.useState)(false);
+  const [error, setError] = (0, import_react64.useState)("");
+  const [saved, setSaved] = (0, import_react64.useState)(false);
+  (0, import_react64.useEffect)(() => {
+    let active = true;
+    request({ endpoint: "memory-settings" }).then((result) => {
+      if (active) setValue(result.localMemory);
+    }).catch((failure) => {
+      if (active) setError(communicationFailure(failure));
+    });
+    return () => {
+      active = false;
+    };
+  }, [request]);
+  const save2 = async (next) => {
+    setBusy(true);
+    setError("");
+    setSaved(false);
+    try {
+      await request({ endpoint: "set-memory-settings", localMemory: next });
+      setValue(next);
+      setSaved(true);
+    } catch (failure) {
+      setError(communicationFailure(failure));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (0, import_react64.createElement)(
+    "section",
+    null,
+    (0, import_react64.createElement)("h3", null, t("Local memory in remote conversations")),
+    (0, import_react64.createElement)("label", { className: "bt-comm-check" }, (0, import_react64.createElement)("input", {
+      type: "checkbox",
+      checked: value === true,
+      disabled: value === null || busy,
+      onChange: (event) => {
+        void save2(event.target.checked);
+      }
+    }), t("Allow each Bot to use its own local memory")),
+    (0, import_react64.createElement)("p", null, t("Enabled by default for this Hub. Selected entries from each Bot’s own main memory are sent to its configured model service. Replies may share relevant facts with everyone in the conversation. Other chats, topic files and other Bots’ memory are not included.")),
+    (0, import_react64.createElement)("p", null, t("Turning this off stops new memory reads after configuration reload. It does not erase existing model context, saved session records or messages already shared. Existing conversations and recovery may still contain earlier facts.")),
+    saved ? (0, import_react64.createElement)("p", { role: "status" }, t("Saved. The configuration will reload.")) : null,
+    error ? (0, import_react64.createElement)("p", { role: "alert" }, error) : null
+  );
+}
+
+// src/client/communication-styles.js
+var communicationCSS = `
+.bt-comm-ip-notes{margin-top:16px;padding-top:12px;border-top:1px solid var(--bt-line);min-width:0}
+.bt-comm-ip-note-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:8px 0;min-width:0}
+.bt-comm-ip-note-row>span{min-width:0;overflow-wrap:anywhere}
+.bt-comm-ip-note-row button{flex:none}
+.bt-comm-ip-note{display:block;font-size:12px;line-height:16px;font-weight:400;color:var(--bt-ink-2);overflow-wrap:anywhere;white-space:pre-wrap}
+.bt-comm-ip-note-editor{margin-top:12px}
+
+.bt-comm-attachments{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;max-width:100%}
+.bt-comm-attachment{display:flex;flex-direction:column;gap:4px;max-width:240px;min-width:0}
+.bt-comm-attachment img{max-width:100%;max-height:220px;object-fit:contain;border-radius:12px}
+.bt-comm-attachment button{display:flex;align-items:center;gap:8px;max-width:100%;border:1px solid var(--bt-line-2);border-radius:12px;padding:8px;background:var(--bt-card);color:var(--bt-ink)}
+.bt-comm-attachment button span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bt-comm-attachment button small{flex:none;color:var(--bt-ink-3)}
+.bt-comm-attach-picker{display:grid;place-items:center;cursor:pointer;width:30px;height:30px;flex:none;position:relative}
+.bt-comm-attach-picker svg{width:18px;height:18px}
+.bt-comm-attach-picker input{position:absolute;width:100%;height:100%;opacity:0;cursor:pointer}
+.bt-comm-attachment-drafts{display:flex;flex-wrap:wrap;gap:6px;max-width:100%;font-size:12px}
+.bt-comm-attachment-drafts>span{display:inline-flex;align-items:center;gap:4px;max-width:220px;overflow:hidden;word-break:break-all}
+.bt-comm-attachment-drafts button{padding:2px;border:0;background:none;color:inherit}
+.bt-comm-attachment-drafts svg{width:14px;height:14px}
+.bt-comm-nav-heading .bt-comm-settings-icon{width:32px;height:32px;padding:6px;display:grid;place-items:center;flex:none;background:none;border-color:transparent}
+.bt-comm-personal-settings>section{margin-top:16px;padding-top:12px;border-top:1px solid var(--bt-line)}
+.bt-comm-personal-settings>section>button{margin:6px 8px 6px 0}
+.bt-comm-thread-log{--reply-step:18px;min-width:0}
+.bt-comm-thread-log ol{list-style:none;margin:0;padding:0;min-width:0}
+.bt-comm-thread-log li{position:relative;min-width:0;padding-top:10px}
+.bt-comm-thread-log .bt-comm-thread-branches>li{padding-left:var(--reply-step)}
+.bt-comm-thread-branches>li::before{content:'';position:absolute;left:0;top:0;bottom:0;border-left:1px solid var(--bt-line-2);pointer-events:none}
+.bt-comm-thread-branches>li:last-child::before{bottom:auto;height:34px}
+.bt-comm-thread-branches>li::after{content:'';position:absolute;left:0;top:34px;width:var(--reply-step);border-top:1px solid var(--bt-line-2);pointer-events:none}
+.bt-comm-thread-log .bt-comm-thread-branches>li[data-thread-deep=true]{padding-left:0}
+.bt-comm-thread-branches>li[data-thread-deep=true]::before,.bt-comm-thread-branches>li[data-thread-deep=true]::after{display:none}
+.bt-comm-thread-log article{position:relative;margin:0;padding:12px 16px;border-left:2px solid var(--bt-line-2);border-radius:12px;background:var(--bt-bubble);font-size:14px;line-height:24px;overflow-wrap:anywhere;min-width:0}
+@media(max-width:600px){.bt-comm-thread-log{--reply-step:12px}.bt-comm-thread-log article{padding:10px}}
+.bt-comm-thread-log article[data-thread-selected=true]{border-left-color:var(--bt-accent)}
+.bt-comm-thread-parent{font-size:12px;line-height:16px;color:var(--bt-ink-2);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.bt-comm-frame{position:fixed;inset:0;z-index:60;display:grid;grid-template-columns:288px minmax(0,1fr);background:var(--bt-main);color:var(--bt-ink);font:13px/18px var(--bt-font);pointer-events:auto;opacity:1;transition:opacity .16s ease}
+.bt-comm-frame[data-closing=true]{opacity:0;pointer-events:none}
+.bt-comm-frame *{box-sizing:border-box}
+.bt-comm-frame h2{font-size:15px;line-height:20px;margin:0;font-weight:600}
+.bt-comm-frame h3{font-size:13px;margin:8px 0}
+.bt-comm-frame p{margin:6px 0;overflow-wrap:anywhere}
+.bt-comm-frame button{min-height:32px;border:1px solid var(--bt-line);border-radius:8px;background:var(--bt-card);color:var(--bt-ink);padding:6px 10px;font:inherit;text-align:left;cursor:pointer;touch-action:manipulation;transition:background-color .12s,color .12s,border-color .12s,opacity .12s,scale var(--bt-tap-duration,0ms) var(--bt-tap-easing,linear)}
+.bt-comm-frame button:hover:not(:disabled):not([aria-disabled=true]){background:var(--bt-hover)}
+.bt-comm-frame button:disabled{opacity:.4;cursor:default}
+.bt-comm-frame :is(button,input,textarea,select,summary):focus-visible{outline:2px solid var(--bt-accent);outline-offset:2px}
+.bt-comm-frame :is(input:not([type=checkbox]),textarea,select){width:100%;min-width:0;border:1px solid var(--bt-line);border-radius:8px;padding:8px;background:var(--bt-card);color:var(--bt-ink);font:13px/18px var(--bt-font)}
+.bt-comm-frame textarea{resize:vertical;min-height:72px;max-height:180px;font-size:14px;line-height:22px}
+.bt-comm-frame code{font:12px/16px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;overflow-wrap:anywhere;user-select:text}
+.bt-comm-frame .bt-comm-primary{background:var(--bt-accent);border-color:var(--bt-accent);color:var(--bt-accent-ink)}
+.bt-comm-frame .bt-comm-primary:hover{background:color-mix(in srgb,var(--bt-accent) 88%,var(--bt-main))}
+.bt-comm-nav{background:var(--bt-sidebar);border-right:1px solid var(--bt-line);padding:20px 16px;overflow:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:12px;min-height:0}
+.bt-comm-nav-heading{display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:10px}
+.bt-comm-frame .bt-comm-back{border-color:transparent;background:transparent;padding:4px 0;font-size:12px;color:var(--bt-ink-2)}
+.bt-comm-connection{padding:12px;border:1px solid var(--bt-line);background:var(--bt-card);border-radius:12px}
+.bt-comm-connection-label{display:flex;align-items:center;gap:8px;font-weight:500}
+.bt-comm-dot{width:7px;height:7px;flex:0 0 7px;border-radius:50%;background:var(--bt-ink-3)}
+.bt-comm-connection-label[data-connected=true] .bt-comm-dot{background:var(--bt-green)}
+.bt-comm-connection>button{margin-top:6px;font-size:12px;min-height:28px}
+.bt-comm-frame .bt-comm-identity summary{font-size:12px;color:var(--bt-ink-2)}
+.bt-comm-start-actions{display:flex;gap:8px;flex-wrap:wrap}
+.bt-comm-nav>.bt-comm-start-actions>button{flex:1;text-align:center}
+.bt-comm-section-title{display:flex;justify-content:space-between;gap:8px;color:var(--bt-ink-2);font-size:12px;font-weight:500;margin-top:4px}
+.bt-comm-nav nav{display:flex;flex-direction:column;gap:4px}
+.bt-comm-nav nav button{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;border-color:transparent;background:transparent;overflow-wrap:anywhere}
+.bt-comm-nav nav button[aria-pressed=true]{background:var(--bt-active);border-color:var(--bt-line);font-weight:500}
+.bt-comm-conversation-body{display:flex;flex-direction:column;gap:3px;flex:1;min-width:0}
+.bt-comm-conversation-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500;line-height:18px}
+.bt-comm-conversation-preview{min-height:16px;line-height:16px;color:var(--bt-ink-2);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bt-comm-nav nav .bt-comm-conversation-row{padding:8px;border-radius:10px;gap:10px;min-height:56px;justify-content:flex-start}
+.bt-comm-nav nav .bt-comm-conversation-row[aria-pressed=true]{border-color:transparent}
+.bt-comm-conversation-row>.bt-comm-avatar{margin-right:0}
+.bt-comm-room-avatar{position:relative;display:inline-block;flex:none}
+.bt-comm-room-avatar:not(.bt-comm-room-empty)>span{position:absolute;display:flex}
+.bt-comm-room-avatar .bt-comm-avatar{margin:0}
+.bt-comm-room-empty{display:grid;place-items:center;border-radius:12px;background:var(--bt-bubble);color:var(--bt-ink-2)}
+.bt-comm-room-more{display:grid;place-items:center;width:100%;height:100%;border-radius:50%;background:var(--bt-tag-bg);color:var(--bt-tag-ink);font-size:9px}
+.bt-comm-toast{position:fixed;top:16px;right:24px;z-index:9;max-width:min(440px,calc(100vw - 32px));display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--bt-line-2);border-radius:12px;background:var(--bt-card);box-shadow:0 8px 28px color-mix(in srgb,var(--bt-ink) 12%,transparent);font-size:12px;line-height:18px}
+.bt-comm-toast>span{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.bt-comm-toast>button{flex:none;font-size:12px;min-height:28px}
+.bt-comm-activity>section{padding:10px 0;border-bottom:1px solid var(--bt-line)}
+.bt-comm-admin-link small{display:block;font-size:11px;color:var(--bt-ink-2);overflow-wrap:anywhere}
+.bt-comm-unread{flex:none;width:7px;height:7px;border-radius:50%;background:var(--bt-accent);margin-left:auto}
+.bt-comm-frame summary{cursor:pointer;min-height:28px;padding:4px 0;font-weight:500}
+.bt-comm-nav details>button{width:100%;margin:4px 0;overflow-wrap:anywhere}
+.bt-comm-frame .bt-comm-contact{text-align:left;font-size:12px;line-height:18px}
+.bt-comm-main{position:relative;min-width:0;min-height:0;display:flex;flex-direction:column;padding:20px 24px 16px;gap:12px}
+.bt-comm-main header{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0;flex-shrink:0}
+.bt-comm-heading{flex:1;min-width:0;overflow-wrap:anywhere}
+.bt-comm-main header>button{flex-shrink:0;font-size:12px}
+.bt-comm-main header p{margin:4px 0 0}
+.bt-comm-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:12px;padding:24px;max-width:560px;margin:auto;color:var(--bt-ink-2)}
+.bt-comm-empty h2{color:var(--bt-ink)}
+.bt-comm-empty p{max-width:420px;margin:0;line-height:22px}
+.bt-comm-empty-symbol{width:56px;height:56px;display:grid;place-items:center;border-radius:18px;background:var(--bt-bubble);color:var(--bt-ink-2);font-size:22px;line-height:34px}
+.bt-comm-log{flex:1;min-height:80px;overflow:auto;overscroll-behavior:contain;padding:8px 0;scrollbar-gutter:stable}
+.bt-comm-log:empty{display:none}
+.bt-comm-log article{max-width:min(880px,90%);padding:12px 16px;border-radius:18px;background:var(--bt-bubble);margin:12px 0;overflow-wrap:anywhere;font-size:14px;line-height:24px}
+.bt-comm-log article[data-self=true]{margin-left:auto;background:var(--bt-user);color:var(--bt-user-ink)}
+.bt-comm-log article[data-failed=true]{outline:1px solid var(--bt-danger);outline-offset:2px}
+.bt-comm-log article[data-referenced=true]{outline:2px solid var(--bt-accent);outline-offset:2px}
+.bt-comm-log strong{font-size:12px;line-height:16px;font-weight:500}
+.bt-comm-message-actions{display:flex;gap:12px;align-items:center;font-size:11px;line-height:16px;margin-top:8px}
+.bt-comm-message-actions button{min-height:28px;padding:3px 8px;font-size:12px}
+.bt-comm-reference,.bt-comm-event{font-size:12px;line-height:16px;color:var(--bt-ink-2)}
+.bt-comm-field{display:flex;flex-direction:column;gap:6px;margin:8px 0;font-size:12px;line-height:16px}
+.bt-comm-check{display:flex;gap:8px;align-items:flex-start;margin:10px 0;font-size:12px;line-height:18px;overflow-wrap:anywhere}
+.bt-comm-check input{width:16px;height:16px;flex-shrink:0;margin-top:1px}
+.bt-comm-mentions{display:flex;gap:4px;flex-wrap:wrap}
+.bt-comm-pending-text{white-space:pre-wrap}
+.bt-comm-members{flex-shrink:0;max-height:32vh;overflow:auto;overscroll-behavior:contain;border:1px solid var(--bt-line);border-radius:12px;padding:8px 12px}
+.bt-comm-members[open]{position:absolute;inset:0 0 0 auto;width:min(520px,100%);max-height:none;z-index:3;padding:20px 16px;background:var(--bt-card);border-radius:0;border-width:0 0 0 1px;box-shadow:-12px 0 40px color-mix(in srgb,var(--bt-ink) 8%,transparent)}
+.bt-comm-members[open]>summary{padding-right:180px;min-height:36px;color:var(--bt-ink);font-size:14px;line-height:22px}
+.bt-comm-settings-actions{position:sticky;top:0;z-index:1;display:flex;justify-content:flex-end;gap:8px;background:var(--bt-card);padding:4px 0;margin-top:-44px;margin-bottom:12px;max-width:max-content;margin-left:auto}
+.bt-comm-settings-actions button[data-dirty=true]{color:var(--bt-danger);border-color:var(--bt-danger)}
+.bt-comm-members>summary{color:var(--bt-ink-2)}
+.bt-comm-members>.bt-comm-person{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:12px 0;border-bottom:1px solid var(--bt-line)}
+.bt-comm-person>span:first-child{flex:1 1 200px;overflow-wrap:anywhere;font-weight:500}
+.bt-comm-role{font-size:11px;line-height:16px;padding:2px 6px;border-radius:6px;background:var(--bt-tag-bg);color:var(--bt-tag-ink)}
+.bt-comm-person label{display:flex;flex-direction:column;gap:4px;min-width:120px;max-width:100%;flex:1 1 140px;font-size:12px;line-height:16px}
+.bt-comm-person button{flex:0 1 auto;font-size:12px}
+.bt-comm-members>.bt-comm-field{max-width:480px}
+.bt-comm-members>button{margin:4px 8px 4px 0}
+.bt-comm-frame .bt-comm-danger,.bt-comm-error{color:var(--bt-danger)}
+.bt-comm-main footer{flex-shrink:0;border-top:1px solid var(--bt-line);padding-top:8px}
+.bt-comm-main footer>button{background:var(--bt-accent);color:var(--bt-accent-ink);text-align:center;padding-inline:18px}
+.bt-comm-main footer>.bt-comm-reference{margin-left:12px}
+.bt-comm-main footer .bt-comm-field:has(select){max-width:420px}
+.bt-comm-body>div,.bt-comm-body>div>div{color:inherit!important;font-size:inherit!important;line-height:inherit!important}
+.bt-comm-log article[data-self=true] .bt-comm-reference{color:inherit;opacity:.8}
+.bt-comm-frame .bt-comm-mobile{display:none}
+@media(max-width:760px){
+  .bt-comm-frame{grid-template-columns:minmax(0,1fr)}
+  .bt-comm-nav{border-right:0;padding:16px;gap:12px}
+  .bt-comm-main{padding:12px;gap:10px}
+  .bt-comm-frame[data-browse=true] .bt-comm-main{display:none}
+  .bt-comm-frame[data-browse=false] .bt-comm-nav{display:none}
+  .bt-comm-frame .bt-comm-mobile{display:block}
+  .bt-comm-nav-heading{flex-direction:row;align-items:center;justify-content:space-between}
+  .bt-comm-frame[data-setup=true] .bt-comm-main{display:flex}
+  .bt-comm-frame[data-setup=true] .bt-comm-nav{display:none}
+  .bt-comm-main header{flex-wrap:wrap;gap:8px}
+  .bt-comm-heading{flex-basis:calc(100% - 130px);order:1}
+  .bt-comm-main header>button:last-child{order:2}
+  .bt-comm-main header>.bt-comm-mobile{flex-basis:auto}
+  .bt-comm-log article{max-width:96%;padding:10px 12px}
+  .bt-comm-main footer>.bt-comm-reference{display:block;margin:8px 0 0}
+  .bt-comm-person>span:first-child{flex-basis:70%}
+  .bt-comm-main footer textarea{max-height:120px}
+}
+@media(prefers-reduced-motion:reduce){.bt-comm-frame{transition:none}}
+
+.bt-comm-avatar{width:28px;height:28px;flex:0 0 28px;display:inline-grid;place-items:center;border-radius:50%;background:var(--bt-bubble);color:var(--bt-ink);font:500 11px/16px var(--bt-font);vertical-align:middle;margin-right:8px}
+.bt-comm-avatar::before{content:attr(data-initials)}
+.bt-comm-avatar[data-avatar="1"]{background:var(--bt-tag-bg);color:var(--bt-tag-ink)}
+.bt-comm-avatar[data-avatar="2"]{border:1px solid var(--bt-line-2)}
+.bt-comm-avatar[data-avatar="3"]{background:var(--bt-sidebar);border:1px solid var(--bt-line)}
+.bt-comm-person-label{display:inline-flex;align-items:center;overflow-wrap:anywhere}
+.bt-comm-modal-backdrop{position:absolute;inset:0;z-index:8;background:color-mix(in srgb,var(--bt-ink) 25%,transparent);display:grid;place-items:center;padding:24px}
+.bt-comm-modal{width:min(560px,100%);max-height:calc(100dvh - 48px);overflow:auto;padding:24px;border-radius:16px;border:.5px solid var(--bt-line-2);background:var(--bt-card);box-shadow:0 12px 40px color-mix(in srgb,var(--bt-ink) 15%,transparent)}
+.bt-comm-modal>button{margin:8px 8px 0 0}
+.bt-comm-address{border-top:1px solid var(--bt-line);padding:8px 0}
+.bt-comm-address button,.bt-comm-participant-picker>button{display:block;width:100%;margin:4px 0}
+.bt-comm-completion{max-height:220px;overflow:auto;border:.5px solid var(--bt-line-2);border-radius:12px;background:var(--bt-card);padding:6px}
+.bt-comm-completion button{display:block;width:100%;border-color:transparent}
+.bt-comm-completion button[aria-selected=true]{background:var(--bt-active)}
+.bt-comm-heading>.bt-comm-avatar{float:left;width:36px;height:36px}
+
+.bt-comm-log article .bt-comm-quote{display:flex;flex-direction:column;gap:2px;width:100%;margin:6px 0;padding:6px 10px;border:0;border-left:2px solid var(--bt-line-2);border-radius:6px;background:var(--bt-tag-bg);color:var(--bt-ink-2);font-size:12px;line-height:16px}
+.bt-comm-quote-author{font-weight:500}
+.bt-comm-quote-text{overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow-wrap:anywhere}
+.bt-comm-kind-icon{display:inline-block;margin-left:5px;font-size:11px;color:var(--bt-ink-3)}
+.bt-comm-kind-icon::before{content:attr(data-symbol)}
+
+.bt-comm-avatar>img{display:block;object-fit:cover;border-radius:50%;max-width:100%;max-height:100%}
+.bt-comm-avatar:has(.bt-mark)::before,.bt-comm-avatar[data-has-image=true]::before{content:none}
+.bt-comm-profile button{margin:8px 8px 0 0}
+.bt-comm-profile button[data-dirty=true]{color:var(--bt-danger);border-color:var(--bt-danger)}
+.bt-comm-profile-preview>img{object-fit:cover;border-radius:50%}
+
+.bt-comm-onboarding button,.bt-comm-contact-manager button{margin:6px 8px 6px 0}
+.bt-comm-admin-link{display:inline-block;margin:6px 8px 6px 0;color:var(--bt-accent)}
+.bt-comm-storage-note{border:1px solid var(--bt-line);border-radius:8px;padding:10px;font-size:12px;line-height:18px}
+.bt-comm-bot-choices{border:1px solid var(--bt-line);border-radius:8px;margin:12px 0;padding:8px 12px;min-width:0}
+.bt-comm-bot-choices legend{font-size:12px;color:var(--bt-ink-2)}
+.bt-comm-user-code{font:500 15px/20px ui-monospace,SFMono-Regular,monospace;user-select:all}
+.bt-comm-set-card{padding:12px;border:1px solid var(--bt-line);border-radius:12px;background:var(--bt-card)}
+
+.bt-comm-avatar[data-kind=human][data-avatar="0"]{background:color-mix(in srgb,var(--bt-accent) 14%,var(--bt-card));color:var(--bt-accent)}
+.bt-comm-avatar[data-kind=human][data-avatar="1"]{background:color-mix(in srgb,var(--bt-green) 14%,var(--bt-card));color:var(--bt-ink)}
+.bt-comm-avatar[data-kind=human][data-avatar="2"]{background:color-mix(in srgb,var(--bt-star) 14%,var(--bt-card));color:var(--bt-ink)}
+.bt-comm-avatar[data-kind=human][data-avatar="3"]{background:var(--bt-tag-bg);color:var(--bt-tag-ink)}
+
+.bt-comm-body .bt-comm-inline-mention{display:inline-flex;align-items:baseline;vertical-align:baseline;max-width:100%;min-height:0;padding:0 1px;border:0;background:none;color:var(--bt-accent);font:inherit;line-height:inherit;cursor:pointer;border-radius:6px;white-space:nowrap;text-decoration:none}
+.bt-comm-mention-targets .bt-comm-inline-mention{margin-inline-end:6px}
+.bt-comm-inline-mention-content{display:inline-flex;align-items:baseline;vertical-align:baseline;gap:3px;font:inherit;line-height:inherit}
+.bt-comm-mention-label{font:inherit;line-height:inherit}
+.bt-comm-inline-mention .bt-comm-avatar{flex:none;align-self:center;margin:0}
+.bt-comm-inline-mention>svg{display:none}
+.bt-comm-body .bt-comm-inline-mention:hover{text-decoration:underline}
+.bt-comm-body .bt-comm-inline-mention:focus-visible{outline:2px solid var(--bt-accent);outline-offset:2px}
+.bt-comm-work-started{display:flex;align-items:center;min-height:24px;margin:2px 0;padding-inline-start:40px;color:var(--bt-ink-2);font-size:12px;line-height:16px}
+.bt-comm-work-started>button,.bt-comm-work-started>span{display:inline-flex;align-items:center;gap:4px;padding:4px 6px;border:0;border-radius:6px;background:none;color:inherit;font:inherit}
+.bt-comm-work-started>button{cursor:pointer}
+.bt-comm-work-started>button:hover{background:var(--bt-hover)}
+
+/* Match the local sidebar, centered HeaderPill, transcript and compact composer.
+   Remote identities and the independent receiving-policy panel stay explicit. */
+.bt-comm-frame{grid-template-columns:280px minmax(0,1fr)}
+.bt-comm-nav{padding:12px;gap:8px;border-right:.5px solid var(--bt-line-2)}
+.bt-comm-nav-heading{height:36px;padding-inline:4px}
+.bt-comm-nav-heading>h2{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}
+.bt-comm-nav-actions{display:flex;align-items:center;gap:2px;flex:none}
+.bt-comm-new-menu{position:relative}
+.bt-comm-create-menu{position:absolute;top:calc(100% + 6px);right:0;width:200px;z-index:7;padding:5px;border:.5px solid var(--bt-line-2);border-radius:12px;background:var(--bt-card);box-shadow:0 6px 24px color-mix(in srgb,var(--bt-ink) 12%,transparent)}
+.bt-comm-frame .bt-comm-create-menu>button{display:flex;align-items:center;gap:10px;width:100%;min-height:38px;padding:8px 10px;border:0;background:none;border-radius:8px}
+.bt-comm-frame .bt-comm-create-menu>button:hover{background:var(--bt-hover)}
+.bt-comm-frame[data-collapsed=true]{grid-template-columns:minmax(0,1fr)}
+.bt-comm-frame[data-collapsed=true]>.bt-comm-nav{display:none}
+.bt-comm-frame[data-collapsed=true]>.bt-comm-main{display:flex}
+.bt-comm-search input{font-size:14px}
+.bt-comm-search [role=listbox]{max-height:min(480px,55dvh);overflow:auto;padding:4px 0}
+.bt-comm-frame .bt-comm-search [role=option]{display:flex;align-items:center;gap:10px;width:100%;min-height:49px;padding:8px;border:0;background:none}
+.bt-comm-frame .bt-comm-search [role=option][aria-selected=true]{background:var(--bt-active)}
+.bt-comm-search [role=option]>span:last-child{display:flex;flex-direction:column;gap:3px;min-width:0}
+.bt-comm-search [role=option] :is(strong,small){white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bt-comm-search [role=option] strong{font-size:13px;font-weight:500}
+.bt-comm-search [role=option] small{font-size:12px;color:var(--bt-ink-2)}
+.bt-comm-frame .bt-comm-back{padding:6px 8px;border-radius:10px;background:var(--bt-hover);text-align:center}
+.bt-comm-connection{border:0;background:none;padding:0 4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.bt-comm-connection-label{flex:1;font-size:11px;color:var(--bt-ink-2);font-weight:400}
+.bt-comm-connection-details{display:none}
+.bt-comm-connection>button{padding:2px 6px;min-height:24px;margin:0;border:0;background:none;color:var(--bt-ink-2);font-size:11px}
+.bt-comm-start-actions>button{display:inline-flex;justify-content:center;align-items:center;gap:5px}
+.bt-comm-nav>.bt-comm-start-actions>button{border:0;background:none;font-size:12px;min-height:36px;padding:6px}
+.bt-comm-nav>.bt-comm-start-actions>button:hover{background:var(--bt-hover)}
+.bt-comm-section-title{padding:4px 8px;font-size:11px}
+.bt-comm-nav nav .bt-comm-conversation-row{min-height:54px;gap:8px;border:0}
+.bt-comm-nav nav .bt-comm-conversation-row[aria-pressed=true]{background:var(--bt-active)}
+.bt-comm-main{padding:10px 0 16px;gap:0}
+.bt-comm-main>header{position:relative;min-height:42px;padding:0 16px;gap:6px}
+.bt-comm-heading.bt-head{height:42px;flex:1;min-width:0;justify-content:center;padding-left:70px}
+.bt-comm-frame .bt-comm-title-pill{display:inline-flex;align-items:center;gap:8px;height:40px;min-height:40px;max-width:100%;padding:7px 12px 7px 7px;border-radius:999px;border:.5px solid var(--bt-line-2);background:var(--bt-main);box-shadow:0 2px 8px -1px color-mix(in srgb,var(--bt-ink) 6%,transparent);pointer-events:auto}
+.bt-comm-title-pill h2{font-size:14px;line-height:20px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bt-comm-title-pill>span:last-child{color:var(--bt-ink-3)}
+.bt-comm-main>header>.bt-comm-icon-button{width:32px;height:32px;min-height:32px;padding:7px;border:0;background:none;display:grid;place-items:center;color:var(--bt-ink-2)}
+.bt-comm-members:not([open]){position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);padding:0;border:0}
+.bt-comm-members[open]{z-index:4;width:min(400px,100%)}
+@media(min-width:1200px){.bt-comm-main:has(.bt-comm-members[open]){padding-right:400px}}
+.bt-comm-log{padding:32px max(24px,calc((100% - 960px)/2));scrollbar-gutter:stable;scroll-padding:24px}
+.bt-comm-log article{display:grid;grid-template-columns:28px minmax(0,1fr);column-gap:8px;row-gap:4px;max-width:100%;width:fit-content;min-width:100px;padding:0;margin:18px 0;background:none;border-radius:12px}
+.bt-comm-log article>.bt-comm-avatar{grid-column:1;grid-row:2;align-self:end;margin:0}
+.bt-comm-log article>strong{grid-column:2;grid-row:1;display:flex;align-items:center;gap:3px;padding:0 10px;color:var(--bt-ink-2);font-size:12px;line-height:18px}
+.bt-comm-log article>.bt-comm-message-bubble{grid-column:2;grid-row:2;min-width:0;padding:7px 12px;border-radius:18px;background:var(--bt-bubble);overflow-wrap:anywhere}
+.bt-comm-body p{margin:0}
+.bt-comm-log article[data-self=true]{display:flex;flex-direction:column;align-items:flex-end;margin-left:auto;max-width:85%;background:none;color:var(--bt-ink)}
+.bt-comm-log article[data-self=true]>.bt-comm-avatar,.bt-comm-log article[data-self=true]>strong{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+.bt-comm-log article[data-self=true]>.bt-comm-message-bubble,.bt-comm-log article[data-self=true]>.bt-comm-pending-text{background:var(--bt-user);color:var(--bt-user-ink);border-radius:18px;padding:7px 12px;min-width:0;max-width:100%}
+.bt-comm-log article[data-self=true]>.bt-comm-reference{color:var(--bt-ink-2)}
+.bt-comm-message-actions{grid-column:2;grid-row:3;justify-content:flex-start;gap:6px;min-height:24px;margin:0;padding-inline:6px;color:var(--bt-ink-3)}
+.bt-comm-message-actions button{border:0;background:none;min-height:24px;padding:2px 5px;color:var(--bt-ink-2);opacity:0;transition:opacity .12s}
+.bt-comm-log article:is(:hover,:focus-within) .bt-comm-message-actions button{opacity:1}
+.bt-comm-main>footer{position:relative;flex-shrink:0;width:calc(100% - 48px);max-width:960px;align-self:center;padding:10px 48px 10px 14px;border:.5px solid var(--bt-line-2);border-radius:22px;background:var(--bt-main);box-shadow:0 1px 4px color-mix(in srgb,var(--bt-ink) 4%,transparent)}
+.bt-comm-main footer .bt-comm-compose-field{margin:0;display:block}
+.bt-comm-frame .bt-comm-main footer textarea{border:0;background:none;min-height:46px;max-height:180px;padding:0;font-size:14px;line-height:23px;resize:vertical;border-radius:0}
+.bt-comm-frame footer textarea:focus-visible{outline:0}
+.bt-comm-frame footer:focus-within{border-color:var(--bt-ink-3)}
+.bt-comm-main footer>.bt-comm-send{position:absolute;right:8px;bottom:8px;width:32px;height:32px;min-height:32px;border:0;border-radius:50%;padding:8px;display:grid;place-items:center;background:var(--bt-accent);color:var(--bt-accent-ink)}
+.bt-comm-completion{position:absolute;bottom:calc(100% + 8px);left:0;width:min(420px,100%);box-shadow:0 4px 20px color-mix(in srgb,var(--bt-ink) 10%,transparent)}
+.bt-comm-message-actions .bt-tool{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;padding:5px;border-radius:8px}
+.bt-comm-message-actions .bt-tool svg{width:16px;height:16px}
+.bt-comm-message-actions .bt-tool:hover{background:var(--bt-hover)}
+.bt-comm-thread article:is(:hover,:focus-within) .bt-comm-message-actions button{opacity:1}
+.bt-comm-frame button:active:not(:disabled):not([aria-disabled=true]){background:var(--bt-active);scale:.96}
+.bt-comm-frame button[aria-pressed=true]:hover:not(:disabled),.bt-comm-frame button[aria-expanded=true]:hover:not(:disabled){background:var(--bt-active)}
+.bt-comm-frame button:is(:disabled,[aria-disabled=true]){cursor:default;scale:1;opacity:.4}
+.bt-comm-frame button:focus-visible{outline:2px solid var(--bt-accent);outline-offset:2px}
+.bt-comm-thread-backdrop{background:transparent;display:block}
+.bt-comm-thread-popover{position:fixed;width:min(520px,calc(100vw - 16px));height:min(560px,calc(100dvh - 16px));max-height:calc(100dvh - 16px);padding:16px;display:flex;flex-direction:column;gap:8px;box-shadow:0 8px 32px color-mix(in srgb,var(--bt-ink) 16%,transparent)}
+.bt-comm-thread-popover>.bt-comm-thread-close{position:absolute;right:8px;top:8px;width:28px;height:28px;min-height:28px;padding:6px;margin:0;border:0;background:transparent;display:grid;place-items:center}
+.bt-comm-thread-close svg{width:16px;height:16px}
+.bt-comm-thread-popover>.bt-comm-thread-heading{padding-right:32px;flex-shrink:0}
+.bt-comm-thread-popover>.bt-comm-thread{overflow:auto;min-height:80px;flex:1}
+.bt-comm-thread-composer{position:relative;border-top:1px solid var(--bt-line);padding-top:8px;flex-shrink:0}
+.bt-comm-thread-composer textarea{resize:vertical;max-height:160px;padding-right:44px}
+.bt-comm-thread-composer>.bt-comm-send{position:absolute;right:6px;bottom:6px;width:32px;height:32px;padding:8px;border:0;border-radius:50%;display:grid;place-items:center;background:var(--bt-accent);color:var(--bt-accent-ink)}
+.bt-comm-thread-composer .bt-comm-completion{z-index:2}
+.bt-comm-thread-send-error{font-size:12px;color:var(--bt-danger);padding-right:36px}
+.bt-comm-frame .bt-comm-danger:hover:not(:disabled){background:color-mix(in srgb,var(--bt-danger) 10%,var(--bt-card))}
+.bt-comm-frame .bt-comm-danger:active:not(:disabled){background:color-mix(in srgb,var(--bt-danger) 18%,var(--bt-card))}
+.bt-comm-frame :is(.bt-comm-primary,.bt-comm-send):hover:not(:disabled){background:color-mix(in srgb,var(--bt-accent) 88%,var(--bt-main));color:var(--bt-accent-ink)}
+.bt-comm-frame :is(.bt-comm-primary,.bt-comm-send):active:not(:disabled){background:color-mix(in srgb,var(--bt-accent) 76%,var(--bt-main))}
+@media(prefers-reduced-motion:reduce){.bt-comm-frame button{transition:none}.bt-comm-frame button:active:not(:disabled){scale:1}}
+@media(hover:none){.bt-comm-message-actions button{opacity:1}}
+@media(pointer:coarse){.bt-comm-message-actions .bt-tool{width:40px;height:40px;min-height:40px;padding:11px}}
+@media(max-width:760px){
+ .bt-comm-frame{grid-template-columns:minmax(0,1fr)}
+ .bt-comm-nav{padding:12px}
+ .bt-comm-main{padding:8px 0 12px}
+ .bt-comm-main>header{padding:0 8px;flex-wrap:nowrap}
+ .bt-comm-heading.bt-head{padding-left:0;flex-basis:auto;order:0}
+ .bt-comm-title-pill h2{font-size:13px}
+ .bt-comm-log{padding:20px 12px}
+ .bt-comm-main>footer{width:calc(100% - 24px)}
+ .bt-comm-message-actions button{opacity:1}
+ .bt-comm-log article[data-self=true]{max-width:94%}
+}
+
+.bt-comm-modal-head{position:sticky;top:-24px;z-index:3;display:flex;align-items:center;justify-content:space-between;gap:12px;margin:-24px -24px 16px;padding:16px 24px;border-bottom:1px solid var(--bt-line);background:var(--bt-card)}
+.bt-comm-modal-head h2{min-width:0;overflow-wrap:anywhere}
+.bt-comm-modal-actions{display:flex;align-items:center;gap:6px;flex:none}
+.bt-comm-frame .bt-comm-modal-actions>button{display:inline-flex;align-items:center;gap:4px;margin:0;min-height:32px;padding:6px 8px}
+.bt-comm-modal-actions svg{width:16px;height:16px}
+.bt-comm-contacts-modal{width:min(680px,100%)}
+.bt-comm-directory-heading{display:flex;align-items:center;gap:8px}
+.bt-comm-count{display:inline-flex;align-items:center;justify-content:center;min-width:20px;padding:2px 6px;border-radius:999px;background:var(--bt-tag-bg);color:var(--bt-tag-ink);font-size:11px;line-height:16px;font-variant-numeric:tabular-nums}
+.bt-comm-contact-card{min-width:0;margin:12px 0;padding:12px;border:1px solid var(--bt-line);border-radius:12px;background:var(--bt-main)}
+.bt-comm-contact-card-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.bt-comm-directory-person{display:inline-flex;align-items:center;gap:8px;min-width:0;overflow-wrap:anywhere}
+.bt-comm-directory-person>.bt-comm-avatar{margin:0;flex:none}
+.bt-comm-directory-person>span:last-child{display:flex;flex-direction:column;gap:2px;min-width:0}
+.bt-comm-directory-person strong{font-size:13px;line-height:18px;font-weight:500}
+.bt-comm-directory-person small{font-size:11px;line-height:16px;color:var(--bt-ink-2)}
+.bt-comm-contact-card h4{font-size:12px;line-height:16px;font-weight:500;margin:16px 0 8px;color:var(--bt-ink-2)}
+.bt-comm-contact-bots{list-style:none;margin:0;padding:0}
+.bt-comm-contact-bots>li{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;min-width:0}
+.bt-comm-frame .bt-comm-contact-card button{margin:0;flex:none;font-size:12px;line-height:16px}
+.bt-comm-contact-info{margin-top:12px;padding-top:8px;border-top:1px solid var(--bt-line)}
+.bt-comm-contact-info summary{font-size:12px;line-height:16px;color:var(--bt-ink-2)}
+.bt-comm-contact-info dl{display:grid;grid-template-columns:minmax(80px,1fr) minmax(0,2fr);gap:8px;font-size:12px;line-height:16px}
+.bt-comm-contact-info dt{color:var(--bt-ink-2)}
+.bt-comm-contact-info dd{margin:0;overflow-wrap:anywhere}
+.bt-comm-bot-identities{list-style:none;padding:0;font-size:12px;line-height:16px;overflow-wrap:anywhere}
+.bt-comm-bot-identities li{margin:8px 0}
+.bt-comm-contact-section{margin-top:12px;padding:8px 0;border-top:1px solid var(--bt-line)}
+.bt-comm-contact-section>summary{padding:6px 0;min-height:32px;font-size:13px;line-height:18px;font-weight:500;cursor:pointer}
+.bt-comm-contact-section>summary .bt-comm-count{margin-left:8px}
+.bt-comm-contact-info>summary{min-height:28px;padding:6px 0;cursor:pointer}
+@media(max-width:600px){
+ .bt-comm-modal-backdrop{padding:12px}
+ .bt-comm-modal{padding:16px;max-height:calc(100dvh - 24px)}
+ .bt-comm-modal-head{top:-16px;margin:-16px -16px 12px;padding:12px 16px;gap:8px}
+ .bt-comm-modal-actions{gap:4px}
+ .bt-comm-contact-info dl{grid-template-columns:minmax(0,1fr)}
+ .bt-comm-contact-info dd{margin-bottom:4px}
+ .bt-comm-thread-popover{max-height:calc(100dvh - 16px)}
+}
+`;
+
+// src/client/communication-directory-styles.js
+var communicationDirectoryCSS = `
+.bt-comm-directory-list .bt-comm-directory-filters{display:flex;flex-wrap:wrap;gap:4px;padding:4px;margin:12px 0 4px;border-radius:10px;background:var(--bt-sidebar)}
+.bt-comm-directory-list .bt-comm-directory-filters button{display:inline-flex;align-items:center;gap:6px;flex:1;justify-content:center;margin:0;padding:6px 10px;border:1px solid transparent;border-radius:8px;background:transparent;font-size:12px;line-height:16px;color:var(--bt-ink-2)}
+.bt-comm-directory-list .bt-comm-directory-filters button[aria-pressed=true]{background:var(--bt-card);border-color:var(--bt-line);color:var(--bt-ink)}
+.bt-comm-directory-list>.bt-comm-contact-card{margin:0;padding:16px 0;border:0;border-bottom:1px solid var(--bt-line);border-radius:0;background:transparent}
+.bt-comm-directory-list>.bt-comm-contact-card:last-of-type{border-bottom:0}
+.bt-comm-directory-list .bt-comm-directory-person{gap:12px}
+.bt-comm-directory-list .bt-comm-directory-headline{font-size:12px;line-height:16px;color:var(--bt-ink)}
+.bt-comm-directory-list .bt-comm-directory-about{margin:8px 0 0 48px;min-width:0}
+.bt-comm-directory-list .bt-comm-directory-about>summary{display:flex;align-items:center;gap:8px;width:fit-content;cursor:pointer;min-height:28px;padding:4px 0;color:var(--bt-ink-2);font-size:12px;line-height:16px}
+.bt-comm-directory-list .bt-comm-directory-about[open]>summary{color:var(--bt-ink)}
+.bt-comm-directory-list .bt-comm-directory-profile{min-width:0;margin:8px 0 12px}
+.bt-comm-directory-list .bt-comm-directory-summary{margin:0 0 8px;font-size:13px;line-height:18px;overflow-wrap:anywhere;white-space:pre-wrap}
+.bt-comm-directory-list .bt-comm-directory-skills{display:flex;flex-wrap:wrap;gap:6px;list-style:none;margin:0;padding:0}
+.bt-comm-directory-list .bt-comm-directory-skills>li{padding:2px 8px;border-radius:999px;background:var(--bt-tag-bg);color:var(--bt-tag-ink);font-size:11px;line-height:16px;overflow-wrap:anywhere;max-width:100%}
+.bt-comm-directory-list .bt-comm-contact-bots>.bt-comm-directory-bot{display:block;padding:12px 0;border-top:1px solid var(--bt-line)}
+.bt-comm-directory-list .bt-comm-directory-row{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0}
+.bt-comm-directory-list .bt-comm-directory-bot>.bt-comm-directory-profile{margin-left:48px;margin-bottom:0}
+.bt-comm-directory-list .bt-comm-contact-info{margin-left:48px;border:0;padding-top:0;margin-top:4px}
+.bt-comm-directory-list .bt-comm-directory-bot-list>h3{font-size:12px;line-height:16px;color:var(--bt-ink-2);margin:0 0 8px}
+@media(max-width:480px){.bt-comm-directory-list .bt-comm-directory-about,.bt-comm-directory-list .bt-comm-contact-info{margin-left:0}.bt-comm-directory-list .bt-comm-directory-bot>.bt-comm-directory-profile{margin-left:0}.bt-comm-directory-list .bt-comm-directory-filters button{padding:6px}.bt-comm-directory-list .bt-comm-directory-person{gap:8px}}
+`;
+
+// src/client/communication.js
+var import_react65 = require("react");
+var import_react_dom11 = require("react-dom");
+var OPEN = "ds-bot:communication:open", SELECTED = "ds-bot:communication:selected";
+var SIDEBAR_HIDDEN = "ds-bot:communication:sidebar-hidden";
+var OPERATION_IDS = "ds-bot:communication:operation-ids";
+var DRAFTS = "ds-bot:communication:drafts", ATTEMPTS = "ds-bot:communication:attempts";
+var read = (key, fallback) => {
+  try {
+    return JSON.parse(sessionStorage.getItem(key)) ?? fallback;
+  } catch {
+    return fallback;
+  }
+};
+var save = (key, value) => {
+  try {
+    sessionStorage.setItem(key, JSON.stringify(value));
+  } catch {
+  }
+};
+async function communicationRequest(body) {
+  const response = await fetch("/api/communication", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(15e3) });
+  if ([401, 403].includes(response.status)) throw Object.assign(new Error("INSTANCE_AUTHENTICATION_REQUIRED"), { code: "INSTANCE_AUTHENTICATION_REQUIRED" });
+  const result = await response.json();
+  if (!result.ok) throw Object.assign(new Error(result.error?.code ?? "COMMUNICATION_UNAVAILABLE"), { code: result.error?.code, phase: result.error?.phase });
+  return result.value;
+}
+function ReferenceQuote({ conversationId, membershipEpoch, messageId, request, labels, onJump }) {
+  const [source, setSource] = (0, import_react65.useState)(null), [unavailable, setUnavailable] = (0, import_react65.useState)(false);
+  (0, import_react65.useEffect)(() => {
+    let active = true;
+    setSource(null);
+    setUnavailable(false);
+    void request({ endpoint: "reference", conversationId, messageId }).then((event) => {
+      if (active && event?.message?.messageId === messageId) setSource(event.message);
+      else if (active) setUnavailable(true);
+    }).catch(() => {
+      if (active) setUnavailable(true);
+    });
+    return () => {
+      active = false;
+    };
+  }, [conversationId, membershipEpoch, messageId, request]);
+  return (0, import_react65.createElement)(
+    "button",
+    {
+      type: "button",
+      className: "bt-comm-quote",
+      "data-reference-id": messageId,
+      disabled: !source || unavailable,
+      "aria-label": t("Jump to source message"),
+      onClick: () => {
+        void onJump(messageId);
+      }
+    },
+    source ? (0, import_react65.createElement)(
+      import_react65.Fragment,
+      null,
+      (0, import_react65.createElement)("span", { className: "bt-comm-quote-author" }, labels.get(source.author.principalId) ?? source.author.displayName ?? t("Participant")),
+      (0, import_react65.createElement)("span", { className: "bt-comm-quote-text" }, referenceExcerpt(source.content.text))
+    ) : t(unavailable ? "Earlier message unavailable" : "Loading reference…")
+  );
+}
+function GroupSettings({ member, contacts, operation, pendingSettings, operationPending, act, busy, humanId, btn, personLabel, chooseContact }) {
+  const [open, setOpen] = (0, import_react65.useState)(false), [base, setBase] = (0, import_react65.useState)(null), [draft, setDraft] = (0, import_react65.useState)(null);
+  const [saving, setSaving] = (0, import_react65.useState)(false), [failure, setFailure] = (0, import_react65.useState)(""), [pending, setPending] = (0, import_react65.useState)(null);
+  const [invite, setInvite] = (0, import_react65.useState)(""), [newOwner, setNewOwner] = (0, import_react65.useState)(""), [confirm, setConfirm] = (0, import_react65.useState)("");
+  const generation = (0, import_react65.useRef)(0), revision = (0, import_react65.useRef)(0), summary = (0, import_react65.useRef)(null);
+  (0, import_react65.useEffect)(() => () => {
+    generation.current += 1;
+  }, []);
+  (0, import_react65.useEffect)(() => {
+    if (pending && !pendingSettings(member.conversationId)) setPending(null);
+  }, [operationPending, member.membershipVersion]);
+  const isOwner = member.role === "owner", canManage = ["owner", "admin"].includes(member.role);
+  const members = member.info?.members ?? [];
+  const close = () => {
+    generation.current += 1;
+    setOpen(false);
+    setBase(null);
+    setDraft(null);
+    setFailure("");
+    setSaving(false);
+    setPending(null);
+    summary.current?.closest("main")?.querySelector(".bt-comm-title-pill")?.focus();
+  };
+  const begin = () => {
+    generation.current += 1;
+    revision.current = 0;
+    const values2 = groupSettingsValues(member);
+    setBase({ values: values2, expectedVersion: member.membershipVersion, membershipEpoch: member.membershipEpoch });
+    setDraft(values2);
+    setFailure("");
+    setPending(pendingSettings(member.conversationId));
+    setSaving(false);
+    setOpen(true);
+  };
+  const edit = (values2) => {
+    revision.current += 1;
+    setDraft((current) => ({ ...current, ...values2 }));
+  };
+  const changes = base && draft ? groupSettingsChanges(base.values, draft) : {};
+  const dirty = Object.keys(changes).length > 0;
+  const saveSettings = async () => {
+    if (saving || !base || !draft || !dirty && !pending) return;
+    const token = generation.current, editedAt = revision.current;
+    const intent = pending ?? { conversationId: member.conversationId, membershipEpoch: base.membershipEpoch, expectedVersion: base.expectedVersion, ...changes };
+    setSaving(true);
+    setFailure("");
+    try {
+      const result = await operation("save-settings", intent);
+      if (token !== generation.current) return;
+      if (result.status === "queued") {
+        setPending(intent);
+        return;
+      }
+      const canonical = result.refreshedState?.conversations?.find((item) => item.conversationId === member.conversationId && item.membershipVersion === result.membershipVersion);
+      const savedValues = canonical ? groupSettingsValues(canonical) : {
+        ...base.values,
+        ...intent.title === void 0 ? {} : { title: intent.title },
+        ...intent.routing ? { routing: intent.routing } : {},
+        policies: { ...base.values.policies, ...Object.fromEntries((intent.policies ?? []).map((policy) => [policy.targetPrincipalId, { ...base.values.policies[policy.targetPrincipalId], ...policy }])) }
+      };
+      setBase({ values: savedValues, expectedVersion: result.membershipVersion, membershipEpoch: intent.membershipEpoch });
+      if (revision.current === editedAt && (!pending || editedAt === 0)) setDraft(savedValues);
+      setPending(null);
+    } catch (error) {
+      if (token === generation.current) {
+        setFailure(communicationFailure(error));
+        setPending(operationOutcomeUncertain(error) ? intent : null);
+      }
+    } finally {
+      if (token === generation.current) setSaving(false);
+    }
+  };
+  const values = draft ?? groupSettingsValues(member);
+  const roleLabel = (role) => role === "owner" ? "Group owner" : role === "admin" ? "Group admin" : "Group member";
+  return (0, import_react65.createElement)(
+    "details",
+    { id: "bt-comm-members", className: "bt-comm-members", open, onKeyDown: (event) => {
+      if (open && event.key === "Escape") {
+        event.stopPropagation();
+        close();
+      }
+    } },
+    (0, import_react65.createElement)("summary", { ref: summary, tabIndex: open ? 0 : -1, onClick: (event) => {
+      event.preventDefault();
+      if (open) close();
+      else begin();
+    } }, t("Group members and receiving rules")),
+    open ? (0, import_react65.createElement)(
+      import_react65.Fragment,
+      null,
+      (0, import_react65.createElement)(
+        "div",
+        { className: "bt-comm-settings-actions" },
+        canManage ? (0, import_react65.createElement)("button", { type: "button", onClick: () => {
+          void saveSettings();
+        }, disabled: saving || !dirty && !pending, "data-dirty": dirty, "aria-label": t("Save group settings") }, t("Save")) : null,
+        (0, import_react65.createElement)("button", { type: "button", onClick: close, "aria-label": t("Close member settings") }, t("Close member settings"))
+      ),
+      failure ? (0, import_react65.createElement)("p", { className: "bt-comm-error", role: "alert" }, t(failure)) : null,
+      pending ? (0, import_react65.createElement)("p", { role: "status" }, t("An operation is not confirmed. Check status, then retry the same action.")) : null,
+      base && member.membershipVersion > base.expectedVersion ? (0, import_react65.createElement)("p", { role: "status" }, t("Group settings changed elsewhere. Your edits are retained. Close and reopen to review the current settings.")) : null,
+      (0, import_react65.createElement)("p", { className: "bt-comm-reference" }, t("Roles control group management. Speaking permissions control who can send.")),
+      member.ownerPrincipalId && !members.some((person) => person.principalId === member.ownerPrincipalId) ? (0, import_react65.createElement)("p", { role: "status" }, t("The owner is unavailable. Ownership stays with that identity.")) : null,
+      !member.ownerPrincipalId ? (0, import_react65.createElement)("p", { role: "status" }, t("This legacy group has no retained owner. No automatic takeover is allowed.")) : null,
+      canManage ? (0, import_react65.createElement)("label", { className: "bt-comm-field" }, t("Group name"), (0, import_react65.createElement)("input", { value: values.title, onChange: (event) => edit({ title: event.target.value }), "aria-label": t("Group name") })) : null,
+      members.map((person) => {
+        const editable = isOwner || member.role === "admin" && person.role === "member";
+        const policy = values.policies[person.principalId] ?? { role: person.role, speakingMode: person.speakingMode };
+        const changePolicy = (change) => edit({ policies: { ...values.policies, [person.principalId]: { ...policy, ...change } } });
+        return (0, import_react65.createElement)(
+          "div",
+          { key: person.principalId, className: "bt-comm-person", "data-principal-id": person.principalId },
+          (0, import_react65.createElement)("span", { title: person.principalId }, personLabel(person)),
+          (0, import_react65.createElement)("span", { className: "bt-comm-role" }, t(roleLabel(person.role))),
+          editable ? (0, import_react65.createElement)(
+            import_react65.Fragment,
+            null,
+            isOwner && person.role !== "owner" ? (0, import_react65.createElement)("label", null, t("Group role"), (0, import_react65.createElement)("select", { value: policy.role, "aria-label": t("Group role"), onChange: (event) => changePolicy({ role: event.target.value }) }, (0, import_react65.createElement)("option", { value: "member" }, t("Group member")), (0, import_react65.createElement)("option", { value: "admin" }, t("Group admin")))) : null,
+            (0, import_react65.createElement)("label", null, t("Speaking permission"), (0, import_react65.createElement)(
+              "select",
+              { value: policy.speakingMode, "aria-label": t("Speaking permission"), onChange: (event) => changePolicy({ speakingMode: event.target.value }) },
+              (person.kind === "human" ? [["readOnly", "Read only"], ["speak", "Can speak"]] : [["passive", "Reply only"], ["active", "Can speak"]]).map(([value, label]) => (0, import_react65.createElement)("option", { key: value, value }, t(label)))
+            ))
+          ) : (0, import_react65.createElement)("span", null, t(["readOnly", "passive"].includes(person.speakingMode) ? person.kind === "human" ? "Read only" : "Reply only" : "Can speak")),
+          canManage && person.role !== "owner" && (isOwner || person.role === "member") && person.principalId !== humanId ? btn("Remove from group", () => {
+            void act(() => operation("remove", { conversationId: member.conversationId, targetPrincipalId: person.principalId }));
+          }) : null
+        );
+      }),
+      (0, import_react65.createElement)("p", { className: "bt-comm-reference" }, t("Both Bot modes may @mention current group Bots in an authorized final reply. Reply-only Bots cannot initiate messages or send proactively with tools. Active Bots may also initiate with tools. Bot delegation chains stop at the server’s finite limit.")),
+      canManage ? (0, import_react65.createElement)(
+        import_react65.Fragment,
+        null,
+        chooseContact("Invite participant", invite, setInvite, contacts.filter((contact) => !members.some((person) => person.principalId === contact.principalId))),
+        btn("Invite", () => {
+          void act(() => operation("invite", { conversationId: member.conversationId, inviteePrincipalId: invite }));
+        }, { disabled: busy || !invite }),
+        (0, import_react65.createElement)("label", { className: "bt-comm-field" }, t("Receiving rule"), (0, import_react65.createElement)(
+          "select",
+          { value: values.routing.mode, onChange: (event) => edit({ routing: { mode: event.target.value, adminBotPrincipalId: event.target.value === "admin" ? values.routing.adminBotPrincipalId : null } }), "aria-label": t("Receiving rule") },
+          (0, import_react65.createElement)("option", { value: "mentionsOnly" }, t("Mentions only")),
+          (0, import_react65.createElement)("option", { value: "admin" }, t("Plain messages go to one Bot"))
+        )),
+        values.routing.mode === "admin" ? chooseContact("Default reply Bot", values.routing.adminBotPrincipalId ?? "", (id) => edit({ routing: { mode: "admin", adminBotPrincipalId: id } }), members.filter((person) => person.kind === "bot")) : null
+      ) : (0, import_react65.createElement)("p", null, t(member.routingMode === "admin" ? "Plain messages go to one Bot" : "Mentions only")),
+      isOwner ? (0, import_react65.createElement)(
+        import_react65.Fragment,
+        null,
+        chooseContact("Transfer ownership to", newOwner, (value) => {
+          setNewOwner(value);
+          setConfirm("");
+        }, members.filter((person) => person.principalId !== humanId)),
+        btn(confirm === "transfer" ? "Confirm ownership transfer" : "Transfer ownership", () => {
+          if (confirm !== "transfer") setConfirm("transfer");
+          else void act(() => operation("transfer", { conversationId: member.conversationId, targetPrincipalId: newOwner, expectedVersion: member.membershipVersion }));
+        }, { disabled: busy || !newOwner })
+      ) : null,
+      btn(confirm === "leave" ? "Confirm leaving group" : "Leave group", () => {
+        if (confirm !== "leave") setConfirm("leave");
+        else void act(() => operation("remove", { conversationId: member.conversationId }));
+      }, { disabled: busy || isOwner, title: isOwner ? t("Transfer ownership before leaving") : void 0 }),
+      isOwner ? btn(confirm === "dissolve" ? "Confirm ending group for everyone" : "End group for everyone", () => {
+        if (confirm !== "dissolve") setConfirm("dissolve");
+        else void act(() => operation("dissolve", { conversationId: member.conversationId }));
+      }, { className: "bt-comm-danger" }) : null
+    ) : null
+  );
+}
+function CommunicationSurface({ roster, surface, panel, request = communicationRequest }) {
+  const team = (0, import_react65.useSyncExternalStore)(roster.subscribe, roster.getSnapshot);
+  const mode = (0, import_react65.useSyncExternalStore)(surface.subscribe, surface.getSnapshot);
+  const open = (0, import_react65.useSyncExternalStore)(panel.subscribe, panel.getSnapshot);
+  const visible = open && mode.mode === "bot";
+  const [shown, closing] = useLinger(visible, 160);
+  const [receivedState, setState] = (0, import_react65.useState)(null), [error, setError] = (0, import_react65.useState)(""), [busy, setBusy] = (0, import_react65.useState)(false);
+  const stateScope = `${Boolean(team.communicationEnabled)}:${team.communicationHubId ?? ""}`, currentStateScope = (0, import_react65.useRef)(stateScope), stateOrder = (0, import_react65.useRef)(0);
+  if (currentStateScope.current !== stateScope) {
+    currentStateScope.current = stateScope;
+    stateOrder.current += 1;
+  }
+  const state = !team.communicationEnabled || team.communicationHubId && receivedState?.hubId !== team.communicationHubId ? null : receivedState;
+  const [pollError, setPollError] = (0, import_react65.useState)(""), [syncError, setSyncError] = (0, import_react65.useState)(null);
+  const [operationPending, setOperationPending] = (0, import_react65.useState)(() => read(OPERATION_IDS, []).length > 0);
+  const [attaching, setAttaching] = (0, import_react65.useState)(false), attachmentFlight = (0, import_react65.useRef)(false);
+  const [selected, setSelected] = (0, import_react65.useState)(() => read(SELECTED, null));
+  const [drafts, setDrafts] = (0, import_react65.useState)(() => read(DRAFTS, {})), [attempts, setAttempts] = (0, import_react65.useState)(() => read(ATTEMPTS, {}));
+  const [page, setPage] = (0, import_react65.useState)(null), [older, setOlder] = (0, import_react65.useState)(null), [reply, setReply] = (0, import_react65.useState)(null);
+  const [referenced, setReferenced] = (0, import_react65.useState)(null), [jumpRevision, setJumpRevision] = (0, import_react65.useState)(0);
+  const pendingJump = (0, import_react65.useRef)(null), referenceOrder = (0, import_react65.useRef)(0), contextKey = (0, import_react65.useRef)("");
+  const [title, setTitle] = (0, import_react65.useState)(""), [invitees, setInvitees] = (0, import_react65.useState)([]);
+  const [completion, setCompletion] = (0, import_react65.useState)(null), [completionIndex, setCompletionIndex] = (0, import_react65.useState)(0), [composing, setComposing] = (0, import_react65.useState)(false);
+  const chooser = (0, import_react65.useRef)(null), chooserTrigger = (0, import_react65.useRef)(null), previousPanel = (0, import_react65.useRef)(""), panelReturn = (0, import_react65.useRef)("");
+  const [browse, setBrowse] = (0, import_react65.useState)(false), [activePanel, setActivePanel] = (0, import_react65.useState)(""), [panelBack, setPanelBack] = (0, import_react65.useState)(""), [inspectedIds, setInspectedIds] = (0, import_react65.useState)([]);
+  const panelShown = (0, import_react65.useRef)({ name: "", visible, version: 0 });
+  if (panelShown.current.name !== activePanel || panelShown.current.visible !== visible) panelShown.current = { name: activePanel, visible, version: panelShown.current.version + 1 };
+  const [sidebarHidden, setSidebarHidden] = (0, import_react65.useState)(() => read(SIDEBAR_HIDDEN, false)), [newMenuOpen, setNewMenuOpen] = (0, import_react65.useState)(false);
+  const [searchQuery, setSearchQuery] = (0, import_react65.useState)(""), [searchCursor, setSearchCursor] = (0, import_react65.useState)(0);
+  const newMenu = (0, import_react65.useRef)(null), newTrigger = (0, import_react65.useRef)(null);
+  const newMenuShown = (0, import_react65.useRef)(newMenuOpen), previousSidebar = (0, import_react65.useRef)(sidebarHidden);
+  newMenuShown.current = newMenuOpen;
+  const [threadMessageId, setThreadMessageId] = (0, import_react65.useState)(null);
+  const [threadReplyTarget, setThreadReplyTarget] = (0, import_react65.useState)(null), [threadPosition, setThreadPosition] = (0, import_react65.useState)({ left: 8, top: 8 });
+  const threadAnchor = (0, import_react65.useRef)(null), viewportTick = useViewport();
+  const input = (0, import_react65.useRef)(null), frame = (0, import_react65.useRef)(null), log = (0, import_react65.useRef)(null), autoScroll = (0, import_react65.useRef)(true), pageOrder = (0, import_react65.useRef)(0), operationIds = (0, import_react65.useRef)(new Map(read(OPERATION_IDS, [])));
+  const labels = contactLabels(state?.contacts ?? [], state?.instanceId, t);
+  const scope = communicationScope(state);
+  syncAvatarDirectory(state?.contacts ?? [], state?.hubId ?? state?.hubUrl ?? "legacy");
+  const member = state?.conversations?.find((item) => item.conversationId === selected);
+  const key = `${scope}:${selected}`;
+  contextKey.current = `${key}:${member?.membershipEpoch}`;
+  (0, import_react65.useEffect)(() => {
+    setThreadMessageId(null);
+    setActivePanel((current) => ["thread", "participant"].includes(current) ? "" : current);
+  }, [scope, selected, member?.membershipEpoch]);
+  const draft = drafts[key] ?? { text: "", mentions: [] };
+  const changeDraft = (value) => setDrafts((current) => {
+    const next = { ...current, [key]: { ...current[key] ?? { text: "", mentions: [] }, ...value } };
+    save(DRAFTS, next);
+    return next;
+  });
+  const openThread = (message, trigger) => {
+    chooserTrigger.current = trigger ?? document.activeElement;
+    threadAnchor.current = trigger?.getBoundingClientRect?.() ?? { left: window.innerWidth / 2, top: window.innerHeight / 3, bottom: window.innerHeight / 3 };
+    setThreadMessageId(message.messageId);
+    setThreadReplyTarget(message);
+    setActivePanel("thread");
+    setError("");
+  };
+  (0, import_react65.useLayoutEffect)(() => {
+    if (activePanel !== "thread" || !chooser.current) return;
+    const anchor = threadAnchor.current, box = chooser.current.getBoundingClientRect();
+    if (!anchor) return;
+    const maxTop = Math.max(8, viewBottom() - box.height - 8);
+    setThreadPosition({ left: Math.max(8, Math.min(anchor.left, window.innerWidth - box.width - 8)), top: Math.max(8, Math.min(anchor.bottom + 6, maxTop)) });
+  }, [activePanel, threadMessageId, viewportTick, member?.speakingMode]);
+  const close = () => {
+    panel.set(false);
+    save(OPEN, false);
+  };
+  const refresh = async () => {
+    const order = ++stateOrder.current, scope2 = stateScope;
+    try {
+      const value = await request({ endpoint: "state" });
+      if (currentStateScope.current === scope2 && order === stateOrder.current) {
+        setState(value);
+        setPollError("");
+      }
+      return value;
+    } catch (failure) {
+      if (currentStateScope.current === scope2 && order === stateOrder.current) setPollError(communicationFailure(failure));
+      throw failure;
+    }
+  };
+  (0, import_react65.useEffect)(() => {
+    if (!team.communicationEnabled) {
+      setState(null);
+      setPollError("");
+      return void 0;
+    }
+    const live = liveRefresh(refresh, { intervalMs: 750 });
+    return () => {
+      stateOrder.current += 1;
+      live.stop();
+    };
+  }, [team.communicationEnabled, team.communicationHubId, request]);
+  (0, import_react65.useEffect)(() => {
+    if (!shown) return void 0;
+    const returning = Boolean(previousPanel.current && !activePanel);
+    previousPanel.current = activePanel;
+    const visible2 = (node) => !node.checkVisibility || node.checkVisibility();
+    const controls = () => [...(activePanel ? chooser.current : frame.current)?.querySelectorAll("button:not(:disabled),input:not(:disabled),textarea:not(:disabled),select:not(:disabled),summary") ?? []].filter((node) => visible2(node) && (!node.closest("details:not([open])") || node.tagName === "SUMMARY"));
+    const focusDefault = () => (activePanel ? controls()[0] : input.current && !input.current.disabled && visible2(input.current) ? input.current : controls()[0])?.focus();
+    if (returning && chooserTrigger.current?.isConnected) chooserTrigger.current.focus();
+    else focusDefault();
+    const foreignDialog = (node) => !frame.current?.contains(node) && node?.closest?.('dialog,[role="dialog"],[role="alertdialog"]');
+    const retain = (event) => {
+      if (!foreignDialog(event.target) && !(activePanel ? chooser.current : frame.current)?.contains(event.target)) focusDefault();
+    };
+    const keys = (event) => {
+      if (foreignDialog(event.target)) return;
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        setNewMenuOpen(false);
+        setSearchQuery("");
+        setSearchCursor(0);
+        chooserTrigger.current = document.activeElement;
+        setActivePanel("search");
+        return;
+      }
+      if (newMenuShown.current && event.key === "Tab") {
+        setNewMenuOpen(false);
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        if (newMenuShown.current) {
+          setNewMenuOpen(false);
+          newTrigger.current?.focus();
+          return;
+        }
+        if (completion) {
+          setCompletion(null);
+          return;
+        }
+        if (activePanel === "thread" && chooser.current?.querySelector("[role=listbox]")) return;
+        if (activePanel) {
+          setActivePanel("");
+          chooserTrigger.current?.focus();
+          return;
+        }
+        const members = frame.current?.querySelector(".bt-comm-members[open]");
+        if (members) {
+          members.querySelector("summary")?.click();
+          focusDefault();
+        } else close();
+      }
+      if (event.key === "Tab") {
+        const targets = controls(), first = targets[0], last = targets.at(-1);
+        if (event.shiftKey && document.activeElement === first || !event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          (event.shiftKey ? last : first)?.focus();
+        }
+      }
+    };
+    document.addEventListener("focusin", retain, true);
+    document.addEventListener("keydown", keys, true);
+    return () => {
+      document.removeEventListener("focusin", retain, true);
+      document.removeEventListener("keydown", keys, true);
+    };
+  }, [shown, browse, selected, member?.speakingMode, activePanel, Boolean(completion)]);
+  (0, import_react65.useEffect)(() => {
+    if (!shown || !activePanel) return;
+    const returning = panelReturn.current;
+    panelReturn.current = "";
+    const target = (returning ? chooser.current?.querySelector(`[data-open-panel="${returning}"]`) : null) ?? (activePanel === "thread" ? chooser.current?.querySelector("textarea") ?? chooser.current?.querySelector("button") : chooser.current?.querySelector(["group", "search"].includes(activePanel) ? "input" : "button"));
+    target?.focus();
+  }, [shown, activePanel]);
+  (0, import_react65.useEffect)(() => {
+    if (!shown || !newMenuOpen) return void 0;
+    (newMenu.current?.querySelector('[role="menuitem"]:not(:disabled)') ?? newTrigger.current)?.focus();
+    const outside = (event) => {
+      if (!newMenu.current?.contains(event.target)) setNewMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", outside, true);
+    return () => document.removeEventListener("pointerdown", outside, true);
+  }, [shown, newMenuOpen]);
+  (0, import_react65.useEffect)(() => {
+    if (!shown || previousSidebar.current === sidebarHidden) return;
+    previousSidebar.current = sidebarHidden;
+    frame.current?.querySelector(sidebarHidden ? ".bt-comm-expand" : ".bt-comm-collapse")?.focus();
+  }, [shown, sidebarHidden]);
+  (0, import_react65.useEffect)(() => {
+    save(SELECTED, selected);
+    setOlder(null);
+    setReply(null);
+    setReferenced(null);
+    pendingJump.current = null;
+    referenceOrder.current += 1;
+    setCompletion(null);
+    autoScroll.current = true;
+    input.current?.focus();
+  }, [scope, selected]);
+  (0, import_react65.useEffect)(() => {
+    if (!shown) return void 0;
+    const clear = () => {
+      pendingJump.current = null;
+      referenceOrder.current += 1;
+      setReferenced(null);
+    };
+    document.addEventListener("pointerdown", clear, true);
+    return () => document.removeEventListener("pointerdown", clear, true);
+  }, [shown]);
+  (0, import_react65.useLayoutEffect)(() => {
+    const jump = pendingJump.current;
+    const target = jump && [...log.current?.querySelectorAll("article") ?? []].find((node) => node.dataset.messageId === jump.messageId);
+    if (target && jump.context === contextKey.current) {
+      pendingJump.current = null;
+      autoScroll.current = false;
+      target.scrollIntoView?.({ block: "center" });
+    } else if (!jump && log.current && older === null && autoScroll.current) log.current.scrollTop = log.current.scrollHeight;
+  }, [page, older, referenced, jumpRevision, state?.outbox]);
+  (0, import_react65.useEffect)(() => {
+    if (!shown || !member) {
+      setPage(null);
+      return void 0;
+    }
+    let active = true;
+    const order = ++pageOrder.current;
+    void request({ endpoint: "history", conversationId: selected, limit: 50, ...older === null ? {} : { before: older } }).then((value) => {
+      if (active && pageOrder.current === order) {
+        setPage({ ...value, scope });
+        setSyncError(null);
+      }
+    }).catch((failure) => {
+      if (active) {
+        setPage(null);
+        setSyncError({ conversationId: selected, message: communicationFailure(failure) });
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [scope, shown, selected, member?.membershipEpoch, older, older === null ? member?.watermark : null, request]);
+  (0, import_react65.useEffect)(() => {
+    if (!shown || page?.scope !== scope || page?.conversationId !== selected || !page.events.length) return void 0;
+    let active = true;
+    const mark = () => {
+      if (document.visibilityState === "visible" && document.hasFocus()) void request({ endpoint: "read", conversationId: selected, seq: page.events.at(-1).conversationSeq }).catch((failure) => {
+        if (!active) return;
+        setSyncError({ conversationId: selected, message: communicationFailure(failure) });
+        if (["FORBIDDEN", "NOT_A_MEMBER", "MEMBERSHIP_REVOKED"].includes(failure.code)) setPage(null);
+      });
+    };
+    mark();
+    window.addEventListener("focus", mark);
+    document.addEventListener("visibilitychange", mark);
+    return () => {
+      active = false;
+      window.removeEventListener("focus", mark);
+      document.removeEventListener("visibilitychange", mark);
+    };
+  }, [scope, shown, selected, page, request]);
+  const operation = async (endpoint, values) => {
+    const current = state?.conversations?.find((item) => item.conversationId === values.conversationId);
+    if (current && !["reclaim", "dm", "create-group", "accept"].includes(endpoint)) values = { membershipEpoch: current.membershipEpoch, expectedVersion: current.membershipVersion, ...values };
+    const operationKey = JSON.stringify([scope, endpoint, values]);
+    if (!operationIds.current.has(operationKey)) operationIds.current.set(operationKey, randomId());
+    const persist = () => {
+      save(OPERATION_IDS, [...operationIds.current]);
+      setOperationPending(operationIds.current.size > 0);
+    };
+    persist();
+    let value;
+    try {
+      value = await request({ endpoint, ...values, operationId: operationIds.current.get(operationKey) });
+    } catch (failure) {
+      if (!operationOutcomeUncertain(failure)) {
+        operationIds.current.delete(operationKey);
+        persist();
+      }
+      throw failure;
+    }
+    if (value.status !== "queued") {
+      operationIds.current.delete(operationKey);
+      persist();
+    }
+    let refreshedState;
+    try {
+      refreshedState = await refresh();
+    } catch (failure) {
+      setPollError(communicationFailure(failure));
+    }
+    return { ...value, refreshedState };
+  };
+  const act = async (work) => {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      await work();
+    } catch (failure) {
+      setError(communicationFailure(failure));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const send = () => act(async () => {
+    if (attachmentFlight.current) return;
+    if (!member || member.kind === "group" && member.speakingMode !== "speak" || !draft.text.trim() && !draft.attachments?.length) return;
+    const intent = attempts[key] ?? {
+      endpoint: "send",
+      conversationId: selected,
+      membershipEpoch: member.membershipEpoch,
+      messageId: randomId(),
+      clientCreatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      text: draft.text,
+      mentions: draft.mentions,
+      ...draft.attachments?.length ? { attachments: draft.attachments } : {},
+      replyToMessageId: reply?.messageId ?? null
+    };
+    const next = { ...attempts, [key]: intent };
+    save(ATTEMPTS, next);
+    setAttempts(next);
+    await request(intent);
+    delete next[key];
+    save(ATTEMPTS, next);
+    setAttempts({ ...next });
+    changeDraft({ text: "", mentions: [], manualMentions: [], attachments: [] });
+    setReply(null);
+    await refresh();
+    input.current?.focus();
+  });
+  const choose = (id) => {
+    setSelected(id);
+    setBrowse(false);
+    setError("");
+  };
+  const openReference = async (messageId) => {
+    const context = contextKey.current, order = ++referenceOrder.current;
+    try {
+      const event = await request({ endpoint: "reference", conversationId: selected, messageId });
+      if (context !== contextKey.current || order !== referenceOrder.current) return;
+      autoScroll.current = false;
+      pendingJump.current = { messageId, context };
+      setReferenced(messageId);
+      setJumpRevision((value) => value + 1);
+      if (!page?.events.some((item) => item.message?.messageId === messageId)) setOlder(event.conversationSeq + 24);
+    } catch {
+      if (context === contextKey.current && order === referenceOrder.current) setError("Earlier message unavailable");
+    }
+  };
+  const btn = (label, onClick, props = {}) => (0, import_react65.createElement)("button", { type: "button", disabled: busy, onClick, ...props }, props.children ?? t(label));
+  const chooseContact = (label, value, onChange, people) => (0, import_react65.createElement)(
+    "details",
+    { className: "bt-comm-participant-picker" },
+    (0, import_react65.createElement)("summary", null, t(label), value ? ": " : "", value ? personLabel(people.find((person) => person.principalId === value) ?? { principalId: value }) : ""),
+    contactsByAddress(people, state?.addressNotes).map((group) => (0, import_react65.createElement)("section", { key: group.address, className: "bt-comm-address" }, (0, import_react65.createElement)("h3", null, t(group.address), group.note ? (0, import_react65.createElement)("span", { className: "bt-comm-ip-note" }, t("IP note"), ": ", group.note) : null), group.instances.map((instance) => (0, import_react65.createElement)("section", { key: instance.instanceId ?? "unknown" }, (0, import_react65.createElement)("p", { className: "bt-comm-reference", title: instance.instanceId }, instance.label), instance.contacts.map((person) => btn(labels.get(person.principalId) ?? person.displayName, (event) => {
+      onChange(person.principalId);
+      const details2 = event.currentTarget.closest("details");
+      details2.open = false;
+      details2.querySelector("summary")?.focus();
+    }, { key: person.principalId, "aria-pressed": person.principalId === value, children: personLabel(person) }))))))
+  );
+  if (!shown) return null;
+  const events = page?.scope === scope && page?.conversationId === selected && page?.membershipEpoch === member?.membershipEpoch ? page.events : [];
+  const visibleIds = new Set(events.map((event) => event.message?.messageId));
+  const ownOutbox = member ? (state?.outbox ?? []).filter((item) => (!item.principalId || item.principalId === state.humanPrincipalId) && item.type === "message.publish" && item.conversationId === selected) : [];
+  const activityOutbox = (state?.outbox ?? []).filter((item) => (!item.principalId || item.principalId === state.humanPrincipalId) && item.type === "message.publish" && (!member || item.conversationId === selected));
+  const currentMembers = member?.info?.members ?? [];
+  const canSpeak = member && (member.kind !== "group" || member.speakingMode === "speak");
+  const contacts = state?.contacts ?? [];
+  const attach = async (files) => {
+    const context = contextKey.current;
+    if (!canSpeak || !state.attachmentsAvailable || attempts[key] || busy) return;
+    if (attachmentFlight.current) {
+      setError("Wait for the current attachment to finish.");
+      return;
+    }
+    attachmentFlight.current = true;
+    setAttaching(true);
+    try {
+      const attachments = await selectedAttachments([...files], draft.attachments ?? []);
+      if (context === contextKey.current) changeDraft({ attachments });
+    } catch (failure) {
+      if (context === contextKey.current) setError(communicationFailure(failure));
+    } finally {
+      attachmentFlight.current = false;
+      setAttaching(false);
+    }
+  };
+  const operations = state?.outbox?.filter((item) => (!item.principalId || item.principalId === state.humanPrincipalId) && item.type !== "message.publish" && item.state !== "accepted" && (!member || item.conversationId === selected)) ?? [];
+  const pendingForConversation = [...operationIds.current.keys()].some((item) => {
+    const [operationScope, , values] = JSON.parse(item);
+    return operationScope === scope && (member ? values.conversationId === selected : !values.conversationId);
+  });
+  const remoteCount = contacts.filter((contact) => contact.homeInstanceId !== state?.instanceId).length;
+  const inspect = (ids) => {
+    const authorized2 = ids.filter((id) => currentMembers.some((person) => person.principalId === id));
+    if (authorized2.length) {
+      setInspectedIds(authorized2);
+      showPanel("participant");
+    }
+  };
+  const showPanel = (name, trigger) => {
+    setPanelBack("");
+    setNewMenuOpen(false);
+    chooserTrigger.current = newMenuOpen ? newTrigger.current : trigger ?? document.activeElement;
+    if (name === "search") {
+      setSearchQuery("");
+      setSearchCursor(0);
+    }
+    ;
+    setActivePanel(name);
+  };
+  const messageContact = (id) => {
+    const context = contextKey.current, version = panelShown.current.version;
+    void act(async () => {
+      const value = await operation("dm", { otherPrincipalId: id });
+      if (value.conversationId && context === contextKey.current && panelShown.current.visible && panelShown.current.name === "manage-contacts" && version === panelShown.current.version) {
+        choose(value.conversationId);
+        setActivePanel("");
+      }
+    });
+  };
+  const collapseSidebar = (value) => {
+    setSidebarHidden(value);
+    save(SIDEBAR_HIDDEN, value);
+  };
+  const startMenu = () => {
+    collapseSidebar(false);
+    setBrowse(true);
+    setNewMenuOpen(true);
+  };
+  const connectionBlocked = state?.error && !["CONNECTION_LOST", "REQUEST_TIMEOUT", "STORAGE_UNAVAILABLE", "BACKPRESSURE", "HISTORY_GAP"].includes(state.error);
+  const connectionLabel = !team.communicationEnabled ? "Not configured" : pollError ? "Offline" : !state ? "Connecting…" : state.connected ? "Connected to Hub" : connectionBlocked ? "Offline" : "Reconnecting to Hub";
+  const roleLabel = (role) => role === "owner" ? "Group owner" : role === "admin" ? "Group admin" : "Group member";
+  const avatar = (id, name) => {
+    const contact = contacts.find((person) => person.principalId === id);
+    return (0, import_react65.createElement)(CommunicationAvatar, { person: contact ?? { principalId: id, displayName: name ?? id, kind: id?.startsWith("bot:") ? "bot" : id?.startsWith("human:") ? "human" : "group" }, request, allowed: Boolean(contact) });
+  };
+  const identityIcons = (person) => {
+    const kind = person.kind ?? (person.principalId?.startsWith("bot:") ? "bot" : "human");
+    const instanceId = person.homeInstanceId ?? person.principalId?.split(":")[1];
+    return (0, import_react65.createElement)(
+      import_react65.Fragment,
+      null,
+      (0, import_react65.createElement)("span", { className: "bt-comm-kind-icon", "aria-label": t(kind === "bot" ? "Bot" : "Human"), title: t(kind === "bot" ? "Bot" : "Human"), "data-symbol": kind === "bot" ? "◇" : "○" }),
+      instanceId && instanceId !== state?.instanceId ? (0, import_react65.createElement)("span", { className: "bt-comm-kind-icon", "aria-label": t("Remote"), title: t("Remote"), "data-symbol": "↗" }) : null
+    );
+  };
+  const personLabel = (person) => (0, import_react65.createElement)("span", { className: "bt-comm-person-label", title: `${person.displayName ?? ""} · ${person.instanceLabel ?? person.homeInstanceId ?? ""} · ${person.principalId}` }, avatar(person.principalId, person.displayName), labels.get(person.principalId) ?? person.displayName ?? person.principalId, identityIcons(person));
+  const groupedContacts = (render) => contactsByAddress(contacts.filter((person) => person.principalId !== state?.humanPrincipalId), state?.addressNotes).map((group) => (0, import_react65.createElement)(
+    "section",
+    { key: group.address, className: "bt-comm-address" },
+    (0, import_react65.createElement)("h3", null, t(group.address), group.note ? (0, import_react65.createElement)("span", { className: "bt-comm-ip-note" }, t("IP note"), ": ", group.note) : null),
+    group.instances.map((instance) => (0, import_react65.createElement)("section", { key: instance.instanceId ?? "unknown" }, (0, import_react65.createElement)("p", { className: "bt-comm-reference", title: instance.instanceId }, instance.label, " · ", instance.instanceId), instance.contacts.map(render)))
+  ));
+  const suggestions = completion ? mentionChoices(currentMembers, completion.query, t("All Bots")) : [];
+  const complete = (person) => {
+    const result = insertMention(draft, completion, person);
+    changeDraft({ text: result.text, mentions: result.mentions, manualMentions: result.manualMentions });
+    setCompletion(null);
+    requestAnimationFrame(() => {
+      input.current?.focus();
+      input.current?.setSelectionRange(result.caret, result.caret);
+    });
+  };
+  const updateCompletion = (node) => {
+    setCompletion(mentionQuery(node.value, node.selectionStart));
+    setCompletionIndex(0);
+  };
+  const wanted = searchQuery.trim().toLocaleLowerCase();
+  const searchable = (value) => String(value ?? "").toLocaleLowerCase().includes(wanted);
+  const searchResults = [
+    ...(state?.conversations ?? []).filter((item) => [conversationTitle(item, state.humanPrincipalId, labels), item.lastMessage?.summary, ...(item.info?.members ?? []).map((person) => person.displayName)].some(searchable)).map((item) => ({ id: item.conversationId, title: conversationTitle(item, state.humanPrincipalId, labels), preview: item.lastMessage?.summary ?? "", avatar: (0, import_react65.createElement)(ConversationAvatar, { conversation: item, humanId: state.humanPrincipalId, request, size: 24 }), run: () => {
+      setActivePanel("");
+      choose(item.conversationId);
+    } })),
+    ...contacts.filter((person) => person.principalId !== state?.humanPrincipalId && [labels.get(person.principalId), person.displayName, person.instanceLabel].some(searchable)).map((person) => ({ id: person.principalId, title: labels.get(person.principalId) ?? person.displayName, preview: t("New message"), avatar: (0, import_react65.createElement)(CommunicationAvatar, { person, request, size: 24 }), run: () => {
+      void act(async () => {
+        const value = await operation("dm", { otherPrincipalId: person.principalId });
+        setActivePanel("");
+        choose(value.conversationId);
+      });
+    } }))
+  ].slice(0, 50);
+  const searchIndex = Math.max(0, Math.min(searchCursor, searchResults.length - 1));
+  return (0, import_react_dom11.createPortal)((0, import_react65.createElement)(
+    "section",
+    { ref: frame, className: "bt-comm-frame", style: { "--bt-tap-duration": `${SPRING_TAP.duration}ms`, "--bt-tap-easing": SPRING_TAP.easing }, role: "dialog", "aria-modal": true, "data-closing": closing, "data-collapsed": sidebarHidden, "data-browse": browse || !member, "data-setup": !team.communicationEnabled, "aria-label": t("Remote communication") },
+    (0, import_react65.createElement)(
+      "aside",
+      { id: "bt-comm-nav", className: "bt-comm-nav" },
+      (0, import_react65.createElement)(
+        "div",
+        { className: "bt-comm-nav-heading" },
+        (0, import_react65.createElement)("h2", { title: t("Remote communication") }, t("Remote communication")),
+        (0, import_react65.createElement)(
+          "div",
+          { className: "bt-comm-nav-actions" },
+          btn("Personal settings", (event) => showPanel("settings", event.currentTarget), { className: "bt-comm-settings-icon", "aria-label": t("Personal settings"), title: t("Personal settings"), children: (0, import_react65.createElement)(GearIcon) }),
+          btn("Contacts", (event) => showPanel("manage-contacts", event.currentTarget), { className: "bt-comm-settings-icon", "aria-label": t("Contacts"), title: t("Contacts"), disabled: busy || !team.communicationEnabled, children: (0, import_react65.createElement)(PeopleIcon) }),
+          btn("Search", (event) => showPanel("search", event.currentTarget), { className: "bt-comm-settings-icon", "aria-label": t("Search"), title: t("Search"), children: (0, import_react65.createElement)(SearchIcon) }),
+          (0, import_react65.createElement)(
+            "div",
+            { ref: newMenu, className: "bt-comm-new-menu", onKeyDown: (event) => {
+              if (!newMenuOpen || !["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+              event.preventDefault();
+              const items = [...newMenu.current.querySelectorAll('[role="menuitem"]:not(:disabled)')], index = items.indexOf(document.activeElement);
+              const next = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : event.key === "ArrowDown" ? (index + 1) % items.length : (index - 1 + items.length) % items.length;
+              items[next]?.focus();
+            } },
+            btn("New…", () => setNewMenuOpen((value) => !value), { ref: newTrigger, className: "bt-comm-settings-icon", "aria-label": t("New…"), title: t("New…"), "aria-haspopup": "menu", "aria-expanded": newMenuOpen, "aria-controls": newMenuOpen ? "bt-comm-create-menu" : void 0, children: (0, import_react65.createElement)(PlusIcon), onKeyDown: (event) => {
+              if (["ArrowDown", "ArrowUp"].includes(event.key)) {
+                event.preventDefault();
+                setNewMenuOpen(true);
+              }
+            } }),
+            newMenuOpen ? (0, import_react65.createElement)(
+              "div",
+              { className: "bt-comm-create-menu", id: "bt-comm-create-menu", role: "menu", "aria-label": t("New chat") },
+              btn("New message", () => showPanel("contacts"), { role: "menuitem", disabled: busy || !team.communicationEnabled, children: (0, import_react65.createElement)(import_react65.Fragment, null, (0, import_react65.createElement)(ChatsIcon), t("New message")) }),
+              btn("New group", () => showPanel("group"), { role: "menuitem", disabled: busy || !team.communicationEnabled, children: (0, import_react65.createElement)(import_react65.Fragment, null, (0, import_react65.createElement)(PeopleIcon), t("New group")) })
+            ) : null
+          ),
+          btn("Collapse sidebar", () => {
+            setNewMenuOpen(false);
+            collapseSidebar(true);
+          }, { className: "bt-comm-settings-icon bt-comm-collapse", "aria-label": t("Collapse sidebar"), "aria-controls": "bt-comm-nav", "aria-expanded": true, title: t("Collapse sidebar"), children: (0, import_react65.createElement)(SidebarIcon) })
+        )
+      ),
+      btn("Back to local chats", close, { className: "bt-comm-back" }),
+      member ? btn("Back to conversation", () => setBrowse(false), { className: "bt-comm-mobile" }) : null,
+      (0, import_react65.createElement)(
+        "section",
+        { className: "bt-comm-connection", "aria-label": t("Connection status") },
+        (0, import_react65.createElement)("p", { className: "bt-comm-connection-label", role: "status", "data-connected": Boolean(state?.connected && !pollError) }, (0, import_react65.createElement)("span", { className: "bt-comm-dot", "aria-hidden": true }), t(connectionLabel)),
+        state ? (0, import_react65.createElement)("p", { className: "bt-comm-reference bt-comm-connection-details" }, `${state.instanceId} · ${t("Remote contacts")}: ${remoteCount}`) : null,
+        team.communicationEnabled && !state?.connected && !connectionBlocked ? (0, import_react65.createElement)("p", { className: "bt-comm-reference" }, t("Queued messages send automatically when the connection returns.")) : null,
+        team.communicationEnabled ? btn("Refresh status", () => {
+          void act(refresh);
+        }) : null,
+        null
+      ),
+      (0, import_react65.createElement)("div", { className: "bt-comm-section-title" }, t("Conversations"), (0, import_react65.createElement)("span", null, state?.conversations?.length ?? 0)),
+      (0, import_react65.createElement)("nav", { "aria-label": t("Communication conversations") }, (state?.conversations ?? []).map((item) => (0, import_react65.createElement)(ConversationRow, { key: item.conversationId, conversation: item, humanId: state.humanPrincipalId, labels, request, selected: item.conversationId === selected, onChoose: choose, disabled: busy }))),
+      !state?.conversations?.length ? (0, import_react65.createElement)("p", { className: "bt-comm-reference" }, t("Your cross-device conversations will appear here.")) : null,
+      state?.invites?.length ? (0, import_react65.createElement)("div", null, (0, import_react65.createElement)("h3", null, t("Invitations")), state.invites.map((invitation) => (0, import_react65.createElement)(
+        "div",
+        { key: invitation.inviteId },
+        avatar(invitation.principalId),
+        (0, import_react65.createElement)("p", null, `${invitation.title} · ${labels.get(invitation.principalId) ?? invitation.principalId}`),
+        btn("Accept invitation", () => {
+          void act(() => operation("accept", { inviteId: invitation.inviteId, recipientPrincipalId: invitation.principalId }));
+        })
+      ))) : null,
+      (state?.recoverableOwnership ?? []).map((item) => (0, import_react65.createElement)(
+        "div",
+        { key: item.conversationId },
+        (0, import_react65.createElement)("p", null, item.title),
+        btn("Restore retained ownership", () => {
+          void act(() => operation("reclaim", { conversationId: item.conversationId, expectedVersion: item.membershipVersion }));
+        })
+      )),
+      null
+    ),
+    activePanel ? (0, import_react65.createElement)(
+      "div",
+      { className: `bt-comm-modal-backdrop${activePanel === "thread" ? " bt-comm-thread-backdrop" : ""}`, onMouseDown: (event) => {
+        if (event.target === event.currentTarget) {
+          setActivePanel("");
+          chooserTrigger.current?.focus();
+        }
+      } },
+      (0, import_react65.createElement)(
+        "section",
+        { ref: chooser, className: `bt-comm-modal${activePanel === "thread" ? " bt-comm-thread-popover" : ""}${activePanel === "manage-contacts" ? " bt-comm-contacts-modal" : ""}`, style: activePanel === "thread" ? threadPosition : void 0, role: "dialog", "aria-modal": true, "aria-label": t(activePanel === "search" ? "Search" : activePanel === "settings" ? "Personal settings" : activePanel === "thread" ? "Message replies" : activePanel === "activity" ? "Activity details" : activePanel === "participant" ? "Participant information" : activePanel === "manage-contacts" ? "Manage contacts" : activePanel === "profile" ? "Human profile" : activePanel === "pairing" ? "Add a device" : activePanel === "group" ? "New group" : "New message") },
+        activePanel === "thread" ? (0, import_react65.createElement)("button", { type: "button", onClick: () => {
+          setActivePanel("");
+          chooserTrigger.current?.focus();
+        }, className: "bt-comm-thread-close", "aria-label": t("Close replies"), title: t("Close replies") }, (0, import_react65.createElement)(CloseIcon)) : null,
+        (0, import_react65.createElement)(
+          "div",
+          { className: activePanel === "thread" ? "bt-comm-thread-heading" : "bt-comm-modal-head" },
+          (0, import_react65.createElement)("h2", null, t(activePanel === "search" ? "Search" : activePanel === "settings" ? "Personal settings" : activePanel === "thread" ? "Message replies" : activePanel === "activity" ? "Activity details" : activePanel === "participant" ? "Participant information" : activePanel === "manage-contacts" ? "Manage contacts" : activePanel === "profile" ? "Human profile" : activePanel === "pairing" ? "Add a device" : activePanel === "group" ? "New group" : "New message")),
+          activePanel !== "thread" ? (0, import_react65.createElement)(
+            "div",
+            { className: "bt-comm-modal-actions" },
+            panelBack ? (0, import_react65.createElement)("button", { type: "button", "aria-label": t("Back to settings"), onClick: () => {
+              panelReturn.current = activePanel;
+              setActivePanel(panelBack);
+              setPanelBack("");
+            } }, (0, import_react65.createElement)(ChevronLeftIcon), t("Back")) : null,
+            (0, import_react65.createElement)("button", { type: "button", "aria-label": t("Close dialog"), onClick: () => {
+              setActivePanel("");
+              setPanelBack("");
+              chooserTrigger.current?.focus();
+            } }, (0, import_react65.createElement)(CloseIcon), t("Close"))
+          ) : null
+        ),
+        activePanel === "search" ? (0, import_react65.createElement)(
+          "div",
+          { className: "bt-comm-search" },
+          (0, import_react65.createElement)("label", { className: "bt-comm-field" }, t("Search conversations and contacts"), (0, import_react65.createElement)("input", { value: searchQuery, role: "combobox", "aria-label": t("Search conversations and contacts"), "aria-autocomplete": "list", "aria-expanded": true, "aria-controls": "bt-comm-search-results", "aria-activedescendant": searchResults.length ? `bt-comm-search-${searchIndex}` : void 0, onChange: (event) => {
+            setSearchQuery(event.target.value);
+            setSearchCursor(0);
+          }, onKeyDown: (event) => {
+            if (event.nativeEvent.isComposing) return;
+            if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+              event.preventDefault();
+              setSearchCursor((index) => !searchResults.length ? 0 : event.key === "Home" ? 0 : event.key === "End" ? searchResults.length - 1 : (index + (event.key === "ArrowDown" ? 1 : -1) + searchResults.length) % searchResults.length);
+            }
+            if (event.key === "Enter" && searchResults.length) {
+              event.preventDefault();
+              searchResults[searchIndex].run();
+            }
+          } })),
+          (0, import_react65.createElement)("p", { className: "bt-comm-reference" }, t("Search current conversations, contacts and recent message summaries.")),
+          (0, import_react65.createElement)("div", { id: "bt-comm-search-results", role: "listbox", "aria-label": t("Results") }, searchResults.map((item, index) => btn(item.title, item.run, { key: item.id, id: `bt-comm-search-${index}`, role: "option", "aria-selected": index === searchIndex, children: (0, import_react65.createElement)(import_react65.Fragment, null, item.avatar, (0, import_react65.createElement)("span", null, (0, import_react65.createElement)("strong", null, item.title), (0, import_react65.createElement)("small", null, item.preview))) }))),
+          !searchResults.length ? (0, import_react65.createElement)("p", { role: "status" }, t("No matching conversations or contacts.")) : null
+        ) : activePanel === "settings" ? (0, import_react65.createElement)(
+          "div",
+          { className: "bt-comm-personal-settings" },
+          state ? (0, import_react65.createElement)(
+            "section",
+            null,
+            (0, import_react65.createElement)("h3", null, t("Your profile")),
+            (0, import_react65.createElement)(HumanProfile, { key: `${scope}:${state.humanPrincipalId}`, human: contacts.find((person) => person.principalId === state.humanPrincipalId) ?? { principalId: state.humanPrincipalId, displayName: t("You"), kind: "human" }, request, operation }),
+            (0, import_react65.createElement)("details", null, (0, import_react65.createElement)("summary", null, t("Device identity")), (0, import_react65.createElement)("p", null, state.instanceId), (0, import_react65.createElement)("code", null, state.humanPrincipalId))
+          ) : null,
+          (0, import_react65.createElement)(CommunicationMemory, { key: scope, request }),
+          (0, import_react65.createElement)(
+            "section",
+            null,
+            (0, import_react65.createElement)("h3", null, t("Connection and contacts")),
+            btn("Add a device", () => {
+              setPanelBack("settings");
+              setActivePanel("pairing");
+            }, { "data-open-panel": "pairing" }),
+            btn("Manage contacts", () => {
+              setPanelBack("settings");
+              setActivePanel("manage-contacts");
+            }, { disabled: !team.communicationEnabled, "data-open-panel": "manage-contacts" })
+          )
+        ) : activePanel === "thread" ? member && threadMessageId ? (0, import_react65.createElement)(import_react65.Fragment, null, (0, import_react65.createElement)(CommunicationThread, {
+          key: `view:${contextKey.current}:${threadMessageId}`,
+          member,
+          messageId: threadMessageId,
+          request,
+          canSpeak,
+          onInspect: inspect,
+          selectedBranch: true,
+          onReply: setThreadReplyTarget
+        }), canSpeak ? (0, import_react65.createElement)(ThreadReplyComposer, { key: `composer:${contextKey.current}:${threadMessageId}`, storageKey: `ds-bot:communication:thread:${contextKey.current}:${threadMessageId}`, member, target: threadReplyTarget, request, onSent: refresh, attachmentsAvailable: state.attachmentsAvailable }) : null) : null : activePanel === "activity" ? (0, import_react65.createElement)(CommunicationActivity, {
+          state,
+          member,
+          events,
+          outbox: activityOutbox,
+          operations,
+          operationPending: pendingForConversation,
+          pendingAttempt: attempts[key],
+          error,
+          pollError: pollError || (syncError?.conversationId === selected ? syncError.message : ""),
+          friendly: communicationFailure,
+          labels,
+          busy,
+          onRefresh: () => {
+            void act(refresh);
+          },
+          onRetry: () => {
+            setActivePanel("");
+            void send();
+          },
+          copyDisabled: Boolean(draft.text) || Boolean(attempts[key]) || !member,
+          onCopy: (item) => {
+            if (draft.text || attempts[key] || !member) return;
+            changeDraft({ text: item.text, mentions: [], manualMentions: [] });
+            setActivePanel("");
+            input.current?.focus();
+          }
+        }) : activePanel === "participant" ? (0, import_react65.createElement)("div", { className: "bt-comm-participant-information" }, currentMembers.filter((person) => inspectedIds.includes(person.principalId)).map((person) => (0, import_react65.createElement)("section", { key: person.principalId }, personLabel(person), (0, import_react65.createElement)("p", null, t(roleLabel(person.role ?? "member"))), (0, import_react65.createElement)("code", null, person.principalId)))) : activePanel === "manage-contacts" ? (0, import_react65.createElement)(ContactManager, { key: scope, request, operation, contacts, connectionKnown: state?.connected === true && !pollError, revision: `${state?.managementRevision ?? ""}:${state?.connected ?? false}`, humanPrincipalId: state?.humanPrincipalId, instanceId: state?.instanceId, addressNotes: state?.addressNotes, onSaveAddressNote: async (address, note) => {
+          const expectedScope = state?.addressNotesScope;
+          const result = await request({ endpoint: "set-address-note", address, note, expectedScope });
+          setState((current) => current?.addressNotesScope === expectedScope ? { ...current, addressNotes: result.addressNotes } : current);
+        }, onMessage: messageContact, messageBusy: busy }) : activePanel === "profile" ? (0, import_react65.createElement)(HumanProfile, { key: scope, human: contacts.find((person) => person.principalId === state?.humanPrincipalId) ?? { principalId: state?.humanPrincipalId ?? "human:local", displayName: t("You"), kind: "human" }, request, operation }) : activePanel === "pairing" ? (0, import_react65.createElement)(AddDevice, { request, revision: `${team.communicationEnabled}:${team.communicationHubId}:${state?.managementRevision ?? ""}:${state?.connected ?? false}`, displayName: contacts.find((person) => person.principalId === state?.humanPrincipalId)?.displayName ?? t("You") }) : (0, import_react65.createElement)(
+          import_react65.Fragment,
+          null,
+          activePanel === "group" ? (0, import_react65.createElement)("label", { className: "bt-comm-field" }, t("Group name"), (0, import_react65.createElement)("input", { value: title, onChange: (event) => setTitle(event.target.value), "aria-label": t("Group name") })) : null,
+          groupedContacts((contact) => activePanel === "group" ? (0, import_react65.createElement)(
+            "label",
+            { key: contact.principalId, className: "bt-comm-check" },
+            (0, import_react65.createElement)("input", { type: "checkbox", checked: invitees.includes(contact.principalId), onChange: (event) => setInvitees((current) => event.target.checked ? [...current, contact.principalId] : current.filter((id) => id !== contact.principalId)) }),
+            personLabel(contact)
+          ) : btn(labels.get(contact.principalId), () => {
+            void act(async () => {
+              const value = await operation("dm", { otherPrincipalId: contact.principalId });
+              if (value.conversationId) {
+                choose(value.conversationId);
+                setActivePanel("");
+              }
+            });
+          }, { key: contact.principalId, children: personLabel(contact), className: "bt-comm-contact" })),
+          !contacts.some((person) => person.principalId !== state?.humanPrincipalId) ? (0, import_react65.createElement)("p", { className: "bt-comm-reference" }, t("Remote contacts appear after the other device connects and publishes its identities.")) : null,
+          activePanel === "group" ? btn("Create and invite", () => {
+            void act(async () => {
+              const value = await operation("create-group", { title });
+              if (!value.conversationId) return;
+              choose(value.conversationId);
+              setTitle("");
+              setInvitees([]);
+              setActivePanel("");
+              const failed = [];
+              for (const inviteePrincipalId of invitees) {
+                try {
+                  await operation("invite", { conversationId: value.conversationId, inviteePrincipalId });
+                } catch {
+                  failed.push(labels.get(inviteePrincipalId) ?? inviteePrincipalId);
+                }
+              }
+              if (failed.length) setError(t("Group created. Some invitations were not sent. Open the member settings to invite them.") + " " + failed.join(", "));
+            });
+          }, { className: "bt-comm-primary", disabled: busy || !title.trim() }) : null
+        ),
+        btn(activePanel === "pairing" ? "Close" : "Cancel", () => {
+          setActivePanel("");
+          chooserTrigger.current?.focus();
+        })
+      )
+    ) : null,
+    error ? (0, import_react65.createElement)("aside", { className: "bt-comm-toast", role: "alert" }, (0, import_react65.createElement)("span", null, t(error)), btn("Dismiss", () => setError(""), { disabled: false, "aria-label": t("Dismiss notification") })) : null,
+    (0, import_react65.createElement)(
+      "main",
+      { className: "bt-comm-main" },
+      (0, import_react65.createElement)(
+        "header",
+        null,
+        sidebarHidden ? btn("Expand sidebar", () => {
+          collapseSidebar(false);
+          setBrowse(true);
+        }, { className: "bt-comm-icon-button bt-comm-expand", "aria-label": t("Expand sidebar"), title: t("Expand sidebar"), children: (0, import_react65.createElement)(SidebarIcon) }) : null,
+        member ? btn("Conversations", () => {
+          collapseSidebar(false);
+          setBrowse(true);
+        }, { className: "bt-comm-mobile" }) : null,
+        !team.communicationEnabled ? btn("Back to local chats", close, { className: "bt-comm-mobile" }) : null,
+        (0, import_react65.createElement)("div", { className: "bt-comm-heading bt-head" }, member ? btn("View conversation details", () => {
+          if (member.kind === "group") frame.current?.querySelector(".bt-comm-members>summary")?.click();
+          else inspect(currentMembers.filter((person) => person.principalId !== state.humanPrincipalId).map((person) => person.principalId));
+        }, { className: "bt-pill bt-comm-title-pill", children: (0, import_react65.createElement)(import_react65.Fragment, null, (0, import_react65.createElement)(ConversationAvatar, { conversation: member, humanId: state.humanPrincipalId, request, size: 24 }), (0, import_react65.createElement)("h2", { className: "bt-pill-name" }, conversationTitle(member, state.humanPrincipalId, labels)), (0, import_react65.createElement)("span", { "aria-hidden": true }, "›")) }) : (0, import_react65.createElement)("h2", null, t("Remote communication"))),
+        btn("Activity details", (event) => showPanel("activity", event.currentTarget), { className: "bt-comm-icon-button", "aria-label": t("Activity details"), title: t("Activity details"), children: (0, import_react65.createElement)(InfoIcon) }),
+        member?.kind === "group" ? (0, import_react65.createElement)("span", { className: "bt-sr" }, `${currentMembers.length} ${t("Members")} · ${t(roleLabel(member.role))} · ${t(member.speakingMode === "readOnly" ? "Read only" : "Can speak")}`) : null
+      ),
+      !member ? (0, import_react65.createElement)(
+        "section",
+        { className: "bt-comm-empty" },
+        (0, import_react65.createElement)("span", { className: "bt-comm-empty-symbol", "aria-hidden": true }, "↔"),
+        (0, import_react65.createElement)("h2", null, t(team.communicationEnabled ? "Start a conversation across devices" : "Pair this device to get started")),
+        (0, import_react65.createElement)("p", null, t(team.communicationEnabled ? "Message a Human or Bot directly, or bring them together in a group." : "Ask the Hub owner to configure communication and pair this device.")),
+        team.communicationEnabled ? btn("New…", startMenu, { className: "bt-comm-primary" }) : null,
+        (0, import_react65.createElement)("p", { className: "bt-comm-reference" }, t("Local chats stay separate from communication conversations."))
+      ) : null,
+      member?.kind === "group" ? (0, import_react65.createElement)(GroupSettings, {
+        key: `${scope}:${selected}:${member.membershipEpoch}`,
+        member,
+        contacts,
+        labels,
+        operation,
+        operationPending,
+        act,
+        busy,
+        humanId: state.humanPrincipalId,
+        btn,
+        personLabel,
+        chooseContact,
+        pendingSettings: (id) => [...operationIds.current.keys()].map((item) => JSON.parse(item)).find(([instanceId, endpoint, values]) => instanceId === scope && endpoint === "save-settings" && values.conversationId === id)?.[2] ?? null
+      }) : null,
+      (0, import_react65.createElement)(
+        "div",
+        { ref: log, className: "bt-comm-log", role: "log", "aria-label": t("Communication messages"), onScroll: (event) => {
+          const element = event.currentTarget;
+          autoScroll.current = !referenced && !pendingJump.current && element.scrollHeight - element.scrollTop - element.clientHeight < 80;
+        } },
+        member && events.length > 0 && events[0].conversationSeq > member.joinSeq ? btn("Load earlier messages", () => setOlder(events[0].conversationSeq - 1)) : null,
+        older !== null ? btn("Show latest messages", () => setOlder(null)) : null,
+        communicationLogEvents(events).map((event) => event.type === "bot.work.started" ? (0, import_react65.createElement)(BotWorkStarted, { key: event.eventId, event, members: currentMembers, request, onInspect: inspect }) : (0, import_react65.createElement)(
+          "article",
+          { key: event.message.messageId, "data-message-id": event.message.messageId, "data-self": event.message.author.principalId === state.humanPrincipalId, "data-referenced": event.message.messageId === referenced },
+          avatar(event.message.author.principalId, contacts.find((person) => person.principalId === event.message.author.principalId)?.displayName ?? event.message.author.displayName),
+          (0, import_react65.createElement)("strong", { title: event.message.author.principalId }, labels.get(event.message.author.principalId) ?? event.message.author.displayName ?? (event.message.author.principalId === state.humanPrincipalId ? t("You") : event.message.author.principalId), identityIcons(contacts.find((person) => person.principalId === event.message.author.principalId) ?? event.message.author)),
+          (0, import_react65.createElement)(
+            "div",
+            { className: "bt-comm-message-bubble" },
+            event.message.replyToMessageId ? (0, import_react65.createElement)(ReferenceQuote, {
+              key: `${scope}:${selected}:${member.membershipEpoch}:${event.message.replyToMessageId}`,
+              conversationId: selected,
+              membershipEpoch: member.membershipEpoch,
+              messageId: event.message.replyToMessageId,
+              request,
+              labels,
+              onJump: openReference
+            }) : null,
+            (0, import_react65.createElement)("div", { className: "bt-comm-body" }, (0, import_react65.createElement)(CommunicationMessage, { message: event.message, members: currentMembers, request, onInspect: inspect }))
+          ),
+          (0, import_react65.createElement)(
+            CommunicationMessageActions,
+            {
+              message: event.message,
+              onReply: canSpeak ? openThread : void 0,
+              onThread: member.kind === "group" ? openThread : void 0
+            },
+            (0, import_react65.createElement)("time", { title: new Date(event.serverAcceptedAt).toLocaleString() }, new Date(event.serverAcceptedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }))
+          )
+        )),
+        ownOutbox.filter((item) => item.state !== "failed" && !visibleIds.has(item.id) && (item.state !== "accepted" || older === null && item.result?.conversationSeq > (page?.watermark ?? 0))).map((item) => (0, import_react65.createElement)(
+          "article",
+          { key: item.id, "data-message-id": item.id, "data-self": true, "data-failed": item.state === "failed" },
+          avatar(state.humanPrincipalId, contacts.find((person) => person.principalId === state.humanPrincipalId)?.displayName),
+          (0, import_react65.createElement)("strong", { title: state.humanPrincipalId }, contacts.find((person) => person.principalId === state.humanPrincipalId)?.displayName ?? t("You"), identityIcons({ principalId: state.humanPrincipalId, kind: "human", homeInstanceId: state.instanceId })),
+          (0, import_react65.createElement)("p", { className: "bt-comm-pending-text" }, item.text),
+          (0, import_react65.createElement)("p", { role: "status" }, t(item.state === "accepted" ? "Hub accepted" : "Queued on this device"))
+        ))
+      ),
+      canSpeak ? (0, import_react65.createElement)(
+        "footer",
+        null,
+        reply ? (0, import_react65.createElement)("div", { className: "bt-comm-reference" }, `${t("Reply to")} ${reply.content.text.slice(0, 120)}`, btn("Cancel reply", () => setReply(null))) : null,
+        (0, import_react65.createElement)("div", { className: "bt-comm-mentions" }, (draft.mentions ?? []).map((id) => btn(`@${labels.get(id) ?? id} ×`, () => changeDraft({ mentions: draft.mentions.filter((item) => item !== id), manualMentions: (draft.manualMentions ?? []).filter((item) => item !== id) }), { key: id, "data-manual-mention": (draft.manualMentions ?? []).includes(id), "aria-label": `${t("Remove mention")}: ${labels.get(id) ?? id}` }))),
+        suggestions.length ? (0, import_react65.createElement)("div", { className: "bt-comm-completion", role: "listbox", id: "bt-comm-completion", "aria-label": t("Mention participant") }, suggestions.map((person, index) => (0, import_react65.createElement)("button", {
+          type: "button",
+          key: person.principalId,
+          id: `bt-comm-option-${index}`,
+          role: "option",
+          "aria-selected": completionIndex === index,
+          onMouseDown: (event) => event.preventDefault(),
+          onClick: () => complete(person)
+        }, person.all ? (0, import_react65.createElement)("span", null, avatar("@all", "All"), t("All Bots")) : personLabel(person)))) : null,
+        (0, import_react65.createElement)("label", { className: "bt-comm-field bt-comm-compose-field" }, (0, import_react65.createElement)("span", { className: "bt-sr" }, t("Communication message")), (0, import_react65.createElement)("textarea", {
+          ref: input,
+          value: draft.text,
+          rows: 2,
+          placeholder: t("Message {name}", { name: conversationTitle(member, state.humanPrincipalId, labels) }),
+          disabled: !canSpeak || Boolean(attempts[key]),
+          onChange: (event) => {
+            changeDraft({ text: event.target.value, mentions: retainedMentions(event.target.value, draft.mentions, currentMembers, draft.manualMentions) });
+            if (!composing) updateCompletion(event.target);
+          },
+          onClick: (event) => updateCompletion(event.target),
+          onCompositionStart: () => {
+            setComposing(true);
+            setCompletion(null);
+          },
+          onCompositionEnd: (event) => {
+            setComposing(false);
+            updateCompletion(event.target);
+          },
+          role: "combobox",
+          "aria-autocomplete": "list",
+          "aria-expanded": suggestions.length > 0,
+          "aria-controls": "bt-comm-completion",
+          "aria-activedescendant": suggestions.length ? `bt-comm-option-${completionIndex}` : void 0,
+          onKeyDown: (event) => {
+            event.stopPropagation();
+            if (event.nativeEvent.isComposing || composing || event.keyCode === 229) return;
+            if (suggestions.length) {
+              if (["ArrowDown", "ArrowUp"].includes(event.key)) {
+                event.preventDefault();
+                setCompletionIndex((index) => (index + (event.key === "ArrowDown" ? 1 : -1) + suggestions.length) % suggestions.length);
+                return;
+              }
+              if (event.key === "Escape") {
+                event.preventDefault();
+                setCompletion(null);
+                return;
+              }
+              if (["Enter", "Tab"].includes(event.key)) {
+                event.preventDefault();
+                complete(suggestions[Math.min(completionIndex, suggestions.length - 1)]);
+                return;
+              }
+            }
+            if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+              event.preventDefault();
+              void send();
+            }
+          },
+          onPaste: (event) => {
+            if (event.clipboardData?.files.length) {
+              event.preventDefault();
+              event.stopPropagation();
+              if (state.attachmentsAvailable) void attach(event.clipboardData.files);
+              else setError("Attachments require a compatible Hub and clients.");
+            }
+          },
+          onDragOver: (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          },
+          onDrop: (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (state.attachmentsAvailable) void attach(event.dataTransfer.files);
+            else setError("Attachments require a compatible Hub and clients.");
+          },
+          "aria-label": t("Communication message")
+        })),
+        state.attachmentsAvailable ? (0, import_react65.createElement)("label", { className: "bt-comm-attach-picker", title: t("Attach images or files (64 KiB total)") }, (0, import_react65.createElement)(PlusIcon), (0, import_react65.createElement)("span", { className: "bt-sr" }, t("Attach images or files (64 KiB total)")), (0, import_react65.createElement)("input", { type: "file", multiple: true, disabled: busy || attaching || Boolean(attempts[key]), "aria-label": t("Attach images or files (64 KiB total)"), onChange: (event) => {
+          void attach(event.target.files);
+          event.target.value = "";
+        } })) : null,
+        draft.attachments?.length ? (0, import_react65.createElement)("div", { className: "bt-comm-attachment-drafts" }, draft.attachments.map((file, index) => (0, import_react65.createElement)("span", { key: index }, file.name, (0, import_react65.createElement)("button", { type: "button", disabled: busy || attaching || Boolean(attempts[key]), "aria-label": t("Remove {name}", { name: file.name }), onClick: () => changeDraft({ attachments: draft.attachments.filter((_, i) => i !== index) }) }, (0, import_react65.createElement)(CloseIcon))))) : null,
+        btn(attempts[key] ? "Retry same send" : "Send message", () => {
+          void send();
+        }, { className: "bt-comm-send", "aria-label": t(attempts[key] ? "Retry same send" : "Send message"), title: t("Enter to send · Shift+Enter for a new line"), children: (0, import_react65.createElement)(import_react65.Fragment, null, (0, import_react65.createElement)(ArrowUpIcon), (0, import_react65.createElement)("span", { className: "bt-sr" }, t(attempts[key] ? "Retry same send" : "Send message"))), disabled: busy || attaching || !canSpeak || !draft.text.trim() && !draft.attachments?.length }),
+        (0, import_react65.createElement)("span", { className: "bt-sr" }, t("Enter to send · Shift+Enter for a new line")),
+        null
+      ) : null
+    )
+  ), document.body);
+}
+function installCommunication(ctx, { roster, surface }) {
+  const panel = createSource(read(OPEN, false));
+  ctx.effect(() => {
+    const style = document.createElement("style");
+    style.textContent = communicationCSS + communicationDirectoryCSS;
+    document.head.append(style);
+    return () => style.remove();
+  }, "ds-bot: communication styles");
+  ctx.slots.inject("shell.overlay", () => ctx.slots.register(
+    { name: "shell.overlay", id: "bot-communication", order: 52 },
+    () => (0, import_react65.createElement)(CommunicationSurface, { roster, surface, panel })
+  ));
+  return { open: () => {
+    save(OPEN, true);
+    panel.set(true);
+  } };
 }
 
 // src/client/index.js
@@ -21200,6 +25495,8 @@ function apply(ctx) {
   const browserPages = browsers?.pages ?? createSource({});
   const browserTabs = browsers?.tabs ?? createSource({});
   const browserHolds = browsers?.holds ?? createSource({});
+  const communication = installCommunication(ctx, { roster, surface });
+  actions.openCommunication = communication.open;
   const face = () => ({ actions, hooks: { roster, ui: ui2, activity, work, memoryNews, registry, turnClock, live, cards, heldCards, browserPages, browserTabs, browserHolds, surface, update, frame, sidebarPref } });
   ctx.effect(() => noticeApprovals({
     work,

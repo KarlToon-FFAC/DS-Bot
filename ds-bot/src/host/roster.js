@@ -4,6 +4,7 @@ import { mkdir } from 'node:fs/promises'
 import { MAX_AVATAR_IMAGE, ROOM_MAX_MEMBERS, ROOM_MODES, ROOM_NAME_MAX, ROOM_NOTICE_MAX } from './constants.js'
 import { currentColor, isColor, normalize, unquote } from './text.js'
 import { nameProblem } from '../shared/mentions.js'
+import { cleanPublicProfile } from './federation/public-profiles.js'
 
 const BROWSER_GRANT_KINDS = new Set(['post', 'upload', 'download', 'delete', '*'])
 const HOSTNAME = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))*$/
@@ -259,6 +260,20 @@ export function install(rt) {
   async function updateBot(id, patch, actorId, fromSessionId) {
     const bot = rt.botOf(id)
     if (bot === undefined) throw new Error('Unknown Bot')
+    const assertActor = () => {
+      if (actorId !== undefined && (rt.botOf(actorId) === undefined || actorId !== id && !rt.isMain(actorId))) {
+        throw new Error('Only a Main Bot can change another Bot')
+      }
+    }
+    assertActor()
+    const publicProfile = patch.publicProfile === undefined ? undefined : cleanPublicProfile(patch.publicProfile, rt)
+    const assertProfileRevision = () => {
+      if (publicProfile !== undefined && patch.expectedProfileRevision !== undefined
+        && (!Number.isSafeInteger(patch.expectedProfileRevision) || patch.expectedProfileRevision !== (bot.publicProfile?.revision ?? 0))) {
+        throw Object.assign(new Error('Public profile changed elsewhere. Your draft is retained; reopen this Bot before saving again.'), { code: 'PROFILE_VERSION_CONFLICT' })
+      }
+    }
+    assertProfileRevision()
     if (patch.browserGrants !== undefined && actorId !== undefined) {
       throw new Error(`Only the user can set what ${bot.name} may do in the browser`)
     }
@@ -286,6 +301,9 @@ export function install(rt) {
         effortId = await rt.resolveEffort(effortRef, patch.effort)
       }
     }
+    // Folder/model checks may await; the actor must retain authority before mutation.
+    assertActor()
+    assertProfileRevision()
     if (patch.name !== undefined) {
       const next = String(patch.name).trim().slice(0, 40)
       const clash = rt.findBot(next)
@@ -301,8 +319,10 @@ export function install(rt) {
     }
     const roleBefore = bot.role
     const instructionsBefore = bot.instructions
+    assertProfileRevision()
     if (patch.role !== undefined) bot.role = String(patch.role).trim().slice(0, 24)
     if (patch.instructions !== undefined) bot.instructions = String(patch.instructions).trim()
+    if (publicProfile !== undefined) bot.publicProfile = { ...publicProfile, revision: (bot.publicProfile?.revision ?? 0) + 1, updatedAt: new Date().toISOString() }
     let modelChanged = false
     if (patch.color !== undefined) {
       if (patch.color === null) delete bot.color

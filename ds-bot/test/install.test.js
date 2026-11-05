@@ -53,6 +53,8 @@ test('apply registers listeners and effects in a fixed order', (t) => {
     'on agent/pre-step (prepend)',
     'on tools/execute',
     'effect ds-bot: scoped team tools',
+    'on agent/pre-step',
+    'on system-prompt/assemble',
     'tools guard',
     'on agent/created',
     'on session/event',
@@ -97,6 +99,10 @@ test('apply registers listeners and effects in a fixed order', (t) => {
     'effect ds-bot: live feed route',
     'route GET /api/bot/feed',
     'effect ds-bot: live feed',
+    'effect ds-bot: communication availability',
+    'prompt ds-bot-communication-availability 645',
+    'effect ds-bot: communication channel',
+    'route POST /api/communication',
     'effect ds-bot: api route',
     'route POST /api/bot',
     'effect ds-bot: load state',
@@ -177,10 +183,11 @@ const TEAM = {
   questions: {},
 }
 
-test('in the Desktop profile read_browser is the last tool and reads through the window', async (t) => {
+test('in the Desktop profile read_browser reads through the window and local diagnostics remain available', async (t) => {
   const { ctx, call, stop } = start(TEAM, { services: { profileContext: { name: 'desktop' } } })
   t.after(stop)
-  assert.equal(rt.teamTools.at(-1).name, 'read_browser')
+  assert.ok(rt.teamTools.some(tool => tool.name === 'read_browser'))
+  assert.equal(rt.teamTools.at(-1).name, 'communication_diagnose')
   assert.ok(ctx.calls.indexOf('effect ds-bot: browser channel') < ctx.calls.indexOf('effect ds-bot: api route'))
   const read = args => rt.teamTools.find(d => d.name === 'read_browser').execute(args, { agent: { id: 'b2' } })
 

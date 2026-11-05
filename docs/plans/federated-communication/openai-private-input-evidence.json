@@ -1,0 +1,92 @@
+{
+  "status": "PASS_INPUT_CHANNEL_ONLY_REAL_NOT_RUN",
+  "timestamp": "2026-11-03T11:04:02.049Z",
+  "computer": "<Windows test host>",
+  "branch": "chore/federated-communication",
+  "head": "6ede702b7d698a8d86261ecb6a2a5f1efc8e1e87",
+  "authorization": {
+    "officialOpenAIOnly": true,
+    "syntheticDataOnly": true,
+    "maxOutboundRequests": 8,
+    "accountCeilingUsd": 5,
+    "temporaryCredential": true,
+    "keyForwardedFromParent": false,
+    "ownerWillRevoke": true,
+    "thisPhase": "prepare only; no API calls"
+  },
+  "input": {
+    "windowsPowerShellNativeCheck": "PASS",
+    "powerShell7NativeCheck": "PASS",
+    "interactiveSyntheticPrompt": "PASS",
+    "interactiveEvidence": "task tool history: only asterisks, fixed success line, terminal process exit 0",
+    "transport": "child-only ProcessStartInfo environment; removed in child before validation",
+    "realCredentialRead": false,
+    "environmentPersisted": false,
+    "secretFileCreated": false,
+    "secretInArguments": false,
+    "secretPrinted": false,
+    "realKeyStaged": false,
+    "apiRequests": 0,
+    "inputDiscardedBeforeExit": true,
+    "nativeNodePath": "D:\\Program Files\\nodejs\\node.exe",
+    "fixedIssue": "Get-Command returned two executables; choose first instead of array-to-string path"
+  },
+  "validation": {
+    "newCases": 2,
+    "allOpenAIPreparationCases": 14,
+    "full": {
+      "tests": 1483,
+      "pass": 1481,
+      "fail": 0,
+      "skipped": 2,
+      "cancelled": 0
+    },
+    "lint": "PASS with existing warnings",
+    "generatedBundleFresh": true,
+    "gitDiffCheck": true,
+    "productionFileHashesUnchanged": 94,
+    "logs": [
+      ".dsh-test-tools/openai-input-full-tests.log",
+      ".dsh-test-tools/openai-input-lint.log",
+      ".dsh-test-tools/openai-private-input-native.log"
+    ]
+  },
+  "spending": {
+    "localRequestAndTokenReservations": "enforced by existing transactional gate",
+    "modeledGenerationTokenUsd": 0.014048,
+    "strictAccountBillUsd5Guarantee": false,
+    "accountControlsInspectedOrChanged": false,
+    "reasons": [
+      "counting/metadata prices not explicitly established",
+      "other account activity and billing outside local control",
+      "official hard-limit enforcement and prepaid cutoff can be delayed"
+    ],
+    "sources": [
+      "https://help.openai.com/en/articles/9186755-managing-projects-in-the-api-platform",
+      "https://help.openai.com/en/articles/8264644-setting-up-and-managing-prepaid-api-billing"
+    ]
+  },
+  "remaining": [
+    "connect the fixed real-test worker to the proven input channel before asking for the real key",
+    "if strict zero-overage final bill <= USD5 is mandatory, real execution remains blocked",
+    "actual account/model permissions remain unverified"
+  ],
+  "virtualInputTouched": false,
+  "persistentServiceOrFirewallChange": false,
+  "modelFallback": false,
+  "pushed": false,
+  "sourceHashes": {
+    "ds-bot/dev/communication/openai-private-input.ps1": "a44a84e52411b18fb699f224dfe2102c03e40043fa0455497e1b5a6d248afefb",
+    "ds-bot/dev/communication/openai-private-input.mjs": "4840af8573a2781815e68a1e842500d30a408d73206b18ecb8cc584a9db3a5a6",
+    "ds-bot/test/openai-private-input.test.js": "e024d7bd6de77529ba2887215d947da774aaf0e0f066e2c1d7cdd915e340f3d4",
+    "ds-bot/dev/communication/README.md": "504e3b93a554926f677ad9c9fd972b670d8d8ddc7d24bcfb8a32967cc37a025e",
+    "docs/plans/federated-communication/openai-private-input.md": "48e5514d6deed93ab21f4354407551263c12720138c82ef55dfc4157903055f5",
+    "docs/plans/federated-communication/openai-model-preparation.md": "86473a3347e9334e25c8b503bc975d0a13be271c511b415a5307eb19eb953805",
+    "docs/plans/federated-communication/local-progress.md": "f23a42982ac6254a6c67d1b703387be547496f710739f3a45a3778852a62fbff"
+  },
+  "publication": {
+    "privacyMetadataRedacted": true,
+    "sourceHashesDescribeOriginalLocalSnapshots": true,
+    "pathPlaceholders": "CurrentUser / LOCALAPPDATA; raw local test artifacts remain untracked"
+  }
+}

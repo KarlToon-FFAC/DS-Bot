@@ -1140,16 +1140,8 @@ export function install(rt) {
     const member = rt.botOf(owner?.botId)
     if (room === undefined || member === undefined || !room.members.includes(member.id)) return
     const text = stripOwnName(member.name, reply)
-    // While a DSH subagent of this member is still running, the member's work is not
-    // finished yet: post any non-empty text as a progress line and keep its batch open.
-    if (rt.hasSubagents?.(sessionId) === true) {
-      if (!isPass(text)) {
-        const calls = callsIn(room, member, text)
-        await postToRoom(room, member, text, { progress: true, ...(!calls ? { quiet: true } : {}) })
-          .catch(error => rt.warn('ds-bot: subagent progress from %s failed: %s', member.name, error))
-      }
-      return
-    }
+    // Waiting for subagents is not a final result. Updates require an explicit send.
+    if (rt.hasSubagents?.(sessionId) === true) return
     const currentBatch = memberBatch.get(batchKeyOf(room.id, member.id))
     const batch = currentBatch !== undefined && (info.role !== 'room' || info.askedBy === currentBatch.by) ? currentBatch : undefined
     const askedBy = info.role === 'room' ? info.askedBy : (info.askedBy ?? batch?.by)

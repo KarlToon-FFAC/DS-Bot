@@ -1,0 +1,69 @@
+{
+  "status": "PASS_LINUX_MOCK_PREPARATION",
+  "base": "9565e9d69b62b95476e03858dc897e57ea904da7",
+  "date": "2026-11-05",
+  "platform": "Linux x86_64",
+  "versions": {
+    "node": "24.22.1",
+    "pnpm": "11.25.0",
+    "dsh": "0.2.1-rc.4"
+  },
+  "pluginTests": {
+    "total": 1714,
+    "pass": 1710,
+    "fail": 0,
+    "skip": 4
+  },
+  "hubTests": {
+    "total": 105,
+    "pass": 105,
+    "fail": 0
+  },
+  "focusedLauncherTests": {
+    "total": 6,
+    "pass": 6
+  },
+  "lint": "PASS_WITH_EXISTING_WARNINGS",
+  "generatedClient": "PASS",
+  "probeClient": "PASS",
+  "mockChain": {
+    "status": "PASS_MOCK_DSH_HUB",
+    "checks": 7,
+    "loopbackRequests": 6,
+    "externalRequests": 0
+  },
+  "lifecycle": [
+    "start-status-stop",
+    "node-cli-flag-isolation",
+    "concurrent-start-single-winner",
+    "persistent-lock-after-stale-manifest",
+    "concurrent-stop",
+    "owner-loss-worker-cleanup"
+  ],
+  "portsFree": {
+    "3121": true,
+    "3122": true,
+    "3196": true,
+    "3131": true,
+    "3133": true,
+    "8831": true,
+    "8833": true
+  },
+  "realModel": "NOT_RUN",
+  "nativeWindowsRegression": "NOT_RUN_WINDOWS_LAUNCHER_UNCHANGED",
+  "credentials": "No real credential read, copied, entered or used.",
+  "oldRealLedgers": "Not imported, reset or rerun.",
+  "sourceHashes": {
+    "ds-bot/dev/communication/bench-linux.mjs": "2f5556bd8fd657f97238dc8d20324054804b4cfdebc4141995f2edd314bd5803",
+    "ds-bot/dev/communication/bench.mjs": "23bd5655d6e0d237b9c3df57080fa26628fa703a4936592ed0dc48d6da7a16a5",
+    "ds-bot/dev/communication/local-topology.mjs": "b1185ba1ced1ba33c95c9242e7724e4241f01427cc9d56949316b3ec7f9dc9c1",
+    "ds-bot/dev/communication/openai-budget.mjs": "8d2b0410728a44f2e918952cffb8db5f4fb4f9f285247e8166494adf4f66b2f7",
+    "ds-bot/test/communication-bench-linux.test.js": "a7c4a8144c60a2ff04169ce3aaf10b3044d5dc7d7a878c8542ab4599aa856888",
+    "ds-bot/test/openai-budget.test.js": "1a2fc0662441843068af89641f0d02ef0438a8ca12680ddfcf873cf76edd5c18"
+  },
+  "remaining": [
+    "Secure cloud credential input channel and a separately authorized fresh real-model run/budget.",
+    "Reverify current official OpenAI pricing before a future real run.",
+    "The published integration commit has no visible remote CI run or checks yet; local gates do not replace remote CI."
+  ]
+}

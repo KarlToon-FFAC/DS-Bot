@@ -1,0 +1,287 @@
+{
+  "baseCommit": "69264f6",
+  "verifiedAt": "2026-11-05T09:23:51.993Z",
+  "environment": {
+    "platform": "linux",
+    "node": "v24.22.1",
+    "network": "same-machine loopback only",
+    "model": "deterministic local Mock only",
+    "runId": "sync-20261105-0906"
+  },
+  "validation": {
+    "contactResponseLoss": {
+      "pass": 6,
+      "fail": 0,
+      "mutations": [
+        "contact.request",
+        "contact.accept",
+        "contact.revoke"
+      ],
+      "faults": [
+        "post-commit socket termination before ACK",
+        "post-commit suppressed ACK on still-open socket"
+      ],
+      "replayRestarts": 2,
+      "identicalRetriesPerRestart": 3,
+      "terminalQueueFailureReopens": 1
+    },
+    "hub": {
+      "pass": 123,
+      "fail": 0,
+      "skipped": 0
+    },
+    "plugin": {
+      "pass": 1778,
+      "fail": 0,
+      "skipped": 4
+    },
+    "bundleCheck": "PASS",
+    "lint": "PASS with existing warnings",
+    "diffCheck": "PASS"
+  },
+  "processMatrices": {
+    "network": {
+      "status": "PASS",
+      "model": "local deterministic Mock",
+      "network": "loopback WS; independent persistent Hub process",
+      "cases": [
+        {
+          "id": "before-commit-crash",
+          "status": "PASS",
+          "messageId": "ae4dc86d-ea53-4546-8f85-d92d2df7a207",
+          "conversationId": "c593aa84-8cfc-4f0e-b46c-14425bc2ab04",
+          "canonicalMessages": 1,
+          "conversationSeq": 2
+        },
+        {
+          "id": "after-commit-crash",
+          "status": "PASS",
+          "messageId": "1f747341-442e-4ab3-9e0e-c5d911a2ce2d",
+          "conversationId": "c593aa84-8cfc-4f0e-b46c-14425bc2ab04",
+          "canonicalMessages": 1,
+          "conversationSeq": 3
+        },
+        {
+          "id": "ACK-loss-on-open-socket",
+          "status": "PASS",
+          "messageId": "fcafff97-ec28-44fc-96fa-d9bd137820ab",
+          "conversationSeq": 4
+        },
+        {
+          "id": "offline-sender-host-restart",
+          "status": "PASS",
+          "messageId": "05ccc9e3-3d8a-4f14-926c-ec4d320e151f",
+          "payloadHashPreserved": true
+        },
+        {
+          "id": "triple-plus-delayed-retransmit",
+          "status": "PASS",
+          "messageId": "4fa9ea68-d943-437c-8020-5c33c3259818",
+          "canonicalMessages": 1,
+          "recipientDeliveries": 1
+        },
+        {
+          "id": "repeated-reconnect",
+          "status": "PASS",
+          "reconnects": 3,
+          "newModelCalls": 0,
+          "duplicateMessages": 0
+        },
+        {
+          "id": "reordered-permanent-gap-then-incremental-repair",
+          "status": "PASS",
+          "conversationId": "f7334500-cb80-4527-9aac-db66d2febbdf",
+          "messageIds": [
+            "d4856dbf-a135-4a6e-9d7d-fbae7834ae0b",
+            "24418ff0-e762-45c2-9a7a-2905799c419a"
+          ],
+          "modelCallsWhileGap": 0,
+          "modelCallsAfterRepair": 2
+        },
+        {
+          "id": "A-B-Hub-backlog-restarts",
+          "status": "PASS",
+          "conversationId": "c593aa84-8cfc-4f0e-b46c-14425bc2ab04",
+          "messageIds": [
+            "e09f88a6-29a0-4089-b7a6-cb6c9a359bb6",
+            "37723911-a305-4434-9dd5-80e4a4cae328"
+          ],
+          "canonicalDmPreserved": true
+        }
+      ]
+    },
+    "recovery": {
+      "status": "PASS",
+      "platform": "linux",
+      "model": "local deterministic Mock",
+      "cases": [
+        {
+          "id": "before-receive",
+          "status": "PASS",
+          "conversationId": "8610132c-ca8f-4e7d-bc00-21d46712563f",
+          "messageId": "cd2d8819-0b81-4f43-b194-0547405a0c60",
+          "deliveryId": "2d1254c4-68bc-4589-bf85-d7b08f9b2b84",
+          "logicalInputs": 1,
+          "finalMessages": 1,
+          "modelCalls": 1,
+          "exportedMessageId": "2252995d-7c50-4a20-961e-3c14979d969b"
+        },
+        {
+          "id": "after-receive",
+          "status": "PASS",
+          "conversationId": "038758cd-da42-46ac-8ba0-2ea6e6749fb0",
+          "messageId": "9d71ecdf-ed6f-4c92-93fc-d3d3576cff2d",
+          "deliveryId": "9f85c66c-2413-456f-a0a3-4b65fe28b7b1",
+          "logicalInputs": 1,
+          "finalMessages": 1,
+          "modelCalls": 1,
+          "exportedMessageId": "6a528df2-b0bb-4322-ac71-1ce5f2c06ca1"
+        },
+        {
+          "id": "before-injection",
+          "status": "PASS",
+          "conversationId": "74cf7345-5b61-4e86-97a9-186efe25db88",
+          "messageId": "a1a10cd5-5a7d-4561-9321-3b57c22888b1",
+          "deliveryId": "4a8d6fde-807d-46e5-9829-887223e53e7c",
+          "logicalInputs": 1,
+          "finalMessages": 1,
+          "modelCalls": 1,
+          "exportedMessageId": "91ebf4dc-4037-43aa-a0c7-c6a6e34c0b53"
+        },
+        {
+          "id": "before-admission",
+          "status": "PASS",
+          "conversationId": "b6ef73d0-4b9d-4e50-b8a8-8f379855f631",
+          "messageId": "7ade62d0-483a-4b0e-97f1-8fd2bdb04c53",
+          "deliveryId": "41396598-670e-446a-a297-3da5addfe7f4",
+          "logicalInputs": 1,
+          "finalMessages": 1,
+          "modelCalls": 1,
+          "exportedMessageId": "d386900a-dcf2-4428-947a-8581932f74ce"
+        },
+        {
+          "id": "after-injection",
+          "status": "PASS",
+          "conversationId": "ba258ad4-7f59-4ec3-8b27-4f58fe081abb",
+          "messageId": "300d90a7-baac-4bc9-83c1-a59ebb2a8d26",
+          "deliveryId": "226b7358-6a15-4c73-aa5d-032482f20607",
+          "logicalInputs": 1,
+          "finalMessages": 1,
+          "modelCalls": 2,
+          "exportedMessageId": "621f063d-ad30-481d-b622-fbc5f2908def"
+        },
+        {
+          "id": "before-export",
+          "status": "PASS",
+          "conversationId": "0d2c2372-cd5e-4883-a89e-4bae772e97ce",
+          "messageId": "b6cb5b9d-4ea1-4004-a7c3-6ba8bf535da3",
+          "deliveryId": "c8a734ea-0e96-44b2-9a32-9097de5a2370",
+          "logicalInputs": 1,
+          "finalMessages": 1,
+          "modelCalls": 1,
+          "exportedMessageId": "b7d3a363-b6ba-4894-b03c-3bff3d022238"
+        },
+        {
+          "id": "after-export",
+          "status": "PASS",
+          "conversationId": "4858a4f3-da90-40d6-ac67-29aac4083e67",
+          "messageId": "c9f14c73-1d49-47a5-b308-5400bc0bf181",
+          "deliveryId": "59973340-83e2-45d2-837a-d280c986cd1f",
+          "logicalInputs": 1,
+          "finalMessages": 1,
+          "modelCalls": 1,
+          "exportedMessageId": "4f1730d4-fc84-4a43-bf9d-61bd6ad66ab3"
+        }
+      ]
+    },
+    "behavior": {
+      "status": "FAIL",
+      "passedCases": [
+        {
+          "id": "DM-01-05-09",
+          "status": "PASS",
+          "conversationId": "86e3a6ab-6b39-45e4-bc8d-682e2461ac91",
+          "bidirectional": true,
+          "canonicalConcurrentOpen": true
+        },
+        {
+          "id": "DM-02-05",
+          "status": "PASS",
+          "conversationIds": [
+            "a482c96d-aaa9-4ab5-86b6-faa38ec424d7",
+            "d2a91e87-272f-4da3-b747-f2023bde9caa"
+          ],
+          "bidirectional": true
+        },
+        {
+          "id": "DM-03-05",
+          "status": "PASS",
+          "conversationIds": [
+            "d2a91e87-272f-4da3-b747-f2023bde9caa",
+            "a482c96d-aaa9-4ab5-86b6-faa38ec424d7"
+          ],
+          "actualExecutingBotAuthors": true
+        }
+      ],
+      "failedCase": "DM-04-05",
+      "failure": "Timeout: K to J reply",
+      "notRunCases": [
+        "DM-08",
+        "DM-06",
+        "GR-01-02-03-05-06",
+        "DM-07",
+        "AC-02-03-04",
+        "GR-08",
+        "CT-01"
+      ]
+    }
+  },
+  "observedFailure": {
+    "messageId": "8b82c047-be94-4af4-8bee-96d1d4fcdeb9",
+    "conversationId": "08d39731-c8b6-4538-a67c-6cb68baaef7d",
+    "conversationSeq": 6,
+    "rootId": "genesis:08d39731-c8b6-4538-a67c-6cb68baaef7d",
+    "parentMessageId": "61f9f8da-ee29-4949-a2da-65143a452821",
+    "dispatchSuppressed": "DUPLICATE_HANDOFF",
+    "deliveries": [
+      {
+        "principalId": "bot:5f8d937e-946b-43ec-80d5-48cd4f1f32c4:5a44bd0a-4671-46bb-b071-c04f1e8cb9d9",
+        "ai": 0,
+        "stored": 1,
+        "aiAccepted": 0,
+        "revoked": 0
+      },
+      {
+        "principalId": "bot:ef386383-2d7a-4d67-815d-c5a4779380a6:bb2db95d-166d-4f32-983f-79e03e6e474b",
+        "ai": 0,
+        "stored": 1,
+        "aiAccepted": 0,
+        "revoked": 0
+      }
+    ],
+    "explanation": "A fresh local Human-driven Bot send reused the previous incoming dispatch key and was suppressed as DUPLICATE_HANDOFF. Core repair delegated separately; this baseline behavior run remains failed."
+  },
+  "cleanup": {
+    "ownedMatricesExited": true,
+    "portsVerifiedReleased": [
+      3103,
+      3104,
+      3105,
+      3106,
+      3192,
+      3193,
+      8803,
+      8804,
+      8805,
+      8806
+    ]
+  },
+  "nonClaims": [
+    "final integrated lifecycle/hint/UI branch",
+    "rendered browser/native Electron UI",
+    "physical cross-machine network",
+    "real model/provider",
+    "production Hub or publication",
+    "same-Hub new-identity reenrollment after forget"
+  ]
+}

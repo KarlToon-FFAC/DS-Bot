@@ -15,6 +15,10 @@ asarUnpack:
   - node_modules/@deepseek-ai/libreoffice-kit/**
   # The payload Node cannot read office.js through the asar.
   - node_modules/ds-bot/office.js
+  # The Remote communication CLI also runs under a plain Node interpreter.
+  - node_modules/ds-bot/bin/**
+  - node_modules/ds-bot/skills/**
+  - node_modules/ds-bot/src/shared/memory-limits.js
   # Automatic unpacking misses versioned Linux libraries such as libvips-cpp.so.8.18.7.
   - node_modules/@img/sharp*/**
 # The Office payload that scripts/prepare-runtime.mjs writes in beforePack (see package.json's

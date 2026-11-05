@@ -1,0 +1,67 @@
+{
+  "phase": "P2",
+  "status": "PASS",
+  "environment": "<Windows test host>; Windows; Node 24.13.0; DSH 0.2.1-rc.4; two independent loopback Web hosts and deterministic Mock models",
+  "implementation": [
+    "Default-off host adapter, authenticated Human route and actual-executing-Bot tools",
+    "Opaque durable published identities separate from private DSH Session IDs",
+    "Per-conversation, recipient and membership-epoch Session bindings with retained automatic context segments",
+    "Exact public-API admission reconciliation and atomic final-source/outbox/cursor mapping",
+    "Separate canonical projection, Human read, target storage and AI admission states"
+  ],
+  "realHostIntegration": {
+    "command": "node dev/communication/adapter.mjs",
+    "casesPassed": 11,
+    "rawEvidence": ".dsh-test-tools/p2-adapter.json",
+    "covered": [
+      "Same-name Chiefs on separate instances retain distinct opaque identities",
+      "Human-Human canonical DM and reverse open; display/read without Chief wake",
+      "Human-Bot actual DSH input and exact-conversation final export",
+      "Same-ID HTTP retry preserves the original canonical message",
+      "Bot-Human actual model tool call; Human reply goes to source Bot",
+      "Bot-Bot actual model/tool/final round trip without reflexive reply loop",
+      "Separate durable Session bindings and exact admission mappings",
+      "Forced host crash before admission; exactly one original input and one reply after restart",
+      "Forced host crash after final output persistence; reply recovered without another model call",
+      "Automatic retained context segments; private chat canaries and local team powers absent from communication prompts/history",
+      "Offline recipient retains unconsumed delivery and replies once after restart"
+    ]
+  },
+  "unitAndRegression": {
+    "communicationSpecificPluginTests": 17,
+    "hubTests": 17,
+    "fullPluginSuite": {
+      "tests": 1450,
+      "passed": 1448,
+      "skipped": 2,
+      "failed": 0
+    },
+    "originalHostSmoke": {
+      "fixture": "smoke-p2",
+      "steps": 52,
+      "status": "PASS"
+    },
+    "lint": "PASS; existing warnings only",
+    "generatedClient": "Rebuilt from source after the shared mention-parser change"
+  },
+  "scope": {
+    "testPairingCredentials": "Transient process memory/environment only; removed from the DSH process environment by the communication host before model tools run",
+    "originalPrivateChatsOrMemoryUploaded": false,
+    "dshPatched": false,
+    "persistentServicesOrFirewallChanges": false,
+    "realAccountsOrApiKeysUsed": false,
+    "pushOrPublish": false
+  },
+  "remaining": {
+    "P3": "NEXT",
+    "P4": "NOT_STARTED",
+    "wssRuntime": "NOT_RUN",
+    "differentIp": "NOT_RUN",
+    "realModels": "NOT_RUN"
+  },
+  "publication": {
+    "privacyMetadataRedacted": true,
+    "sourceHashesDescribeOriginalLocalSnapshots": true,
+    "pathPlaceholders": "CurrentUser / LOCALAPPDATA; raw local test artifacts remain untracked"
+  }
+}

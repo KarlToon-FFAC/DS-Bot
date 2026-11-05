@@ -1,0 +1,3 @@
+- insert:
+    - id: communication-probe
+      name: ds-bot-communication-probe

@@ -7,6 +7,23 @@
 
 # DS Bot
 
+DS-Bot 新生成的自身 Skill 和项目 AGENTS.md 学习建议通过校验后默认自动应用。
+插件配置设为 `learningAutoApply: false` 可恢复人工审批。已有待审建议和其他工具审批
+保持原状。详见[学习策略与边界](docs/plans/learning-auto-apply.md)。
+
+本分支的远程通信支持独立配对实例之间的联系人、私聊和群聊。工具栏的 +
+打开私聊/群聊选择窗口，个人设置包含设备配对和本人资料。每个实例同时只连接
+一个 Hub，切换时按 Hub 隔离保留历史和队列。签名 Hub 码可携带私有 CA
+信任材料，无需修改系统信任。图片和文件每条最多四个、合计 64 KiB。
+权限、配置、CLI、兼容与恢复边界见 [Hub 指南](communication-hub/README.md)
+及内置的 [操作与 Bot Skill](ds-bot/skills/dsbot-remote/SKILL.md)。
+
+本地 Bot 即使尚未发布，也能在自己的本地私聊中，按用户要求查看和管理远程
+联系人、发布选定 Bot。宿主校验直接来自本地用户的请求，远程消息不能授予
+这项权限；联系人变更和发布还须对具体动作进行原生审批。
+发布仍决定 Bot 能否用自己的远程身份参与通信；原有本地 Bot 角色
+和 Hub 成员、权限校验保持不变。
+
 [English](README.md) | 中文
 
 ![版本](https://img.shields.io/badge/版本-v0.2_预览-blue) ![DSH](https://img.shields.io/badge/DSH-0.2.1--rc.4-4D6BFE) ![许可](https://img.shields.io/badge/许可-Apache_2.0-green)
@@ -136,3 +153,8 @@ Bot 可以处理 Office 文档：创建和编辑 .docx、.pptx、.xlsx；按稳�
 ds bot 是独立的社区项目，**不是 DeepSeek 官方产品**，与 DeepSeek 没有隶属、认可或赞助关系。“DeepSeek”“DeepSeek Harness”等名称是各自所有者的商标，这里只用来说明本插件和什么一起用。
 
 bot 会消耗你自己的模型额度，也会按你的要求读写文件、运行命令。重要的操作请自己检查。
+
+
+## 跨实例通信诊断
+
+在本地 Bot 自己的私聊中，调用 `communication_diagnose` 可查看连接、当前 Bot 的发布、工具作用域、同步、TLS 及凭据/环境变量的存在元信息，不返回秘密值。操作员可使用已认证的 `dsbot-remote diagnose`。完整步骤见随包 dsbot-remote Skill 的 “Diagnostics and first message”。配置重载与宿主进程重启不同；无法观测的状态会保留为未知。

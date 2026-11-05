@@ -2,11 +2,12 @@
 // team has been idle for a while, and at most every few hours, one background pass
 // reads what was said since the last pass and asks whether it taught a skill worth
 // keeping or a lasting project rule. Most work teaches nothing, so most passes
-// propose nothing. A proposal waits as a card in the Bot's chat until approved, and
-// declined changes are remembered so the same idea does not come back.
+// propose nothing. New validated proposals apply automatically unless this host
+// opts into manual review. Failures and older cards remain reviewable; declined
+// changes are remembered so the same idea does not come back.
 import { createHash, randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
-import { access, mkdir, readFile, unlink, writeFile } from 'node:fs/promises'
+import { access, lstat, mkdir, readFile, unlink, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { replaceFile } from './files.js'
 import { looksLikeKey, looksSecret, writtenIn } from './memory.js'
@@ -270,6 +271,7 @@ export function install(rt) {
   const { ctx, config, home, state } = rt
   const settings = { ...LEARNING, ...(config.learningTimes ?? {}) }
   const on = config.learning !== false && config.memory !== false
+  const automatic = () => config.learningAutoApply === undefined || config.learningAutoApply === true
   const view = () => ({})
   if (!on) {
     Object.assign(rt, { learningView: view, learningEndpoint: async () => { throw new Error('Learning is turned off on this host') }, learningRun: async () => 0 })
@@ -300,16 +302,17 @@ export function install(rt) {
   }
   let stopped = false
   let writing = Promise.resolve()
-  const persist = () => {
+  const persist = ({ required = false } = {}) => {
     if (stopped) return writing
     const text = JSON.stringify(data(), null, 1)
-    writing = writing.then(async () => {
+    const attempt = writing.then(async () => {
       await mkdir(dirname(path), { recursive: true })
       const temp = `${path}.${process.pid}.tmp`
       await writeFile(temp, text, 'utf8')
       await replaceFile(temp, path)
-    }).catch(error => rt.warn('ds-bot: saving the learning state failed: %s', error?.message ?? error))
-    return writing
+    })
+    writing = attempt.catch(error => rt.warn('ds-bot: saving the learning state failed: %s', error?.message ?? error))
+    return required ? attempt : writing
   }
 
   // A turn in a Bot's own chat that ran long marks the chat for the next pass.
@@ -369,6 +372,26 @@ export function install(rt) {
   const skillsOf = () => Object.fromEntries(Object.entries(state.capabilities?.items ?? {}).filter(([, item]) => item.kind === 'skill'))
   const learnedOf = bot => (data().learned[bot.id] ?? []).filter(name => skillsOf()[name] !== undefined && (bot.capabilities ?? []).includes(name))
   const waitingFor = botId => Object.values(data().proposals).filter(entry => entry.botId === botId)
+  const autoApplying = new Set()
+
+  async function offer(proposal) {
+    data().proposals[proposal.id] = proposal
+    const auto=automatic()&&!stopped
+    if(auto)autoApplying.add(proposal.id)
+    try {
+      await persist({ required: auto })
+      // Only freshly reviewed in-process proposals reach this path. Never approve
+      // persisted cards en masse when a host upgrades or switches policy.
+      if (!auto || stopped) return
+      await answer({ id:proposal.id, approve:true, auto:true })
+    } catch {
+      if (Object.hasOwn(data().proposals,proposal.id)) {
+        proposal.autoApplyFailed = true
+        await persist()
+      }
+      rt.warn('ds-bot: automatic learning application failed (%s)', proposal.kind)
+    } finally { autoApplying.delete(proposal.id) }
+  }
 
   async function reviewSkill(bot, lines) {
     const skills = skillsOf()
@@ -454,6 +477,8 @@ export function install(rt) {
   async function agentsFile(folder) {
     const path = join(folder, 'AGENTS.md')
     try {
+      const info = await lstat(path)
+      if (!info.isFile() || info.isSymbolicLink() || info.nlink > 1) throw new Error('AGENTS.md must be a regular unlinked file')
       const content = await readFile(path, 'utf8')
       return content.length <= LEARNING.agentsFileMax ? content : undefined
     } catch (error) {
@@ -517,7 +542,7 @@ export function install(rt) {
           const proposal = lines.length === 0 ? undefined : await reviewSkill(bot, lines)
           if (stopped) return made
           if (proposal !== undefined) {
-            store.proposals[proposal.id] = proposal
+            await offer(proposal)
             made += 1
           }
           if (config.agentsMd !== false) {
@@ -562,6 +587,9 @@ export function install(rt) {
           try {
             const reviewRecords = [...group.records]
             const reviewedOrders = reviewRecords.map(item => item.order)
+            if(await rt.real(folder)!==folder)throw new Error('The queued project folder changed')
+            await rt.workFolder(folder)
+            if(!await exists(join(folder,'.git'))&&!await exists(join(folder,'AGENTS.md')))continue
             const current = await agentsFile(folder)
             if (stopped) return made
             if (current === undefined && await exists(join(folder, 'AGENTS.md'))) continue
@@ -585,7 +613,7 @@ export function install(rt) {
             const proposal = await reviewAgents(bot, folder, current, lines)
             if (stopped) return made
             if (proposal !== undefined) {
-              store.proposals[proposal.id] = proposal
+              await offer(proposal)
               made += 1
             }
             const queue = store.agentsPending[folder]
@@ -627,7 +655,14 @@ export function install(rt) {
   }, 'ds-bot: learning')
 
   // The user's answer to a card.
-  async function answer({ id, approve }) {
+  const decisions = new Map()
+  async function answer({ id, approve, auto=false }) {
+    const previous=decisions.get(id)??Promise.resolve()
+    const work=previous.catch(()=>{}).then(()=>decide({id,approve,auto}))
+    decisions.set(id,work)
+    try{return await work}finally{if(decisions.get(id)===work)decisions.delete(id)}
+  }
+  async function decide({ id, approve, auto }) {
     const store = data()
     const proposal = Object.hasOwn(store.proposals, id) ? store.proposals[id] : undefined
     if (proposal === undefined) throw Object.assign(new Error('This proposal is no longer open'), { code: 'bot/stale' })
@@ -641,15 +676,34 @@ export function install(rt) {
       return { applied: false }
     }
     // A failed approval keeps the card, so the user can still decline it.
-    if (proposal.kind === 'agents') await applyAgents(proposal)
-    else await applySkill(proposal)
+    const guard=()=>{
+      if(stopped)throw new Error('Learning host stopped')
+      if(config.learning===false||config.memory===false)throw new Error('Learning is turned off on this host')
+      if(proposal.kind==='agents'&&config.agentsMd===false)throw new Error('AGENTS.md learning is turned off on this host')
+      if(auto&&!automatic())throw new Error('Automatic learning application is turned off')
+      const readOnly=rt.readOnly()
+      if(readOnly!==undefined)throw new Error(readOnly)
+    }
+    await writable()
+    guard()
+    if (proposal.kind === 'agents') await applyAgents(proposal,guard)
+    else if(proposal.kind === 'skill') await applySkill(proposal,guard)
+    else throw new Error('Unknown learning proposal kind')
     delete store.proposals[id]
     await persist()
     return { applied: true }
   }
 
   const agentsApplying = new Map()
-  async function applyAgents(proposal) {
+  async function writable() {
+    if(stopped)throw new Error('Learning host stopped')
+    await rt.load()
+    await rt.refresh()
+    if(stopped)throw new Error('Learning host stopped')
+    const readOnly=rt.readOnly()
+    if(readOnly!==undefined)throw new Error(readOnly)
+  }
+  async function applyAgents(proposal,guard) {
     const path = proposal.path
     const previous = agentsApplying.get(path) ?? Promise.resolve()
     let release
@@ -661,8 +715,9 @@ export function install(rt) {
       const folder = await rt.real(proposal.folder)
       await rt.workFolder(folder)
       if (join(folder, 'AGENTS.md') !== path) throw new Error('AGENTS.md changed since this was proposed')
+      if(!await exists(join(folder,'.git'))&&!await exists(path))throw new Error('The folder is no longer a project')
       const readCurrent = async () => {
-        try { return await readFile(path, 'utf8') } catch (error) {
+        try { return await agentsFile(folder) } catch (error) {
           if (error?.code !== 'ENOENT') throw error
           return undefined
         }
@@ -673,11 +728,19 @@ export function install(rt) {
           throw new Error('AGENTS.md changed since this was proposed')
         }
       }
-      checkCurrent(await readCurrent())
+      const current=await readCurrent()
+      checkCurrent(current)
+      const problem=agentsProblem({action:'edit',edits:proposal.edits},current)
+      if(problem!==undefined||applyEdits(current,proposal.edits)!==proposal.content)throw new Error('AGENTS.md proposal is no longer valid')
+      if(rt.redactSecrets(proposal.content)!==proposal.content)throw new Error('AGENTS.md proposal contains a saved secret')
       const temp = `${path}.${process.pid}.${randomUUID()}.tmp`
       try {
-        await writeFile(temp, proposal.content, 'utf8')
+        await writeFile(temp, proposal.content, {encoding:'utf8',flag:'wx',mode:0o600})
+        await writable()
+        if(await rt.real(proposal.folder)!==folder)throw new Error('AGENTS.md folder changed since this was proposed')
+        await rt.workFolder(folder)
         checkCurrent(await readCurrent())
+        guard()
         await replaceFile(temp, path)
       } finally {
         await unlink(temp).catch(() => {})
@@ -688,11 +751,23 @@ export function install(rt) {
     }
   }
 
-  async function applySkill(proposal) {
+  async function applySkill(proposal,guard) {
     const bot = rt.botOf(proposal.botId)
     if (bot === undefined) throw new Error('The Bot that learned this skill is gone')
     const current = skillsOf()[proposal.name]
     const store = data()
+    const contentProblem=skillProblem({...proposal,action:'create'},{skills:{},learned:[],limit:settings.learnedMax})
+    if(contentProblem!==undefined||!['create','update'].includes(proposal.action))throw new Error('The skill proposal is no longer valid')
+    if([proposal.description,proposal.content,proposal.why??''].some(value=>rt.redactSecrets(value)!==value))throw new Error('The skill proposal contains a saved secret')
+    const assertCurrent = existing => {
+      guard()
+      const owner=rt.botOf(proposal.botId)
+      if(!owner)throw new Error('The Bot that learned this skill is gone')
+      if(proposal.action==='create') {
+        if(existing!==undefined)throw new Error(`A skill named ${proposal.name} exists now`)
+        if(learnedOf(owner).length>=settings.learnedMax)throw new Error('The Bot has reached its learned skill limit')
+      }else if(!learnedOf(owner).includes(proposal.name)||existing?.kind!=='skill'||existing.createdBy!==owner.id||hashOf(`${existing.description}\n${existing.content}`)!==proposal.base)throw new Error(`${proposal.name} changed since this was proposed`)
+    }
     if (proposal.action === 'create') {
       if (proposal.saved) {
         if (current === undefined || current.description !== proposal.description || current.content !== proposal.content) {
@@ -702,18 +777,19 @@ export function install(rt) {
         await persist()
       } else {
         if (current !== undefined) throw new Error(`A skill named ${proposal.name} exists now`)
-        const item = await rt.capabilitySave({ name: proposal.name, kind: 'skill', description: proposal.description, content: proposal.content }, { botId: bot.id, ui: false })
+        const item = await rt.capabilitySave({ name: proposal.name, kind: 'skill', description: proposal.description, content: proposal.content }, { botId: bot.id, ui: false, assertCurrent })
         proposal.saved = true
         store.learned[bot.id] = [...new Set([...(store.learned[bot.id] ?? []), item.name])]
         await persist()
       }
     } else if (proposal.action === 'update') {
       if (current === undefined || hashOf(`${current.description}\n${current.content}`) !== proposal.base) throw new Error(`${proposal.name} changed since this was proposed`)
-      const item = await rt.capabilitySave({ name: proposal.name, kind: 'skill', description: proposal.description, content: proposal.content }, { botId: bot.id, ui: false })
+      const item = await rt.capabilitySave({ name: proposal.name, kind: 'skill', description: proposal.description, content: proposal.content }, { botId: bot.id, ui: false, assertCurrent })
       store.learned[bot.id] = [...new Set([...(store.learned[bot.id] ?? []), item.name])]
       await persist()
     }
-    if (!(bot.capabilities ?? []).includes(proposal.name)) await rt.capabilityEndpoint('bot-capability', { botId: bot.id, name: proposal.name, attached: true })
+    guard()
+    if (!(bot.capabilities ?? []).includes(proposal.name)) await rt.capabilityEndpoint('bot-capability', { botId: bot.id, name: proposal.name, attached: true }, { assertCurrent: guard })
   }
 
   async function learningEndpoint(endpoint, body) {
@@ -733,7 +809,7 @@ export function install(rt) {
   // Per Bot, its proposals waiting for the user.
   const learningView = () => {
     const byBot = {}
-    for (const entry of Object.values(data().proposals)) (byBot[entry.botId] ??= []).push(entry)
+    for (const entry of Object.values(data().proposals)) if(!autoApplying.has(entry.id)) (byBot[entry.botId] ??= []).push(entry)
     return byBot
   }
 

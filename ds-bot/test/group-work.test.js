@@ -287,10 +287,9 @@ test('read_group_chat reads textless events among messages and keeps seq reads c
   }
 })
 
-// 公开#185: the result went out as the work's first step line, next to one last tool
-// call, and the turn then ended with an empty reply. Chief, which asked for the work,
-// was never called to answer it.
-const resultAsStep = async (t, ask) => {
+// An explicit public update can carry the result before the turn ends.
+// Its caller still needs one completion notification when the final is empty.
+const resultAsPublicPost = async (t, ask) => {
   t.mock.timers.enable({ apis: ['setTimeout'] })
   const host = await start(t)
   const first = host.round('c1', host.say(ask))
@@ -305,20 +304,18 @@ const resultAsStep = async (t, ask) => {
   t.mock.timers.tick(ROOM_WORK_GRACE_MS)
   await settle(() => first() !== undefined)
   host.emit('gb', 'tool/result', { callId: 'k1' })
-  host.emit('gb', 'assistant/message', { message: { content: [{ type: 'text', text: '整理好了，在 docs/ 下。' }, { type: 'tool-call', id: 'k2', name: 'pwsh', arguments: '{}' }] } })
-  host.emit('gb', 'tool/call', { callId: 'k2', name: 'pwsh', arguments: '{}' })
+  await host.tool('post_to_group', { group: 'Ops', message: '整理好了，在 docs/ 下。' }, 'gb')
   await settle(() => host.agentOf('r1').calls.length === 1)
   const step = host.takePost()
   assert.deepEqual([step.source.progress, step.source.quiet, text(step)], [true, true, '[Group post from Writer]\n整理好了，在 docs/ 下。'])
   const stepRound = host.round('c2', step)
   await settle(() => stepRound() !== undefined)
-  host.emit('gb', 'tool/result', { callId: 'k2' })
   host.finish('gb', '')
   return host
 }
 
-test('late work whose result went out as a step line still tells the member that asked, which answers it', async (t) => {
-  const host = await resultAsStep(t, '@Chief 安排一下文档')
+test('late work whose result went out as an explicit post still tells the member that asked, which answers it', async (t) => {
+  const host = await resultAsPublicPost(t, '@Chief 安排一下文档')
   await settle(() => host.agentOf('r1').calls.length === 1)
   const done = host.takePost()
   assert.deepEqual([done.source.done, done.source.late, done.source.askedBy], [true, true, 'a'])
@@ -337,7 +334,7 @@ test('late work whose result went out as a step line still tells the member that
 })
 
 test('late work the user asked for directly ends without a post once its result is out', async (t) => {
-  const host = await resultAsStep(t, '@Writer 把文档整理好')
+  const host = await resultAsPublicPost(t, '@Writer 把文档整理好')
   for (let i = 0; i < 20; i += 1) await new Promise(resolve => setImmediate(resolve))
   assert.deepEqual(host.agentOf('r1').calls, [])
 })
@@ -1094,146 +1091,52 @@ test('room-progress answers for any part of the group\'s own Session', async (t)
   assert.equal((await host.call('room-progress', { roomId: 'r1' })).value[0]?.callId, 'c1')
 })
 
-test('what a member writes while it works shows in the round at once, and its @ calls members', async (t) => {
+test('internal steps neither publish nor wake mentioned members; the final remains visible', async (t) => {
   const host = await start(t)
-  const result = host.round('c1', host.say('@Writer 整理文档'))
+  const result = host.round('c1', host.say('@Writer inspect'))
   await settle(() => host.agentOf('gb').calls.length === 1)
   host.begin('gb')
-  step(host, 'gb', '收到，我先看看 docs/ 的结构。@Tester 你等下帮我验一下', 'k1', 'list_bots')
-  // The line calls the Tester at once, while the Writer still works.
-  await settle(() => host.agentOf('gc').calls.length === 1)
-  const live = await progress(host)
-  assert.deepEqual(live.replies.map(reply => [reply.name, reply.text]), [['Writer', '收到，我先看看 docs/ 的结构。@Tester 你等下帮我验一下']])
-  assert.deepEqual(live.speaking, ['b', 'c'])
-  assert.match(text(host.begin('gc')), /Writer: 收到，我先看看 docs\/ 的结构。/)
-  host.finish('gc', '验过了。')
-  host.emit('gb', 'tool/result', { callId: 'k1' })
-  host.finish('gb', '整理好了。')
+  step(host, 'gb', 'Internal @Tester plan', 'k1', 'list_bots')
+  host.emit('gb', 'tool/result', { callId: 'k1', result: 'raw private tool receipt' })
+  assert.deepEqual((await progress(host)).replies, [])
+  assert.equal(host.agentOf('gc').calls.length, 0)
+  host.finish('gb', 'Useful result: pending is a valid business status.')
   await settle(() => result() !== undefined)
-  assert.deepEqual(result().replies.map(reply => [reply.name, reply.text]), [['Writer', '收到，我先看看 docs/ 的结构。@Tester 你等下帮我验一下'], ['Tester', '验过了。'], ['Writer', '整理好了。']])
-  assert.equal(host.agentOf('gc').calls.length, 1, 'one call per turn, however many lines name the member')
+  assert.deepEqual(result().replies.map(r => r.text), ['Useful result: pending is a valid business status.'])
+  assert.equal(typeof result().replies[0].duration, 'number')
   const log = JSON.parse(readFileSync(join(host.home, 'state.json'), 'utf8')).rooms.r1.log
-  assert.deepEqual(log.map(line => line.who), ['User', 'Writer', 'Tester', 'Writer'])
+  assert.ok(!JSON.stringify(log).includes('Internal'))
+  assert.ok(!JSON.stringify(log).includes('raw private'))
 })
 
-test('a member whose every message went out while it worked counts as posted, not passed', async (t) => {
+test('a turn ending after tools does not publish its last internal step as a result', async (t) => {
   const host = await start(t)
-  const result = host.round('c1', host.say('@Writer 看一下'))
+  const result = host.round('c1', host.say('@Writer inspect'))
   await settle(() => host.agentOf('gb').calls.length === 1)
   host.begin('gb')
-  step(host, 'gb', '我看一下。', 'k1', 'list_bots')
+  step(host, 'gb', 'Internal plan', 'k1', 'list_bots')
   host.emit('gb', 'tool/result', { callId: 'k1' })
   host.emit('gb', 'turn/end', { turn: 1, reason: { kind: 'completed' } })
   await settle(() => result() !== undefined)
-  assert.deepEqual([result().passed, result().replies.map(reply => reply.text)], [[], ['我看一下。']])
+  assert.deepEqual(result().replies, [])
 })
 
-test('a member\'s messages carry how long its turn ran', async (t) => {
-  const host = await start(t)
-  const result = host.round('c1', host.say('@Writer 整理文档'))
-  await settle(() => host.agentOf('gb').calls.length === 1)
-  host.begin('gb')
-  step(host, 'gb', '收到，先看看。', 'k1', 'list_bots')
-  await settle(() => true)
-  const live = await progress(host)
-  assert.equal(typeof live.replies[0].duration, 'number')
-  assert.ok(live.replies[0].duration >= 0)
-  host.emit('gb', 'tool/result', { callId: 'k1' })
-  host.finish('gb', '整理好了。')
-  await settle(() => result() !== undefined)
-  const messages = result().replies.filter(reply => reply.kind === undefined)
-  assert.deepEqual(messages.map(reply => reply.text), ['收到，先看看。', '整理好了。'])
-  for (const reply of messages) {
-    assert.equal(typeof reply.duration, 'number')
-    assert.ok(reply.duration >= 0)
-  }
-  assert.ok(result().replies.every(reply => reply.kind === undefined || reply.duration === undefined))
-})
-
-test('after the round went on, lines a member writes close together reach the group as one message; only the result is answered', async (t) => {
+test('late background turns publish only their final, without delayed step flushes', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] })
   const host = await start(t)
-  const first = host.round('c1', host.say('@Chief 安排一下文档'))
-  await settle(() => host.agentOf('ga').calls.length === 1)
-  host.begin('ga')
-  host.finish('ga', '@Writer 把文档整理好')
-  await settle(() => host.agentOf('gb').calls.length === 1)
-  host.begin('gb')
-  step(host, 'gb', '收到，开始整理。', 'k1')
-  t.mock.timers.tick(ROOM_WORK_GRACE_MS)
-  await settle(() => first() !== undefined)
-  assert.deepEqual(kinds(first()), [['message', 'Chief'], ['message', 'Writer'], ['working', 'Writer']])
-
+  host.emit('gb', 'turn/start', { turn: 1 })
+  host.emit('gb', 'user/message', { content: [{ type: 'text', text: 'background job finished' }], source: { kind: 'tool-jobs', form: 'notice' } })
+  step(host, 'gb', 'Internal @Tester prepare', 'k1')
   host.emit('gb', 'tool/result', { callId: 'k1' })
-  step(host, 'gb', '目录理好了。', 'k2')
-  host.emit('gb', 'tool/result', { callId: 'k2' })
-  step(host, 'gb', '正文改完了，在改索引。', 'k3')
-  await settle(() => true)
-  assert.deepEqual(host.agentOf('r1').calls, [])
-  t.mock.timers.tick(ROOM_STEP_GAP_MS)
-  await settle(() => host.agentOf('r1').calls.length === 1)
-  const update = host.takePost()
-  assert.deepEqual([update.source.progress, update.source.quiet, update.source.askedBy, text(update)], [true, true, undefined, '[Group post from Writer]\n目录理好了。\n\n正文改完了，在改索引。'])
-  const quiet = host.round('c2', update)
-  await settle(() => quiet() !== undefined)
-  assert.deepEqual(quiet().replies, [])
-
-  // A line still held when the work ends opens the result.
-  host.emit('gb', 'tool/result', { callId: 'k3' })
-  step(host, 'gb', '索引也改完了。', 'k4')
-  host.emit('gb', 'tool/result', { callId: 'k4' })
-  host.finish('gb', '整理好了，在 docs/ 下。')
-  await settle(() => host.agentOf('r1').calls.length === 1)
-  const done = host.takePost()
-  assert.deepEqual([done.source.late, done.source.askedBy, text(done)], [true, 'a', '[Group post from Writer]\n索引也改完了。\n\n整理好了，在 docs/ 下。'])
   t.mock.timers.tick(ROOM_STEP_GAP_MS)
   await settle(() => true)
   assert.deepEqual(host.agentOf('r1').calls, [])
-})
-
-test('a step that calls a member with @ after the round went on starts a round for that member', async (t) => {
-  const host = await start(t)
-  host.emit('gb', 'turn/start', { turn: 1 })
-  host.emit('gb', 'user/message', { content: [{ type: 'text', text: 'go' }], source: { kind: 'bot', role: 'room', exchangeId: 'x1', roomId: 'r1', askedBy: 'a' } })
-  step(host, 'gb', '@Tester 帮我跑一下测试', 'k1')
+  host.finish('gb', 'Verified final')
   await settle(() => host.agentOf('r1').calls.length === 1)
-  const post = host.takePost()
-  assert.deepEqual([post.source.progress, post.source.quiet], [true, undefined])
-  const result = host.round('c1', post)
-  await settle(() => host.agentOf('gc').calls.length === 1)
-  assert.equal(host.begin('gc').source.askedBy, 'b')
-  host.finish('gc', '测试过了。')
-  await settle(() => result() !== undefined)
-  assert.deepEqual(host.agentOf('ga').calls, [])
-})
-
-test('a step joins a round that is running in the group', async (t) => {
-  const host = await start(t)
-  host.emit('gb', 'turn/start', { turn: 1 })
-  host.emit('gb', 'user/message', { content: [{ type: 'text', text: 'go' }], source: { kind: 'bot', role: 'room', exchangeId: 'x1', roomId: 'r1', hop: 0 } })
-  const result = host.round('c1', host.say('@Tester 你怎么看'))
-  await settle(() => host.agentOf('gc').calls.length === 1)
-  step(host, 'gb', '索引改完了。', 'k1')
+  assert.equal(text(host.takePost()), '[Group post from Writer]\nVerified final')
+  t.mock.timers.tick(ROOM_STEP_GAP_MS)
   await settle(() => true)
-  host.begin('gc')
-  host.finish('gc', '没问题。')
-  await settle(() => result() !== undefined)
-  assert.deepEqual(result().replies.map(reply => [reply.name, reply.text]), [['Writer', '索引改完了。'], ['Tester', '没问题。']])
   assert.deepEqual(host.agentOf('r1').calls, [])
-})
-
-test('a turn that a finished background job starts in a group Session posts to the group', async (t) => {
-  const host = await start(t)
-  host.emit('gb', 'turn/start', { turn: 1 })
-  host.emit('gb', 'user/message', { content: [{ type: 'text', text: 'background job pwsh-3 finished' }], source: { kind: 'tool-jobs', form: 'notice' } })
-  step(host, 'gb', '下载完了，开始解压。', 'k1')
-  await settle(() => host.agentOf('r1').calls.length === 1)
-  assert.equal(text(host.takePost()), '[Group post from Writer]\n下载完了，开始解压。')
-  host.emit('gb', 'tool/result', { callId: 'k1' })
-  host.finish('gb', '解压好了。')
-  await settle(() => host.agentOf('r1').calls.length === 1)
-  const post = host.takePost()
-  assert.deepEqual([post.source.late, post.source.askedBy, text(post)], [true, undefined, '[Group post from Writer]\n解压好了。'])
 })
 
 test('a fresh part\'s opening line stays out of the group', async (t) => {
@@ -1415,7 +1318,6 @@ test('a member that only promises to start working without calling a tool gets o
   host.finish('gb', '排查完毕：原因是端口冲突。')
   await settle(() => first() !== undefined)
   assert.deepEqual(first().replies.map(reply => [reply.name, reply.text]), [
-    ['Writer', '收到，我现在开始排查构建日志。'],
     ['Writer', '排查完毕：原因是端口冲突。'],
   ])
 })

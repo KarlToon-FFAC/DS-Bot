@@ -1,0 +1,82 @@
+{
+  "status": "PASS_INTEGRATED_LOCAL_MOCK",
+  "verifiedAt": "2026-11-05T07:35:22.375358+00:00",
+  "publishedBase": "9565e9d69b62b95476e03858dc897e57ea904da7",
+  "launcherCommit": "3b11626aabd3240e23049a1889015f4a0b84ea5c",
+  "relationshipSourceCommit": "026e67fae1c18cb34f891823ae45076073e5e426",
+  "relationshipCherryPick": "ff6bb2b",
+  "platform": "Linux x86_64",
+  "pluginTests": {
+    "total": 1725,
+    "passed": 1721,
+    "failed": 0,
+    "skipped": 4
+  },
+  "hubTests": {
+    "total": 105,
+    "passed": 105,
+    "failed": 0
+  },
+  "nativeMockSmoke": {
+    "passed": 52,
+    "failed": 0
+  },
+  "openaiMockChain": {
+    "passed": 7,
+    "loopbackRequests": 6,
+    "externalRequests": 0
+  },
+  "relationshipMock": {
+    "passed": 5,
+    "externalRequests": 0
+  },
+  "lint": "PASS_WITH_EXISTING_WARNINGS",
+  "generatedClient": "PASS",
+  "probeClient": "PASS",
+  "schemaFixture": "Separate first-unsupported versions: Hub=5, client=6; marker and database version retained after refusal.",
+  "guardChange": [
+    "read_communication_relationships",
+    "remember_communication_relationship"
+  ],
+  "guardBoundary": "All 21 scoped production tools match; three outside-conversation tools and arbitrary local tools stay excluded. No production authorization change.",
+  "independentReview": {
+    "blockingFindings": 0,
+    "schemaBoundaryCaveatResolved": true
+  },
+  "cleanup": {
+    "allOwnedTestPortsFree": {
+      "3121": true,
+      "3122": true,
+      "3196": true,
+      "3161": true,
+      "3162": true,
+      "8861": true,
+      "8862": true,
+      "3193": true,
+      "3141": true,
+      "8841": true
+    },
+    "personalProfilesUntouched": true
+  },
+  "sourceHashes": {
+    "communication-hub/test/store.test.js": "dd3b85a1a55be95200c696fce4f145a91270d28e7d9c8f4540bb7e5bf2369b39",
+    "ds-bot/dev/communication/openai-budget.mjs": "ccd56cc6c44a50b2484f8a638b6ffca31b469e2dd99bb84fdfb4f319c9348f77",
+    "ds-bot/test/openai-budget.test.js": "11054526ba5f7ceb13f41a9b7c5f3186d3e6ca79169892153419fcf47d7ed133",
+    "ds-bot/src/host/federation/relationship-memory.js": "d4f06cb83e5475714215ebe64ba9f1806a185868867c19f7c6e0a5df0b365b06"
+  },
+  "notRun": [
+    "Paid or real model requests",
+    "Physical cross-machine networking",
+    "Native Windows regression",
+    "GitHub Actions"
+  ],
+  "remoteWrites": {
+    "push": false,
+    "actionsTriggered": false
+  },
+  "limits": [
+    "The 4 platform/baseline skips are not passing tests.",
+    "Mock responses do not prove real-model behavioral compliance.",
+    "No relationship GUI editor was added by this feature."
+  ]
+}
