@@ -158,6 +158,10 @@ private CA, including rejection of untrusted certificates, wrong hostnames and
 wrong credentials. Different-IP operation remains separate acceptance work. See
 [the two-machine trial and rollback guide](../docs/plans/federated-communication/two-machine-trial.md).
 
+## Reset a disposable test Hub
+
+For an intentional clean start, follow the [test Hub reset guide (Chinese)](../docs/plans/federated-communication/test-hub-reset.zh.md). It covers server/client scope, stopping processes, optional backups, pairing and contact/group rebuild, and rollback limits. This is not a reconnect procedure; never delete a live database or attach an old client outbox to a replacement Hub.
+
 ## Durable behavior
 
 - Schema version 2 is installed idempotently and migrates version 1. Future `user_version`
