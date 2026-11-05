@@ -17,7 +17,7 @@ export class CommunicationQueue {
     if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true })
     this.db = new DatabaseSync(path)
     const version = this.db.prepare('PRAGMA user_version').get().user_version
-    if (version > 3) { this.db.close(); fail('SCHEMA_VERSION_UNSUPPORTED') }
+    if (version > 4) { this.db.close(); fail('SCHEMA_VERSION_UNSUPPORTED') }
     this.maxPending = maxPending
     this.beforeCommit = beforeCommit
     this.authorized = false
@@ -32,6 +32,7 @@ export class CommunicationQueue {
       CREATE TABLE IF NOT EXISTS exports (source_key TEXT PRIMARY KEY,binding_id TEXT NOT NULL,source_hash TEXT NOT NULL,message_id TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS export_cursors (binding_id TEXT NOT NULL,session_id TEXT NOT NULL,seq INTEGER NOT NULL,PRIMARY KEY(binding_id,session_id));
       CREATE TABLE IF NOT EXISTS reply_targets (delivery_id TEXT PRIMARY KEY,binding_id TEXT NOT NULL,targets TEXT NOT NULL,source_key TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS tool_reply_completions (delivery_id TEXT PRIMARY KEY,binding_id TEXT NOT NULL,message_id TEXT NOT NULL);
       `)
     if (version < 2) {
       this.db.exec('BEGIN IMMEDIATE')
@@ -43,7 +44,7 @@ export class CommunicationQueue {
         this.db.exec('PRAGMA user_version=2; COMMIT')
       } catch (error) { this.db.exec('ROLLBACK'); this.db.close(); throw error }
     }
-    if (version < 3) this.db.exec('PRAGMA user_version=3')
+    if (version < 4) this.db.exec('PRAGMA user_version=4')
     const old = this.db.prepare('SELECT value FROM metadata WHERE key=?').get('instanceId')?.value
     if (old && instanceId && old !== instanceId) { this.db.close(); fail('INSTANCE_ID_MISMATCH') }
     this.instanceId = old ?? instanceId ?? randomUUID()
@@ -296,6 +297,31 @@ export class CommunicationQueue {
     if (!this.authorized) return []
     return this.db.prepare(`SELECT i.body,i.ai_state,i.mapping FROM inbox i JOIN memberships m ON m.conversation_id=i.conversation_id AND m.principal_id=i.principal_id AND m.epoch=i.epoch JOIN cursors c ON c.conversation_id=i.conversation_id AND c.principal_id=i.principal_id AND c.epoch=i.epoch WHERE i.ai=1 AND i.revoked=0 AND i.ai_state NOT IN ('accepted','revoked') AND m.active=1 AND c.seq>=i.seq ORDER BY i.conversation_id,i.seq`).all().map(row => ({ ...JSON.parse(row.body), state: row.ai_state, mapping: row.mapping ? JSON.parse(row.mapping) : null }))
   }
+  inputUpdates(binding, parentDeliveryId) {
+    if (!this.authorized) return []
+    const rows = this.db.prepare("SELECT * FROM inbox WHERE conversation_id=? AND principal_id=? AND epoch=? AND revoked=0 AND json_extract(body,'$.event.message.updateRecipientPrincipalId')=principal_id ORDER BY seq").all(binding.conversationId,binding.recipientPrincipalId,binding.membershipEpoch)
+    return rows.flatMap(row => {
+      const delivery=JSON.parse(row.body), message=delivery.event.message
+      if(this.cursor(row.conversation_id,row.principal_id,row.epoch)<row.seq)return []
+      const parent=this.db.prepare('SELECT delivery_id,mapping FROM inbox WHERE message_id=? AND principal_id=? AND epoch=? AND ai=1 AND revoked=0').get(message.updateForMessageId,row.principal_id,row.epoch)
+      if(!parent || parentDeliveryId && parent.delivery_id!==parentDeliveryId)return []
+      return [{...delivery,state:row.ai_state,mapping:row.mapping?JSON.parse(row.mapping):null,parentDeliveryId:parent.delivery_id,parentMapping:parent.mapping?JSON.parse(parent.mapping):null}]
+    })
+  }
+  updateState(delivery, state, mapping) {
+    requireValue(['injecting','accepted'].includes(state),'INVALID_AI_STATE')
+    return this.transaction(()=>{
+      const row=this.db.prepare('SELECT * FROM inbox WHERE delivery_id=?').get(delivery.deliveryId)
+      requireValue(this.authorized && row && !row.revoked && !row.ai,'MEMBERSHIP_REVOKED')
+      this.member(row.conversation_id,row.principal_id,row.epoch)
+      const stored=JSON.parse(row.body)
+      requireValue(stored.event?.message?.updateRecipientPrincipalId===row.principal_id && stored.event.message.updateForMessageId,'INVALID_INPUT_UPDATE')
+      requireValue(state!=='accepted' || mapping?.sessionId && mapping.messageId && Number.isSafeInteger(mapping.seq),'INVALID_AI_MAPPING')
+      if(row.ai_state==='accepted'){requireValue(row.mapping===JSON.stringify(mapping),'AI_MAPPING_CONFLICT');return}
+      this.db.prepare('UPDATE inbox SET ai_state=?,mapping=? WHERE delivery_id=?').run(state,mapping?JSON.stringify(mapping):null,delivery.deliveryId)
+      if(state==='accepted')this.receiptInside(stored,'updateRead')
+    })
+  }
   aiState(deliveryId, state, mapping = null) {
     requireValue(['injecting', 'injection_unknown', 'accepted'].includes(state), 'INVALID_AI_STATE')
     return this.transaction(() => {
@@ -345,14 +371,35 @@ export class CommunicationQueue {
       this.db.prepare('INSERT INTO reply_targets VALUES (?,?,?,?)').run(deliveryId, bindingId, value, sourceKey)
     })
   }
-  commitExports(bindingId, outputs, positions, makeMessage) {
+  completedToolReply(bindingId,deliveryId) {
+    const row=this.db.prepare('SELECT * FROM tool_reply_completions WHERE delivery_id=?').get(deliveryId)
+    requireValue(!row||row.binding_id===bindingId,'CONVERSATION_SCOPE_MISMATCH')
+    return row?.message_id
+  }
+  completeFinalExport(bindingId,deliveryId,output) {
+    const messageId=this.completedToolReply(bindingId,deliveryId)
+    requireValue(messageId && this.outboxStatus(messageId).state==='accepted','RESPONSE_NOT_ACCEPTED')
+    return this.commitExports(bindingId,[output],[{sessionId:output.sessionId,seq:output.seq}],undefined,{completedDeliveryId:deliveryId})
+  }
+  commitExports(bindingId, outputs, positions, makeMessage, completion) {
     return this.transaction(() => {
       const ids = []
       for (const output of outputs) {
         const hash = digest(output), old = this.db.prepare('SELECT binding_id,source_hash,message_id FROM exports WHERE source_key=?').get(output.sourceKey)
         if (old) { requireValue(old.binding_id === bindingId && old.source_hash === hash, 'EXPORT_SOURCE_CONFLICT'); ids.push(old.message_id); continue }
+          if(completion?.completedDeliveryId){
+            const messageId=this.completedToolReply(bindingId,completion.completedDeliveryId)
+            requireValue(messageId,'RESPONSE_NOT_COMPLETED')
+            this.db.prepare('INSERT INTO exports VALUES (?,?,?,?)').run(output.sourceKey,bindingId,hash,messageId)
+            ids.push(messageId);continue
+          }
         const message = makeMessage(output)
         requireValue(this.owns(message.author?.principalId), 'AUTHOR_MISMATCH')
+          if(completion?.deliveryId){
+            requireValue(!this.completedToolReply(completion.bindingId,completion.deliveryId),'RESPONSE_ALREADY_SENT')
+            requireValue(!this.db.prepare('SELECT 1 FROM reply_targets WHERE delivery_id=?').get(completion.deliveryId),'HANDOFF_ALREADY_SET')
+            this.db.prepare('INSERT INTO tool_reply_completions VALUES (?,?,?)').run(completion.deliveryId,completion.bindingId,message.messageId)
+          }
         this.enqueueInside('message.publish', message, message.messageId)
         this.db.prepare('INSERT INTO exports VALUES (?,?,?,?)').run(output.sourceKey, bindingId, hash, message.messageId)
         ids.push(message.messageId)

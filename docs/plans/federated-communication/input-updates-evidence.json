@@ -1,0 +1,114 @@
+{
+  "scope": "Two isolated DSH hosts and durable Hub on one Windows computer; synthetic identities/data only",
+  "baseline": {
+    "runId": "fdbb92e5",
+    "status": "PASS_REAL_DSH_HUB",
+    "requests": 16,
+    "generations": 8,
+    "cases": [
+      {
+        "id": "real-human-a-b-busy-update-a",
+        "status": "PASS",
+        "root": "1bf09c48-4269-4d1e-92a3-6da4d4207378",
+        "final": "6a1d9a9b-73b6-4d73-bfe9-2facf8f7a97e",
+        "supplement": "input-update-7366542028ae068991da49b60bd0d24814b0e1606f721c56b4fd02b01a23c059",
+        "bFinal": "30 + 12 = 42.",
+        "bWorkStarts": 1,
+        "bSessions": 1,
+        "updateInputs": 1,
+        "readReceipts": 1,
+        "updateAiDeliveries": 0
+      },
+      {
+        "id": "busy-update-restart-no-repeat",
+        "status": "PASS",
+        "extraRequests": 0
+      }
+    ],
+    "modeledGenerationCostUsdUpperBound": 0.009453
+  },
+  "restartCause": "A had published its final through the send tool before private closing text finished. Shutdown interrupted the model, and old recovery resumed despite accepted publication. The new recovery gate waits on pending and skips accepted tool replies.",
+  "checks": {
+    "hub": {
+      "pass": 104
+    },
+    "plugin": {
+      "tests": 1693,
+      "pass": 1689,
+      "skip": 2,
+      "fail": 2,
+      "knownFailures": [
+        "communication-usability.test.js:298",
+        "style-debt.test.js:32"
+      ]
+    },
+    "specialized": {
+      "pass": 16
+    },
+    "generatedClient": "pass",
+    "lint": "pass with warnings",
+    "smoke": {
+      "pass": 52,
+      "ownedProcessesStopped": true
+    }
+  },
+  "limits": [
+    "No cross-machine deployment tested",
+    "Read receipt proves model-step input, not comprehension",
+    "Injected-steer crash windows have deterministic queue replay tests; full real-model crash at each admission boundary is not covered",
+    "Plain final text remains model-controlled; meaningful-looking execution chatter cannot be classified perfectly"
+  ],
+  "faultRun": {
+    "runId": "fd324c7a",
+    "status": "PASS_REAL_DSH_HUB",
+    "requests": 18,
+    "generations": 9,
+    "cases": [
+      {
+        "id": "real-human-a-b-busy-update-a",
+        "status": "PASS",
+        "root": "74a420ae-4603-4df4-a03c-b0e7a64e0680",
+        "final": "1348f042-6a79-4950-acde-d80f8458add4",
+        "supplement": "input-update-0aa12d91f7dc8bd70cffa96ddad0a0f5179be2fa302019c0122dfed0dcafc785",
+        "bFinal": "42",
+        "bWorkStarts": 1,
+        "bSessions": 1,
+        "updateInputs": 1,
+        "readReceipts": 1,
+        "updateAiDeliveries": 0
+      },
+      {
+        "id": "busy-update-restart-no-repeat",
+        "status": "PASS",
+        "extraRequests": 0
+      },
+      {
+        "id": "real-rejected-tool-send-final-recovered",
+        "status": "PASS",
+        "root": "d84d8304-010d-4a77-9246-34994810e1d5",
+        "final": "8abee72f-2d76-4b7e-bd97-a4e97d3222f1",
+        "failedToolMessageId": "fcf18542-c90e-449b-8cc3-6a190101d52f",
+        "publishedFinals": 1
+      }
+    ],
+    "cleanup": true,
+    "modeledGenerationCostUsdUpperBound": 0.010520750000000002,
+    "hubCheckpoint": {
+      "point": "drop-ack",
+      "messageId": "3a49e437-7c6e-468e-aa74-c625624997e2",
+      "conversationSeq": 12,
+      "socketOpen": true
+    }
+  },
+  "budget": {
+    "ledgerPreserved": true,
+    "reservedRequests": 219,
+    "reservedWorstCaseUsd": 0.382808,
+    "note": "Reservations include failures and requests not sent; not an invoice. Latest generation estimate uses reported usage and conservative input pricing."
+  },
+  "retainedFailures": [
+    "491532ec: accepted tool result resumed interrupted closing text; fixed and baseline restart passed",
+    "54b2d89d: model failed structured return to A despite arithmetic42; failed run retained",
+    "40582fb6: model-test allowlist blocked local private-session request caused by configuring instructions on real route; zero upstream calls; moved synthetic setup to Mock without widening allowlist"
+  ]
+}

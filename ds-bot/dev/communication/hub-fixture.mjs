@@ -13,7 +13,7 @@ const checkpoint=(point,extra={})=>{
   process.send?.({type:'checkpoint',value})
 }
 const hub=await startHub({databasePath:process.argv[2],port:Number(process.argv[3]),peers,
-  beforeRequest:request=>{activeRequest=request;if(armed?.point==='deny-publish'&&request.type==='message.publish'&&request.payload.author?.principalId===armed.principalId)throw new CommunicationError('STORAGE_UNAVAILABLE')},
+  beforeRequest:request=>{activeRequest=request;if(armed?.point==='reject-publish-once'&&request.type==='message.publish'&&request.payload.author?.principalId===armed.principalId){armed=null;throw new CommunicationError('TARGET_NOT_RECEIVING')}if(armed?.point==='deny-publish'&&request.type==='message.publish'&&request.payload.author?.principalId===armed.principalId)throw new CommunicationError('STORAGE_UNAVAILABLE')},
   beforeCommit:()=>{
     if(armed?.point!=='before-commit-crash'||activeRequest?.type!=='message.publish')return
     checkpoint(armed.point,{messageId:activeRequest.payload.messageId});armed=null

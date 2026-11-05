@@ -599,9 +599,14 @@ export function install(rt) {
       // An ordinary member's post calls only the members it names (openingSpeakers).
       const member = !rt.isMain(self) && !rt.isAdminOf(room, self)
       const info = rt.live.get(exec.agent?.id)?.info
-      if (info?.role === 'room' && info.roomId === room.id) return `You are speaking in "${room.name}" right now. Write your message as your reply instead.`
       const text = absoluteLinks(String(args.message ?? '').trim(), rt.sessionFolder?.(exec.agent?.session ?? exec.agent))
       if (text === '') return 'Write a message to post.'
+      if (info?.role === 'room' && info.roomId === room.id) {
+        await rt.roomStepText(exec.agent.id, info, text, true)
+        const live = rt.live.get(exec.agent.id)
+        if (live) live.publicPosted = true
+        return `Posted in "${room.name}". Continue working; do not repeat this message or its receipt in your final.`
+      }
       // Counted on the whole message. A post past MESSAGE_INLINE_MAX keeps only its
       // first LONG_HEAD characters, and the round reads this list instead of that text.
       const spans = mentionSpans(text, room.members.map(rt.botOf).filter(Boolean))

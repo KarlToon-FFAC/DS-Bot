@@ -569,7 +569,7 @@ test('Human and group rename send authenticated versioned requests and failed se
 
 test('pairing guide is available before and after configuration and never performs API mutations', async () => {
   for (const enabled of [false, true]) {
-    await pane({ enabled, snapshot: state(), handle: async body => { assert.equal(body.endpoint, 'onboarding-storage'); return { storage: { defaultProvider: 'owner-acl-plaintext', encryptedByDefault: false, agentIsolation: false }, enrollments: [] } } }, async ({ doc, dom, calls, click, panel }) => {
+    await pane({ enabled, snapshot: state(), handle: async body => { if(body.endpoint==='memory-settings')return {localMemory:true};assert.equal(body.endpoint, 'onboarding-storage'); return { storage: { defaultProvider: 'owner-acl-plaintext', encryptedByDefault: false, agentIsolation: false }, enrollments: [] } } }, async ({ doc, dom, calls, click, panel }) => {
       await click('Personal settings')
       await click('Add a device')
       const guide = doc.querySelector('.bt-comm-modal[aria-label="Pairing guide"]')
@@ -588,11 +588,11 @@ test('pairing guide is available before and after configuration and never perfor
       assert.match(guide.querySelector('pre[aria-label="Device configuration example"]').textContent, /url: wss:\/\/hub.example.test:3190\/communication/)
       assert.ok(guide.querySelector('[aria-label="Hub code"]'))
       assert.equal(guide.querySelector('.bt-comm-manual-guide').open, false)
-      assert.equal(calls.filter(call => !['state', 'onboarding-storage'].includes(call.endpoint)).length, 0)
+      assert.equal(calls.filter(call => !['state', 'onboarding-storage', 'memory-settings'].includes(call.endpoint)).length, 0)
       await act(async () => doc.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })))
       assert.equal(doc.querySelector('.bt-comm-modal'), null)
       assert.equal(panel.getSnapshot(), true)
-      assert.equal(calls.filter(call => !['state', 'onboarding-storage'].includes(call.endpoint)).length, 0)
+      assert.equal(calls.filter(call => !['state', 'onboarding-storage', 'memory-settings'].includes(call.endpoint)).length, 0)
     })
   }
 })

@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { normalizeAttachments, ATTACHMENT_CAPABILITY } from './attachments.js'
 
 export const PROTOCOL = 'dsbot-communication/1'
-export const CAPABILITIES = ['text', 'markdown', 'mentions', 'group', 'dm', 'reply', 'history', 'group-policy', 'membership-epoch', 'explicit-bot-activation']
+export const CAPABILITIES = ['text', 'markdown', 'mentions', 'group', 'dm', 'reply', 'history', 'group-policy', 'membership-epoch', 'explicit-bot-activation', 'bot-input-updates']
 export const HUB_CAPABILITIES = [...CAPABILITIES, 'bounded-bot-collaboration', 'principal-avatars', 'principal-publication', 'bot-work-events', ATTACHMENT_CAPABILITY]
 export const DEFAULT_LIMITS = { maxTextBytes: 65536, maxEnvelopeBytes: 131072, maxMembers: 64, maxPendingDeliveries: 10000,
   maxPrincipals: 64, maxMembershipsPerInstance: 64, maxPendingInvitesPerInstance: 64, maxCausalDepth: 8, maxAiDeliveriesPerRoot: 32 }
@@ -56,11 +56,19 @@ export function normalizeMessage(input, author, limits) {
   if (input.responseToDeliveryId !== undefined) identifier(input.responseToDeliveryId)
   if (input.causationDeliveryId !== undefined) identifier(input.causationDeliveryId)
   requireThat(['causality','rootMessageId','parentMessageId','depth','dispatchSuppressed'].every(key => !Object.hasOwn(input,key)), 'INVALID_CAUSALITY')
+  if (input.updateForMessageId !== undefined) {
+    identifier(input.updateForMessageId); identifier(input.updateRecipientPrincipalId)
+    requireThat(!input.responseToDeliveryId && !input.causationDeliveryId && !activationTargets?.length && !attachments.length, 'INVALID_INPUT_UPDATE')
+    requireThat(input.replyToMessageId === input.updateForMessageId, 'INVALID_INPUT_UPDATE')
+  } else requireThat(input.updateRecipientPrincipalId === undefined, 'INVALID_INPUT_UPDATE')
+  if (input.inputUpdateIds !== undefined) requireThat(Array.isArray(input.inputUpdateIds) && input.inputUpdateIds.length <= 100 && input.inputUpdateIds.every(id => identifier(id)), 'INVALID_INPUT_UPDATE')
   if (input.membershipEpoch !== undefined) identifier(input.membershipEpoch)
   return { protocol: PROTOCOL, type: 'message.publish', messageId: input.messageId, conversationId: input.conversationId,
     author, clientCreatedAt: input.clientCreatedAt, content: { format: input.content.format, text: input.content.text }, mentions,
     ...(activationTargets === undefined ? {} : { activationTargets }),
     ...(attachments.length ? { attachments } : {}),
+    ...(input.updateForMessageId ? { updateForMessageId: input.updateForMessageId, updateRecipientPrincipalId: input.updateRecipientPrincipalId } : {}),
+    ...(input.inputUpdateIds ? { inputUpdateIds: [...new Set(input.inputUpdateIds)].sort() } : {}),
     replyToMessageId: input.replyToMessageId, ...(input.responseToDeliveryId === undefined ? {} : { responseToDeliveryId: input.responseToDeliveryId }),
     ...(input.causationDeliveryId === undefined ? {} : { causationDeliveryId: input.causationDeliveryId }),
     ...(input.membershipEpoch === undefined ? {} : { membershipEpoch: input.membershipEpoch }) }

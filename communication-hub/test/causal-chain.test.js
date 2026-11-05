@@ -229,7 +229,7 @@ test('accepted legacy history retry returns its original ACK without recalculati
   const before=f.store.db.prepare('SELECT count(*) n FROM deliveries').get().n
   f.store.db.exec('PRAGMA user_version=2; DELETE FROM schema_version WHERE version=3; DROP TABLE bot_dispatches')
   f.store.close();f.store=new HubStore(f.path)
-  assert.equal(f.store.db.prepare('PRAGMA user_version').get().user_version,3)
+  assert.equal(f.store.db.prepare('PRAGMA user_version').get().user_version,4)
   const retry=f.store.publish(f.a,legacy)
   assert.equal(retry.messageId,accepted.messageId);assert.equal(retry.payloadHash,digest)
   assert.equal(f.store.db.prepare('SELECT count(*) n FROM deliveries').get().n,before)
@@ -241,4 +241,26 @@ test('explicit targets respect receiving policy changes before actual publicatio
   f.store.syncPublication(f.b,{principalIds:[]})
   assert.throws(()=>f.store.publish(f.a,input),{code:'BOT_NOT_PUBLISHED'})
   assert.equal(f.store.db.prepare('SELECT 1 FROM messages WHERE id=?').get(input.messageId),undefined)
+})
+
+
+test('supplements preserve one activation, require the original author, and gate stale finals on actual read-in', t => {
+  const f=fixture(t)
+  const task=f.send(f.A,{activationTargets:[{principalId:f.B}]}), grant=f.grant(task,f.B)
+  const update=f.input(f.A,{replyToMessageId:task.messageId,updateForMessageId:task.messageId,updateRecipientPrincipalId:f.B})
+  const accepted=f.store.publish(f.a,update)
+  assert.deepEqual(f.ai(accepted),[])
+  assert.equal(f.store.publish(f.a,update).messageId,accepted.messageId)
+  assert.throws(()=>f.send(f.C,{replyToMessageId:task.messageId,updateForMessageId:task.messageId,updateRecipientPrincipalId:f.B}),{code:'INVALID_INPUT_UPDATE'})
+  const final={responseToDeliveryId:grant,replyToMessageId:task.messageId}
+  assert.throws(()=>f.send(f.B,final),{code:'INPUT_UPDATES_PENDING'})
+  const row=f.store.db.prepare('SELECT * FROM deliveries WHERE message_id=? AND recipient_id=?').get(accepted.messageId,f.B)
+  const receipt={deliveryId:row.id,principalId:f.B,membershipEpoch:row.membership_epoch}
+  f.store.receipt(f.b,{...receipt,status:'targetStored'})
+  assert.throws(()=>f.send(f.B,{...final,inputUpdateIds:[accepted.messageId]}),{code:'INPUT_UPDATES_PENDING'})
+  f.store.receipt(f.b,{...receipt,status:'updateRead'});f.store.receipt(f.b,{...receipt,status:'updateRead'})
+  assert.equal(f.store.db.prepare("SELECT count(*) n FROM events WHERE type='bot.input.read'").get().n,1)
+  assert.throws(()=>f.send(f.B,final),{code:'INPUT_UPDATES_PENDING'})
+  f.send(f.B,{...final,inputUpdateIds:[accepted.messageId]})
+  assert.throws(()=>f.store.publish(f.a,{...update,messageId:randomUUID()}),{code:'HANDOFF_ALREADY_COMPLETED'})
 })

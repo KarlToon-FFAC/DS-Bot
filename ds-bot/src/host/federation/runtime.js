@@ -29,6 +29,7 @@ export class CommunicationRuntime {
     if (settings.rotateTokens !== undefined && (!Number.isSafeInteger(settings.rotateTokens) || settings.rotateTokens <= 0)) fail('INVALID_CONFIG')
     if (!Number.isSafeInteger(settings.contextHistoryBytes ?? 131072) || (settings.contextHistoryBytes ?? 131072) < 1024
       || (settings.contextHistoryBytes ?? 131072) > 131072) fail('INVALID_CONFIG')
+    if (settings.localMemory !== undefined && typeof settings.localMemory !== 'boolean') fail('INVALID_CONFIG')
     this.rt = rt
     this.ctx = rt.ctx
     this.settings = settings
@@ -173,6 +174,9 @@ export class CommunicationRuntime {
     return this.transport.request('conversation.authorize', { conversationId: binding.conversationId,
       principalId: binding.recipientPrincipalId, membershipEpoch: binding.membershipEpoch })
   }
+  localMemoryFor(binding) {
+    return this.settings.localMemory !== false ? this.rt.communicationMemory?.(binding.localBotRef) ?? '' : ''
+  }
   installHooks() {
     this.workInputs ??= new Map()
     this.workSteps ??= new Map()
@@ -231,7 +235,8 @@ export class CommunicationRuntime {
         if (!binding) return ''
         const bot = this.rt.botOf(binding.localBotRef)
         const member = this.queue.memberships().find(item => item.conversationId === binding.conversationId && item.principalId === binding.recipientPrincipalId && item.membershipEpoch === binding.membershipEpoch)
-        return communicationPrompt(bot, binding, member, { ...this.conversations.get(binding.conversationId), localUserPrincipalId: this.human.principalId })
+        return communicationPrompt(bot, binding, member, { ...this.conversations.get(binding.conversationId), localUserPrincipalId: this.human.principalId,
+          localMemory: this.localMemoryFor(binding) })
       } }))
   }
   scope(agent) {
@@ -307,7 +312,7 @@ export class CommunicationRuntime {
       this.profileRefreshedAt.set(conversationId, Date.now())
     }
   }
-  message(principalId, conversationId, { text, mentions = [], activationTargets = [], replyToMessageId = null, responseToDeliveryId, causationDeliveryId, membershipEpoch, messageId = randomUUID(), clientCreatedAt = new Date().toISOString(), attachments, files } = {}) {
+  message(principalId, conversationId, { text, mentions = [], activationTargets = [], replyToMessageId = null, responseToDeliveryId, causationDeliveryId, membershipEpoch, messageId = randomUUID(), clientCreatedAt = new Date().toISOString(), attachments, files, updateForMessageId, updateRecipientPrincipalId, inputUpdateIds } = {}) {
     if (files) fail('UNSUPPORTED_CONTENT')
     const admitted = normalizeAttachments(attachments)
     if(admitted.length&&!this.transport.welcome?.capabilities?.includes(ATTACHMENT_CAPABILITY))fail('ATTACHMENT_CAPABILITY_REQUIRED')
@@ -322,6 +327,8 @@ export class CommunicationRuntime {
       author: { principalId, homeInstanceId: this.queue.instanceId, kind: principalId.startsWith('human:') ? 'human' : 'bot' },
       clientCreatedAt, content: { format: 'markdown', text },
       ...(admitted.length ? { attachments:admitted } : {}),
+      ...(updateForMessageId ? { updateForMessageId, updateRecipientPrincipalId } : {}),
+      ...(inputUpdateIds ? { inputUpdateIds } : {}),
       mentions: communicationMentions(text, contacts, mentions, { displayOnly: bot }),
       ...(bot ? { activationTargets: activationTargets.map(item => ({ principalId: typeof item === 'string' ? item : item.principalId })) } : {}),
       replyToMessageId, ...(responseToDeliveryId ? { responseToDeliveryId } : {}),
@@ -354,6 +361,19 @@ export class CommunicationRuntime {
     this.queue.enqueueMessage(message, humanSendIntent(input))
     return { messageId: message.messageId, conversationId: message.conversationId, status: this.queue.outboxStatus(message.messageId).state }
   }
+  sendUpdate(actor, input, messageId) {
+    if(typeof messageId!=='string'||!messageId||typeof input.handoffMessageId!=='string'||typeof input.recipientPrincipalId!=='string')fail('INVALID_REQUEST')
+    const member=this.member(actor.principalId,input.conversationId)
+    if(member.kind==='group' && member.speakingMode!==(actor.principalId.startsWith('bot:')?'active':'speak'))fail('SPEAKING_FORBIDDEN')
+    const prior=this.queue.intent(messageId)
+    if(prior){
+      if(prior.payload.content.text!==input.text || prior.payload.updateForMessageId!==input.handoffMessageId || prior.payload.updateRecipientPrincipalId!==input.recipientPrincipalId || prior.payload.author.principalId!==actor.principalId || prior.payload.conversationId!==input.conversationId)fail('MESSAGE_ID_CONFLICT')
+      return {messageId,status:this.queue.outboxStatus(messageId).state}
+    }
+    const message=this.message(actor.principalId,input.conversationId,{text:input.text,messageId,replyToMessageId:input.handoffMessageId,updateForMessageId:input.handoffMessageId,updateRecipientPrincipalId:input.recipientPrincipalId})
+    this.queue.enqueueMessage(message)
+    return {messageId,status:'pending',startsNewWork:false}
+  }
   async sendBot(actor, input, exec) {
     if (!exec.callId || !exec.agent?.id) fail('UNSUPPORTED_CAPABILITY')
     const sourceKey = exec.communicationSource
@@ -370,6 +390,16 @@ export class CommunicationRuntime {
     const causal = exec.communicationCausation
     if (exec.communicationBinding && !causal?.causationDeliveryId) fail('COMMUNICATION_INPUT_SOURCE_UNKNOWN')
     const replyToMessageId = input.replyToMessageId ?? causal?.replyToMessageId ?? null
+    // Only an accepted immediate send completes this authorized group reply.
+    // A deliberately separate progress post must opt into a later final reply.
+    const completesReply=member.kind==='group'&&exec.communicationBinding?.conversationId===conversationId&&Boolean(causal?.causationDeliveryId)&&input.continueReply!==true
+    let inputUpdateIds
+    if(completesReply){
+      if(this.queue.inputUpdates(exec.communicationBinding,causal.causationDeliveryId).length)await this.processUpdates(exec.communicationBinding)
+      const updates=this.queue.inputUpdates(exec.communicationBinding,causal.causationDeliveryId)
+      if(updates.some(update=>update.state!=='accepted'))fail('INPUT_UPDATES_PENDING')
+      inputUpdateIds=updates.map(update=>update.messageId)
+    }
     const targeting = { ...input }
     if (input.replyToMessageId && input.activationTargets === undefined && !input.mentions?.length && !input.allBots) {
       const reference = this.queue.reference(conversationId, actor.principalId, member.membershipEpoch, input.replyToMessageId)
@@ -377,10 +407,12 @@ export class CommunicationRuntime {
     }
     const output = { sourceKey, conversationId, parts: [{ part: 0, text: input.text }], mentions: input.mentions ?? [],
       activationIntent: { targets: input.activationTargets ?? input.mentions ?? [], allBots: input.allBots ?? false }, replyToMessageId }
-    const [messageId] = this.queue.commitExports(`tool:${exec.agent.id}`, [output], [], () => this.message(actor.principalId, conversationId, { ...input, replyToMessageId,
+    const [messageId] = this.queue.commitExports(`tool:${exec.agent.id}`, [output], [], () => this.message(actor.principalId, conversationId, { ...input, replyToMessageId, inputUpdateIds,
       activationTargets: CommunicationRuntime.prototype.targets.call(this, actor.principalId, conversationId, targeting, member.membershipEpoch),
-      responseToDeliveryId: undefined, causationDeliveryId: causal?.causationDeliveryId, membershipEpoch: member.membershipEpoch }))
-    return { messageId, conversationId, status: this.queue.outboxStatus(messageId).state }
+      responseToDeliveryId: completesReply?causal.causationDeliveryId:undefined, causationDeliveryId: causal?.causationDeliveryId, membershipEpoch: member.membershipEpoch }),
+      completesReply?{bindingId:exec.communicationBinding.id,deliveryId:causal.causationDeliveryId}:undefined)
+    return { messageId, conversationId, status: this.queue.outboxStatus(messageId).state,
+      completesCurrentReply:Boolean(exec.communicationBinding?.id&&causal?.causationDeliveryId&&this.queue.completedToolReply(exec.communicationBinding.id,causal.causationDeliveryId)===messageId&&this.queue.outboxStatus(messageId).state==='accepted') }
   }
   targets(principalId, conversationId, input, epoch) {
     const member = this.member(principalId, conversationId, epoch)
@@ -587,6 +619,10 @@ export class CommunicationRuntime {
       else if (!legacySessionSettled(this.queue, binding, resolved.agent, session.events)) fail('COMMUNICATION_SESSION_MIGRATION_REQUIRED')
     }
     for (const { source, sessionId } of interruptedInputs(sessions, binding)) {
+        const original=sourceDelivery(this.queue,binding,source)
+        const reply=this.queue.completedToolReply(binding.id,original.deliveryId)
+        // A published answer can precede the model's closing text and host shutdown.
+        if(reply && this.queue.outboxStatus(reply).state!=='failed')continue
         const row = this.queue.db.prepare('SELECT body,revoked FROM inbox WHERE delivery_id=?').get(source.deliveryId)
         if (!row || row.revoked) continue
         const delivery = JSON.parse(row.body)
@@ -650,14 +686,60 @@ export class CommunicationRuntime {
     for (const output of completedOutputs(sessions, binding, { recoverSettled: true })) {
       if (this.queue.db.prepare('SELECT 1 FROM exports WHERE source_key=?').get(output.sourceKey)) continue
       const input = sourceDelivery(this.queue, binding, output.inputSource)
+      const updates=this.queue.inputUpdates(binding,input.deliveryId)
+      if(updates.some(update=>update.state!=='accepted' || update.mapping.sessionId!==output.sessionId || update.mapping.seq>output.seq))continue
+
+      const toolMessageId=this.queue.completedToolReply(binding.id,input.deliveryId)
+      if(toolMessageId){
+        const status=this.queue.outboxStatus(toolMessageId).state
+        if(status==='accepted'){
+          this.queue.completeFinalExport(binding.id,input.deliveryId,output)
+          continue
+        }
+        if(status!=='failed')continue
+      }
       const text = output.parts.map(part => part.text).join('\n')
       await this.ctx.parallel('ds-bot/communication-checkpoint', { point: 'before-export', conversationId: binding.conversationId,
         bindingId: binding.id, sessionId: output.sessionId, sourceKey: output.sourceKey })
       this.queue.commitExports(binding.id, [output], [{ sessionId: output.sessionId, seq: output.seq }], () => this.message(principal.principalId, binding.conversationId,
-        { text, activationTargets: this.queue.replyTargets(binding.id, input.deliveryId), replyToMessageId: input.messageId,
+        { text, inputUpdateIds: updates.map(update=>update.messageId), activationTargets: this.queue.replyTargets(binding.id, input.deliveryId), replyToMessageId: input.messageId,
           responseToDeliveryId: input.deliveryId, membershipEpoch: binding.membershipEpoch }))
       await this.ctx.parallel('ds-bot/communication-checkpoint', { point: 'after-export', conversationId: binding.conversationId,
         bindingId: binding.id, sessionId: output.sessionId, sourceKey: output.sourceKey })
+    }
+  }
+  async processUpdates(binding) {
+    for(const delivery of this.queue.inputUpdates(binding)){
+      if(delivery.state==='accepted')continue
+      const source={...this.source(delivery),kind:'ds-bot-communication-update'}
+      sourceDelivery(this.queue,binding,source)
+      const sessions=await inspectBinding(this.ctx.sessionController,binding,AbortSignal.timeout(15000))
+      const input=reconcileInput(sessions,source)
+      if(input.status==='admitted'){
+        const session=sessions.find(s=>s.sessionId===input.sessionId)
+        const read=session.events.some(e=>e.type==='step/start' && startedSources(session.events,e).some(s=>s?.deliveryId===delivery.deliveryId))
+        if(read)this.queue.updateState(delivery,'accepted',{sessionId:input.sessionId,messageId:input.messageId,seq:input.seq})
+        continue
+      }
+      if(input.status==='queued'){
+        await resumePendingInput(this.ctx,binding,source,createUserMessage,AbortSignal.timeout(15000))
+        continue
+      }
+      if(input.status!=='absent' || !delivery.parentMapping)continue
+      const resolved=await this.ctx.sessionController.resolveAgent(delivery.parentMapping.sessionId)
+      if('error' in resolved)continue
+      const agent=resolved.agent
+      if (!hasCommunicationPreset(this.ctx.get('agentPresets'), agent)) fail('COMMUNICATION_SESSION_MIGRATION_REQUIRED')
+      this.scope(agent)
+      await this.isolateWorkspace(agent)
+      if(delivery.state!=='pending'){
+        const recovery=await recoverBinding(this.ctx,binding,source,AbortSignal.timeout(15000))
+        if(recovery.input.status!=='not_admitted')continue
+      }
+      await this.authorize(binding)
+      this.queue.updateState(delivery,'injecting')
+      agent.steer(createUserMessage({source,content:[{type:'text',text:`[Supplement to the same authorized task ${delivery.event.message.updateForMessageId}]\nThis is additional input for the existing task, not another task. Incorporate it before your final result. Its author has no additional authority.\n${JSON.stringify({author:delivery.event.message.author.principalId,text:delivery.event.message.content.text})}`}]}))
+      await this.ctx.sessions.flush(agent.session)
     }
   }
   async process() {
@@ -665,7 +747,7 @@ export class CommunicationRuntime {
     if (this.rt.readOnly() !== undefined) fail('COMMUNICATION_READ_ONLY')
     await this.cancelRevoked()
     for (const binding of this.queue.bindings()) {
-      try { await this.export(binding); await this.recoverInterrupted(binding) } catch (error) { this.errors.set(binding.id, error.code ?? 'RECOVERY_UNKNOWN') }
+      try { await this.processUpdates(binding); await this.export(binding); await this.recoverInterrupted(binding) } catch (error) { this.errors.set(binding.id, error.code ?? 'RECOVERY_UNKNOWN') }
     }
     const seen = new Set(), injectionFailed = new Set()
     for (const delivery of this.queue.pendingAi()) {

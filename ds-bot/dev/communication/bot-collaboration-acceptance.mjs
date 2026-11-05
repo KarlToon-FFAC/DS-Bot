@@ -19,7 +19,7 @@ if(process.argv[2]==='--owned-hub'){
   process.on('message',message=>{
     let value
     if(message.command==='duplicate'){duplicateId=message.value.messageId;value={armed:true}}
-    else if(message.command==='stats')value={messages:hub.store.db.prepare('SELECT id,conversation_id,seq,author_id,body FROM messages').all(),deliveries:hub.store.db.prepare('SELECT * FROM deliveries').all(),responses:hub.store.db.prepare('SELECT * FROM responses').all(),events:hub.store.db.prepare("SELECT body FROM events WHERE type='message'").all().map(row=>JSON.parse(row.body)),duplicateInjected}
+    else if(message.command==='stats')value={messages:hub.store.db.prepare('SELECT id,conversation_id,seq,author_id,body FROM messages').all(),deliveries:hub.store.db.prepare('SELECT * FROM deliveries').all(),responses:hub.store.db.prepare('SELECT * FROM responses').all(),events:hub.store.db.prepare("SELECT body FROM events WHERE type IN ('message','bot.work.started')").all().map(row=>JSON.parse(row.body)),duplicateInjected}
     else return process.send({id:message.id,ok:false})
     process.send({id:message.id,ok:true,value})
   })
@@ -117,6 +117,19 @@ try{
   assert.equal(eventFor(activeStats,toolMessage.id).causality.rootMessageId,activeRoot.messageId)
   assert.equal(activeStats.deliveries.filter(d=>d.message_id===toolMessage.id&&d.ai&&d.recipient_id===b.bot).length,1)
   record('active-tool-text-peer-mention-with-input-causation',{rootMessageId:activeRoot.messageId,toolMessageId:toolMessage.id})
+
+  const receiptGroup=await topology.group(`Single answer ${nonce}`,[a.bot,b.bot],{allowSpeaking:false})
+  await policy(a,receiptGroup,a.bot,'active')
+  const receiptRoot=await topology.send(a,receiptGroup,`COMM-RECEIPT ${receiptGroup} ${b.bot} receipt-${nonce}`,[a.bot])
+  await until(()=>topology.hasText(a,receiptGroup,`Collaboration done receipt-${nonce}`),'B receives one immediate answer')
+  const receiptStats=await stats(),aMessages=groupMessages(receiptStats,receiptGroup).filter(row=>row.author_id===a.bot)
+  assert.equal(aMessages.length,1,'tool receipt final does not become a second group message')
+  assert.equal(receiptStats.deliveries.filter(d=>d.message_id===aMessages[0].id&&d.ai&&d.recipient_id===b.bot).length,1)
+  const bReceiptInputs=inputs(await inspect(b,receiptGroup)).filter(event=>event.data.source?.messageId===aMessages[0].id)
+  assert.equal(bReceiptInputs.length,1,'one actual admitted DSH input on B')
+  const work=await until(async()=>{const s=await stats();const events=s.events.filter(event=>event.type==='bot.work.started'&&event.messageId===aMessages[0].id&&event.principalId===b.bot);return events.length&&events},'actual B work-start receipt')
+  assert.equal(work.length,1,'one canonical B work-start event')
+  record('immediate-answer-plus-receipt-final-publishes-once-and-starts-B-once',{rootMessageId:receiptRoot.messageId,messageId:aMessages[0].id,admittedInputs:bReceiptInputs.length,workStarts:work.length})
 
   const outside=await a.client.request('/api/bot',{endpoint:'create-bot',payload:{name:`Outside${nonce}`,role:'outside',model:'deepseek-official/deepseek-v4-pro'}})
   a.published.push(outside.id);await topology.bench(a,'stop');await topology.startPeer(a)

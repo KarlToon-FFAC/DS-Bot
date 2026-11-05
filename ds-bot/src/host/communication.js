@@ -88,14 +88,18 @@ export function install(rt) {
     defineTool({ name: 'list_communication_conversations', description: 'List only communication conversations and invitations authorized for your own Bot identity; original private chats are separate.', parameters: {}, output,
       execute: execute((comm, actor, _args, exec) => ({ conversations: comm.queue.memberships().filter(item => item.principalId === actor.principalId && (!exec.communicationBinding || item.conversationId === exec.communicationBinding.conversationId && item.membershipEpoch === exec.communicationBinding.membershipEpoch)),
         invites: exec.communicationBinding ? [] : comm.queue.invites().filter(item => item.principalId === actor.principalId), recoverableOwnership: exec.communicationBinding ? [] : comm.queue.recoverableOwnership(actor.principalId) })) }),
-    defineTool({ name: 'send_contact_message', description: 'Send as your executing Bot. Only an active group Bot can send proactively. To wake member Bots supply activationTargets exact IDs or allBots=true; @ in text is display-only. A passive Bot uses set_communication_reply_targets then its one authorized final reply. Never provide a sender identity.',
+    defineTool({ name: 'send_contact_message', description: 'Immediately send as your executing Bot. A same-group send completes the current input only after Hub acceptance. While pending, write a substantive final fallback, not a tool receipt; the host retains it through uncertainty and publishes it on rejection. Prefer set_communication_reply_targets plus one natural final for normal group replies. Only active Bots can send this way. Structured targets wake member Bots; text @ is display-only. Never provide a sender identity.',
       parameters: { text: { type: 'string', required: true }, contactPrincipalId: { type: 'string' }, conversationId: { type: 'string' },
         mentions: { type: 'array', items: { type: 'string' }, description: 'Explicit target IDs; compatibility alias for activationTargets' },
         activationTargets: { type: 'array', items: { type: 'string' }, description: 'Exact member Bot IDs to wake; names in body never wake Bots' },
         allBots: { type: 'boolean', description: 'Explicitly wake all current member Bots except yourself' }, replyToMessageId: { type: 'string' },
+        continueReply:{type:'boolean',description:'Only for an intentional progress post followed by a distinct useful final result. Default false completes this current group reply after Hub acceptance; not a permission or duplicate-wakeup bypass.'},
         attachments:{type:'array',description:'Optional bounded inline files; at most 4 and 64 KiB total. User-authorized bytes only, no paths or URLs. Each entry has name,mime,size,sha256,data (canonical base64).',items:{type:'object',additionalProperties:false,properties:{name:{type:'string',required:true},mime:{type:'string',required:true},size:{type:'integer',required:true},sha256:{type:'string',required:true},data:{type:'string',required:true}}}} }, output,
       execute: execute((comm, actor, args, exec) => comm.sendBot(actor, args, exec)) }),
-    defineTool({ name: 'set_communication_reply_targets', description: 'Stage explicit member Bot handoff targets for this authorized final group reply only. Works for passive or active Bots. Does not send a message, grant proactive permission or consume the reply until the final is exported. Textual @ alone is display-only.',
+    defineTool({ name: 'update_communication_handoff', description: 'Add important information to your own earlier handoff for one recipient. Uses the same task and Session, never a new activation. The task must not have published its final. A pending receipt is not proof the recipient read it.',
+      parameters: { conversationId: { type:'string',required:true }, handoffMessageId: { type:'string',required:true }, recipientPrincipalId:{type:'string',required:true}, text:{type:'string',required:true} }, output,
+      execute: execute((comm,actor,args,exec)=>comm.sendUpdate(actor,args,toolOperation('input-update',exec))) }),
+    defineTool({ name: 'set_communication_reply_targets', description: 'Preferred for a natural group reply or handoff: stage exact Bot targets, then write one final answer addressed to them. Works for passive or active Bots. Does not send a message or grant proactive permission. Textual @ alone is display-only.',
       parameters: { replyToMessageId: { type: 'string', required: true, description: 'The exact current authorized input Message ID from host metadata' }, activationTargets: { type: 'array', items: { type: 'string' } }, allBots: { type: 'boolean' } }, output,
       execute: execute((comm, actor, args, exec) => comm.stageHandoff(actor, args, exec)) }),
     defineTool({ name: 'read_communication_history', description: 'Read authorized canonical history from one communication conversation, without causing a new send or model delivery. Other chats and membership epochs are inaccessible.',
@@ -174,7 +178,7 @@ export function install(rt) {
         if (['author', 'sender', 'senderId', 'homeInstanceId'].some(key => Object.hasOwn(body, key))
           || body.endpoint !== 'avatar' && Object.hasOwn(body, 'principalId')) fail('AUTHOR_MISMATCH')
         const enrollmentActions = { 'decode-hub-code': 'decode-hub-code', 'join-hub': 'join', 'hub-join-status': 'status', 'cancel-hub-join': 'cancel', 'onboarding-storage': 'storage',
-          'available-bots': 'available-bots', 'publish-bots': 'publish-bots', 'update-hub-trust': 'update-hub-trust',
+          'memory-settings': 'memory-settings', 'set-memory-settings': 'set-memory-settings', 'available-bots': 'available-bots', 'publish-bots': 'publish-bots', 'update-hub-trust': 'update-hub-trust',
           'disconnect-hub':'disconnect-hub','switch-hub':'switch-hub','resume-hub':'resume-hub',
           'leave-hub':'leave-hub','hub-leave-status':'hub-leave-status','forget-hub':'forget-hub',
           'user-code': 'user-code', 'rotate-user-code': 'rotate-user-code', 'request-contact': 'contact-request', 'contact-requests': 'contact-requests',
@@ -182,7 +186,7 @@ export function install(rt) {
         if (Object.hasOwn(enrollmentActions, body.endpoint)) {
           const action = enrollmentActions[body.endpoint]
           if (action === 'available-bots') await rt.load()
-          if (!['decode-hub-code','storage','available-bots'].includes(action)) {
+          if (!['decode-hub-code','storage','available-bots','memory-settings'].includes(action)) {
             await rt.load(); await rt.refresh()
             if (rt.readOnly?.() !== undefined) fail('COMMUNICATION_READ_ONLY')
           }
@@ -197,6 +201,7 @@ export function install(rt) {
         let value
         switch (body.endpoint) {
           case 'state': value = comm.snapshot(); break
+          case 'update-handoff': value = comm.sendUpdate(comm.human,body,body.messageId); break
           case 'history': value = comm.history(comm.human.principalId, body); break
           case 'thread': value = comm.thread(comm.human.principalId, body); break
           case 'members': value = await comm.members(comm.human.principalId, body); break

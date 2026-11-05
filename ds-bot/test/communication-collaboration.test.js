@@ -7,7 +7,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-const binding = { conversationId: 'group', recipientPrincipalId: 'bot:a:one', membershipEpoch: 'epoch' }
+const binding = { id:'binding', conversationId: 'group', recipientPrincipalId: 'bot:a:one', membershipEpoch: 'epoch' }
 const source = { kind: 'ds-bot-communication', ...binding, deliveryId: 'delivery', messageId: 'parent' }
 const input = { ...binding, deliveryId: 'delivery', messageId: 'parent', ai: true }
 const tool = { seq: 4, type: 'assistant/message', data: { turn: 2, message: { id: 'tool-message', content: [{ type: 'tool-call', id: 'call' }] } } }
@@ -49,7 +49,7 @@ test('active tool exports retain parent and causal delivery on journal retry', a
     assert.equal(first.messageId, second.messageId)
     assert.equal(queue.intent(first.messageId).payload.causationDeliveryId, 'delivery')
     assert.equal(queue.intent(first.messageId).payload.replyToMessageId, 'parent')
-    assert.equal(queue.intent(first.messageId).payload.responseToDeliveryId, undefined)
+    assert.equal(queue.intent(first.messageId).payload.responseToDeliveryId, 'delivery')
     delete exec.communicationCausation
     await assert.rejects(send(), { code: 'COMMUNICATION_INPUT_SOURCE_UNKNOWN' })
   } finally { queue.close() }
@@ -148,7 +148,7 @@ test('all-Bot tool retry keeps its original target expansion after the roster ch
   const members=[{principalId:actor.principalId,kind:'bot'},{principalId:'bot:b:two',kind:'bot'}]
   const info={membershipVersion:1,members}
   const runtime=Object.assign(Object.create(CommunicationRuntime.prototype),{queue,contacts:members,conversations:new Map([['group',info]]),member:()=>({kind:'group',speakingMode:'active',membershipEpoch:'epoch',membershipVersion:info.membershipVersion})})
-  const exec={callId:'call',agent:{id:'session'},communicationSource:'source',communicationBinding:binding,communicationCausation:{causationDeliveryId:'delivery',replyToMessageId:'parent'}}
+  const exec={callId:'call',agent:{id:'session'},communicationSource:'source',communicationBinding:{...binding,id:'binding'},communicationCausation:{causationDeliveryId:'delivery',replyToMessageId:'parent'}}
   try{
     const first=await runtime.sendBot(actor,{conversationId:'group',text:'Delegate to this batch',allBots:true},exec)
     members.push({principalId:'bot:b:three',kind:'bot'});info.membershipVersion=2
@@ -156,6 +156,37 @@ test('all-Bot tool retry keeps its original target expansion after the roster ch
     assert.equal(retry.messageId,first.messageId)
     assert.deepEqual(queue.intent(first.messageId).payload.activationTargets,[{principalId:'bot:b:two'}])
   }finally{queue.close()}
+})
+
+test('an immediate group answer completes only its exact input; the later receipt final is journaled without a second send',async()=>{
+ const dir=mkdtempSync(join(tmpdir(),'dsbot-tool-final-')),path=join(dir,'queue.sqlite')
+ let queue=new CommunicationQueue(path,{instanceId:'a'})
+ const actor=queue.localPrincipal('bot','one','One'),members=[{principalId:actor.principalId,kind:'bot'},{principalId:'bot:b:two',kind:'bot'}]
+ const current={...binding,id:'binding'}
+ const runtime=Object.assign(Object.create(CommunicationRuntime.prototype),{queue,contacts:members,conversations:new Map([['group',{members,membershipVersion:1}]]),member:()=>({kind:'group',speakingMode:'active',membershipEpoch:'epoch',membershipVersion:1})})
+ const exec={callId:'call',agent:{id:'session'},communicationSource:'immediate-answer',communicationBinding:current,communicationCausation:{causationDeliveryId:'input-A',replyToMessageId:'human-input'}}
+ try{
+  const sent=await runtime.sendBot(actor,{conversationId:'group',text:'@Two Please confirm once.',activationTargets:['bot:b:two']},exec)
+  assert.equal(sent.completesCurrentReply,false)
+  assert.equal(queue.intent(sent.messageId).payload.responseToDeliveryId,'input-A')
+  queue.close();queue=new CommunicationQueue(path,{instanceId:'a'});runtime.queue=queue
+  assert.equal(queue.completedToolReply('binding','input-A'),sent.messageId)
+  assert.equal(queue.completedToolReply('binding','different-input'),undefined)
+  assert.throws(()=>queue.completedToolReply('other-binding','input-A'),{code:'CONVERSATION_SCOPE_MISMATCH'})
+  const final={sourceKey:'receipt-final',sessionId:'session',seq:8,parts:[{part:0,text:'Sent @Two, status pending.'}]}
+  assert.throws(()=>queue.completeFinalExport('binding','input-A',final),{code:'RESPONSE_NOT_ACCEPTED'})
+  queue.accepted(sent.messageId,{messageId:sent.messageId})
+  queue.completeFinalExport('binding','input-A',final)
+  queue.completeFinalExport('binding','input-A',final)
+  assert.equal(queue.pendingOutbox().length,0)
+  assert.equal(queue.db.prepare('SELECT count(*) n FROM exports').get().n,2)
+  assert.equal((await runtime.sendBot(actor,{conversationId:'group',text:'@Two Please confirm once.',activationTargets:['bot:b:two']},exec)).messageId,sent.messageId)
+  await assert.rejects(runtime.sendBot(actor,{conversationId:'group',text:'Repeat @Two',activationTargets:['bot:b:two']},{...exec,communicationSource:'second-call'}),{code:'RESPONSE_ALREADY_SENT'})
+  const progress=await runtime.sendBot(actor,{conversationId:'group',text:'I am checking the result.',continueReply:true},{...exec,communicationSource:'progress',communicationCausation:{causationDeliveryId:'input-B',replyToMessageId:'other-input'}})
+  assert.equal(progress.completesCurrentReply,false)
+  assert.equal(queue.completedToolReply('binding','input-B'),undefined)
+  assert.equal(queue.pendingOutbox().length,1)
+ }finally{queue.close();rmSync(dir,{recursive:true,force:true})}
 })
 
 test('staged reply targets survive process queue reopen and remain bound to the original input',()=>{
@@ -166,7 +197,7 @@ test('staged reply targets survive process queue reopen and remain bound to the 
     queue.db.exec('PRAGMA user_version=2')
     queue.close();queue=new CommunicationQueue(path,{instanceId:'a'})
     assert.deepEqual(queue.replyTargets('binding','delivery'),['bot:b:two'])
-    assert.equal(queue.db.prepare('PRAGMA user_version').get().user_version,3)
+    assert.equal(queue.db.prepare('PRAGMA user_version').get().user_version,4)
     assert.deepEqual(queue.replyTargets('binding','new-input'),[])
     assert.throws(()=>queue.replyTargets('new-binding','delivery'),{code:'CONVERSATION_SCOPE_MISMATCH'})
   }finally{queue.close();rmSync(dir,{recursive:true,force:true})}

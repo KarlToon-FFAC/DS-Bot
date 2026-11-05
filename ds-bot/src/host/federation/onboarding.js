@@ -114,7 +114,7 @@ const checkedScope = record => {
   if (scope !== 'legacy' && scope !== namespace(record.hubId) && scope !== identityNamespace(record.hubId,record.publicKey)) fail('COMMUNICATION_CREDENTIAL_MISMATCH')
   return scope
 }
-const publicConfiguration = value => Object.fromEntries(['enabled','hubId','url','instanceId','credentialKey','credentialEnv','humanDisplayName','publishedBotIds','autoAcceptBotInvites','pollMs','contextHistoryBytes','rotateTokens','maxPending'].filter(key=>value?.[key]!==undefined).map(key=>[key,value[key]]))
+const publicConfiguration = value => Object.fromEntries(['enabled','hubId','url','instanceId','credentialKey','credentialEnv','humanDisplayName','publishedBotIds','autoAcceptBotInvites','localMemory','pollMs','contextHistoryBytes','rotateTokens','maxPending'].filter(key=>value?.[key]!==undefined).map(key=>[key,value[key]]))
 const selection = value => JSON.stringify([value?.hubId??null,value?.url??null,value?.instanceId??null,value?.credentialKey??null])
 function checkChallenge(challenge, expected, now = Date.now()) {
   if (!challenge || challenge.hubId !== expected.hubId || challenge.purpose !== expected.purpose
@@ -267,6 +267,8 @@ export class CommunicationOnboarding {
     if (action === 'update-hub-trust') return this.updateTrust(input)
     if (action === 'status' || action === 'cancel') return this.enrollment(action, input)
     if (action === 'storage') return this.storage(input)
+    if (action === 'memory-settings') return { localMemory: this.rt.config.communication?.localMemory !== false }
+    if (action === 'set-memory-settings') return this.setMemorySettings(input)
     if (action === 'available-bots') return this.availableBots()
     if (action === 'publish-bots') return this.publishBots(input)
     return this.contact(action, input)
@@ -304,6 +306,18 @@ export class CommunicationOnboarding {
       return { ...current, communication: { ...latest, publishedBotIds } }
     }))
     return { publishedBotIds: ids, reloadRequired: true }
+  }
+  async setMemorySettings(input) {
+    if (typeof input.localMemory !== 'boolean') fail('INVALID_CONFIG')
+    const configured = this.rt.config.communication
+    if (!configured?.url) fail('COMMUNICATION_NOT_CONFIGURED')
+    const { editor, entry } = this.editor()
+    await phase('COMMUNICATION_CONFIG_WRITE_FAILED', () => editor.edit(entry, current => {
+      const latest = current.communication
+      if (!latest || ['url', 'instanceId', 'hubId', 'credentialKey', 'credentialEnv'].some(key => latest[key] !== configured[key])) fail('COMMUNICATION_PAIRING_CONFLICT')
+      return { ...current, communication: { ...latest, localMemory: input.localMemory } }
+    }))
+    return { localMemory: input.localMemory, reloadRequired: true }
   }
   async storage(input) {
     const hubId = input.hubId

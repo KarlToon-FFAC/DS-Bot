@@ -246,14 +246,14 @@ test('export source mapping, complete outbox and cursor commit together and reus
 test('future database schema versions are refused before migration and existing records remain intact',()=>{
   const root=directory(),path=join(root,'future.sqlite')
   const future=new DatabaseSync(path)
-  future.exec("PRAGMA user_version=4; CREATE TABLE marker(value TEXT); INSERT INTO marker VALUES ('keep');")
+  future.exec("PRAGMA user_version=5; CREATE TABLE marker(value TEXT); INSERT INTO marker VALUES ('keep');")
   future.close()
   try{
     assert.throws(()=>new HubStore(path),{code:'SCHEMA_VERSION_UNSUPPORTED'})
     assert.throws(()=>new CommunicationQueue(path,{instanceId:'a'}),{code:'SCHEMA_VERSION_UNSUPPORTED'})
     const checked=new DatabaseSync(path)
     assert.equal(checked.prepare('SELECT value FROM marker').get().value,'keep')
-    assert.equal(checked.prepare('PRAGMA user_version').get().user_version,4)
+    assert.equal(checked.prepare('PRAGMA user_version').get().user_version,5)
     checked.close()
   }finally{cleanDirectory(root)}
 })

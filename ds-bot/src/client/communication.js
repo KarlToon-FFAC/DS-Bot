@@ -12,6 +12,7 @@ import { selectedAttachments } from './communication-attachments.js'
 import { ConversationRow, ConversationAvatar } from './communication-list.js'
 import { CommunicationActivity } from './communication-activity.js'
 import { CommunicationThread, ThreadReplyComposer } from './communication-thread.js'
+import { CommunicationMemory } from './communication-memory.js'
 import { CommunicationMessageActions } from './communication-message-actions.js'
 import { GearIcon, ArrowUpIcon, CloseIcon, InfoIcon, PeopleIcon, ChatsIcon, SearchIcon, PlusIcon, SidebarIcon } from './icons.js'
 import { communicationCSS } from './communication-styles.js'
@@ -477,6 +478,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
           h('label', { className: 'bt-comm-check' }, h('input', { type: 'checkbox', checked: showHidden, onChange: event => setShowHidden(event.target.checked) }), t('Show closed conversations')),
           state ? h('section', null, h('h3', null, t('Your profile')), h(HumanProfile, { key: `${scope}:${state.humanPrincipalId}`, human: contacts.find(person => person.principalId === state.humanPrincipalId) ?? { principalId: state.humanPrincipalId, displayName: t('You'), kind: 'human' }, request, operation }),
             h('details', null, h('summary', null, t('Device identity')), h('p', null, state.instanceId), h('code', null, state.humanPrincipalId))) : null,
+          h(CommunicationMemory, { key: scope, request }),
           h('section', null, h('h3', null, t('Connection and contacts')), btn('Add a device', () => setActivePanel('pairing')),
             btn('Manage contacts', () => setActivePanel('manage-contacts'), { disabled: !team.communicationEnabled }))) : activePanel === 'thread' ? member && threadMessageId ? h(Fragment,null,h(CommunicationThread, { key: `view:${contextKey.current}:${threadMessageId}`, member, messageId: threadMessageId, request, canSpeak, onInspect: inspect,
           selectedBranch:true,onReply:setThreadReplyTarget }),canSpeak?h(ThreadReplyComposer,{key:`composer:${contextKey.current}:${threadMessageId}`,storageKey:`ds-bot:communication:thread:${contextKey.current}:${threadMessageId}`,member,target:threadReplyTarget,request,onSent:refresh,attachmentsAvailable:state.attachmentsAvailable}):null) : null : activePanel === 'activity' ? h(CommunicationActivity, { state, member, events, outbox: activityOutbox, operations, operationPending: pendingForConversation, pendingAttempt: attempts[key], error, pollError: pollError || (syncError?.conversationId === selected ? syncError.message : ''), friendly, labels, busy,

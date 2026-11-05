@@ -14,7 +14,7 @@ export class HubStore {
     if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true })
     this.db = new DatabaseSync(path)
     const version=this.db.prepare('PRAGMA user_version').get().user_version
-    if(version>3){this.db.close();throw new CommunicationError('SCHEMA_VERSION_UNSUPPORTED')}
+    if(version>4){this.db.close();throw new CommunicationError('SCHEMA_VERSION_UNSUPPORTED')}
     this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;
       CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY);
       INSERT OR IGNORE INTO schema_version VALUES (1);
@@ -40,6 +40,7 @@ export class HubStore {
       CREATE TABLE IF NOT EXISTS causal_roots (id TEXT PRIMARY KEY, conversation_id TEXT NOT NULL REFERENCES conversations(id), ai_deliveries INTEGER NOT NULL DEFAULT 0);
       CREATE TABLE IF NOT EXISTS message_causality (message_id TEXT PRIMARY KEY REFERENCES messages(id), root_id TEXT NOT NULL REFERENCES causal_roots(id), parent_id TEXT, depth INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS causal_schema (version INTEGER PRIMARY KEY);
+      CREATE TABLE IF NOT EXISTS input_updates (message_id TEXT PRIMARY KEY,parent_delivery_id TEXT NOT NULL,recipient_id TEXT NOT NULL,epoch TEXT NOT NULL,read INTEGER NOT NULL DEFAULT 0);
       CREATE TABLE IF NOT EXISTS bot_dispatches (cause_key TEXT NOT NULL,author_id TEXT NOT NULL,target_id TEXT NOT NULL,PRIMARY KEY(cause_key,author_id,target_id));
       `)
     if(version<2)this.transaction(()=>{
@@ -58,7 +59,8 @@ export class HubStore {
         INSERT OR IGNORE INTO schema_version VALUES (2); PRAGMA user_version=2;`)
     })
     if(version<3)this.transaction(()=>this.db.exec('INSERT OR IGNORE INTO schema_version VALUES (3); PRAGMA user_version=3;'))
-    requireThat(this.db.prepare('SELECT max(version) version FROM schema_version').get().version === 3, 'SCHEMA_VERSION_UNSUPPORTED')
+    if(version<4)this.transaction(()=>this.db.exec('INSERT OR IGNORE INTO schema_version VALUES (4); PRAGMA user_version=4;'))
+    requireThat(this.db.prepare('SELECT max(version) version FROM schema_version').get().version === 4, 'SCHEMA_VERSION_UNSUPPORTED')
     if (!this.db.prepare('SELECT 1 FROM causal_schema WHERE version=1').get()) this.transaction(()=>{
       const latestHuman = new Map()
       for (const row of this.db.prepare('SELECT m.*,p.kind FROM messages m JOIN principals p ON p.id=m.author_id ORDER BY m.conversation_id,m.seq').all()) {
@@ -592,7 +594,7 @@ export class HubStore {
         requireThat(author.kind==='human'?sender.speaking_mode==='speak':['passive','active'].includes(sender.speaking_mode),'SPEAKING_FORBIDDEN')
         requireThat(author.kind!=='bot'||sender.speaking_mode!=='passive'||message.responseToDeliveryId,'PASSIVE_REPLY_REQUIRED')
       }
-      let cause
+      let cause, updateParent
       if(message.responseToDeliveryId || message.causationDeliveryId){
         requireThat(!message.responseToDeliveryId || !message.causationDeliveryId || message.responseToDeliveryId===message.causationDeliveryId,'INVALID_CAUSATION_GRANT')
         const delivery=this.db.prepare('SELECT d.*,m.conversation_id FROM deliveries d JOIN messages m ON m.id=d.message_id WHERE d.id=?').get(message.responseToDeliveryId ?? message.causationDeliveryId)
@@ -601,6 +603,20 @@ export class HubStore {
           &&(!message.responseToDeliveryId || delivery.message_id===message.replyToMessageId),message.responseToDeliveryId?'INVALID_RESPONSE_GRANT':'INVALID_CAUSATION_GRANT')
         if(message.responseToDeliveryId)requireThat(!this.db.prepare('SELECT 1 FROM responses WHERE delivery_id=?').get(delivery.id),'RESPONSE_ALREADY_SENT')
         cause=delivery
+      }
+      if (message.updateForMessageId) {
+        const original=this.db.prepare('SELECT * FROM messages WHERE id=?').get(message.updateForMessageId)
+        requireThat(original && original.author_id===author.principalId && original.conversation_id===message.conversationId, 'INVALID_INPUT_UPDATE')
+        updateParent=this.db.prepare('SELECT * FROM deliveries WHERE message_id=? AND recipient_id=?').get(original.id,message.updateRecipientPrincipalId)
+        requireThat(updateParent?.ai===1 && !updateParent.revoked && this.isPublished(updateParent.recipient_id), 'INVALID_INPUT_UPDATE')
+        const target=this.db.prepare('SELECT * FROM memberships WHERE conversation_id=? AND principal_id=?').get(message.conversationId,updateParent.recipient_id)
+        requireThat(target?.active===1 && target.epoch===updateParent.membership_epoch, 'MEMBERSHIP_REVOKED')
+        requireThat(!this.db.prepare('SELECT 1 FROM responses WHERE delivery_id=?').get(updateParent.id), 'HANDOFF_ALREADY_COMPLETED')
+        requireThat(this.db.prepare('SELECT count(*) n FROM input_updates WHERE parent_delivery_id=?').get(updateParent.id).n<100, 'BACKPRESSURE')
+      }
+      if (message.responseToDeliveryId) {
+        const updates=this.db.prepare('SELECT message_id,read FROM input_updates WHERE parent_delivery_id=?').all(message.responseToDeliveryId)
+        requireThat(updates.every(update=>update.read===1 && message.inputUpdateIds?.includes(update.message_id)), 'INPUT_UPDATES_PENDING')
       }
       const members=this.db.prepare('SELECT m.*,p.kind,coalesce(pub.published,1) published FROM memberships m JOIN principals p ON p.id=m.principal_id LEFT JOIN principal_publication pub ON pub.principal_id=p.id WHERE conversation_id=? AND active=1').all(message.conversationId)
       if(message.attachments?.length)for(const member of members){const instance=this.db.prepare('SELECT instance_id FROM principals WHERE id=?').get(member.principal_id);requireThat(this.db.prepare('SELECT attachments FROM instance_features WHERE instance_id=?').get(instance.instance_id)?.attachments===1,'ATTACHMENT_CAPABILITY_REQUIRED')}
@@ -622,7 +638,8 @@ export class HubStore {
         }
       }
       let rootId, parentMessageId=null, depth=0
-      if(author.kind==='human')rootId=`message:${message.messageId}`
+      if(updateParent){const parent=this.db.prepare('SELECT * FROM message_causality WHERE message_id=?').get(message.updateForMessageId);rootId=parent.root_id;parentMessageId=message.updateForMessageId;depth=parent.depth+1}
+      else if(author.kind==='human')rootId=`message:${message.messageId}`
       else if(cause){
         const parent=this.db.prepare('SELECT * FROM message_causality WHERE message_id=?').get(cause.message_id)
         requireThat(parent,'INVALID_CAUSATION_GRANT')
@@ -649,6 +666,7 @@ export class HubStore {
         const mayReceiveAi=conversation.kind==='dm'||['passive','active'].includes(member.speaking_mode)
         let ai=member.kind==='bot'&&member.published===1&&member.principal_id!==author.principalId&&mayReceiveAi&&(conversation.kind==='dm'?true:
           mentioned||(!explicitBots.length&&replyBot===member.principal_id)||(!replyBot&&!message.mentions.length&&author.kind==='human'&&conversation.routing_mode==='admin'&&conversation.admin_bot===member.principal_id))
+        if(message.updateForMessageId)ai=false
         if(ai&&author.kind==='bot'&&this.db.prepare('SELECT 1 FROM bot_dispatches WHERE cause_key=? AND author_id=? AND target_id=?').get(dispatchKey,author.principalId,member.principal_id)){ai=false;duplicate=true}
         return {deliveryId:randomUUID(),messageId:message.messageId,conversationId:message.conversationId,recipientPrincipalId:member.principal_id,membershipEpoch:member.epoch,routingVersion:conversation.version,notify:member.kind==='human'&&member.principal_id!==author.principalId,ai:Boolean(ai),event}
       })
@@ -666,6 +684,7 @@ export class HubStore {
       this.event(message.conversationId,'message',{message,serverAcceptedAt:acceptedAt,payloadHash:digest,causality,...(event.dispatchSuppressed?{dispatchSuppressed:event.dispatchSuppressed}:{})},message.messageId)
       this.db.prepare('INSERT INTO messages VALUES (?,?,?,?,?,?,?)').run(message.messageId,message.conversationId,event.conversationSeq,digest,author.principalId,JSON.stringify(message),acceptedAt)
       this.db.prepare('INSERT INTO message_causality VALUES (?,?,?,?)').run(message.messageId,rootId,parentMessageId,depth)
+      if(updateParent)this.db.prepare('INSERT INTO input_updates(message_id,parent_delivery_id,recipient_id,epoch) VALUES (?,?,?,?)').run(message.messageId,updateParent.id,updateParent.recipient_id,updateParent.membership_epoch)
       if(message.responseToDeliveryId)this.db.prepare('INSERT INTO responses VALUES (?,?)').run(message.responseToDeliveryId,message.messageId)
       for(const delivery of deliveries){
         if(delivery.ai&&author.kind==='bot')this.db.prepare('INSERT INTO bot_dispatches VALUES (?,?,?)').run(dispatchKey,author.principalId,delivery.recipientPrincipalId)
@@ -743,6 +762,14 @@ export class HubStore {
       requireThat(!row.revoked,'MEMBERSHIP_REVOKED')
       requireThat(input.membershipEpoch===row.membership_epoch,'MEMBERSHIP_REVOKED')
       this.member(auth,row.conversation_id,row.recipient_id,input.membershipEpoch)
+      if(input.status==='updateRead'){
+        const update=this.db.prepare('SELECT * FROM input_updates WHERE message_id=? AND recipient_id=? AND epoch=?').get(row.message_id,row.recipient_id,row.membership_epoch)
+        requireThat(update && row.stored===1 && row.kind==='bot', 'INVALID_RECEIPT')
+        const eventId=`bot-input-read:${row.id}`
+        if(!this.db.prepare('SELECT 1 FROM events WHERE id=?').get(eventId))this.event(row.conversation_id,'bot.input.read',{deliveryId:row.id,messageId:row.message_id,principalId:row.recipient_id,parentDeliveryId:update.parent_delivery_id,membershipEpoch:row.membership_epoch},eventId)
+        this.db.prepare('UPDATE input_updates SET read=1 WHERE message_id=?').run(row.message_id)
+        return {deliveryId:row.id,status:input.status,eventId}
+      }
       if(input.status==='aiStarted'){
         requireThat(row.kind==='bot'&&row.ai===1,'INVALID_RECEIPT')
         requireThat(this.isPublished(row.recipient_id),'BOT_NOT_PUBLISHED')
@@ -776,6 +803,8 @@ export class HubStore {
     const message=this.db.prepare('SELECT * FROM messages WHERE id=? AND author_id=?').get(input.messageId,author.principalId)
     requireThat(message,'FORBIDDEN')
     requireThat(message.seq>=this.member(auth,message.conversation_id,author.principalId).join_seq,'FORBIDDEN')
-    return this.db.prepare("SELECT id deliveryId,recipient_id recipientPrincipalId,membership_epoch membershipEpoch,notify,ai,stored targetStored,applied uiApplied,human_read humanRead,ai_accepted aiAccepted,revoked,CASE WHEN revoked=1 THEN 'permission_revoked' ELSE NULL END rejectionReason FROM deliveries WHERE message_id=?").all(message.id)
+    const deliveries=this.db.prepare("SELECT id deliveryId,recipient_id recipientPrincipalId,membership_epoch membershipEpoch,notify,ai,stored targetStored,applied uiApplied,human_read humanRead,ai_accepted aiAccepted,revoked,CASE WHEN revoked=1 THEN 'permission_revoked' ELSE NULL END rejectionReason FROM deliveries WHERE message_id=?").all(message.id)
+    const update=this.db.prepare('SELECT recipient_id,read FROM input_updates WHERE message_id=?').get(message.id)
+    return deliveries.map(delivery=>update && delivery.recipientPrincipalId===update.recipient_id?{...delivery,inputUpdate:true,updateRead:Boolean(update.read)}:delivery)
   }
 }

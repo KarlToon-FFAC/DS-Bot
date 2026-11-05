@@ -17,11 +17,22 @@ export function hasCommunicationPreset(registry, agent) {
 export function sourceDelivery(queue, binding, source) {
   if (!source || source.conversationId !== binding.conversationId) fail('COMMUNICATION_INPUT_SOURCE_UNKNOWN')
   const recovery = source.kind === 'ds-bot-communication-recovery'
-  if (!recovery && source.kind !== 'ds-bot-communication') fail('COMMUNICATION_INPUT_SOURCE_UNKNOWN')
+  if (!recovery && !['ds-bot-communication','ds-bot-communication-update'].includes(source.kind)) fail('COMMUNICATION_INPUT_SOURCE_UNKNOWN')
   const id = recovery ? source.forDeliveryId : source.deliveryId
   const row = queue.db.prepare('SELECT body,revoked FROM inbox WHERE delivery_id=?').get(id ?? '')
   if (!row || row.revoked) fail('COMMUNICATION_INPUT_SOURCE_UNKNOWN')
   const delivery = JSON.parse(row.body)
+  if (delivery.event?.message?.updateForMessageId) {
+    if(!recovery && (source.kind!=='ds-bot-communication-update'||source.recipientPrincipalId!==binding.recipientPrincipalId) || source.membershipEpoch!==undefined&&source.membershipEpoch!==binding.membershipEpoch)fail('COMMUNICATION_INPUT_SOURCE_UNKNOWN')
+    if(delivery.conversationId!==binding.conversationId || delivery.recipientPrincipalId!==binding.recipientPrincipalId || delivery.membershipEpoch!==binding.membershipEpoch
+      || delivery.event.message.updateRecipientPrincipalId!==binding.recipientPrincipalId || delivery.ai
+      || delivery.messageId!==(recovery?source.forMessageId:source.messageId))fail('COMMUNICATION_INPUT_SOURCE_UNKNOWN')
+    const parent=queue.db.prepare('SELECT body FROM inbox WHERE message_id=? AND principal_id=? AND epoch=? AND ai=1 AND revoked=0').get(delivery.event.message.updateForMessageId,binding.recipientPrincipalId,binding.membershipEpoch)
+    if(!parent)fail('COMMUNICATION_INPUT_SOURCE_UNKNOWN')
+    const original=JSON.parse(parent.body)
+    return sourceDelivery(queue,binding,{kind:'ds-bot-communication',conversationId:binding.conversationId,recipientPrincipalId:binding.recipientPrincipalId,membershipEpoch:binding.membershipEpoch,deliveryId:original.deliveryId,messageId:original.messageId})
+  }
+
   if (delivery.conversationId !== binding.conversationId || delivery.recipientPrincipalId !== binding.recipientPrincipalId
     || delivery.membershipEpoch !== binding.membershipEpoch || !delivery.ai
     || delivery.messageId !== (recovery ? source.forMessageId : source.messageId)

@@ -108,7 +108,7 @@ export function interruptedInputs(sessions, binding) {
       if (event.type === 'turn/end' && turns.has(event.data.turn)) Object.assign(turns.get(event.data.turn), { end: event.seq, reason: event.data.reason.kind })
       if (event.type !== 'user/message' || event.data.source?.conversationId !== binding.conversationId) continue
       const source = event.data.source
-      if (source.kind === SOURCE_KIND && source.recipientPrincipalId === binding.recipientPrincipalId) inputs.set(source.deliveryId, { source, turn })
+      if ([SOURCE_KIND,'ds-bot-communication-update'].includes(source.kind) && source.recipientPrincipalId === binding.recipientPrincipalId) inputs.set(source.deliveryId, { source, turn })
       if (source.kind === RECOVERY_SOURCE_KIND && inputs.has(source.forDeliveryId)) inputs.get(source.forDeliveryId).turn = turn
     }
     const outputs = completedOutputs([session], binding, { recoverSettled: true })
@@ -126,7 +126,7 @@ export function reconcileInput(sessions, source) {
   const pending = []
   let claimed = false
   let canceled = false
-  const matches = message => message?.source?.kind === SOURCE_KIND
+  const matches = message => message?.source?.kind === source.kind
     && message.source.deliveryId === source.deliveryId
     && message.source.messageId === source.messageId
     && message.source.conversationId === source.conversationId
@@ -205,7 +205,7 @@ export function completedOutputs(sessions, binding, { recoverSettled = false } =
         ? [{ part: index, text: block.text }] : [])
       if (!parts.some(part => part.text.trim())) continue
       const inputs = inputsByTurn.get(turn) ?? []
-      if (!inputs.length || inputs.some(source => !source || ![SOURCE_KIND, RECOVERY_SOURCE_KIND].includes(source.kind)
+      if (!inputs.length || inputs.some(source => !source || ![SOURCE_KIND, RECOVERY_SOURCE_KIND, 'ds-bot-communication-update'].includes(source.kind)
         || source.conversationId !== binding.conversationId
         || source.kind === SOURCE_KIND && source.recipientPrincipalId !== binding.recipientPrincipalId
         || source.membershipEpoch !== undefined && source.membershipEpoch !== binding.membershipEpoch)) {

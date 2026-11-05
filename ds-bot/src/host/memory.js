@@ -460,6 +460,7 @@ export function install(rt) {
   if (config.memory === false) {
     Object.assign(rt, {
       memoryEnabled: false,
+      communicationMemory: () => '',
       renewMemory: () => {},
       archiveBotMemory: async () => {},
       archiveGroupMemory: async () => {},
@@ -1804,7 +1805,23 @@ export function install(rt) {
     throw new Error(`Unknown endpoint ${endpoint}`)
   }
 
+  function communicationMemory(botId) {
+    if (!rt.botOf(botId)) return ''
+    const pending = pendingChange()
+    if (pending.pending || pending.failed) return ''
+    const read = sectionRead(join(dirOf(ownScope(botId)), MAIN))
+    if (read.failed) return ''
+    // Only the executing Bot's main entries cross this opt-out boundary. Chat
+    // summaries, metadata, topic files, team memory and other scopes stay local.
+    return parseMemory(read.text).entries
+      .filter(entry => !['local', 'private', 'never'].includes(entry.meta.sharing?.toLowerCase()))
+      .map(entry => entry.text)
+      .filter(text => !secretEntry(text))
+      .map(text => `- ${text}`).join('\n').slice(0, 10000)
+  }
+
   Object.assign(rt, {
+    communicationMemory,
     memoryEnabled: true, renewMemory, archiveBotMemory, archiveGroupMemory, memoryEndpoint, memoryReviews,
     memoryNews: () => Object.fromEntries(news), botShot,
   })

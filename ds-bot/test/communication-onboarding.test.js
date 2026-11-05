@@ -414,3 +414,16 @@ test('known public config-editor guards have fixed diagnostic codes without expo
     assert.equal(f.configWrites.length, 0)
   }
 })
+
+
+test('local memory settings default on, require the local Human and preserve other configuration', async () => {
+  const f = fixture({ current: { untouched: 'local', communication: { enabled: true, ...hub, instanceId: 'instance', credentialKey: 'reference' } } })
+  assert.deepEqual(await f.onboarding.handle('memory-settings', {}, human), { localMemory: true })
+  await assert.rejects(f.onboarding.handle('set-memory-settings', { localMemory: false }, { human: true, agent: {} }), { code: 'HUMAN_REQUIRED' })
+  await assert.rejects(f.onboarding.handle('set-memory-settings', { localMemory: 'false' }, human), { code: 'INVALID_CONFIG' })
+  assert.deepEqual(await f.onboarding.handle('set-memory-settings', { localMemory: false }, human), { localMemory: false, reloadRequired: true })
+  assert.equal(f.configWrites.at(-1).communication.localMemory, false)
+  assert.equal(f.configWrites.at(-1).communication.credentialKey, 'reference')
+  assert.equal(f.configWrites.at(-1).untouched, 'local')
+  assert.equal(f.sockets, 0)
+})

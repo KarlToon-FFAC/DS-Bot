@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { ATTACHMENT_CAPABILITY } from '../../shared/communication-attachments.js'
 
 const PROTOCOL = 'dsbot-communication/1'
-const CAPABILITIES = ['text', 'markdown', 'mentions', 'group', 'dm', 'reply', 'history', 'group-policy', 'membership-epoch', 'explicit-bot-activation']
+const CAPABILITIES = ['text', 'markdown', 'mentions', 'group', 'dm', 'reply', 'history', 'group-policy', 'membership-epoch', 'explicit-bot-activation', 'bot-input-updates']
 const BOUNDED_COLLABORATION = 'bounded-bot-collaboration'
 export const communicationCapabilities = () => [...CAPABILITIES, BOUNDED_COLLABORATION, ATTACHMENT_CAPABILITY]
 const outboxCapacity = Symbol('outbox-capacity')
@@ -110,6 +110,13 @@ export class CommunicationTransport {
   }
   async synchronize() {
     if (!this.connected) throw errorWith('CONNECTION_LOST')
+    // Recovery may retain both receipts. Hub storage must precede proof of model read,
+    // and both must precede publication of a final covering that supplement.
+    for (const receipt of this.queue.pendingReceipts().filter(item=>['targetStored','updateRead'].includes(item.payload.status))
+      .sort((a,b)=>Number(a.payload.status==='updateRead')-Number(b.payload.status==='updateRead'))) {
+      try { await this.request('delivery.receipt',receipt.payload);this.queue.receiptAccepted(receipt.id) }
+      catch(error){ if(transient.has(error.code)||error.code==='STALE_CONNECTION')throw error;this.queue.receiptRejected(receipt.id,error.code??'INVALID_RESPONSE') }
+    }
     let deferredError
     for (const item of this.queue.pendingOutbox()) {
       try {

@@ -182,7 +182,7 @@ function start({ home = mkdtempSync(join(tmpdir(), 'ds-bot-memory-')), replies =
     await ctx.dispose()
     if (!keep) rmSync(home, { recursive: true, force: true, maxRetries: 5 })
   }
-  return { ctx, home, call, tool, section, read, journal, requests, warnings, stop }
+  return { rt, ctx, home, call, tool, section, read, journal, requests, warnings, stop }
 }
 
 const settle = () => new Promise(resolve => setTimeout(resolve, 20))
@@ -1485,4 +1485,23 @@ test('all resident Memory scopes accept exactly 10000 UTF-16 units and reject gr
     }
   }
   assert.deepEqual(MEMORY_LIMITS, { entry: 300, main: 10000, topic: 16000, topics: 40 })
+})
+
+
+test('communication memory reads only the executing Bot main entries without source metadata or secrets', async () => {
+  const fixture = start()
+  try {
+    for (const [scope, text] of [['bots/b2', '- Likes tea [source: private anchor]\n- Do not share this canary [sharing: local]\n- Another private canary [sharing: PRIVATE]\n- Never disclose [sharing: never]\n- password is synthetic-secret\n'], ['bots/b3', '- Other Bot canary\n'], ['team', '- Team canary\n'], ['groups/r1', '- Group canary\n']]) {
+      const dir = join(fixture.home, 'memory', scope)
+      mkdirSync(dir, { recursive: true })
+      writeFileSync(join(dir, 'MEMORY.md'), '# Memory\n\n' + text)
+    }
+    writeFileSync(join(fixture.home, 'memory/bots/b2/topic.md'), '- Topic canary')
+    assert.equal(fixture.rt.communicationMemory('b2'), '- Likes tea')
+    assert.equal(fixture.rt.communicationMemory('missing'), '')
+    fixture.rt.redactSecrets = text => text.replace('tea', '[redacted]')
+    assert.equal(fixture.rt.communicationMemory('b2'), '')
+  } finally { await fixture.stop() }
+  const disabled = start({ config: { memory: false } })
+  try { assert.equal(disabled.rt.communicationMemory('b2'), '') } finally { await disabled.stop() }
 })

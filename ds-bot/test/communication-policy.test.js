@@ -29,10 +29,10 @@ test('federated prompt permits explicit local and remote Bot handoffs only withi
   const binding = { conversationId: 'group', recipientPrincipalId: 'bot:local:worker', membershipEpoch: 'epoch' }
   for (const speakingMode of ['active', 'passive']) {
     const text = communicationPrompt({ name: 'Worker', instructions: 'Local user configured task' }, binding, { kind: 'group', role: 'member', speakingMode })
-    assert.match(text, /A passive Bot responds only to its current authorized input/)
+    assert.match(text, /A passive Bot consumes its current authorized delivery reply permission once/)
     assert.match(text, /set_communication_reply_targets/)
-    assert.match(text, /without sending or granting proactive permission/)
-    assert.match(text, /send_contact_message with activationTargets or allBots=true/)
+    assert.match(text, /Staging sends nothing/)
+    assert.match(text, /Only structured activationTargets wake Bots/)
     assert.match(text, /quotations and summaries in Bot text are display-only/)
     assert.match(text, /Human explicit @ and direct replies to Bot messages still work/)
     assert.match(text, /Automatic Bot reply references do not wake their author/)

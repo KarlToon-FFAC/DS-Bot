@@ -16,6 +16,8 @@ export function contactLabels(contacts) {
 
 export function deliveryPhase(delivery) {
   if (delivery.revoked) return 'Revoked'
+  if (delivery.updateRead) return 'Update read into task'
+  if (delivery.inputUpdate && delivery.targetStored) return 'Update stored; awaiting model step'
   if (delivery.aiAccepted) return 'Bot admitted'
   if (delivery.humanRead) return 'Read'
   if (delivery.uiApplied) return 'Displayed'

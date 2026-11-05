@@ -130,6 +130,8 @@ function decide(body) {
     const communicationResults = isResults(last) && blocks.findLastIndex(block => block.type === 'tool_result')
       > blocks.findLastIndex(block => block.type === 'text' && block.text.includes('[Communication delivery]'))
     const current = textOf(last?.content)
+    const receiptCommand=/^COMM-RECEIPT (\S+) (\S+) (\S+)$/m.exec(textOf(messages.findLast(message=>message.role==='user'&&textOf(message.content).includes('[Communication delivery]'))?.content))
+    if(receiptCommand)return communicationResults?[text('Sent @CollabB, status pending. Internal tool receipt.')]:[tool('send_contact_message',{conversationId:receiptCommand[1],activationTargets:[receiptCommand[2]],text:`COMM-COLLAB DONE ${receiptCommand[3]} @CollabB`})]
     const recovering = current.startsWith('[Local transport recovery notice]')
     const stagedHandoff = isResults(last) && blocks.some(block => block.type === 'tool_result' && JSON.stringify(block.content).includes('staged'));
     const commandText = (recovering || stagedHandoff) ? messages.findLast(message => message.role === 'user' && textOf(message.content).includes('[Communication delivery]'))?.content : last?.content
@@ -150,7 +152,7 @@ function decide(body) {
       if (!communicationResults && collaborationBurst) {
         const count = Number(collaborationBurst[3])
         if (count < 1 || count > 40) return [text('Collaboration burst count rejected')]
-        return Array.from({ length: count }, (_, index) => tool('send_contact_message', { conversationId: collaborationBurst[1], text: `COMM-COLLAB DONE ${collaborationBurst[4]}-${index}`, mentions: [collaborationBurst[2]] }))
+        return Array.from({ length: count }, (_, index) => tool('send_contact_message', { conversationId: collaborationBurst[1], text: `COMM-COLLAB DONE ${collaborationBurst[4]}-${index}`, mentions: [collaborationBurst[2]],continueReply:true }))
       }
     const restate = /^COMM-RESTATE (single|all|quote) (\S+)$/.exec(command)
     if (!communicationResults && restate) return [text(`${restate[1] === 'quote' ? '> ' : ''}Summary ${restate[2]} ${restate[1] === 'all' ? '@all' : '@CollabB'}`)]
