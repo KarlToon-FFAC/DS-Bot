@@ -4,7 +4,6 @@ import { call } from './api.js'
 import { createElement as h, Fragment, useEffect, useRef, useState } from 'react'
 import { CommunicationAvatar } from './communication-profile.js'
 import { ContactDirectory } from './communication-contacts.js'
-import { AddressNotes } from './communication-address-notes.js'
 import { BotMark } from './mark.js'
 import { t } from './i18n.js'
 import { communicationFailure, knownCommunicationFailure } from './communication-errors.js'
@@ -248,11 +247,11 @@ export function OwnRemoteProfile({ request, operation, revision, bots = [] }) {
     h(CommunicationActionDialog,{open:confirm==='rotate',title:'Rotate user code',confirmLabel:'Confirm code rotation',onClose:()=>setConfirm(''),danger:true,error,onConfirm:()=>run(()=>operation('rotate-user-code',{}))},h('p',null,t('The previous user code will stop working. Existing contacts are retained.'))),
     h('details', { className: 'bt-comm-contact-section', open: true }, h('summary', null, t('Published Bots')), h(BotChoices, { bots: available.bots, selected: published, onChange: value => { if (!publicationDirty.current) publicationBase.current = [...available.publishedBotIds]; publicationDirty.current = true; setPublished(value) }, label: 'Bots available to contacts' }),
       h('button', { type: 'button', disabled: busy || JSON.stringify([...published].sort()) === JSON.stringify([...available.publishedBotIds].sort()), 'data-dirty': JSON.stringify([...published].sort()) !== JSON.stringify([...available.publishedBotIds].sort()), onClick: () => { void run(async () => { await operation('publish-bots', { localBotIds: published, expectedPublishedBotIds: publicationBase.current ?? available.publishedBotIds }); publicationDirty.current = false; publicationBase.current = null }) } }, t('Save published Bots')),
-      available.bots.map(item => { const bot = bots.find(bot => bot.id === item.id); return bot ? h('details', { key: item.id, className: 'bt-comm-local-profile' }, h('summary', null, item.name, ' · ', t('Remote profile')), h(BotPublicProfile, { bot, actions: publicProfileActions })) : null }),
+      available.bots.map(item => { const bot = bots.find(bot => bot.id === item.id); return bot ? h(BotPublicProfile, {key:item.id,bot,actions:publicProfileActions}) : null }),
       publicationDirty.current ? h('button', { type: 'button', disabled: busy, onClick: () => { publicationDirty.current = false; publicationBase.current = null; setPublished([...available.publishedBotIds]); setError('') } }, t('Discard publication changes')) : null))
 }
 
-export function ContactManager({ request, operation, contacts, humanPrincipalId, instanceId, onMessage, messageBusy, addressNotes, onSaveAddressNote, revision, connectionKnown }) {
+export function ContactManager({ request, operation, contacts, humanPrincipalId, instanceId, onMessage, messageBusy, revision, connectionKnown }) {
   const [data, setData] = useState(null), [userCode, setUserCode] = useState('')
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [confirm, setConfirm] = useState('')
   const generation = useRef(0), loadOrder = useRef(0), working = useRef(false)
@@ -289,9 +288,8 @@ export function ContactManager({ request, operation, contacts, humanPrincipalId,
   return h('div', { className: 'bt-comm-contact-manager' },
     liveError ? h('p', { className: 'bt-comm-reference', role: 'status' }, t('Status may be out of date.'), ' ', liveError) : null,
     error ? h('p', { className: 'bt-comm-error', role: 'alert' }, error) : null,
-    h(ContactDirectory, { contacts, relations: data?.relations ?? [], humanPrincipalId, instanceId, request, addressNotes, connectionKnown: liveError ? false : connectionKnown, busy: busy || messageBusy, onMessage, onRemove: item => setConfirm(item) }),
+    h(ContactDirectory, { contacts, relations: data?.relations ?? [], humanPrincipalId, instanceId, request, connectionKnown: liveError ? false : connectionKnown, busy: busy || messageBusy, onMessage, onRemove: item => setConfirm(item) }),
     h(CommunicationActionDialog,{open:Boolean(confirm),title:'Remove contact',confirmLabel:'Confirm contact removal',onClose:()=>setConfirm(''),danger:true,error,onConfirm:()=>run(()=>operation('revoke-contact',{otherHumanPrincipalId:confirm.otherHumanPrincipalId,expectedVersion:confirm.version}))},h('p',null,contacts.find(person=>person.principalId===confirm?.otherHumanPrincipalId)?.displayName ?? confirm?.otherHumanPrincipalId),h('p',null,t('This revokes the contact relationship and access to shared private conversations.'))),
-    h(AddressNotes, { contacts, notes: addressNotes, onSave: onSaveAddressNote, busy: busy || messageBusy }),
     h('details', { className: 'bt-comm-contact-section' }, h('summary', null, t('Add a contact')),
     h('label', { className: 'bt-comm-field' }, t('Other user code'), h('input', { value: userCode, maxLength: 64, 'aria-label': t('Other user code'), onChange: event => setUserCode(event.target.value) })),
     h('button', { type: 'button', disabled: busy || !userCode.trim(), onClick: () => { void run(async () => { await operation('request-contact', { userCode }); setUserCode('') }) } }, t('Request contact')),

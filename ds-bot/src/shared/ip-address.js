@@ -1,5 +1,5 @@
-// Address labels are not identities. Ports do not distinguish IP notes; a bare
-// IPv6 address is never split at its last colon as if it contained a port.
+// Canonical network addresses do not establish a contact identity. A bare IPv6
+// address is never split at its last colon as if it contained a port.
 export function normalizeIpAddress(value) {
   if (typeof value !== 'string' || value.length > 128) return null
   let address = value.trim(), port

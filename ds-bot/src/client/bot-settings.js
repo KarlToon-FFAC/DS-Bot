@@ -1,3 +1,4 @@
+import { CommunicationDialog } from './communication-dialog.js'
 import { createElement as h, Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import { paintCss } from './inks.js'
 import { CHARACTERS, PICKER_SHAPES, PICKER_COLUMNS, CHARACTER_COLORS, SHAPES, hasShape, shapeOf, bodyOf, maskBox, holes, nextMarkSerial } from './characters.js'
@@ -180,10 +181,22 @@ const publicProfileDraft = profile => ({ headline: profile?.headline ?? '', summ
 const publicProfileList = value => value.split(/[,，\n]/).map(item => item.trim()).filter(Boolean)
 
 export function BotPublicProfile({ bot, actions }) {
+  const [open,setOpen] = useState(false)
+  return h(Card,{title:bot.name?`${bot.name} · ${t('Remote profile')}`:t('Remote profile')},
+    bot.publicProfile?.headline ? h('p',{className:'bt-set-hint'},bot.publicProfile.headline) : null,
+    h('button',{type:'button',className:'bt-soft bt-soft-sm',onClick:()=>setOpen(true),'aria-label':t('Edit remote profile')},t('Edit remote profile')),
+    h(BotPublicProfileEditor,{bot,actions,open,onClose:()=>setOpen(false)}))
+}
+
+function BotPublicProfileEditor({ bot, actions, open, onClose }) {
   const [draft, setDraft] = useState(() => publicProfileDraft(bot.publicProfile))
   const [base, setBase] = useState(() => ({ draft: publicProfileDraft(bot.publicProfile), revision: bot.publicProfile?.revision ?? 0 }))
   const [busy, setBusy] = useState(false), [error, setError] = useState('')
-  const active = useRef(true), edits = useRef(0)
+  const active = useRef(true), edits = useRef(0), wasOpen = useRef(false)
+  useEffect(()=>{
+    if(open && !wasOpen.current){const next=publicProfileDraft(bot.publicProfile);setDraft(next);setBase({draft:next,revision:bot.publicProfile?.revision??0});setError('');edits.current=0}
+    wasOpen.current=open
+  },[open])
   useEffect(() => { active.current = true; return () => { active.current = false } }, [])
   const dirty = JSON.stringify(draft) !== JSON.stringify(base.draft)
   useEffect(() => {
@@ -208,12 +221,12 @@ export function BotPublicProfile({ bot, actions }) {
       if (active.current) setError(failure?.message ?? t('Unable to update profile'))
     } finally { if (active.current) setBusy(false) }
   }
-  return h(Card, { title: t('Remote profile') },
+  return h(CommunicationDialog,{open,title:'Edit remote profile',onClose,busy,actions:h('div',{className:'bt-comm-operation-buttons'},h('button',{type:'button',onClick:onClose,disabled:busy,'data-dialog-cancel':true},t('Cancel')),h('button',{type:'button',className:'bt-comm-primary',disabled:busy||!dirty,onClick:()=>{void commit()},'aria-label':t('Save public profile')},t(busy?'Saving…':'Save public profile')))},
+    h('h3',null,bot.name),
     h('p', { className: 'bt-set-hint' }, t('Saved on this device. Published Bots sync this profile to their authorized Remote audience. Keep private instructions and secrets out.')),
-    h(Row, { label: t('Headline'), stack: true }, h('input', { className: 'bt-bs-input', 'aria-label': t('Public headline'), value: draft.headline, maxLength: 80, onChange: event => change('headline', event.target.value) })),
-    h(Row, { label: t('About'), stack: true }, h('textarea', { className: 'bt-bs-input bt-bs-area', 'aria-label': t('Public summary'), value: draft.summary, maxLength: 1000, onChange: event => change('summary', event.target.value) })),
-    h(Row, { label: t('Skills'), hint: t('Separate keywords with commas'), stack: true }, h('input', { className: 'bt-bs-input', 'aria-label': t('Public skills'), value: draft.expertise, onChange: event => change('expertise', event.target.value) })),
-    h('button', { type: 'button', className: 'bt-soft bt-soft-sm', disabled: busy || !dirty, onClick: () => { void commit() } }, t(busy ? 'Saving…' : 'Save public profile')),
+    h('label', { className: 'bt-comm-field' }, t('Headline'), h('input', { 'aria-label': t('Public headline'), value: draft.headline, maxLength: 80, onChange: event => change('headline', event.target.value) })),
+    h('label', { className: 'bt-comm-field' }, t('About'), h('textarea', { rows: 7, 'aria-label': t('Public summary'), value: draft.summary, maxLength: 1000, onChange: event => change('summary', event.target.value) })),
+    h('label', { className: 'bt-comm-field' }, t('Skills'), h('span', { className: 'bt-comm-reference' }, t('Separate keywords with commas')), h('input', { 'aria-label': t('Public skills'), value: draft.expertise, onChange: event => change('expertise', event.target.value) })),
     error ? h('p', { className: 'bt-comm-error', role: 'alert' }, error) : null)
 }
 

@@ -3,6 +3,10 @@
 The user requested six interface fixes and supplied concrete Hub evidence for a
 second proactive Bot message being suppressed in both groups and Bot-only DMs.
 
+Current follow-up decisions for the right member sidebar, profile dialogs and
+Human-to-Bot DMs are in [profile-sidebar-and-departures.md](profile-sidebar-and-departures.md).
+They supersede the group-settings dialog and collapsed-row choices below.
+
 ## Interface decisions
 
 - Hub forget/leave, contact removal, user-code rotation, member removal, ownership

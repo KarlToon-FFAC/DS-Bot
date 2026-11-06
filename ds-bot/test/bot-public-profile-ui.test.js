@@ -19,13 +19,13 @@ async function ui(check) {
   runInNewContext(outputFiles[0].text, { module: mod, exports: mod.exports, require: id => id === 'react' ? React : id === 'react-dom' ? harness('react-dom') : {},
     window: dom.window, document: dom.window.document, sessionStorage: dom.window.sessionStorage, localStorage: dom.window.localStorage, setTimeout, clearTimeout, URL })
   const { createRoot } = harness('react-dom/client'), root = createRoot(dom.window.document.getElementById('root')), doc = dom.window.document
-  const render = async (bot, actions) => act(async () => root.render(React.createElement(React.StrictMode, null, React.createElement(mod.exports.BotPublicProfile, { key: bot.id, bot, actions }))))
+  const render = async (bot, actions, open = true) => {await act(async () => root.render(React.createElement(React.StrictMode, null, React.createElement(mod.exports.BotPublicProfile, { key: bot.id, bot, actions }))));if(open&&!doc.querySelector('dialog[open]'))await act(async()=>doc.querySelector('[aria-label="Edit remote profile"]').click())}
   const edit = async (label, value) => act(async () => {
     const node = doc.querySelector(`[aria-label="${label}"]`), kind = node.tagName === 'TEXTAREA' ? dom.window.HTMLTextAreaElement : dom.window.HTMLInputElement
     Object.getOwnPropertyDescriptor(kind.prototype, 'value').set.call(node, value)
     node.dispatchEvent(new dom.window.Event('input', { bubbles: true }))
   })
-  const save = async () => act(async () => doc.querySelector('button').click())
+  const save = async () => act(async () => doc.querySelector('[aria-label="Save public profile"]').click())
   try { await check({ doc, render, edit, save }) }
   finally { await act(async () => root.unmount()); dom.window.close(); for (const [key, descriptor] of Object.entries(saved)) { if (descriptor) Object.defineProperty(globalThis, key, descriptor); else delete globalThis[key] } }
 }
@@ -36,7 +36,7 @@ test('Bot public profile stages changes, saves separately from instructions and 
     const actions = { updateBot: async (id, patch) => { calls.push({ id, patch }); return new Promise(resolve => { finish = resolve }) } }
     const bot = { id: 'bot-one', instructions: 'Private instructions' }
     await render(bot, actions)
-    assert.equal(doc.querySelector('button').disabled, true)
+    assert.equal(doc.querySelector('[aria-label="Save public profile"]').disabled, true)
     await edit('Public headline', 'Testing expert')
     await edit('Public skills', 'testing, regression， browser')
     assert.equal(calls.length, 0)
@@ -48,12 +48,12 @@ test('Bot public profile stages changes, saves separately from instructions and 
     await edit('Public summary', 'New detail entered during save')
     await act(async () => finish({ publicProfile: { ...calls[0].patch.publicProfile, revision: 1 } }))
     assert.equal(doc.querySelector('[aria-label="Public summary"]').value, 'New detail entered during save')
-    assert.equal(doc.querySelector('button').disabled, false)
+    assert.equal(doc.querySelector('[aria-label="Save public profile"]').disabled, false)
     await save()
     assert.equal(calls[1].patch.expectedProfileRevision, 1)
     assert.equal(calls[1].patch.publicProfile.summary, 'New detail entered during save')
     await act(async () => finish({ publicProfile: { ...calls[1].patch.publicProfile, revision: 2 } }))
-    assert.equal(doc.querySelector('button').disabled, true)
+    assert.equal(doc.querySelector('[aria-label="Save public profile"]').disabled, true)
   })
 })
 
@@ -70,4 +70,24 @@ test('concurrent roster refresh keeps a dirty draft and sends its original revis
     assert.equal(doc.querySelector('[aria-label="Public headline"]').value, 'My unsaved draft')
     assert.match(doc.querySelector('[role="alert"]').textContent, /changed elsewhere/)
   })
+})
+
+test('remote profile starts as a compact action and edits in a standalone dialog whose cancel never saves',async()=>{
+ await ui(async({doc,render,edit})=>{
+  let saves=0
+  const bot={id:'tester',name:'Tester',publicProfile:{headline:'Current',summary:'Background',expertise:['Regression'],revision:1}}
+  const actions={updateBot:async()=>{saves++;return {}}}
+  await render(bot,actions,false)
+  assert.equal(doc.querySelector('[aria-label="Public headline"]'),null)
+  await act(async()=>doc.querySelector('[aria-label="Edit remote profile"]').click())
+  const dialog=doc.querySelector('dialog[aria-label="Edit remote profile"]')
+  assert.equal(dialog.parentElement,doc.body);assert.equal(dialog.open,true)
+  assert.equal(dialog.querySelector('[aria-label="Public summary"]').value,'Background')
+  assert.ok(dialog.querySelector('.bt-comm-operation-footer [aria-label="Save public profile"]'))
+  await edit('Public summary','Unsaved background')
+  await act(async()=>dialog.querySelector('[aria-label="Close dialog"]').click())
+  assert.equal(saves,0)
+  await act(async()=>doc.querySelector('[aria-label="Edit remote profile"]').click())
+  assert.equal(dialog.querySelector('[aria-label="Public summary"]').value,'Background')
+ })
 })

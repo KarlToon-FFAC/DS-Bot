@@ -2,7 +2,6 @@ import { createElement as h, Fragment, useState } from 'react'
 import { CommunicationAvatar } from './communication-profile.js'
 import { contactLabels } from './communication-model.js'
 import { t } from './i18n.js'
-import { normalizeIpAddress } from '../shared/ip-address.js'
 
 export function contactDirectory(contacts, relations = [], humanPrincipalId, instanceId) {
   const people = [...new Map(contacts.map(person => [person.principalId, person])).values()]
@@ -27,16 +26,16 @@ export function contactDirectory(contacts, relations = [], humanPrincipalId, ins
 
 const normalized = value => String(value ?? '').normalize('NFKC').toLocaleLowerCase()
 const profileValues = profile => [profile?.headline, profile?.summary, ...(Array.isArray(profile?.expertise) ? profile.expertise : [])]
-export function contactMatches(person, query, { label, addressNotes = {} } = {}) {
+export function contactMatches(person, query, { label } = {}) {
   const needle = normalized(query).trim()
   return !needle || [label, person.displayName, person.principalId, person.instanceLabel, person.homeInstanceId, person.ipAddress,
-    addressNotes[normalizeIpAddress(person.ipAddress)], ...profileValues(person.publicProfile)].some(value => normalized(value).includes(needle))
+    ...profileValues(person.publicProfile)].some(value => normalized(value).includes(needle))
 }
 
-export function ContactDirectory({ contacts, relations, humanPrincipalId, instanceId, request, busy, onMessage, onRemove, addressNotes = {}, connectionKnown }) {
+export function ContactDirectory({ contacts, relations, humanPrincipalId, instanceId, request, busy, onMessage, onRemove, connectionKnown }) {
   const [query, setQuery] = useState(''), [view, setView] = useState('all')
   const labels = contactLabels(contacts), { people, otherBots } = contactDirectory(contacts, relations, humanPrincipalId, instanceId)
-  const needle = query.trim(), matches = person => contactMatches(person, query, { label: labels.get(person.principalId), addressNotes })
+  const needle = query.trim(), matches = person => contactMatches(person, query, { label: labels.get(person.principalId) })
   const shown = people.filter(item => matches(item.person) || item.bots.some(matches))
   const allBots = [...people.flatMap(item => item.bots), ...otherBots]
   const bots = (view === 'bots' ? allBots : otherBots).filter(matches)
@@ -71,7 +70,6 @@ export function ContactDirectory({ contacts, relations, humanPrincipalId, instan
           visibleBots.length ? h('ul', { className: 'bt-comm-contact-bots' }, visibleBots.map(botRow)) : h('p', { className: 'bt-comm-reference' }, t('No Bots shared with you'))),
         h('details', { className: 'bt-comm-contact-info' }, h('summary', null, t('Contact details')),
           person.homeInstanceId ? h('p', { className: 'bt-comm-reference' }, person.instanceLabel ?? person.homeInstanceId, ' · ', t(person.ipAddress || 'Address unavailable')) : null,
-          addressNotes[normalizeIpAddress(person.ipAddress)] ? h('p', { className: 'bt-comm-ip-note' }, t('IP note'), ': ', addressNotes[normalizeIpAddress(person.ipAddress)]) : null,
           h('dl', null, h('dt', null, t('Human identity')), h('dd', null, h('code', null, person.principalId)),
             person.homeInstanceId ? h(Fragment, null, h('dt', null, t('Device identity')), h('dd', null, h('code', null, person.homeInstanceId))) : null,
             relation ? h(Fragment, null, h('dt', null, t('Bots you share with this contact')), h('dd', null, (relation.botPrincipalIds ?? []).map(id => labels.get(id) ?? id).join(', ') || t('None'))) : null),

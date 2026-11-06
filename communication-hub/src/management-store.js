@@ -25,6 +25,7 @@ export class HubManagement {
       CREATE TABLE IF NOT EXISTS hub_management (key TEXT PRIMARY KEY,value TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS hub_join_requests (id TEXT PRIMARY KEY,public_key TEXT NOT NULL,label TEXT NOT NULL,status TEXT NOT NULL,created_at INTEGER NOT NULL,expires_at INTEGER NOT NULL,version INTEGER NOT NULL DEFAULT 1,instance_id TEXT);
       CREATE TABLE IF NOT EXISTS hub_enrolled_peers (instance_id TEXT PRIMARY KEY REFERENCES instances(id),public_key TEXT NOT NULL UNIQUE,revision INTEGER NOT NULL DEFAULT 1);
+      CREATE TABLE IF NOT EXISTS hub_instance_departures (instance_id TEXT PRIMARY KEY,departed_at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS hub_user_codes (principal_id TEXT PRIMARY KEY REFERENCES principals(id),code TEXT NOT NULL UNIQUE,code_hash TEXT NOT NULL UNIQUE);
       CREATE TABLE IF NOT EXISTS hub_code_tombstones (code_hash TEXT PRIMARY KEY);
       CREATE TABLE IF NOT EXISTS hub_contact_requests (id TEXT PRIMARY KEY,sender TEXT NOT NULL REFERENCES principals(id),target TEXT REFERENCES principals(id),scope TEXT NOT NULL,status TEXT NOT NULL,expires_at INTEGER NOT NULL,version INTEGER NOT NULL DEFAULT 1);
@@ -35,6 +36,13 @@ export class HubManagement {
     `)
     this.db.prepare('INSERT OR IGNORE INTO hub_management VALUES (?,?)').run('hubId', randomUUID())
     this.hubId = this.db.prepare('SELECT value FROM hub_management WHERE key=?').get('hubId').value
+    const departed=this.db.prepare(`SELECT i.id FROM instances i WHERE i.trusted=0 AND
+      (EXISTS(SELECT 1 FROM hub_instance_departures d WHERE d.instance_id=i.id) OR
+      (SELECT a.action FROM hub_admin_audit a WHERE a.subject=i.id AND a.action IN ('instance.leave','instance.repair') ORDER BY a.id DESC LIMIT 1)='instance.leave')`).all()
+    if(departed.length)this.store.transaction(()=>{for(const {id} of departed){
+      this.db.prepare('INSERT OR IGNORE INTO hub_instance_departures VALUES (?,?)').run(id,this.now())
+      this.detachContacts(id)
+    }})
   }
   info() { return { hubId: this.hubId, ...(this.url ? { url: this.url, code: this.pairingTrust
     ? hubCode(this.hubId, this.url, { ...this.pairingTrust, now: this.now() }) : undefined,
@@ -95,10 +103,14 @@ export class HubManagement {
       const row = this.db.prepare('SELECT label,trusted FROM instances WHERE id=?').get(item.instanceId)
       if(item.purpose!=='login'){
         requireThat(row,'UNAUTHENTICATED')
-        if(item.purpose==='leave'&&row.trusted===1){
-          requireThat(!this.db.prepare('SELECT 1 FROM conversations c JOIN principals p ON p.id=c.owner_id WHERE p.instance_id=? AND c.closed=0').get(item.instanceId),'OWNER_TRANSFER_REQUIRED')
-          this.revoke(item.instanceId)
-          this.audit('instance.leave',item.instanceId)
+        if(item.purpose==='leave'&&!this.db.prepare('SELECT 1 FROM hub_instance_departures WHERE instance_id=?').get(item.instanceId)){
+          this.store.transaction(()=>{
+            requireThat(!this.db.prepare('SELECT 1 FROM conversations c JOIN principals p ON p.id=c.owner_id WHERE p.instance_id=? AND c.closed=0').get(item.instanceId),'OWNER_TRANSFER_REQUIRED')
+            this.store.revokeInstanceInside(item.instanceId)
+            this.detachContacts(item.instanceId)
+            this.db.prepare('INSERT INTO hub_instance_departures VALUES (?,?)').run(item.instanceId,this.now())
+            this.audit('instance.revoke',item.instanceId);this.audit('instance.leave',item.instanceId)
+          })
         }
         return {instanceId:item.instanceId,left:item.purpose==='leave'||row.trusted===0}
       }
@@ -122,7 +134,7 @@ export class HubManagement {
   }
   joins() {
     this.cleanup()
-    return this.db.prepare('SELECT id requestId,label,status,created_at createdAt,expires_at expiresAt,version,instance_id instanceId,public_key FROM hub_join_requests ORDER BY created_at DESC LIMIT 200').all()
+    return this.db.prepare('SELECT id requestId,label,status,created_at createdAt,expires_at expiresAt,version,instance_id instanceId,public_key FROM hub_join_requests WHERE NOT EXISTS(SELECT 1 FROM hub_instance_departures d WHERE d.instance_id=hub_join_requests.instance_id) ORDER BY created_at DESC LIMIT 200').all()
       .map(({ public_key, ...row }) => ({ ...row, fingerprint: digest(public_key) }))
   }
   audit(action, subject) { this.db.prepare('INSERT INTO hub_admin_audit(at,action,subject) VALUES (?,?,?)').run(this.now(), action, subject) }
@@ -149,12 +161,12 @@ export class HubManagement {
       return { requestId: row.id, status: 'approved', instanceId: id }
     })
   }
-  instances() { return this.db.prepare('SELECT i.id instanceId,i.label,i.trusted,i.pairing_revision pairingRevision,p.revision,coalesce(n.version,0) nameVersion FROM instances i LEFT JOIN hub_enrolled_peers p ON p.instance_id=i.id LEFT JOIN hub_instance_names n ON n.instance_id=i.id ORDER BY i.id').all().map(instance => ({ ...instance, connected: this.isInstanceConnected?.(instance.instanceId) === true, ownedSharedGroups: this.db.prepare("SELECT c.id conversationId,c.title,c.version FROM conversations c JOIN principals owner ON owner.id=c.owner_id WHERE owner.instance_id=? AND c.kind='group' AND c.closed=0 AND EXISTS (SELECT 1 FROM memberships m JOIN principals p ON p.id=m.principal_id WHERE m.conversation_id=c.id AND p.instance_id<>?) ORDER BY c.id").all(instance.instanceId, instance.instanceId) })) }
+  instances() { return this.db.prepare('SELECT i.id instanceId,i.label,i.trusted,i.pairing_revision pairingRevision,p.revision,coalesce(n.version,0) nameVersion FROM instances i LEFT JOIN hub_enrolled_peers p ON p.instance_id=i.id LEFT JOIN hub_instance_names n ON n.instance_id=i.id WHERE NOT EXISTS(SELECT 1 FROM hub_instance_departures d WHERE d.instance_id=i.id) ORDER BY i.id').all().map(instance => ({ ...instance, connected: this.isInstanceConnected?.(instance.instanceId) === true, ownedSharedGroups: this.db.prepare("SELECT c.id conversationId,c.title,c.version FROM conversations c JOIN principals owner ON owner.id=c.owner_id WHERE owner.instance_id=? AND c.kind='group' AND c.closed=0 AND EXISTS (SELECT 1 FROM memberships m JOIN principals p ON p.id=m.principal_id WHERE m.conversation_id=c.id AND p.instance_id<>?) ORDER BY c.id").all(instance.instanceId, instance.instanceId) })) }
   participants() {
     const rows = this.db.prepare(`SELECT p.id principalId,p.instance_id homeInstanceId,p.kind,p.name displayName,
       i.label instanceLabel,i.trusted FROM principals p JOIN instances i ON i.id=p.instance_id
       LEFT JOIN principal_publication pub ON pub.principal_id=p.id
-      WHERE p.kind='human' OR coalesce(pub.published,1)=1 ORDER BY p.id`).all()
+      WHERE (p.kind='human' OR coalesce(pub.published,1)=1) AND NOT EXISTS(SELECT 1 FROM hub_instance_departures d WHERE d.instance_id=p.instance_id) ORDER BY p.id`).all()
       .map(person => ({ ...person, trusted: person.trusted === 1, published: this.store.isPublished(person.principalId),
         avatar: this.store.avatarOf(person.principalId), connected: this.isInstanceConnected?.(person.homeInstanceId) === true }))
     return this.store.participantProfiles(rows)
@@ -162,7 +174,7 @@ export class HubManagement {
   participantAvatar(input) {
     requireThat(input && Object.keys(input).every(key => ['principalId','imageRevision','offset','limit'].includes(key)), 'INVALID_REQUEST')
     identifier(input.principalId)
-    const person = this.db.prepare('SELECT kind FROM principals WHERE id=?').get(input.principalId)
+    const person = this.db.prepare('SELECT kind FROM principals p WHERE id=? AND NOT EXISTS(SELECT 1 FROM hub_instance_departures d WHERE d.instance_id=p.instance_id)').get(input.principalId)
     requireThat(person && (person.kind === 'human' || this.store.isPublished(input.principalId)), 'UNKNOWN_PRINCIPAL')
     return this.store.avatarImage(input)
   }
@@ -197,6 +209,7 @@ export class HubManagement {
       // Authentication retains the previously proved key; no membership is restored.
       this.db.prepare('UPDATE instances SET trusted=1,epoch=epoch+1,pairing_revision=pairing_revision+1 WHERE id=?').run(input.instanceId)
       this.db.prepare('UPDATE hub_enrolled_peers SET revision=revision+1 WHERE instance_id=?').run(input.instanceId)
+      this.db.prepare('DELETE FROM hub_instance_departures WHERE instance_id=?').run(input.instanceId)
       this.audit('instance.repair', input.instanceId)
       return { instanceId: input.instanceId, pairingRevision: input.expectedRevision + 1, trusted: true }
     })
@@ -246,7 +259,7 @@ export class HubManagement {
       // A private rejection must not reveal itself by freeing a sender-visible slot.
       requireThat(this.db.prepare("SELECT count(*) n FROM hub_contact_requests WHERE sender=? AND (status='pending' OR (status='rejected' AND expires_at>?))").get(input.principalId, this.now()).n < 20, 'CONTACT_LIMIT')
       const code = input.userCode.toUpperCase().replace(/[^A-F0-9]/g, '').match(/.{1,4}/g)?.join('-') ?? ''
-      const found = this.db.prepare('SELECT principal_id FROM hub_user_codes WHERE code_hash=?').get(digest(code))?.principal_id
+      const found = this.db.prepare('SELECT c.principal_id FROM hub_user_codes c JOIN principals p ON p.id=c.principal_id JOIN instances i ON i.id=p.instance_id WHERE c.code_hash=? AND i.trusted=1').get(digest(code))?.principal_id
       let target = found && found !== input.principalId && !found.startsWith(`human:${auth.instanceId}:`) ? found : null
       if (target) {
         try { this.rate(`contact-target:${target}`, 30, day) }
@@ -309,6 +322,14 @@ export class HubManagement {
       this.cancelContactRequests(...pair)
       return { revoked: true }
     })
+  }
+  detachContacts(instanceId) {
+    const people=this.db.prepare('SELECT id FROM principals WHERE instance_id=?').all(instanceId).map(row=>row.id),ids=JSON.stringify(people)
+    for(const relation of this.db.prepare('SELECT * FROM hub_contacts WHERE active=1 AND (left_id IN (SELECT value FROM json_each(?)) OR right_id IN (SELECT value FROM json_each(?)))').all(ids,ids)){
+      this.db.prepare('UPDATE hub_contacts SET active=0,epoch=?,version=version+1 WHERE pair=?').run(randomUUID(),relation.pair)
+      this.fenceDms(relation,'contact.leftHub')
+    }
+    this.db.prepare("UPDATE hub_contact_requests SET status='cancelled',version=version+1 WHERE status IN ('pending','rejected') AND (sender IN (SELECT value FROM json_each(?)) OR target IN (SELECT value FROM json_each(?)))").run(ids,ids)
   }
   scopedBots(humanId, serialized, publishedOnly = false) {
     const ids = JSON.parse(serialized)

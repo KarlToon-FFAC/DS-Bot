@@ -18,7 +18,9 @@ test('private chat archive survives reopening, stays local to one Hub, and prese
     message: { messageId: 'one', author: { principalId: 'human:b:owner' }, content: { text: 'Retained history' } } }] })
   const history = queue.view('private', person.principalId, 'epoch'), unread = queue.unread('private', person.principalId, 'epoch')
   assert.deepEqual(queue.setConversationArchived('private', true).archivedConversationIds, ['private'])
+  queue.db.exec("CREATE TABLE local_address_notes(address TEXT PRIMARY KEY,note TEXT NOT NULL); INSERT INTO local_address_notes VALUES ('192.0.2.1','retired note')")
   queue.close(); queue = new CommunicationQueue(path)
+  assert.equal(queue.db.prepare("SELECT 1 FROM sqlite_master WHERE name='local_address_notes'").get(),undefined)
   assert.deepEqual(queue.archivedConversations(), ['private'])
   assert.deepEqual(queue.view('private', person.principalId, 'epoch'), history)
   assert.equal(queue.unread('private', person.principalId, 'epoch'), unread)
@@ -47,7 +49,7 @@ test('archiving requires the exact local Human or owned Bot DM epoch and Hub sco
       { ...own, conversationId: 'private', kind: 'dm' }, { ...own, conversationId: 'group', kind: 'group' },
       { ...own, principalId: bot.principalId, conversationId: 'bot-private', kind: 'dm' }], invites: [] })
     runtime.conversations.set('bot-private', { kind: 'dm', members: [{ ...bot, kind: 'bot' }, { principalId: 'bot:b:expert', kind: 'bot' }] })
-    const input = { conversationId: 'private', membershipEpoch: 'epoch', archived: true, expectedScope: runtime.addressNotesScope() }
+    const input = { conversationId: 'private', membershipEpoch: 'epoch', archived: true, expectedScope: runtime.conversationPreferencesScope() }
     runtime.setConversationArchived(input)
     runtime.setConversationArchived({ ...input, conversationId: 'bot-private', localBotId: 'worker' })
     assert.deepEqual(runtime.snapshot().archivedConversationIds, ['bot-private', 'private'])

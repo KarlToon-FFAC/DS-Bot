@@ -28,7 +28,7 @@ export function deliveryPhase(delivery) {
 
 // IP is a directory heading, never a recipient or authorization key. In particular,
 // multiple paired devices behind one NAT keep their own principals and Humans.
-export function contactsByAddress(contacts, addressNotes = {}) {
+export function contactsByAddress(contacts) {
   const groups=new Map(), seen=new Set()
   for(const contact of contacts){
     if(seen.has(contact.principalId))continue
@@ -39,7 +39,7 @@ export function contactsByAddress(contacts, addressNotes = {}) {
     if(!instances.has(contact.homeInstanceId))instances.set(contact.homeInstanceId,{instanceId:contact.homeInstanceId,label:contact.instanceLabel??contact.homeInstanceId,contacts:[]})
     instances.get(contact.homeInstanceId).contacts.push(contact)
   }
-  return [...groups].sort(([a],[b])=>a.localeCompare(b)).map(([address,instances])=>({address,...(addressNotes[address] ? { note: addressNotes[address] } : {}),instances:[...instances.values()].sort((a,b)=>a.instanceId.localeCompare(b.instanceId))}))
+  return [...groups].sort(([a],[b])=>a.localeCompare(b)).map(([address,instances])=>({address,instances:[...instances.values()].sort((a,b)=>a.instanceId.localeCompare(b.instanceId))}))
 }
 
 export function conversationTitle(member, humanId, labels) {

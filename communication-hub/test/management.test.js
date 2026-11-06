@@ -500,3 +500,48 @@ test('admin is disabled by default; login uses Origin, session HttpOnly cookie a
   await adminCommand([origin, 'repair'], { password, fetcher: async (url, options) => { assert.equal(url.pathname, '/admin/api/repair'); assert.equal(options.redirect, 'error'); return { ok: true, json: async () => ({ ok: true, value: { repaired: true } }) } } })
   assert.throws(() => hubCode('id', 'ws://192.0.2.1/communication'), { code: 'TLS_REQUIRED' })
 })
+
+
+test('self-departure removes devices, profiles, join rows and live contact relations while preserving signed status and history',t=>{
+ const {store,m}=fixture(t),a=enroll(m,'Leaving'),b=enroll(m,'Remaining')
+ const local=store.register(a.auth,{localId:'bot',kind:'bot',displayName:'Leaving Bot'}).principalId
+ const remote=store.register(b.auth,{localId:'bot',kind:'bot',displayName:'Remaining Bot'}).principalId
+ consent(m,a,b,[local],[remote])
+ const dm=store.createDm(a.auth,{principalId:local,otherPrincipalId:remote,operationId:randomUUID()}).conversationId
+ const oldEpoch=store.authorize(b.auth,{principalId:remote,conversationId:dm}).membershipEpoch
+ const pending=m.requestContact(a.auth,{principalId:a.principalId,operationId:randomUUID(),userCode:m.code(b.auth,{principalId:b.principalId}).userCode,botPrincipalIds:[local]})
+ const socket={},challenge=m.challenge(socket,{purpose:'leave',instanceId:a.auth.instanceId})
+ store.beforeCommit=()=>{throw Error('Synthetic leave failure')}
+ assert.throws(()=>m.prove(socket,proof(a.key,challenge)),/Synthetic leave failure/)
+ assert.equal(store.db.prepare('SELECT trusted FROM instances WHERE id=?').get(a.auth.instanceId).trusted,1)
+ assert.ok(m.instances().some(row=>row.instanceId===a.auth.instanceId))
+ assert.equal(m.relations(b.auth,{principalId:b.principalId})[0].active,true)
+ store.beforeCommit=undefined
+ const leave={};m.prove(leave,proof(a.key,m.challenge(leave,{purpose:'leave',instanceId:a.auth.instanceId})))
+ assert.ok(!m.instances().some(row=>row.instanceId===a.auth.instanceId))
+ assert.ok(!m.participants().some(row=>row.homeInstanceId===a.auth.instanceId))
+ assert.ok(!m.joins().some(row=>row.instanceId===a.auth.instanceId))
+ assert.equal(m.relations(b.auth,{principalId:b.principalId})[0].active,false)
+ assert.equal(store.db.prepare('SELECT status FROM hub_contact_requests WHERE id=?').get(pending.requestId).status,'cancelled')
+ assert.notEqual(store.authorize(b.auth,{principalId:remote,conversationId:dm}).membershipEpoch,oldEpoch)
+ assert.ok(store.db.prepare('SELECT 1 FROM conversations WHERE id=?').get(dm))
+ const status={};assert.equal(m.prove(status,proof(a.key,m.challenge(status,{purpose:'leave-status',instanceId:a.auth.instanceId}))).left,true)
+ m.repair({instanceId:a.auth.instanceId,expectedRevision:1})
+ assert.ok(m.instances().some(row=>row.instanceId===a.auth.instanceId))
+ assert.equal(m.relations(b.auth,{principalId:b.principalId})[0].active,false,'repair cannot silently restore contact consent')
+})
+
+test('legacy completed self-departures disappear after restart, while administrator revocations remain reviewable',t=>{
+ const root=mkdtempSync(join(tmpdir(),'dsbot-departures-')),path=join(root,'hub.sqlite')
+ let store=new HubStore(path),m=new HubManagement(store)
+ t.after(()=>{store.close();rmSync(root,{recursive:true,force:true})})
+ const a=enroll(m,'Legacy leaving'),b=enroll(m,'Admin revoked')
+ store.revokeInstance(a.auth.instanceId);m.audit('instance.leave',a.auth.instanceId)
+ m.revoke(b.auth.instanceId)
+ store.close();store=new HubStore(path);m=new HubManagement(store)
+ assert.ok(!m.instances().some(row=>row.instanceId===a.auth.instanceId))
+ assert.ok(m.instances().some(row=>row.instanceId===b.auth.instanceId))
+ const status={};assert.equal(m.prove(status,proof(a.key,m.challenge(status,{purpose:'leave-status',instanceId:a.auth.instanceId}))).left,true)
+ store.close();store=new HubStore(path);m=new HubManagement(store)
+ assert.equal(store.db.prepare('SELECT count(*) n FROM hub_instance_departures').get().n,1)
+})

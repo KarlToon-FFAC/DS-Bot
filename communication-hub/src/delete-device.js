@@ -106,7 +106,7 @@ export function deleteDevice(management, input) {
       drop('hub_rate_limits', 'key', createHash('sha256').update(key).digest('hex'))
     }
     for (const request of requests) drop('hub_join_requests', 'id', request.id)
-    for (const table of ['hub_enrolled_peers', 'instance_features', 'instance_addresses', 'hub_instance_names']) drop(table, 'instance_id', id)
+    for (const table of ['hub_enrolled_peers', 'instance_features', 'instance_addresses', 'hub_instance_names', 'hub_instance_departures']) drop(table, 'instance_id', id)
     drop('principals', 'instance_id', id)
     drop('instances', 'id', id)
     return { instanceId: id, deleted: true, principalsDeleted: principalIds.length, conversationsDeleted: deletedConversations.size, sharedGroupsRetained: sharedConversations.length, sharedGroupsClosed: ownedSharedGroups.length }

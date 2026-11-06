@@ -3,7 +3,6 @@ import { randomUUID, createHash } from 'node:crypto'
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { normalizeAttachments } from '../../shared/communication-attachments.js'
-import { normalizeIpAddress } from '../../shared/ip-address.js'
 
 const canonical = value => Array.isArray(value) ? `[${value.map(canonical).join(',')}]`
   : value && typeof value === 'object' ? `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonical(value[key])}`).join(',')}}` : JSON.stringify(value)
@@ -35,7 +34,7 @@ export class CommunicationQueue {
       CREATE TABLE IF NOT EXISTS reply_targets (delivery_id TEXT PRIMARY KEY,binding_id TEXT NOT NULL,targets TEXT NOT NULL,source_key TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS tool_reply_completions (delivery_id TEXT PRIMARY KEY,binding_id TEXT NOT NULL,message_id TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS relationship_memory (scope TEXT NOT NULL,id TEXT NOT NULL,body TEXT NOT NULL,PRIMARY KEY(scope,id));
-      CREATE TABLE IF NOT EXISTS local_address_notes (address TEXT PRIMARY KEY,note TEXT NOT NULL);
+      DROP TABLE IF EXISTS local_address_notes;
       CREATE TABLE IF NOT EXISTS archived_conversations (conversation_id TEXT PRIMARY KEY);
       `)
     if (version < 2) {
@@ -66,23 +65,6 @@ export class CommunicationQueue {
       if (archived) this.db.prepare('INSERT OR IGNORE INTO archived_conversations VALUES (?)').run(conversationId)
       else this.db.prepare('DELETE FROM archived_conversations WHERE conversation_id=?').run(conversationId)
       return { archivedConversationIds: this.archivedConversations() }
-    })
-  }
-  addressNotes() {
-    return Object.fromEntries(this.db.prepare('SELECT address,note FROM local_address_notes ORDER BY address').all().map(row => [row.address, row.note]))
-  }
-  setAddressNote(input) {
-    const address = normalizeIpAddress(input.address)
-    requireValue(address, 'INVALID_IP_ADDRESS')
-    requireValue(typeof input.note === 'string' && input.note.length <= 160 && !Array.from(input.note).some(char => { const point = char.codePointAt(0); return point < 32 || point >= 127 && point <= 159 || point >= 0x202a && point <= 0x202e || point >= 0x2066 && point <= 0x2069 }), 'INVALID_IP_NOTE')
-    const note = input.note.trim()
-    return this.transaction(() => {
-      if (!note) this.db.prepare('DELETE FROM local_address_notes WHERE address=?').run(address)
-      else {
-        requireValue(this.db.prepare('SELECT 1 FROM local_address_notes WHERE address=?').get(address) || this.db.prepare('SELECT count(*) count FROM local_address_notes').get().count < 256, 'IP_NOTE_LIMIT')
-        this.db.prepare('INSERT INTO local_address_notes VALUES (?,?) ON CONFLICT(address) DO UPDATE SET note=excluded.note').run(address, note)
-      }
-      return { address, note, addressNotes: this.addressNotes() }
     })
   }
   transaction(work) {

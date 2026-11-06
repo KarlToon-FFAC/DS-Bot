@@ -676,7 +676,9 @@ export class HubStore {
   }
   revokeInstance(instanceId) {
     identifier(instanceId)
-    return this.transaction(()=>{
+    return this.transaction(()=>this.revokeInstanceInside(instanceId))
+  }
+  revokeInstanceInside(instanceId) {
       requireThat(this.db.prepare('SELECT 1 FROM instances WHERE id=?').get(instanceId),'INSTANCE_NOT_FOUND')
       this.db.prepare('UPDATE instances SET trusted=0 WHERE id=?').run(instanceId)
       const members=this.db.prepare('SELECT m.* FROM memberships m JOIN principals p ON p.id=m.principal_id WHERE p.instance_id=? AND m.active=1').all(instanceId)
@@ -688,7 +690,6 @@ export class HubStore {
         this.event(member.conversation_id,'membership.removed',{principalId:member.principal_id,membershipEpoch:member.epoch,reason:'trustRevoked'})
       }
       return {revoked:true}
-    })
   }
   publish(auth,input) {
     const author=this.principal(auth,input.author?.principalId)

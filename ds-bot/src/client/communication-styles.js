@@ -12,12 +12,6 @@ export const communicationCSS = `
 .bt-comm-invitation-details li{margin:8px 0}
 .bt-comm-invitation-details li code{display:block;color:var(--bt-ink-2)}
 
-.bt-comm-ip-notes{margin-top:16px;padding-top:12px;border-top:1px solid var(--bt-line);min-width:0}
-.bt-comm-ip-note-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:8px 0;min-width:0}
-.bt-comm-ip-note-row>span{min-width:0;overflow-wrap:anywhere}
-.bt-comm-ip-note-row button{flex:none}
-.bt-comm-ip-note{display:block;font-size:12px;line-height:16px;font-weight:400;color:var(--bt-ink-2);overflow-wrap:anywhere;white-space:pre-wrap}
-.bt-comm-ip-note-editor{margin-top:12px}
 
 .bt-comm-attachments{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;max-width:100%}
 .bt-comm-attachment{display:flex;flex-direction:column;gap:4px;max-width:240px;min-width:0}
@@ -371,8 +365,6 @@ export const communicationCSS = `
 .bt-comm-operation-buttons{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
 .bt-comm-frame .bt-comm-operation-footer button{margin:0}
 .bt-comm-dialog-layer[data-closing=true] .bt-comm-operation-dialog{animation:bt-comm-operation-exit .16s ease both}
-.bt-comm-members{display:none}
-.bt-comm-main:has(.bt-comm-members[open]){padding-right:0}
 .bt-comm-archive-row{display:flex;align-items:center;gap:8px;margin:6px 0}
 .bt-comm-archive-row>.bt-comm-conversation-row{flex:1;min-width:0;display:flex;align-items:center;gap:8px}
 .bt-comm-archive-row>button:last-child{flex:none}
@@ -384,15 +376,26 @@ export const communicationCSS = `
 
 .bt-comm-member-contact{margin:8px 0}
 .bt-comm-member-bots{margin-left:24px;padding-left:12px;border-left:1px solid var(--bt-line)}
-.bt-comm-member-row{min-width:0;border-bottom:1px solid var(--bt-line)}
-.bt-comm-member-row>summary{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:44px;padding:6px;cursor:pointer;list-style:none}
-.bt-comm-member-row>summary::-webkit-details-marker{display:none}
-.bt-comm-member-row>summary>span:first-child{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-.bt-comm-member-row>summary>.bt-comm-role{flex:none;font-size:11px;color:var(--bt-ink-2)}
-.bt-comm-member-row>summary::after{content:'›';color:var(--bt-ink-3);flex:none}
-.bt-comm-member-row[open]>summary::after{content:'⌄'}
-.bt-comm-member-row>summary:hover{background:var(--bt-hover);border-radius:8px}
-.bt-comm-member-controls{padding:8px 6px 12px;display:flex;flex-direction:column;gap:8px}
-.bt-comm-member-controls label{display:flex;flex-direction:column;gap:6px}
-.bt-comm-member-controls>button{align-self:flex-start}
+ .bt-comm-member-row{display:flex;align-items:center;gap:8px;min-height:44px;border-bottom:1px solid var(--bt-line);min-width:0;padding:6px 0}
+.bt-comm-member-name{flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.bt-comm-member-name .bt-comm-person-label{display:flex;min-width:0;overflow:hidden;white-space:nowrap}
+.bt-comm-member-name .bt-comm-avatar{flex:none}
+.bt-comm-member-actions{display:flex;align-items:center;gap:4px;flex:none}
+.bt-comm-frame .bt-comm-member-actions select{width:auto;max-width:88px;padding:4px 2px;min-height:28px;font-size:11px}
+.bt-comm-member-actions .bt-comm-role{font-size:11px;color:var(--bt-ink-2);max-width:76px}
+.bt-comm-frame .bt-comm-member-icon{display:grid;place-items:center;width:28px;min-height:28px;height:28px;padding:4px;border:0;background:none;font-size:18px}
+.bt-comm-member-icon svg{width:14px;height:14px}
+.bt-comm-members[open]{padding:0;overflow:hidden}
+.bt-comm-members[open]>summary{display:none}
+.bt-comm-members-panel{height:100%;display:flex;flex-direction:column;min-height:0}
+.bt-comm-members-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:16px;border-bottom:1px solid var(--bt-line);flex:none}
+.bt-comm-members-heading h2{font-size:13px}
+.bt-comm-members-heading button{display:grid;place-items:center;width:28px;padding:4px;border:0}
+.bt-comm-members-heading svg{width:16px;height:16px}
+.bt-comm-members-body{padding:12px 16px;overflow:auto;min-height:0;flex:1;overscroll-behavior:contain}
+.bt-comm-members-footer{flex:none;padding:12px;border-top:1px solid var(--bt-line)}
+.bt-comm-members-footer .bt-comm-operation-buttons{gap:4px}
+.bt-comm-members-footer button{font-size:12px}
+@media(max-width:600px){.bt-comm-members-body{padding:8px}.bt-comm-member-bots{margin-left:12px;padding-left:6px}.bt-comm-member-actions select{max-width:80px}}
+
 `

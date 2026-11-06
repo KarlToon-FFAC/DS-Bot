@@ -481,6 +481,13 @@ try {
   assert.equal(agentGroup.ownerPrincipalId,sender.bot)
   assert.ok(agentGroup.info.members.some(person=>person.principalId===sender.human))
   record('real-agent-created-group-includes-its-human-owner')
+  const humanDm = await api(sender,'dm',{otherPrincipalId:recipient.bot,operationId:randomUUID()})
+  await until(async()=>(await api(sender,'state')).conversations.some(item=>item.conversationId===humanDm.conversationId),'Human-to-remote-Bot DM appears',30000)
+  const humanDmTag=`human-dm-${nonce}`
+  await topology.send(sender,humanDm.conversationId,`COMM-ECHO ${humanDmTag}`,[])
+  await until(async()=>(await topology.history(sender,humanDm.conversationId)).events.some(event=>event.message?.author.principalId===recipient.bot && event.message.content.text===`Communication reply ${humanDmTag}`),'real remote Bot answers a direct Human consultation',60000)
+  assert.ok(!(await api(recipient,'state')).conversations.some(item=>item.conversationId===humanDm.conversationId),'Bot owner is not implicitly a DM participant')
+  record('human-can-directly-consult-a-remote-published-bot-without-adding-its-owner')
   await sender.client.request('/api/bot',{endpoint:'send',payload:{sessionId:sender.botId,text:`COMM-SEND ${recipient.bot} ${dmTag}`}})
   let dm=await until(async()=>(await api(sender,'state')).botConversations.find(item=>item.info.members.some(person=>person.principalId===recipient.bot)),'Bot DM record appears separately from Human conversations',60000)
   await until(async()=>(await api(sender,'bot-dm-history',{conversationId:dm.conversationId,localBotId:sender.botId,membershipEpoch:dm.membershipEpoch})).events.some(event=>event.message?.content.text===`Communication reply ${dmTag}`),'actual remote Mock reply is retained in the Bot DM record',60000)
