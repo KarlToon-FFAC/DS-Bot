@@ -390,6 +390,33 @@ test('an unchanged state answer skips the live fields a window already holds', a
   assert.equal(again.activity, undefined)
 })
 
+test('Hub configuration changes propagate at the same team revision and clear removed configuration', async t => {
+  const { call, stop } = start(undefined, { models: ['deepseek-v4-flash'] })
+  t.after(stop)
+  let held = (await call('state', {})).value
+  assert.equal(held.communicationEnabled, false)
+  assert.equal(held.communicationHubId, null)
+  const revision = held.revision, models = held.modelsKey
+  for (const [config, enabled, hubId] of [
+    [{ enabled: true, hubId: 'hub-a' }, true, 'hub-a'],
+    [{ enabled: true, hubId: 'hub-b' }, true, 'hub-b'],
+    [{ enabled: false, hubId: 'hub-b' }, false, 'hub-b'],
+    [undefined, false, null],
+  ]) {
+    rt.config.communication = config
+    const next = (await call('state', { since: revision, models, live: held.liveKey })).value
+    assert.equal(next.revision, revision)
+    assert.equal(next.unchanged, true)
+    assert.notEqual(next.liveKey, held.liveKey)
+    assert.equal(next.communicationEnabled, enabled)
+    assert.equal(next.communicationHubId, hubId)
+    const quiet = (await call('state', { since: revision, models, live: next.liveKey })).value
+    assert.equal(quiet.liveKey, next.liveKey)
+    assert.equal(quiet.communicationEnabled, undefined)
+    held = next
+  }
+})
+
 test('a window holding live state gets fresh fields after the host restarts at the same revision', async (t) => {
   const first = start({ version: 1, mainBotIds: ['chief'], bots: { chief: { id: 'chief', sessionId: 'chief', name: 'Chief' } } })
   t.after(first.stop)

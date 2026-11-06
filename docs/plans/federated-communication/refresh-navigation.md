@@ -13,6 +13,14 @@ periodic fallback reads, visibility/online/focus recovery, single-flight reads a
 bounded retry backoff remain in place. Dirty publication/name drafts and message
 composers are not overwritten or submitted by an automatic read.
 
+Hub configuration flags and the selected Hub ID are live roster fields, independent
+of the saved team revision. Hot reload after approval, disconnect or Hub switching
+updates them through the existing roster poll, including explicit false/null values
+to clear disabled or removed configuration. The browser applies these fields before
+skipping an unchanged team snapshot, so joining starts connection polling without
+reloading the page. Connection checks retain their existing 750 ms interval while
+the page is visible.
+
 Enrollment reconciliation starts from the just-read saved snapshot, including on
 first opening the guide. Saved pending requests and uncertain approval/configuration
 results are checked automatically. Revocation and administrator repair of a saved

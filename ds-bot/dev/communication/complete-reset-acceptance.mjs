@@ -184,6 +184,7 @@ async function connected(peer, hubId) {
   return until(async () => { const value = await api(peer, 'state'); return value.connected && value.reconciled && value.hubId === hubId && value }, 'enrolled selected Hub reconciled', 45000)
 }
 async function enroll(peer, info) {
+  const held = await peer.client.request('/api/bot', { endpoint: 'state' })
   const reviewed = await api(peer, 'decode-hub-code', { hubCode: info.code })
   const pending = await api(peer, 'join-hub', { hubCode: info.code, confirmedHubId: reviewed.hubId, confirmedUrl: reviewed.url, confirmedTrustFingerprint: reviewed.trustFingerprint, displayName: `Reset test ${peer.id.toUpperCase()}` })
   assert.equal(pending.status, 'pending')
@@ -192,6 +193,11 @@ async function enroll(peer, info) {
   await admin('decide', { requestId: request.requestId, expectedVersion: request.version, action: 'approve' })
   assert.equal((await api(peer, 'hub-join-status', { hubId: info.hubId })).status, 'approved')
   const state = await connected(peer, info.hubId)
+  const delta = await peer.client.request('/api/bot', { endpoint: 'state', payload: { since: held.revision, models: held.modelsKey, live: held.liveKey } })
+  assert.equal(delta.revision, held.revision, 'Enrollment must not require a team edit to update the browser')
+  assert.equal(delta.unchanged, true)
+  assert.equal(delta.communicationEnabled, true)
+  assert.equal(delta.communicationHubId, info.hubId)
   peer.instanceId = state.instanceId; peer.human = state.humanPrincipalId
   assert.equal((await api(peer, 'onboarding-storage', { hubId: info.hubId })).storage.kind, 'dsh-credential-record')
   return state

@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { runInNewContext } from 'node:vm'
 import { build } from 'esbuild'
-import { createSource } from '../src/client/sources.js'
+import { createSource, updateLiveRoster } from '../src/client/sources.js'
 
 const harness = createRequire(join(process.env.DSH_HARNESS, 'package.json'))
 const { JSDOM } = harness('jsdom'), React = harness('react'), { act } = React
@@ -25,7 +25,7 @@ async function pane({ enabled = true, snapshot, storage = {}, localStored = {}, 
     require: id => id === 'react' ? React : id === 'react-dom' ? harness('react-dom') : { MarkdownText },
     window: dom.window, document: dom.window.document, navigator:dom.window.navigator, sessionStorage: dom.window.sessionStorage, localStorage: dom.window.localStorage,
     setTimeout, clearTimeout, crypto: cryptoSource, URL, AbortSignal, requestAnimationFrame: dom.window.requestAnimationFrame, cancelAnimationFrame: dom.window.cancelAnimationFrame })
-  const panel = createSource(true), roster = createSource({ communicationEnabled: enabled }), surface = createSource({ mode: 'bot' }), calls = []
+  const panel = createSource(true), roster = createSource({ communicationEnabled: enabled, ready: true }), surface = createSource({ mode: 'bot' }), calls = []
   const request = async body => {
     calls.push(body)
     if (body.endpoint === 'state') return getState ? getState() : { ...snapshot, conversations: snapshot.conversations?.map(item => ({ ...item })) }
@@ -50,7 +50,7 @@ async function pane({ enabled = true, snapshot, storage = {}, localStored = {}, 
   }
   try {
     await act(async () => root.render(React.createElement(mod.exports.CommunicationSurface, { roster, surface, panel, request })))
-    await check({ dom, doc, panel, surface, calls, button, click, edit, autoRefresh, remount: async () => {
+    await check({ dom, doc, panel, surface, roster, calls, button, click, edit, autoRefresh, remount: async () => {
       await act(async () => root.unmount())
       root = createRoot(dom.window.document.getElementById('root'))
       await act(async () => root.render(React.createElement(mod.exports.CommunicationSurface, { roster, surface, panel, request })))
@@ -67,6 +67,32 @@ async function pane({ enabled = true, snapshot, storage = {}, localStored = {}, 
 const membership = { conversationId: 'group', title: 'Shared group', kind: 'group', role: 'owner', speakingMode: 'speak', membershipEpoch: 'epoch', membershipVersion: 1,
   ownerPrincipalId: 'human:a:owner', joinSeq: 1, watermark: 1, info: { members: [{ principalId: 'human:a:owner', displayName: 'Owner', kind: 'human', role: 'owner', speakingMode: 'speak' }] } }
 const state = () => ({ connected: true, instanceId: 'a', humanPrincipalId: 'human:a:owner', contacts: [], conversations: [], invites: [], outbox: [], errors: [] })
+
+test('a same-revision Hub configuration update starts live connection checks without remounting the page', async () => {
+  let snapshot = { ...state(), enabled: false, connected: false }
+  await pane({ enabled: false, getState: () => snapshot }, async ({ doc, roster, calls, button, autoRefresh }) => {
+    const label = () => doc.querySelector('.bt-comm-connection-label')
+    assert.equal(label().textContent, 'Not configured')
+    assert.equal(calls.some(call => call.endpoint === 'state'), false)
+    await act(async () => {
+      snapshot = { ...state(), enabled: true, hubId: 'hub-a' }
+      updateLiveRoster(roster, { unchanged: true, communicationEnabled: true, communicationHubId: 'hub-a' })
+    })
+    assert.equal(label().textContent, 'Connected to Hub')
+    assert.equal(label().dataset.connected, 'true')
+    assert.equal(button('Contacts').disabled, false)
+    snapshot = { ...snapshot, connected: false }
+    await autoRefresh()
+    assert.equal(label().dataset.connected, 'false')
+    snapshot = { ...snapshot, connected: true }
+    await autoRefresh()
+    assert.equal(label().textContent, 'Connected to Hub')
+    await act(async () => updateLiveRoster(roster, { unchanged: true, communicationEnabled: false, communicationHubId: null }))
+    assert.equal(label().textContent, 'Not configured')
+    assert.equal(label().dataset.connected, 'false')
+    assert.equal(button('Contacts').disabled, true)
+  })
+})
 
 test('a departed device can reconcile administrator repair without reconnecting and forgetting names the exact cleanup scope',async()=>{
  let departed=true, repaired=false
