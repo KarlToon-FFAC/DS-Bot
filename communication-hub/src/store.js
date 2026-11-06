@@ -439,6 +439,7 @@ export class HubStore {
       this.db.prepare('INSERT INTO conversations(id,kind,title,routing_mode,owner_id) VALUES (?,?,?,?,?)').run(id,'group',input.title,'mentionsOnly',input.principalId)
       this.db.prepare("INSERT INTO memberships(conversation_id,principal_id,epoch,join_seq,active,manager,role,speaking_mode) VALUES (?,?,?,?,1,1,'owner',?)").run(id,input.principalId,randomUUID(),1,input.principalId.startsWith('bot:')?'active':'speak')
       this.event(id,'conversation.created',{kind:'group',title:input.title,members:[input.principalId]})
+      this.includeBotOwner(input.principalId,id,input.principalId)
       return {conversationId:id}
     })
   }
@@ -449,19 +450,9 @@ export class HubStore {
       requireThat(this.db.prepare('SELECT p.id FROM principals p JOIN instances i ON i.id=p.instance_id WHERE p.id=? AND i.trusted=1').get(input.inviteePrincipalId),'UNKNOWN_PRINCIPAL')
       requireThat(this.isPublished(input.inviteePrincipalId),'BOT_NOT_PUBLISHED')
       this.contactPolicy?.(auth,input.principalId,input.inviteePrincipalId)
-      const old=this.db.prepare('SELECT id FROM invites WHERE conversation_id=? AND principal_id=? AND active=1').get(input.conversationId,input.inviteePrincipalId)
-      if(old)return {inviteId:old.id}
-      const instance=this.db.prepare('SELECT instance_id FROM principals WHERE id=?').get(input.inviteePrincipalId).instance_id
-      const pending=this.db.prepare('SELECT count(*) count FROM invites i JOIN principals p ON p.id=i.principal_id WHERE p.instance_id=? AND i.active=1').get(instance).count
-      requireThat(pending<this.limits.maxPendingInvitesPerInstance,'INVITE_LIMIT')
-      const id=randomUUID()
-      this.db.prepare('INSERT INTO invites(id,conversation_id,principal_id,inviter_id) VALUES (?,?,?,?)').run(id,input.conversationId,input.inviteePrincipalId,input.principalId)
-      const target=this.db.prepare('SELECT kind,instance_id FROM principals WHERE id=?').get(input.inviteePrincipalId)
-      const actor=this.principal(auth,input.principalId)
-      if(target.kind==='bot' && target.instance_id===auth.instanceId && actor.kind==='human' && this.ownerOfPrincipal(input.inviteePrincipalId)===input.principalId){
-        return {inviteId:id,joined:true,...this.joinInvitedPrincipal({id,conversation_id:input.conversationId,principal_id:input.inviteePrincipalId,inviter_id:input.principalId,active:1},input.inviteePrincipalId)}
-      }
-      return {inviteId:id}
+      this.includeBotOwner(input.inviteePrincipalId,input.conversationId,input.principalId)
+      const invite=this.groupInviteRecord(input.inviteePrincipalId,input.conversationId,input.principalId)
+      return {inviteId:invite.id,joined:true,...this.joinInvitedPrincipal(invite,input.inviteePrincipalId)}
     })
   }
   accept(auth,input) {
@@ -469,17 +460,64 @@ export class HubStore {
     return this.operation(auth,input.operationId,input,()=>{
       const invite=this.db.prepare('SELECT * FROM invites WHERE id=?').get(input.inviteId)
       requireThat(invite?.principal_id===input.principalId,'FORBIDDEN')
+      this.includeBotOwner(input.principalId,invite.conversation_id,invite.inviter_id)
       return this.joinInvitedPrincipal(invite,input.principalId)
     })
   }
-  joinInvitedPrincipal(invite,principalId) {
+  groupInviteRecord(principalId,conversationId,inviterId) {
+    const old=this.db.prepare('SELECT * FROM invites WHERE conversation_id=? AND principal_id=? AND active=1').get(conversationId,principalId)
+    if(old)return old
+    const invite={id:randomUUID(),conversation_id:conversationId,principal_id:principalId,inviter_id:inviterId,active:1}
+    this.db.prepare('INSERT INTO invites(id,conversation_id,principal_id,inviter_id) VALUES (?,?,?,?)').run(invite.id,conversationId,principalId,inviterId)
+    return invite
+  }
+  includeBotOwner(principalId,conversationId,inviterId,{repair=false}={}) {
+    if(!principalId.startsWith('bot:'))return
+    const owner=this.ownerOfPrincipal(principalId)
+    requireThat(owner,'UNKNOWN_PRINCIPAL')
+    const member=this.db.prepare('SELECT active FROM memberships WHERE conversation_id=? AND principal_id=?').get(conversationId,owner)
+    if(member?.active)return true
+    if(repair && member){
+      const bot=this.db.prepare('SELECT * FROM memberships WHERE conversation_id=? AND principal_id=? AND active=1').get(conversationId,principalId)
+      if(bot)this.dropGroupMember(conversationId,{...bot,principalId})
+      this.db.prepare('UPDATE invites SET active=0 WHERE conversation_id=? AND principal_id=?').run(conversationId,principalId)
+      return false
+    }
+    requireThat(this.ownerInvitationPolicy?.(inviterId,owner)!==false,'CONTACT_REQUIRED')
+    const activeBot=repair && this.db.prepare('SELECT 1 FROM memberships WHERE conversation_id=? AND principal_id=? AND active=1').get(conversationId,principalId)
+    this.joinInvitedPrincipal(this.groupInviteRecord(owner,conversationId,inviterId),owner,activeBot?{ownerOfActiveBot:principalId}:undefined)
+    return true
+  }
+  repairGroupJoins() {
+    const repaired=[],deferred=[]
+    const rows=this.db.prepare(`SELECT i.*,p.kind,c.owner_id FROM invites i JOIN principals p ON p.id=i.principal_id
+      JOIN instances peer ON peer.id=p.instance_id JOIN conversations c ON c.id=i.conversation_id
+      JOIN memberships source ON source.conversation_id=c.id AND source.principal_id=i.inviter_id
+      WHERE c.kind='group' AND c.closed=0 AND peer.trusted=1 AND source.active=1 AND source.role IN ('owner','admin')
+      AND (i.active=1 OR EXISTS(SELECT 1 FROM memberships m WHERE m.conversation_id=c.id AND m.principal_id=p.id AND m.active=1)) ORDER BY i.rowid DESC`).all()
+    for(const row of rows){
+      if(this.ownerInvitationPolicy?.(row.inviter_id,row.principal_id)===false)continue
+      try{this.transaction(()=>{
+        const ownerReady=this.includeBotOwner(row.principal_id,row.conversation_id,row.inviter_id,{repair:true})
+        if(ownerReady!==false && row.active && this.isPublished(row.principal_id))this.joinInvitedPrincipal(row,row.principal_id)
+      });repaired.push(row.conversation_id)}catch(error){if(!['MEMBER_LIMIT','MEMBERSHIP_LIMIT','CONTACT_REQUIRED','UNKNOWN_PRINCIPAL','OWNER_UNAVAILABLE','INVITE_REVOKED'].includes(error.code))throw error;deferred.push({conversationId:row.conversation_id,code:error.code})}
+    }
+    for(const row of this.db.prepare(`SELECT c.id,p.id owner_id FROM conversations c JOIN memberships m ON m.conversation_id=c.id
+      JOIN principals p ON p.id=m.principal_id JOIN instances peer ON peer.id=p.instance_id
+      WHERE c.kind='group' AND c.closed=0 AND p.kind='bot' AND peer.trusted=1 AND m.active=1`).all()){
+      try{this.transaction(()=>this.includeBotOwner(row.owner_id,row.id,row.owner_id,{repair:true}));repaired.push(row.id)}catch(error){if(!['MEMBER_LIMIT','MEMBERSHIP_LIMIT','CONTACT_REQUIRED','UNKNOWN_PRINCIPAL','OWNER_UNAVAILABLE','INVITE_REVOKED'].includes(error.code))throw error;deferred.push({conversationId:row.id,code:error.code})}
+    }
+    return {repaired:[...new Set(repaired)],deferred}
+  }
+  joinInvitedPrincipal(invite,principalId,{ownerOfActiveBot}={}) {
     const current=this.db.prepare('SELECT * FROM memberships WHERE conversation_id=? AND principal_id=?').get(invite.conversation_id,principalId)
     if(current?.active){this.db.prepare('UPDATE invites SET active=0 WHERE id=?').run(invite.id);return {conversationId:invite.conversation_id,membershipEpoch:current.epoch,joinSeq:current.join_seq}}
     requireThat(invite.active,'INVITE_REVOKED')
     requireThat(this.db.prepare('SELECT owner_id FROM conversations WHERE id=?').get(invite.conversation_id).owner_id!==principalId,'OWNER_UNAVAILABLE')
     if(!current)this.requireMembershipCapacity(principalId)
     const inviter=this.db.prepare('SELECT active,role FROM memberships WHERE conversation_id=? AND principal_id=?').get(invite.conversation_id,invite.inviter_id)
-    requireThat(inviter?.active&&['owner','admin'].includes(inviter.role),'INVITE_REVOKED')
+    const derivedOwner=ownerOfActiveBot && this.ownerOfPrincipal(ownerOfActiveBot)===principalId && this.db.prepare('SELECT 1 FROM memberships WHERE conversation_id=? AND principal_id=? AND active=1').get(invite.conversation_id,ownerOfActiveBot)
+    requireThat(derivedOwner || inviter?.active&&['owner','admin'].includes(inviter.role),'INVITE_REVOKED')
     const count=this.db.prepare('SELECT count(*) count FROM memberships WHERE conversation_id=? AND active=1').get(invite.conversation_id).count
     requireThat(count<this.limits.maxMembers,'MEMBER_LIMIT')
     const epoch=randomUUID()
@@ -503,13 +541,23 @@ export class HubStore {
       }
       requireThat(member.role!=='owner','OWNER_TRANSFER_REQUIRED')
       requireThat(input.targetPrincipalId===input.principalId||caller.role==='owner'||member.role==='member','FORBIDDEN')
-      this.db.prepare('UPDATE memberships SET active=0 WHERE conversation_id=? AND principal_id=?').run(input.conversationId,input.targetPrincipalId)
-      this.db.prepare('UPDATE deliveries SET revoked=1 WHERE recipient_id=? AND membership_epoch=? AND ai_accepted=0').run(input.targetPrincipalId,member.epoch)
-      this.db.prepare('UPDATE conversations SET version=version+1,routing_mode=CASE WHEN admin_bot=? THEN ? ELSE routing_mode END,admin_bot=CASE WHEN admin_bot=? THEN NULL ELSE admin_bot END WHERE id=?').run(input.targetPrincipalId,'mentionsOnly',input.targetPrincipalId,input.conversationId)
-      this.db.prepare('UPDATE invites SET active=0 WHERE conversation_id=? AND (principal_id=? OR inviter_id=?)').run(input.conversationId,input.targetPrincipalId,input.targetPrincipalId)
-      this.event(input.conversationId,'membership.removed',{principalId:input.targetPrincipalId,membershipEpoch:member.epoch})
+      const targets=[{principalId:input.targetPrincipalId,...member}]
+      if(input.targetPrincipalId.startsWith('human:'))for(const bot of this.db.prepare("SELECT p.id,m.* FROM principals p JOIN memberships m ON m.principal_id=p.id WHERE m.conversation_id=? AND m.active=1 AND p.kind='bot'").all(input.conversationId)){
+        if(this.ownerOfPrincipal(bot.id)!==input.targetPrincipalId)continue
+        requireThat(bot.role!=='owner','OWNER_TRANSFER_REQUIRED')
+        requireThat(input.targetPrincipalId===input.principalId || caller.role==='owner' || bot.role==='member','FORBIDDEN')
+        targets.push({principalId:bot.id,...bot})
+      }
+      for(const target of targets)this.dropGroupMember(input.conversationId,target)
       return {revoked:true}
     })
+  }
+  dropGroupMember(conversationId,target) {
+    this.db.prepare('UPDATE memberships SET active=0 WHERE conversation_id=? AND principal_id=?').run(conversationId,target.principalId)
+    this.db.prepare('UPDATE deliveries SET revoked=1 WHERE recipient_id=? AND membership_epoch=? AND ai_accepted=0').run(target.principalId,target.epoch)
+    this.db.prepare('UPDATE conversations SET version=version+1,routing_mode=CASE WHEN admin_bot=? THEN ? ELSE routing_mode END,admin_bot=CASE WHEN admin_bot=? THEN NULL ELSE admin_bot END WHERE id=?').run(target.principalId,'mentionsOnly',target.principalId,conversationId)
+    this.db.prepare('UPDATE invites SET active=0 WHERE conversation_id=? AND (principal_id=? OR inviter_id=?)').run(conversationId,target.principalId,target.principalId)
+    this.event(conversationId,'membership.removed',{principalId:target.principalId,membershipEpoch:target.epoch})
   }
   routing(auth,input) {
     return this.operation(auth,input.operationId,input,()=>{

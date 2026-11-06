@@ -43,7 +43,7 @@ export function contactsByAddress(contacts, addressNotes = {}) {
 }
 
 export function conversationTitle(member, humanId, labels) {
-  return member.kind === 'group' ? member.title : member.info?.members.filter(person => person.principalId !== humanId).map(person => labels.get(person.principalId) ?? person.displayName).join(', ') || 'Private message'
+  return member.archive ? (member.info?.members ?? []).map(person => labels.get(person.principalId) ?? person.displayName).join(' ↔ ') : member.kind === 'group' ? member.title : member.info?.members.filter(person => person.principalId !== humanId).map(person => labels.get(person.principalId) ?? person.displayName).join(', ') || 'Private message'
 }
 
 // Stable principal identity also keeps avatars distinct behind shared addresses.

@@ -169,6 +169,8 @@ function decide(body) {
       }
     const restate = /^COMM-RESTATE (single|all|quote) (\S+)$/.exec(command)
     if (!communicationResults && restate) return [text(`${restate[1] === 'quote' ? '> ' : ''}Summary ${restate[2]} ${restate[1] === 'all' ? '@all' : '@CollabB'}`)]
+    const createGroup = /^COMM-CREATE-GROUP (.+)$/.exec(command)
+    if (!communicationResults && createGroup && tools.has('create_communication_group')) return [tool('create_communication_group', {title:createGroup[1]})]
     const send = /^COMM-SEND (\S+) ([^\n]+)$/.exec(command)
     if (!communicationResults && send) return [tool('send_contact_message', { contactPrincipalId: send[1], text: `COMM-ECHO ${send[2]}` })]
     const post = /^COMM-POST (\S+) (\S+) (.+)$/.exec(command)

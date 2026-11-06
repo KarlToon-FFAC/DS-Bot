@@ -16,14 +16,13 @@ The user's eight requested changes are implemented together:
 5. Group creation shows each contact with their address on one nonselectable row;
    only Bot checkboxes are selectable. The canonical owner is included automatically,
    deduplicated when several Bots have the same owner.
-6. Inviting one's own published local Bot joins it atomically at the Hub. Membership
-   limits, owner authority, epochs and default Bot speaking policy still apply. This
-   does not automatically accept a remote owner's Bot or Human invitation.
-7. Pending invitations are grouped by exact group and canonical inviter. One detail
-   dialog shows source identity/address, target group and every invited local identity.
-   Explicit acceptance processes these exact invitations with stable operation IDs;
-   a failed partial acceptance retains the remaining invitations. Unknown sources in
-   older snapshots are kept separate instead of guessed from names.
+6. Group additions now join immediately at the Hub, for local and remote participants.
+   Every group Bot has its canonical Human owner included, including Agent-created
+   groups and CLI additions. Role, capacity and epoch checks remain authoritative.
+7. Older pending invitation details remain grouped by exact group and canonical
+   inviter. New group additions require no acceptance dialog. On startup the Hub
+   repairs valid older requests and groups whose Bot owner had never joined as a
+   Human. A prior explicit departure is preserved rather than silently resumed.
 8. An empty message log remains the flexible space above the bottom composer, keeping
    mention choices visible above it at both desktop and narrow viewport sizes.
 

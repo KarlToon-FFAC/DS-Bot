@@ -47,10 +47,12 @@ export async function startHub({ databasePath, databaseLock, peers, host='127.0.
   store.directoryFilter=(auth,rows,principalId)=>management.filterDirectory(auth,rows,principalId)
   store.contactPolicy=(auth,actorId,targetId)=>management.assertContact(auth,actorId,targetId)
   store.dmPolicy=id=>management.assertDm(id)
+  store.ownerInvitationPolicy=(actorId,targetId)=>management.canContact(actorId,targetId)
   try{
     requireThat(allowed.size>0||managementOptions?.enabled===true||store.db.prepare('SELECT 1 FROM hub_enrolled_peers LIMIT 1').get(),'INVALID_CONFIG','Configure paired instances or explicitly enable Hub management')
     for(const [id,peer] of allowed)store.configurePeer(id,peer.label,peer.pairingRevision)
     for(const instance of store.db.prepare('SELECT id FROM instances WHERE trusted=1').all())if(!allowed.has(instance.id)&&!management.peer(instance.id))store.revokeInstance(instance.id)
+    store.groupJoinRepair=store.repairGroupJoins()
     if(managementOptions?.enabled)requireThat(typeof managementOptions.password==='string'||store.db.prepare("SELECT 1 FROM hub_management WHERE key='adminVerifier'").get(),'INVALID_CONFIG','Configure a private administrator password before enabling management')
   }catch(error){store.close();throw error}
   let managementHttp, managementUrl = null

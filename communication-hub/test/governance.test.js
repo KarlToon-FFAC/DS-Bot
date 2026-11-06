@@ -117,15 +117,14 @@ test('ownership transfer and device repair never restore membership or permit ta
   assert.equal(store.reclaim,undefined)
   assert.throws(()=>store.authorize(repaired,{principalId:B,conversationId:group}),{code:'NOT_A_MEMBER'})
   assert.throws(()=>store.sync(repaired,{principalId:B,conversationId:group,membershipEpoch:before.membershipEpoch,after:0}),{code:'NOT_A_MEMBER'})
-  const invitation=store.invite(a,op({principalId:A,conversationId:group,inviteePrincipalId:B}))
-  assert.throws(()=>store.accept(repaired,op({principalId:B,inviteId:invitation.inviteId})),{code:'OWNER_UNAVAILABLE'})
+  assert.throws(()=>store.invite(a,op({principalId:A,conversationId:group,inviteePrincipalId:B})),{code:'OWNER_UNAVAILABLE'})
   assert.equal(store.db.prepare("SELECT count(*) n FROM events WHERE type='ownership.reclaimed'").get().n,0)
 })
 
 test('Bot-created ownership is explicit and neither its Human nor another Chief inherits it',t=>{
   const {store,a,b,A,J,K}=fixture(t)
   const group=store.createGroup(a,op({principalId:J,title:'Bot-created group'})).conversationId
-  assert.throws(()=>store.invite(a,op({principalId:A,conversationId:group,inviteePrincipalId:K})),{code:'NOT_A_MEMBER'})
+  assert.throws(()=>store.invite(a,op({principalId:A,conversationId:group,inviteePrincipalId:K})),{code:'FORBIDDEN'})
   assert.throws(()=>store.invite(b,op({principalId:K,conversationId:group,inviteePrincipalId:A})),{code:'NOT_A_MEMBER'})
   const invite=store.invite(a,op({principalId:J,conversationId:group,inviteePrincipalId:A}))
   store.accept(a,op({principalId:A,inviteId:invite.inviteId}))
@@ -144,6 +143,7 @@ test('v1 migration retains legacy speakers, deterministically selects owner and 
   try{
     const a=store.connect('a','A',CAPABILITIES),b=store.connect('b','B',CAPABILITIES)
     const A=store.register(a,{localId:'A',kind:'human',displayName:'A'}).principalId
+    store.register(b,{localId:'owner',kind:'human',displayName:'Remote owner'})
     const K=store.register(b,{localId:'K',kind:'bot',displayName:'K'}).principalId
     const group=store.createGroup(a,op({principalId:A,title:'Legacy'})).conversationId
     const invite=store.invite(a,op({principalId:A,conversationId:group,inviteePrincipalId:K}))
@@ -153,8 +153,8 @@ test('v1 migration retains legacy speakers, deterministically selects owner and 
     store.close();store=new HubStore(path)
     const members=store.memberships(a).memberships
     assert.equal(members[0].role,'owner');assert.equal(members[0].ownerPrincipalId,A);assert.equal(members[0].speakingMode,'speak')
-    assert.equal(store.memberships(b).memberships[0].speakingMode,'active')
-    assert.equal(store.memberships(b).memberships[0].role,'admin')
+    assert.equal(store.memberships(b).memberships.find(m=>m.principalId===K).speakingMode,'active')
+    assert.equal(store.memberships(b).memberships.find(m=>m.principalId===K).role,'admin')
     const id=members[0].conversationId
     store.close();store=new HubStore(path)
     assert.equal(store.memberships(a).memberships[0].conversationId,id)

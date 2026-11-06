@@ -166,6 +166,7 @@ test('remove then immediately @all uses refreshed members, and refresh failure p
     const a = store.connect('a', 'A', CAPABILITIES), b = store.connect('b', 'B', CAPABILITIES)
     const human = queue.localPrincipal('human', 'user', 'User'), bot = queue.localPrincipal('bot', 'one', 'One')
     for (const principal of [human, bot]) store.register(a, { localId: principal.localId, kind: principal.kind, displayName: principal.displayName })
+    store.register(b,{localId:'owner',kind:'human',displayName:'Remote owner'})
     const remote = store.register(b, { localId: 'two', kind: 'bot', displayName: 'Two' }).principalId
     const op = value => ({ operationId: randomUUID(), ...value })
     const conversationId = store.createGroup(a, op({ principalId: human.principalId, title: 'Group' })).conversationId
@@ -193,7 +194,7 @@ test('remove then immediately @all uses refreshed members, and refresh failure p
     const message = queue.intent(send.messageId).payload
     assert.deepEqual(message.mentions, [{ principalId: bot.principalId }])
     assert.equal(store.publish(a, message).messageId, send.messageId)
-    assert.equal(store.pending(b).length, 0)
+    assert.equal(store.pending(b).filter(item=>item.ai).length, 0)
     const scope = runtime.member(human.principalId, conversationId)
     runtime.conversations.get(conversationId).membershipVersion = scope.membershipVersion - 1
     assert.throws(() => runtime.message(human.principalId, conversationId, { text: '@all' }), { code: 'AUTHORIZATION_PENDING' })

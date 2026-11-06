@@ -42,6 +42,9 @@ const schemas = {
   'resume-hub': { hubId:text,confirmedUrl:text,confirmResume:'boolean' },
   'onboarding-storage': { hubId: text },
   'hub-join-status': { hubId: text }, 'cancel-hub-join': { hubId: text },
+  'bot-dm-history': {conversationId:text,localBotId:text,membershipEpoch:text,after:integer,before:integer,limit:integer,latest:'boolean'},
+  'bot-dm-reference': {conversationId:text,localBotId:text,membershipEpoch:text,messageId:text},
+  'participant-profile': {conversationId:text,membershipEpoch:text,targetPrincipalId:text,localBotId:text},
   'user-code': {}, 'rotate-user-code': { operationId: text },
   'request-contact': { userCode: text, localBotIds: 'strings', operationId: text },
   'contact-requests': {}, 'contact-relations': {},
@@ -56,6 +59,9 @@ const schemas = {
   'forget-relationship-memory': { localBotId: text, conversationId: text, membershipEpoch: text, id: 'sha256' },
 }
 const required = {
+  'bot-dm-history':['conversationId','localBotId','membershipEpoch'],
+  'bot-dm-reference':['conversationId','localBotId','membershipEpoch','messageId'],
+  'participant-profile':['conversationId','membershipEpoch','targetPrincipalId'],
   thread: ['conversationId', 'messageId'],
   members: ['conversationId'], history: ['conversationId'], reference: ['conversationId', 'messageId'], read: ['conversationId', 'seq'],
   send: ['conversationId', 'text'], dm: ['otherPrincipalId'], 'create-group': ['title'], invite: ['conversationId', 'inviteePrincipalId'],

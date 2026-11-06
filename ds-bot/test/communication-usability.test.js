@@ -519,13 +519,14 @@ test('group creation selects only Bots, shows contact and IP together, and dedup
     const boxes=doc.querySelectorAll('.bt-comm-group-choices input[type=checkbox]');assert.equal(boxes.length,2)
     for(const box of boxes)await act(async()=>box.click())
     await click('Create and invite')
-    assert.deepEqual(invited,['human:b:buddy','bot:b:one','bot:b:two'])
+    assert.deepEqual(invited,['bot:b:one','bot:b:two'])
   })
 })
 
 test('partial invitations preserve the created group and never create another group or silently retry invitations', async () => {
   const snapshot = state(), invitations = []
   snapshot.contacts = ['human:b:person', 'bot:b:chief'].map((principalId, index) => ({ principalId, displayName: index ? 'Chief' : 'Person', homeInstanceId: 'b', instanceLabel: 'Other device', kind: index ? 'bot' : 'human', ownerPrincipalId: 'human:b:person' }))
+  snapshot.contacts.push({...snapshot.contacts[1],principalId:'bot:b:second',displayName:'Second'})
   await pane({ snapshot, handle: async body => {
     if (body.endpoint === 'create-group') { snapshot.conversations = [membership]; return { conversationId: 'group' } }
     if (body.endpoint === 'invite') { invitations.push(body); if (invitations.length === 2) throw Object.assign(new Error('denied'), { code: 'FORBIDDEN' }); return {} }
@@ -1023,7 +1024,7 @@ test('canonical started history deduplicates beneath messages and member chips o
     assert.equal(inspector.querySelector('input,select,textarea'), null)
     assert.equal(inspector.querySelectorAll('button').length, 2)
     assert.ok(inspector.querySelector('[aria-label="Close dialog"]'))
-    assert.ok(calls.every(body => ['state', 'history', 'read'].includes(body.endpoint)), 'inspection performs no writes or local Bot navigation')
+    assert.ok(calls.every(body => ['state', 'history', 'read', 'participant-profile'].includes(body.endpoint)), 'inspection performs no writes or local Bot navigation')
   })
 })
 
@@ -1083,7 +1084,7 @@ test('routine failures, queues and reconciliation have no bottom console and act
     assert.match(activity.textContent, /Preserved failed text|Pending text/)
     assert.match(activity.textContent, /CURRENT_RECONCILE/); assert.match(activity.textContent, /CURRENT_EXPORT/)
     assert.doesNotMatch(activity.textContent, /OTHER_RECONCILE|SECRET_BOT_FAILURE|Operation failed/)
-    assert.equal(calls.some(body => !['state', 'history', 'read'].includes(body.endpoint)), false)
+    assert.equal(calls.some(body => !['state', 'history', 'read', 'participant-profile'].includes(body.endpoint)), false)
     await click('Cancel')
     await edit(doc.querySelector('.bt-comm-main textarea'), 'Retained original intent')
     await click('Send message')
@@ -1368,4 +1369,30 @@ test('a fresh pending-reset document clears main and thread drafts before React 
     assert.ok(dom.window.localStorage.getItem(threadKey).includes('New thread text'))
     assert.ok(!dom.window.localStorage.getItem(threadKey).includes('old'))
   })
+})
+
+
+test('member details show the canonical owning contact and full public Bot profile without private fields',async()=>{
+ const bot={principalId:'bot:b:coder',kind:'bot',displayName:'Coder',ownerPrincipalId:'human:b:buddy',publicProfile:{headline:'Short preview',truncated:true}},owner={principalId:'human:b:buddy',kind:'human',displayName:'Buddy',ipAddress:'192.0.2.20'}
+ const snapshot={...state(),contacts:[bot,owner],conversations:[{...membership,kind:'dm',title:'Private',info:{members:[membership.info.members[0],bot]}}]}
+ await pane({snapshot,handle:async body=>{assert.equal(body.endpoint,'participant-profile');return {principalId:bot.principalId,publicProfile:{headline:'Testing expert',summary:'Complete public profile',expertise:['Regression'],instructions:'PRIVATE_CANARY_DO_NOT_RENDER',version:2}}}},async({doc,click})=>{
+  await click('Coder');await act(async()=>doc.querySelector('.bt-comm-title-pill').click())
+  const dialog=doc.querySelector('[aria-label="Participant information"]')
+  assert.match(dialog.textContent,/From contact.*Buddy/s);assert.match(dialog.textContent,/192.0.2.20/)
+  assert.match(dialog.textContent,/Testing expert.*Complete public profile.*Regression/s)
+  assert.doesNotMatch(dialog.textContent,/PRIVATE_CANARY/)
+ })
+})
+
+test('Bot-to-Bot records have a dedicated read-only conversation without a Human membership or Human read ACK',async()=>{
+ const members=[{principalId:'bot:a:worker',kind:'bot',displayName:'Worker'},{principalId:'bot:b:expert',kind:'bot',displayName:'Expert'}]
+ const snapshot={...state(),botConversations:[{conversationId:'bot-only-dm',kind:'dm',archive:true,viewerBotId:'worker',viewerPrincipalId:members[0].principalId,membershipEpoch:'private-epoch',joinSeq:1,watermark:1,info:{members}}]}
+ const event={type:'message',conversationSeq:1,serverAcceptedAt:'2026-11-06T00:00:00Z',message:{messageId:'bot-note',author:members[1],content:{text:'Recorded expert advice'},mentions:[]}}
+ await pane({snapshot,handle:async body=>{assert.equal(body.endpoint,'bot-dm-history');assert.equal(body.localBotId,'worker');assert.equal(body.membershipEpoch,'private-epoch');return {conversationId:'bot-only-dm',membershipEpoch:'private-epoch',events:[event]}}},async({doc,calls})=>{
+  await act(async()=>doc.querySelector('[aria-label="Bot private chats"] [data-conversation-id]').click())
+  assert.match(doc.querySelector('.bt-comm-log').textContent,/Recorded expert advice/)
+  assert.match(doc.querySelector('.bt-comm-archive-notice').textContent,/Read-only/)
+  assert.equal(doc.querySelector('textarea[aria-label="Communication message"]'),null)
+  assert.ok(!calls.some(body=>['send','read','accept'].includes(body.endpoint)))
+ })
 })

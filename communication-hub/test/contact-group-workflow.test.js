@@ -35,23 +35,87 @@ test('contact consent follows current published Bots, includes later publication
   assert.notEqual(store.db.prepare('SELECT epoch FROM memberships WHERE conversation_id=? AND principal_id=?').get(dm,one).epoch,oldEpoch)
   assert.throws(()=>m.assertDm(dm),{code:'CONTACT_REQUIRED'})
 })
-test('only a local Human owner directly adds its own Bot; remote invitations retain source details and require consent',t=>{
+test('local and remote group additions join immediately with the canonical Human owner and preserve replay safety',t=>{
   const {store,a,b,A,B,one,two}=fixture(t)
-  store.observeAddress(a,'192.0.2.10')
   const group=store.createGroup(a,op({principalId:A,title:'Review'})).conversationId
-  const local=store.invite(a,op({principalId:A,conversationId:group,inviteePrincipalId:one}))
-  assert.equal(local.joined,true)
-  assert.equal(store.memberships(a).invites.length,0)
-  assert.ok(store.memberships(a).memberships.some(item=>item.principalId===one&&item.active))
-  const intent=op({principalId:A,conversationId:group,inviteePrincipalId:two})
-  const remote=store.invite(a,intent)
-  assert.deepEqual(store.invite(a,intent),remote)
-  assert.ok(!store.memberships(b).memberships.some(item=>item.principalId===two&&item.active))
-  const pending=store.memberships(b).invites.find(item=>item.inviteId===remote.inviteId)
-  assert.equal(pending.inviterPrincipalId,A);assert.equal(pending.inviterName,'Alice');assert.equal(pending.inviterIpAddress,'192.0.2.10')
-  assert.equal(pending.principalName,'Two')
-  assert.throws(()=>store.accept(a,op({principalId:one,inviteId:remote.inviteId})),{code:'FORBIDDEN'})
-  store.accept(b,op({principalId:two,inviteId:remote.inviteId}))
+  assert.equal(store.invite(a,op({principalId:A,conversationId:group,inviteePrincipalId:one})).joined,true)
+  const input=op({principalId:A,conversationId:group,inviteePrincipalId:two}),result=store.invite(a,input)
+  assert.deepEqual(store.invite(a,input),result)
+  assert.equal(result.joined,true)
   assert.ok(store.memberships(b).memberships.some(item=>item.principalId===two&&item.active))
-  assert.equal(store.ownerOfPrincipal(two),B)
+  assert.ok(store.memberships(b).memberships.some(item=>item.principalId===B&&item.active))
+  assert.equal(store.memberships(b).invites.length,0)
+  assert.throws(()=>store.accept(a,op({principalId:one,inviteId:result.inviteId})),{code:'FORBIDDEN'})
+  assert.equal(store.accept(b,op({principalId:two,inviteId:result.inviteId})).membershipEpoch,result.membershipEpoch)
+})
+
+test('Bot-created groups include the Human owner and CLI-style Bot-only additions cannot omit the remote owner',t=>{
+ const {store,a,b,A,B,one,two}=fixture(t)
+ const group=store.createGroup(a,op({principalId:one,title:'Agent-created'})).conversationId
+ const own=store.memberships(a).memberships.filter(row=>row.conversationId===group)
+ assert.equal(own.find(row=>row.principalId===one).role,'owner')
+ assert.equal(own.find(row=>row.principalId===A).role,'member')
+ store.invite(a,op({principalId:one,conversationId:group,inviteePrincipalId:two}))
+ assert.ok(store.memberships(b).memberships.some(row=>row.conversationId===group&&row.principalId===B))
+ assert.ok(store.memberships(b).memberships.some(row=>row.conversationId===group&&row.principalId===two))
+ assert.throws(()=>store.remove(a,op({principalId:A,conversationId:group,targetPrincipalId:A})),{code:'OWNER_TRANSFER_REQUIRED'})
+})
+test('a full group rejects owner and Bot additions atomically instead of creating a Bot-only membership',t=>{
+ const {store,a,b,A,B,two}=fixture(t)
+ store.limits.maxMembers=2
+ const group=store.createGroup(a,op({principalId:A,title:'Full'})).conversationId
+ assert.throws(()=>store.invite(a,op({principalId:A,conversationId:group,inviteePrincipalId:two})),{code:'MEMBER_LIMIT'})
+ assert.equal(store.memberships(b).memberships.filter(row=>row.conversationId===group).length,0)
+ assert.equal(store.db.prepare('SELECT count(*) n FROM invites WHERE conversation_id=?').get(group).n,0)
+ assert.ok(!store.db.prepare('SELECT 1 FROM memberships WHERE conversation_id=? AND principal_id=?').get(group,B))
+})
+test('startup repair restores never-joined owners of legacy Bot groups, is idempotent and preserves an explicit departure',t=>{
+ const {store,a,b,A,B,two}=fixture(t)
+ const group=store.createGroup(a,op({principalId:A,title:'Legacy missing owner'})).conversationId
+ store.transaction(()=>store.joinInvitedPrincipal(store.groupInviteRecord(two,group,A),two))
+ assert.ok(!store.memberships(b).memberships.some(row=>row.principalId===B))
+ store.repairGroupJoins()
+ assert.ok(store.memberships(b).memberships.some(row=>row.principalId===B&&row.conversationId===group))
+ const epoch=store.db.prepare('SELECT epoch FROM memberships WHERE conversation_id=? AND principal_id=?').get(group,B).epoch
+ store.repairGroupJoins()
+ assert.equal(store.db.prepare('SELECT epoch FROM memberships WHERE conversation_id=? AND principal_id=?').get(group,B).epoch,epoch)
+ store.remove(a,op({principalId:A,conversationId:group,targetPrincipalId:B}))
+ assert.ok(!store.memberships(b).memberships.some(row=>row.conversationId===group&&row.active))
+ store.repairGroupJoins()
+ assert.ok(!store.memberships(b).memberships.some(row=>row.conversationId===group&&row.active))
+})
+
+test('a real Hub restart repairs legacy missing Human membership before serving clients and keeps the repaired epoch stable',async t=>{
+ const {mkdtempSync,rmSync}=await import('node:fs'),{tmpdir}=await import('node:os'),{join}=await import('node:path')
+ const {startHub}=await import('../src/server.js')
+ const root=mkdtempSync(join(tmpdir(),'dsbot-group-repair-')),databasePath=join(root,'hub.sqlite')
+ const options={databasePath,port:0,peers:[{instanceId:'a',credential:'synthetic-test-credential-local-a-12345'},{instanceId:'b',credential:'synthetic-test-credential-local-b-12345'}]}
+ let hub=await startHub(options)
+ t.after(async()=>{await hub?.close();rmSync(root,{recursive:true,force:true})})
+ const a=hub.store.connect('a','A',CAPABILITIES),b=hub.store.connect('b','B',CAPABILITIES)
+ const A=hub.store.register(a,{localId:'owner',kind:'human',displayName:'Alice'}).principalId
+ const B=hub.store.register(b,{localId:'owner',kind:'human',displayName:'Buddy'}).principalId
+ const bot=hub.store.register(b,{localId:'worker',kind:'bot',displayName:'Worker'}).principalId
+ const group=hub.store.createGroup(a,op({principalId:A,title:'Legacy hidden group'})).conversationId
+ hub.store.transaction(()=>hub.store.joinInvitedPrincipal(hub.store.groupInviteRecord(bot,group,A),bot))
+ assert.ok(!hub.store.db.prepare('SELECT 1 FROM memberships WHERE conversation_id=? AND principal_id=?').get(group,B))
+ await hub.close();hub=await startHub(options)
+ const repaired=hub.store.db.prepare('SELECT * FROM memberships WHERE conversation_id=? AND principal_id=?').get(group,B)
+ assert.equal(repaired.active,1)
+ await hub.close();hub=await startHub(options)
+ assert.equal(hub.store.db.prepare('SELECT epoch FROM memberships WHERE conversation_id=? AND principal_id=?').get(group,B).epoch,repaired.epoch)
+})
+
+test('a legacy active Bot still brings in its canonical Human when the original inviter has left',t=>{
+ const {store,a,b,A,B,two}=fixture(t)
+ const c=store.connect('c','C',CAPABILITIES),C=store.register(c,{localId:'owner',kind:'human',displayName:'New owner'}).principalId
+ const group=store.createGroup(a,op({principalId:A,title:'Older transferred group'})).conversationId
+ store.invite(a,op({principalId:A,conversationId:group,inviteePrincipalId:C}))
+ store.transaction(()=>store.joinInvitedPrincipal(store.groupInviteRecord(two,group,A),two))
+ let row=store.memberships(a).memberships.find(m=>m.conversationId===group&&m.principalId===A)
+ store.transfer(a,op({principalId:A,conversationId:group,membershipEpoch:row.membershipEpoch,expectedVersion:row.membershipVersion,targetPrincipalId:C}))
+ store.remove(c,op({principalId:C,conversationId:group,targetPrincipalId:A}))
+ store.repairGroupJoins()
+ const parent=store.memberships(b).memberships.find(m=>m.conversationId===group&&m.principalId===B)
+ assert.equal(parent.active,true);assert.equal(parent.role,'member');assert.equal(parent.ownerPrincipalId,C)
 })

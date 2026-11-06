@@ -17,6 +17,7 @@ function fixture(t, disk = false) {
   f.store = new HubStore(f.path)
   t.after(() => { f.store.close(); if (dir) rmSync(dir, { recursive: true, force: true }) })
   f.a = f.store.connect('a', 'A', CAPABILITIES); f.b = f.store.connect('b', 'B', CAPABILITIES)
+  f.store.register(f.b, {localId:'owner',kind:'human',displayName:'Remote owner'})
   f.H = f.store.register(f.a, { localId: 'user', kind: 'human', displayName: 'Configured Human' }).principalId
   f.B = f.store.register(f.b, { localId: 'worker', kind: 'bot', displayName: 'Worker', avatar: { seed: 'local-bot-id', shape: 'round', color: 'deepseek' } }).principalId
   f.begin = (image, principalId = f.H, auth = f.a, uploadId = randomUUID()) => {
@@ -118,7 +119,7 @@ test('directory/member responses omit images and chunks retain revision identity
   const contacts = f.store.contacts(f.a), members = f.store.members(f.b, { conversationId: group, principalId: f.B })
   assert.ok(!JSON.stringify(contacts).includes('data:image')); assert.ok(!JSON.stringify(members).includes('data:image'))
   assert.equal(members.members.find(p => p.principalId === f.B).avatar.imageRevision, upload.imageRevision)
-  assert.throws(() => f.store.settings(f.b, { operationId: randomUUID(), principalId: f.B, conversationId: group, membershipEpoch: f.store.memberships(f.b).memberships[0].membershipEpoch, expectedVersion: members.membershipVersion, title: 'Forbidden' }), { code: 'FORBIDDEN' })
+  assert.throws(() => f.store.settings(f.b, { operationId: randomUUID(), principalId: f.B, conversationId: group, membershipEpoch: f.store.memberships(f.b).memberships.find(m=>m.principalId===f.B).membershipEpoch, expectedVersion: members.membershipVersion, title: 'Forbidden' }), { code: 'FORBIDDEN' })
   let image = '', offset = 0
   do {
     const chunk = f.store.avatarRead(f.a, { principalId: f.B, imageRevision: upload.imageRevision, offset })

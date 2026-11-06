@@ -13,6 +13,7 @@ function fixture(t, disk = false) {
   f.store = new HubStore(f.path)
   t.after(() => { f.store.close(); if (dir) rmSync(dir, { recursive: true, force: true }) })
   f.a = f.store.connect('a', 'A', CAPABILITIES); f.b = f.store.connect('b', 'B', CAPABILITIES)
+  f.store.register(f.b, {localId:'owner',kind:'human',displayName:'Remote owner'})
   f.H = f.store.register(f.a, { localId: 'human', kind: 'human', displayName: 'Human' }).principalId
   f.K = f.store.register(f.b, { localId: 'worker', kind: 'bot', displayName: 'Worker' }).principalId
   f.op = value => ({ operationId: randomUUID(), ...value })

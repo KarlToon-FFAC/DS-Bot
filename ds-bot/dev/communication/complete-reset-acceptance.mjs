@@ -97,9 +97,10 @@ function credentialRemainder(peer) {
 async function freePort(port) {
   await new Promise((accept, reject) => { const server = createServer(); server.once('error', () => reject(new Error('ACCEPTANCE_PORT_IN_USE'))); server.listen(port, '127.0.0.1', () => server.close(accept)) })
 }
-async function command(script, args, extra = {}) {
+async function command(script, args, extra = {}, input) {
   return new Promise((accept, reject) => {
-    const child = spawn(process.execPath, [script, ...args], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...environment, ...extra } })
+    const child = spawn(process.execPath, [script, ...args], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], env: { ...environment, ...extra } })
+    child.stdin.end(input === undefined ? undefined : JSON.stringify(input))
     let stdout = '', stderr = ''
     const timer = setTimeout(() => { child.kill('SIGTERM'); reject(new Error('ACCEPTANCE_COMMAND_TIMEOUT')) }, 90000)
     child.stdout.on('data', value => { stdout += value }); child.stderr.on('data', value => { stderr += value })
@@ -217,7 +218,16 @@ async function contactAndGroup(label, attachments = []) {
   const incoming = await until(async () => (await api(b, 'contact-requests')).find(value => value.requestId === request.requestId && value.direction === 'incoming'), 'contact request received')
   await topology.operation(b, 'accept-contact', { requestId: incoming.requestId, expectedVersion: incoming.version })
   await until(async () => (await api(a, 'state')).contacts.some(value => value.principalId === b.bot) && (await api(b, 'state')).contacts.some(value => value.principalId === a.bot), 'mutual selected Bot consent')
-  const conversationId = await topology.group(`Reset ${label}`, [a.bot, b.human, b.bot], { allowSpeaking: false })
+  const cliEnv={DSBOT_REMOTE_URL:`http://127.0.0.1:${a.web}`,DSBOT_REMOTE_COOKIE:a.cookie}
+  const created=await command(join(repo,'ds-bot/bin/dsbot-remote.mjs'),['create-group'],cliEnv,{title:`Reset ${label}`})
+  assert.equal(created.code,0);assert.equal(created.value.ok,true)
+  const conversationId=created.value.value.conversationId
+  for(const inviteePrincipalId of [a.bot,b.bot]){
+    const added=await command(join(repo,'ds-bot/bin/dsbot-remote.mjs'),['invite'],cliEnv,{conversationId,inviteePrincipalId})
+    assert.equal(added.code,0);assert.equal(added.value.value.joined,true)
+  }
+  for(const peer of [a,b])await until(async()=>{const snapshot=await api(peer,'state');return snapshot.conversations.some(item=>item.conversationId===conversationId)&&!snapshot.invites.some(item=>item.conversationId===conversationId)},'CLI-created group appears on both real DSH instances without invitation acceptance',45000)
+  record(`cli-created-group-${label}-visible-on-both-devices-without-acceptance`)
   assert.ok(!(await api(a,'state')).invites.some(item=>item.conversationId===conversationId&&item.principalId===a.bot),'The local Bot joins without an invitation acceptance step')
   const tag = `${label}-${nonce}`, sent = await topology.send(a, conversationId, `COMM-ECHO ${tag}`, [b.bot], { attachments })
   const reply = await until(async () => (await topology.history(a, conversationId)).events.find(event => event.message?.author.principalId === b.bot && event.message.content.text === `Communication reply ${tag}`)?.message, 'actual remote DSH Mock reply', 60000)
@@ -464,6 +474,24 @@ try {
   const freshGroup = await contactAndGroup('after-reset')
   assert.notEqual(freshGroup.conversationId, oldGroup.conversationId)
   record('same-profiles-new-enrollment-contact-group-and-real-DSH-Mock-reply')
+  stage('real Agent-created group and persistent Bot-to-Bot conversation carrier')
+  const [sender,recipient]=topology.peers,agentGroupTitle=`Agent group ${nonce}`,dmTag=`bot-dm-${nonce}`
+  await sender.client.request('/api/bot',{endpoint:'send',payload:{sessionId:sender.botId,text:`COMM-CREATE-GROUP ${agentGroupTitle}`}})
+  const agentGroup=await until(async()=>(await api(sender,'state')).conversations.find(item=>item.title===agentGroupTitle),'Agent-created group appears in local Human conversation list',60000)
+  assert.equal(agentGroup.ownerPrincipalId,sender.bot)
+  assert.ok(agentGroup.info.members.some(person=>person.principalId===sender.human))
+  record('real-agent-created-group-includes-its-human-owner')
+  await sender.client.request('/api/bot',{endpoint:'send',payload:{sessionId:sender.botId,text:`COMM-SEND ${recipient.bot} ${dmTag}`}})
+  let dm=await until(async()=>(await api(sender,'state')).botConversations.find(item=>item.info.members.some(person=>person.principalId===recipient.bot)),'Bot DM record appears separately from Human conversations',60000)
+  await until(async()=>(await api(sender,'bot-dm-history',{conversationId:dm.conversationId,localBotId:sender.botId,membershipEpoch:dm.membershipEpoch})).events.some(event=>event.message?.content.text===`Communication reply ${dmTag}`),'actual remote Mock reply is retained in the Bot DM record',60000)
+  await assert.rejects(api(sender,'history',{conversationId:dm.conversationId}),{code:'NOT_A_MEMBER'})
+  assert.ok(!(await api(sender,'state')).conversations.some(item=>item.conversationId===dm.conversationId))
+  record('bot-dm-record-holds-real-mock-messages-without-human-membership')
+  await topology.bench(sender,'stop');await startPeer(sender)
+  dm=await until(async()=>(await api(sender,'state')).botConversations.find(item=>item.conversationId===dm.conversationId),'Bot DM record survives Host restart',45000)
+  const archive=await command(join(repo,'ds-bot/bin/dsbot-remote.mjs'),['bot-dm-history'],{DSBOT_REMOTE_URL:`http://127.0.0.1:${sender.web}`,DSBOT_REMOTE_COOKIE:sender.cookie},{conversationId:dm.conversationId,localBotId:sender.botId,membershipEpoch:dm.membershipEpoch})
+  assert.equal(archive.code,0);assert.ok(archive.value.value.events.some(event=>event.message?.content.text===`Communication reply ${dmTag}`))
+  record('bot-dm-record-survives-host-restart-and-is-readable-through-real-cli')
   for (const peer of topology.peers) {
     await topology.bench(peer, 'stop')
     assert.ok(journals(peer).some(value => !value.remote && JSON.stringify(value.rows).includes(`ordinary-reset-canary-${nonce}-${peer.id}`)), 'Ordinary local chat remains readable after reconnect')

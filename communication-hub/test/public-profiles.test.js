@@ -93,7 +93,7 @@ test('authorized contacts and conversation members carry profiles without exposi
   f.store.accept(f.a, { principalId: f.bot, inviteId: invited.inviteId, operationId: randomUUID() })
   const member = f.store.members(f.b, { principalId: f.other, conversationId: group.conversationId })
     .members.find(person => person.principalId === f.bot)
-  assert.equal(member.ownerPrincipalId, null); assert.equal(member.publicProfile.version, 1)
+  assert.equal(member.ownerPrincipalId, f.human); assert.equal(member.publicProfile.version, 1)
   assert.equal(f.store.readPublicProfile(f.b, { principalId: f.other, targetPrincipalId: f.bot }).publicProfile.headline, profile.headline)
   f.store.remove(f.b, { principalId: f.other, conversationId: group.conversationId, targetPrincipalId: f.bot,
     membershipEpoch: ownMembership.membershipEpoch, expectedVersion: f.store.members(f.b, { principalId: f.other, conversationId: group.conversationId }).membershipVersion, operationId: randomUUID() })

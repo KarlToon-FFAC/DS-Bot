@@ -155,13 +155,13 @@ test('group routing uses exact identities and never treats a Human mention or or
   assert.deepEqual(store.remove(b,leave),{revoked:true})
 })
 
-test('unaccepted invitations, per-principal join boundaries and rejoin epochs cannot expose old events or revive revoked deliveries',t=>{
+test('immediate joins, per-principal join boundaries and rejoin epochs cannot expose old events or revive revoked deliveries',t=>{
   const f=fixture(t),{store,a,b,A,B,K}=f
   const conversationId=store.createGroup(a,operation({principalId:A,title:'Shared group'})).conversationId
   joinGroup(f,conversationId,B)
   const old=message(A,conversationId,'before K joins');store.publish(a,old)
   const invite=store.invite(a,operation({conversationId,principalId:A,inviteePrincipalId:K}))
-  assert.throws(()=>store.sync(b,{conversationId,principalId:K,after:0}),{code:'NOT_A_MEMBER'})
+  assert.equal(invite.joined,true)
   const membership=store.accept(b,operation({principalId:K,inviteId:invite.inviteId}))
   const history=store.sync(b,{conversationId,principalId:K,membershipEpoch:membership.membershipEpoch,after:0})
   assert.equal(history.events[0].conversationSeq,membership.joinSeq)

@@ -1,4 +1,10 @@
 export const communicationCSS = `
+.bt-comm-participant-owner>p{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.bt-comm-participant-owner small{color:var(--bt-ink-2)}
+.bt-comm-participant-profile{padding:8px 0}
+.bt-comm-participant-summary{white-space:pre-wrap}
+.bt-comm-archive-notice{padding:0 24px;color:var(--bt-ink-2)}
+
 .bt-comm-group-contact-heading{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px}
 .bt-comm-group-contact .bt-comm-check{padding-left:28px}
 .bt-comm-invitations>button{display:flex;align-items:center;justify-content:space-between;width:100%;margin:4px 0}

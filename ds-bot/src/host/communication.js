@@ -1,3 +1,4 @@
+import { botDmContext, participantProfile } from './federation/bot-dm-records.js'
 import { federationResetStatus } from './federation/reset.js'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { createHash } from 'node:crypto'
@@ -131,7 +132,7 @@ export function install(rt) {
     defineTool({ name: 'read_communication_thread', description: 'Read one authorized message reply chain, including its visible ancestors and subsequent replies. It cannot access another conversation or membership epoch. Continue with nextAfter and the same watermark.',
       parameters: { conversationId: { type: 'string', required: true }, messageId: { type: 'string', required: true }, after: { type: 'integer' }, limit: { type: 'integer' }, watermark: { type: 'integer' } }, output,
       execute: execute((comm, actor, args) => comm.thread(actor.principalId, args)) }),
-    defineTool({ name: 'create_communication_group', description: 'Create an explicit communication group as yourself. Other people/Bots join only through invitations and acceptance.',
+    defineTool({ name: 'create_communication_group', description: 'Create a communication group as yourself. Your Human owner is included automatically. Authorized group additions join directly with each Bot’s canonical Human owner.',
       parameters: { title: { type: 'string', required: true } }, output,
       execute: execute((comm, actor, args, exec) => comm.operation(actor.principalId, 'group.create', { title: args.title }, toolOperation('group', exec))) }),
     defineTool({ name: 'read_communication_members', description: 'Read the current participants, exact IDs, group title, roles, speaking modes, receiving rule and membershipVersion of one authorized communication conversation.',
@@ -152,10 +153,10 @@ export function install(rt) {
         policies: { type: 'array', items: { type: 'object', additionalProperties: false, properties: {
           targetPrincipalId: { type: 'string', required: true }, role: { type: 'string', enum: ['member','admin'] }, speakingMode: { type: 'string', enum: ['readOnly','speak','passive','active'] } } } } }, output,
       execute: execute((comm, actor, args, exec) => comm.operation(actor.principalId, 'group.settings', args, toolOperation('settings', exec))) }),
-    defineTool({ name: 'invite_communication_member', description: 'Invite an exact published participant to a communication group you manage.',
+    defineTool({ name: 'invite_communication_member', description: 'Add an exact published participant to a group you manage. The participant joins immediately, with its canonical Human owner when it is a Bot.',
       parameters: { conversationId: { type: 'string', required: true }, inviteePrincipalId: { type: 'string', required: true } }, output,
       execute: execute((comm, actor, args, exec) => comm.operation(actor.principalId, 'group.invite', args, toolOperation('invite', exec))) }),
-    defineTool({ name: 'accept_communication_invite', description: 'Accept an invitation for your own Bot identity; it grants no access for the Human who owns you.',
+    defineTool({ name: 'accept_communication_invite', description: 'Replay or finish a saved older group invitation as your own Bot. Current group additions join immediately and include the canonical Human owner. This does not expose private Bot DMs.',
       parameters: { inviteId: { type: 'string', required: true } }, output,
       execute: execute((comm, actor, args, exec) => comm.operation(actor.principalId, 'group.accept', args, toolOperation('accept', exec))) }),
     defineTool({ name: 'leave_communication_group', description: 'Leave a communication group as yourself, revoking pending deliveries under the old membership.',
@@ -240,6 +241,9 @@ export function install(rt) {
           case 'save-relationship-memory':
           case 'forget-relationship-memory': value = await comm.manageRelationships(body.endpoint, body); break
           case 'update-handoff': value = comm.sendUpdate(comm.human,body,body.messageId); break
+          case 'participant-profile': value = await participantProfile(comm, body); break
+          case 'bot-dm-history': { const context = botDmContext(comm, body); value = comm.history(context.principalId, body); break }
+          case 'bot-dm-reference': { const context = botDmContext(comm, body); value = comm.queue.reference(body.conversationId, context.principalId, context.member.membershipEpoch, body.messageId); break }
           case 'history': value = comm.history(comm.human.principalId, body); break
           case 'thread': value = comm.thread(comm.human.principalId, body); break
           case 'members': value = await comm.members(comm.human.principalId, body); break

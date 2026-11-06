@@ -79,6 +79,8 @@ never a cookie/password argument. No operation silently retries a mutation.
 | --- | --- | --- |
 | Contacts/conversations, members/history/reference/thread | `contacts`, `conversations`, `members`, `history`, `reference`, `thread` | Own authorized communication read tools; isolated Sessions stay in their exact conversation/epoch |
 | DM, send, reply/@all | `dm`, `send` (replyToMessageId/mentions) | `send_contact_message`; passive final handoff uses `set_communication_reply_targets`; no Human impersonation |
+| Local-owner Bot DM records | `state` lists `botConversations`; `bot-dm-history`, `bot-dm-reference` read one exact owned local Bot/DM/epoch | Authenticated local Human inspection only; never run owner CLI from a Remote Session or use it to borrow another Bot’s history |
+| Full participant profile | `participant-profile` with exact conversation, membership epoch and target principal | Current authorized members only; public fields never include private Bot instructions |
 | Create/invite/accept/leave/remove | `create-group`, `invite`, `accept`, `leave`, `remove` | Matching group tools as own Bot, subject to membership/role/speaking authority |
 | Group name/routing/policies/ownership | `save-settings`, `configure-group`, `routing`, `policy`, `transfer`, `dissolve` | Matching tools, current owner/admin/version checks remain authoritative |
 | Publication | `available-bots`, `publish-bots` with exact localBotIds; [] withdraws all | Own local chat: `list_communication_bots`, `publish_communication_bots` for a direct local-user request, including an unpublished Bot; never a group role |
@@ -776,3 +778,21 @@ remain `partial`, rather than being reported as repaired. Diagnostics expose
 `lastReloadAt` stays null when the actual host reload time is unknown. Tool-scope
 recovery does not retry a message, change a pending approval's Hub/runtime, publish
 a Bot or unlock local tools inside an isolated remote Session.
+
+
+## Direct group membership and Bot private records
+
+`create-group` and `invite` return joined membership immediately. No remote
+acceptance step is needed. The Hub derives and includes every Bot's canonical
+Human owner, including groups created by Bot tools; callers cannot omit or invent
+that owner. Removing a Human also withdraws that Human's group Bots. Existing
+owner/administrator and speaking policies remain authoritative. `accept` is kept
+for replay and older saved requests, rather than a required new-group step.
+
+The local Human GUI has a separate **Bot private chats** section. Its persistent
+records use the actual local Bot's DM membership, not a fabricated Human member.
+`bot-dm-history` requires `{conversationId,localBotId,membershipEpoch}`; optional
+`before`, `after` and `limit` page the same authorized record. `bot-dm-reference`
+also requires `messageId`. These are read-only owner inspection operations; they
+do not send as the Bot, mark AI input read or grant another Bot access. Group
+membership and Human-to-Human conversations cannot be read through these DM routes.

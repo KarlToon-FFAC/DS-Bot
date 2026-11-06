@@ -64,7 +64,7 @@ test('permanent device deletion removes identities, private history, contact sta
   const untouched = store.createGroup(c.auth, op({ principalId: c.principalId, title: 'Other device group' })).conversationId
   const untouchedMessage = message(store, c, untouched, 'Do not delete me')
   const invitationInput = op({ principalId: c.principalId, conversationId: untouched, membershipEpoch: member(store, c, untouched).membershipEpoch, inviteePrincipalId: a.principalId })
-  const invitation = store.invite(c.auth, invitationInput)
+  const invitation = store.operation(c.auth,invitationInput.operationId,invitationInput,()=>{const id=randomUUID();db.prepare('INSERT INTO invites(id,conversation_id,principal_id,inviter_id) VALUES (?,?,?,?)').run(id,untouched,a.principalId,c.principalId);return {inviteId:id}})
   assert.ok(db.prepare('SELECT 1 FROM operations WHERE id=?').get(invitationInput.operationId))
   const digest = key => createHash('sha256').update(key).digest('hex')
   const privateRateKeys = [`contact:${a.auth.instanceId}`, `contact-target:${a.principalId}`, `contact-target:${bot}`]

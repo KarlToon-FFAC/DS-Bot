@@ -101,6 +101,7 @@ test('immediate send after actual Hub group acceptance resolves the new member w
   t.after(() => hub.close())
   const a = hub.connect('a', 'A', CAPABILITIES), b = hub.connect('b', 'B', CAPABILITIES)
   const human = hub.register(a, { localId: f.actor.localId, kind: 'human', displayName: 'Actor' }).principalId
+  hub.register(b,{localId:'owner',kind:'human',displayName:'Remote owner'})
   const bot = hub.register(b, { localId: 'joined', kind: 'bot', displayName: 'Joined' }).principalId
   assert.equal(human, f.actor.principalId)
   const op = input => ({ operationId: randomUUID(), ...input })

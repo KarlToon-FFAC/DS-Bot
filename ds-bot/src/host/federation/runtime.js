@@ -1,3 +1,4 @@
+import { botDmRecords } from './bot-dm-records.js'
 import { join } from 'node:path'
 import { mkdir } from 'node:fs/promises'
 import { createHash, randomUUID } from 'node:crypto'
@@ -618,6 +619,7 @@ export class CommunicationRuntime {
         lastMessage: conversationSummary(this.queue.lastMessage(member.conversationId, member.principalId, member.membershipEpoch),
           [...this.contacts, ...(this.conversations.get(member.conversationId)?.members ?? [])]),
         unread: this.queue.unread(member.conversationId, member.principalId, member.membershipEpoch) })),
+      botConversations: botDmRecords(this),
       invites: this.queue.invites(), outbox: this.queue.outboxFor(this.human.principalId).map(item => ({ ...item, deliveries: this.deliveryStates.get(item.id) ?? [] })),
       errors: [...this.errors].flatMap(([bindingId,code]) => {
         const binding = this.queue.bindings().find(item => item.id === bindingId)

@@ -3,11 +3,6 @@ import { contactDirectory } from './communication-contacts.js'
 import { CommunicationAvatar } from './communication-profile.js'
 import { t } from './i18n.js'
 
-export function groupTargets(botIds, contacts, humanId) {
-  const bots = contacts.filter(person => person.kind === 'bot' && botIds.includes(person.principalId))
-  return [...new Set([...bots.map(bot => bot.ownerPrincipalId).filter(id => id && id !== humanId), ...bots.map(bot => bot.principalId)])]
-}
-
 export function invitationGroups(invites = []) {
   const groups = new Map()
   for (const invite of invites) {
@@ -32,7 +27,7 @@ export function GroupBotChoices({ contacts, humanId, instanceId, selected, onCha
     bots.map(bot => h('label', { key: bot.principalId, className: 'bt-comm-check' },
       h('input', { type: 'checkbox', 'aria-label': `${t('Invite')} ${bot.displayName}`, checked: selected.includes(bot.principalId), onChange: event => onChange(event.target.checked ? [...selected, bot.principalId] : selected.filter(id => id !== bot.principalId)) }),
       h(CommunicationAvatar, { person: bot, request, size: 24 }), bot.displayName)))),
-    h('p', { className: 'bt-comm-reference' }, t('Selecting a Bot also includes its owner. Remote participants confirm one invitation before joining.')))
+    h('p', { className: 'bt-comm-reference' }, t('Selected Bots and their owners join the group immediately.')))
 }
 
 export function InvitationDetails({ invitation, busy, onAccept }) {

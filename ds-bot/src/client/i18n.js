@@ -5,8 +5,17 @@
 export const NAMESPACE = 'ds-bot'
 
 const ZH = {
+  'From contact': '所属联系人',
+  'Owner information unavailable': '所属联系人信息暂不可用',
+  'Public profile': '公开资料',
+  'No public profile shared.': '尚未填写公开资料。',
+  'Profile details are unavailable.': '暂时无法读取完整资料。',
+  'Identity details': '身份详情',
+  'Bot private chats': 'Bot 私聊',
+  'Read-only record of your Bot’s private conversation.': '这是你的 Bot 的私聊记录，仅供查看。',
+
   'Share this code with the person you want to add. Contacts can reach your published Bots.': '将此用户码分享给要添加的人。联系人可访问你已发布的 Bot。',
-  'Selecting a Bot also includes its owner. Remote participants confirm one invitation before joining.': '选中 Bot 后会自动带上所属联系人。远端参与者统一确认邀请后入群。',
+  'Selected Bots and their owners join the group immediately.': '选中的 Bot 及其所属联系人会直接加入群聊。',
   'Invitation details': '邀请详情',
   'Invitation source': '邀请来源',
   'Source address': '来源地址',
