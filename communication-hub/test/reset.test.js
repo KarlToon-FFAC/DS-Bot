@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawn, spawnSync } from 'node:child_process'
 import { once } from 'node:events'
+import { fileURLToPath } from 'node:url'
 import { HubStore } from '../src/store.js'
 import { HubManagement } from '../src/management-store.js'
 import { resetHub, RESET_CONFIRMATION } from '../src/reset.js'
@@ -18,6 +19,26 @@ function fixture(t) {
   writeFileSync(configPath, JSON.stringify(config))
   return { root, configPath, databasePath, config, reset: options => resetHub({ configPath, confirmation: RESET_CONFIRMATION, ...options }) }
 }
+
+test('reset CLI flushes its replacement config through a writable file handle', t => {
+  const f = fixture(t), store = new HubStore(f.databasePath), management = new HubManagement(store)
+  const oldHubId = management.hubId
+  store.close()
+  const result = spawnSync(process.execPath, [
+    '--import', fileURLToPath(new URL('./fixtures/writable-fsync.mjs', import.meta.url)),
+    fileURLToPath(new URL('../src/reset-cli.js', import.meta.url)),
+    '--config', f.configPath, '--confirm', RESET_CONFIRMATION,
+  ], { encoding: 'utf8', timeout: 15000 })
+  assert.equal(result.error, undefined)
+  assert.equal(result.status, 0, result.stderr)
+  assert.equal(JSON.parse(result.stdout).ok, true)
+  assert.deepEqual(JSON.parse(readFileSync(f.configPath)), { ...f.config, peers: [] })
+  for (const suffix of ['', '-wal', '-shm', '-journal']) assert.equal(existsSync(f.databasePath + suffix), false)
+  assert.equal(existsSync(f.configPath + '.reset-tmp'), false)
+  const fresh = new HubStore(f.databasePath)
+  try { assert.notEqual(new HubManagement(fresh).hubId, oldHubId) }
+  finally { fresh.close() }
+})
 
 test('reset removes every data table, static credentials and sidecar; restart creates a new identity', t => {
   const f = fixture(t), store = new HubStore(f.databasePath), management = new HubManagement(store)
@@ -95,10 +116,10 @@ test('OS releases the process lock on a crash; reset succeeds in another process
   t.after(() => { if (child.exitCode === null) child.kill('SIGKILL') })
   await once(child.stdout, 'data')
   const cli = new URL('../src/reset-cli.js', import.meta.url)
-  const blocked = spawnSync(process.execPath, [cli.pathname, '--config', f.configPath, '--confirm', RESET_CONFIRMATION], { encoding: 'utf8' })
+  const blocked = spawnSync(process.execPath, [fileURLToPath(cli), '--config', f.configPath, '--confirm', RESET_CONFIRMATION], { encoding: 'utf8' })
   assert.equal(blocked.status, 2); assert.match(blocked.stderr, /HUB_ACTIVE_STOP_REQUIRED/)
   child.kill('SIGKILL'); await once(child, 'exit')
-  const result = spawnSync(process.execPath, [cli.pathname, '--config', f.configPath, '--confirm', RESET_CONFIRMATION], { encoding: 'utf8' })
+  const result = spawnSync(process.execPath, [fileURLToPath(cli), '--config', f.configPath, '--confirm', RESET_CONFIRMATION], { encoding: 'utf8' })
   assert.equal(result.status, 0, result.stderr)
   assert.equal(existsSync(f.databasePath), false)
 })

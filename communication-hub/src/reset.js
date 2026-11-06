@@ -60,7 +60,8 @@ export function resetHub({ configPath, confirmation, beforeStep } = {}) {
     const contents = JSON.stringify(next, null, 2) + '\n'
     if (existsSync(temporary) && readFileSync(temporary, 'utf8') !== contents) throw resetError('RESET_TEMP_CONFLICT')
     writeFileSync(temporary, contents, { mode: statSync(path).mode & 0o777 })
-    const fd = openSync(temporary, 'r'); try { fsyncSync(fd) } finally { closeSync(fd) }
+    // Windows FlushFileBuffers requires write access to the file handle.
+    const fd = openSync(temporary, 'r+'); try { fsyncSync(fd) } finally { closeSync(fd) }
     renameSync(temporary, path)
     for (const target of targets) {
       beforeStep?.(target)
