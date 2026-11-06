@@ -136,9 +136,11 @@ test('Hub code review reveals the actual address and storage before a Human expl
       if (body.endpoint === 'cancel-hub-join') return { ...hub, status: 'cancelled', requestId: 'join-one' }
       throw new Error('Unexpected endpoint')
     }
-    await render(React.createElement(api.AddDevice, { request, manualGuide: React.createElement('p', null, 'Manual steps') }))
+    await render(React.createElement(api.AddDevice, { request }))
     assert.deepEqual(calls.map(call => call.endpoint), ['onboarding-storage'])
     assert.match(doc.body.textContent, /plaintext protected by your OS account permissions/)
+    assert.equal(doc.querySelector('.bt-comm-manual-guide'), null)
+    assert.doesNotMatch(doc.body.textContent, /Manual configuration guide/)
     await edit('Hub code', 'owner-provided-code')
     await click('Review Hub')
     assert.match(doc.body.textContent, /wss:\/\/hub.example.test:3190\/communication/)

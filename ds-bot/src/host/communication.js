@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto'
 import { output } from './tools.js'
 import { assertConversationToolScope } from './federation/tool-scope.js'
 import { communicationPreset, hasCommunicationPreset } from './federation/session-scope.js'
-import { profileHuman, readPrincipalAvatar } from './federation/avatars.js'
+import { profileHuman, profileHumanInfo, readHumanProfileInfo, readPrincipalAvatar } from './federation/avatars.js'
 import { communicationError } from '../shared/communication-diagnostics.js'
 import { communicationDiagnoseTool, diagnoseCommunication, loadedCommunicationSettings, communicationAvailabilityPrompt, communicationReloadRequired } from './federation/diagnostics.js'
 import { legacyCredential } from './federation/legacy-credential.js'
@@ -251,6 +251,8 @@ export function install(rt) {
           case 'read': value = comm.markRead(body); break
           case 'send': value = await comm.sendHumanWithRefresh(body); break
           case 'profile-human': value = await profileHuman(comm, body); break
+          case 'human-profile-info': value = await readHumanProfileInfo(comm, body); break
+          case 'profile-human-info': value = await profileHumanInfo(comm, body); break
           case 'avatar': value = await readPrincipalAvatar(comm, body); break
           case 'rename-human': {
             value = await comm.transport.request('principal.rename',{principalId:comm.human.principalId,displayName:body.displayName})

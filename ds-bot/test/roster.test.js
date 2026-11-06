@@ -82,6 +82,81 @@ const until = async (check) => {
   }
 }
 
+test('Bot public profiles persist with local revision checks and the existing self/Main authority', async t => {
+  const { call, stop, home } = start(undefined, { models: ['deepseek-v4-flash'] })
+  t.after(stop)
+  const chief = (await call('state', {})).value.mainBotId
+  const writer = (await call('create-bot', { name: 'Writer', instructions: 'Private writing instructions.' })).value
+  const profile = { headline: 'Testing expert', summary: 'I investigate failures.', expertise: ['testing'], languages: ['English'] }
+  const first = await call('update-bot', { id: writer.id, publicProfile: profile, expectedProfileRevision: 0 })
+  assert.equal(first.ok, true)
+  assert.equal(first.value.publicProfile.revision, 1)
+  assert.equal(first.value.instructions, writer.instructions)
+  assert.deepEqual(JSON.parse(readFileSync(join(home, 'state.json'), 'utf8')).bots[writer.id].publicProfile, first.value.publicProfile)
+  const stale = await call('update-bot', { id: writer.id, publicProfile: { ...profile, headline: 'Stale draft' }, expectedProfileRevision: 0 })
+  assert.equal(stale.ok, false)
+  assert.equal(rt.botOf(writer.id).publicProfile.headline, profile.headline)
+  const tool = rt.teamTools.find(definition => definition.name === 'update_bot')
+  assert.ok(tool.parameters.properties.public_profile)
+  const mine = { agent: { id: writer.id } }, main = { agent: { id: chief } }
+  assert.match(await tool.execute({ bot: 'Chief', public_profile: profile }, mine), /^Only a Main Bot can change another Bot/)
+  assert.equal(await tool.execute({ public_profile: { ...profile, headline: 'Writing expert' } }, mine), 'Updated Writer.')
+  assert.equal(rt.botOf(writer.id).publicProfile.revision, 2)
+  assert.equal(await tool.execute({ bot: 'Writer', public_profile: profile }, main), 'Updated Writer.')
+  assert.equal(rt.botOf(writer.id).publicProfile.revision, 3)
+  const unsafe = await call('update-bot', { id: writer.id, publicProfile: { ...profile, summary: 'password: hunter2' } })
+  assert.equal(unsafe.ok, false)
+  assert.equal(rt.botOf(writer.id).publicProfile.revision, 3)
+})
+
+test('update_bot public_profile patches supplied fields and clears only explicit empty values', async t => {
+  const { call, stop } = start(undefined, { models: ['deepseek-v4-flash'] })
+  t.after(stop)
+  await call('state', {})
+  const writer = (await call('create-bot', { name: 'Writer' })).value
+  const profile = { headline: 'Testing expert', summary: 'I investigate failures.', expertise: ['testing', 'regression'], languages: ['English'] }
+  await call('update-bot', { id: writer.id, publicProfile: profile })
+  const tool = rt.teamTools.find(definition => definition.name === 'update_bot'), mine = { agent: { id: writer.id } }
+  assert.match(tool.parameters.properties.public_profile.description, /omitted fields stay unchanged/)
+  assert.equal(await tool.execute({ public_profile: { headline: 'Browser testing expert' } }, mine), 'Updated Writer.')
+  const saved = rt.botOf(writer.id).publicProfile
+  assert.deepEqual({ headline: saved.headline, summary: saved.summary, expertise: saved.expertise, languages: saved.languages }, { ...profile, headline: 'Browser testing expert' })
+  assert.equal(saved.revision, 2)
+  assert.equal(await tool.execute({ public_profile: { summary: '', expertise: [] } }, mine), 'Updated Writer.')
+  const cleared = rt.botOf(writer.id).publicProfile
+  assert.equal(cleared.headline, 'Browser testing expert')
+  assert.equal(cleared.summary, '')
+  assert.deepEqual(cleared.expertise, [])
+  assert.deepEqual(cleared.languages, ['English'])
+  assert.equal(cleared.revision, 3)
+})
+
+test('update_bot rejects a public profile patch if another edit commits during an awaited host check', async t => {
+  const { call, stop } = start(undefined, { models: ['deepseek-v4-flash'] })
+  t.after(stop)
+  await call('state', {})
+  const writer = (await call('create-bot', { name: 'Writer' })).value
+  const profile = { headline: 'Testing expert', summary: 'Original summary', expertise: ['testing'], languages: ['English'] }
+  await call('update-bot', { id: writer.id, publicProfile: profile })
+  const originalCheck = rt.checkPrivacyChange
+  let paused = false, entered, release
+  const checked = new Promise(resolve => { entered = resolve }), blocked = new Promise(resolve => { release = resolve })
+  rt.checkPrivacyChange = async (...args) => {
+    await originalCheck(...args)
+    if (!paused) { paused = true; entered(); await blocked }
+  }
+  const tool = rt.teamTools.find(definition => definition.name === 'update_bot')
+  const pending = tool.execute({ public_profile: { headline: 'Stale patch' } }, { agent: { id: writer.id } })
+  await checked
+  const current = await rt.updateBot(writer.id, { publicProfile: { ...profile, summary: 'Newer summary' }, expectedProfileRevision: 1 })
+  release()
+  assert.match(await pending, /^Could not update the Bot: Public profile changed elsewhere\./)
+  assert.deepEqual(rt.botOf(writer.id).publicProfile, current.publicProfile)
+  assert.equal(current.publicProfile.headline, profile.headline)
+  assert.equal(current.publicProfile.summary, 'Newer summary')
+  assert.equal(current.publicProfile.revision, 2)
+})
+
 test('the first Main Bot waits for the user to pick a model, then greets', async (t) => {
   const { call, stop, sent, selected } = start(undefined, { models: ['deepseek-v4-flash', 'deepseek-v4-pro'] })
   t.after(stop)

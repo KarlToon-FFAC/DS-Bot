@@ -61,7 +61,7 @@ export function hubManagementAddress(value) {
   } catch { return null }
 }
 
-export function AddDevice({ request, manualGuide, displayName = 'Human', revision }) {
+export function AddDevice({ request, displayName = 'Human', revision }) {
   const [code, setCode] = useState(''), [name, setName] = useState(displayName), [hub, setHub] = useState(null)
   const [storage, setStorage] = useState(null), [enrollments, setEnrollments] = useState([]), [busy, setBusy] = useState(false), [error, setError] = useState('')
   const [absentHub, setAbsentHub] = useState(null)
@@ -186,7 +186,6 @@ export function AddDevice({ request, manualGuide, displayName = 'Human', revisio
         if(token===generation.current){setLifecycle(null);await refreshStorage(token)}
       })}},t(lifecycle.kind==='leave'?'Confirm leaving':'Confirm forgetting')),
       h('button',{type:'button',disabled:busy,onClick:()=>setLifecycle(null)},t('Cancel'))):null,
-    h('details', { className: 'bt-comm-manual-guide' }, h('summary', null, t('Manual configuration guide')), manualGuide),
     liveError ? h('p', { className: 'bt-comm-reference', role: 'status' }, t('Status may be out of date.'), ' ', liveError) : null,
     error ? h('p', { className: 'bt-comm-error', role: 'alert' }, error) : null)
 }

@@ -158,6 +158,6 @@ test('v1 migration retains legacy speakers, deterministically selects owner and 
     const id=members[0].conversationId
     store.close();store=new HubStore(path)
     assert.equal(store.memberships(a).memberships[0].conversationId,id)
-    assert.equal(store.db.prepare('PRAGMA user_version').get().user_version,4)
+    assert.equal(store.db.prepare('PRAGMA user_version').get().user_version,5)
   }finally{store.close()}
 })

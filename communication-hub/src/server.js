@@ -11,7 +11,7 @@ const loopback = host => ['127.0.0.1','::1'].includes(host)
 const digest = value => createHash('sha256').update(value).digest()
 // Hints never carry conversation IDs, membership data or content. All reads still
 // pass through the authenticated RPC routes and durable per-membership cursors.
-const invalidatingRoutes = new Set(['principal.register', 'principal.rename', 'principal.publication', 'principal.avatar.chunk',
+const invalidatingRoutes = new Set(['principal.register', 'principal.rename', 'principal.publication', 'principal.public-profile', 'principal.avatar.chunk',
   'dm.open', 'group.create', 'group.invite', 'group.accept', 'group.remove', 'group.routing', 'group.dissolve',
   'group.policy', 'group.transfer', 'group.configure', 'group.settings', 'message.publish',
   'principal.profile', 'contact.code.rotate', 'contact.request', 'contact.accept', 'contact.reject', 'contact.cancel', 'contact.revoke'])
@@ -23,6 +23,8 @@ const routes = {
   'conversation.ack':'acknowledgeCursor', 'deliveries.pull':'pending', 'delivery.receipt':'receipt', 'message.status':'deliveryStatus',
   'principal.avatar.begin':'avatarBegin', 'principal.avatar.chunk':'avatarChunk', 'principal.avatar.read':'avatarRead', 'principal.profile':'profile',
   'principal.publication':'syncPublication',
+  'principal.public-profile':'updatePublicProfile',
+  'principal.public-profile.read':'readPublicProfile',
 }
 
 export async function startHub({ databasePath, databaseLock, peers, host='127.0.0.1', port=3190, tls, limits, management:managementOptions, beforeCommit, beforeRequest, beforeResponse, heartbeatMs=30000 }={}) {

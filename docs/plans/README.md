@@ -36,6 +36,7 @@
 
 | 文档 | 内容 |
 |---|---|
+| [Human / Bot 公开资料、Hub 联系人列表与安全咨询](2026-11-05-public-bot-profiles-and-consultation.md) | 共用公开资料、后台 Contacts / Public Bots 列表与头像 / 真实 owner、本人本地编辑及备注分离；资料 GUI 实施中，普通 opt-in 发现和自动专家咨询仍待实施 |
 | [跨实例的人与 Bot 通信（待实施）](2026-11-03-federated-communication.md) | 仅通信范围；含协议、单机双实例环境、分阶段实施、故障验收与本地 AI 交接说明 |
 | [DSH 让步总账](2026-10-13-dsh-concessions.md) | 因 DSH 本身的限制而做的妥协，以及桌面应用之后怎么处理。判断「是 DS Bot 的 bug 还是 DSH 的限制」先看这里 |
 | [角色与权限](2026-10-07-roles-and-permissions.md) | 用户、Main Bot、群管理员、普通 Bot 各能做什么；Bot 的权限预设和群的统一权限 |

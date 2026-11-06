@@ -1,6 +1,14 @@
 export const communicationDescriptions = {
   COMMUNICATION_RESET_INCOMPLETE: 'Complete federation reset was interrupted. Stop the Host and rerun the same reset command before using Remote communication.',
   COMMUNICATION_BROWSER_RESET_REQUIRED: 'Federation data was reset. Refresh this tab to clear its old communication drafts and pending actions before continuing.',
+  PUBLIC_PROFILE_SECRET_REFUSED: 'The public profile appears to contain private credentials. Remove them before saving.',
+  PUBLIC_PROFILE_SYNC_FAILED: 'The public profile could not be synchronized. Check the Hub connection and try again.',
+  PUBLIC_PROFILE_VERSION_CONFLICT: 'Profile changed elsewhere. Your edits are kept. Review the latest profile before saving.',
+  PROFILE_VERSION_CONFLICT: 'Profile changed elsewhere. Your edits are kept. Review the latest profile before saving.',
+  PUBLIC_PROFILE_CAPABILITY_REQUIRED: 'Upgrade the Hub to edit public profiles.',
+  INVALID_PUBLIC_PROFILE: 'The public profile is invalid. Check the field lengths and try again.',
+  INVALID_PUBLIC_PROFILE_RESPONSE: 'The Hub returned an invalid public profile. Refresh before trying again.',
+
   INVALID_IP_ADDRESS: 'Enter a valid IPv4 or IPv6 address. Ports are optional; use brackets around IPv6 with a port.',
   INVALID_IP_NOTE: 'Use an IP note of at most 160 characters without line breaks or hidden control characters.',
   IP_NOTE_LIMIT: 'Up to 256 IP notes can be saved for this Hub. Clear an old note before adding another.',

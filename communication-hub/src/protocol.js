@@ -3,7 +3,7 @@ import { normalizeAttachments, ATTACHMENT_CAPABILITY } from './attachments.js'
 
 export const PROTOCOL = 'dsbot-communication/1'
 export const CAPABILITIES = ['text', 'markdown', 'mentions', 'group', 'dm', 'reply', 'history', 'group-policy', 'membership-epoch', 'explicit-bot-activation', 'bot-input-updates']
-export const HUB_CAPABILITIES = [...CAPABILITIES, 'bounded-bot-collaboration', 'principal-avatars', 'principal-publication', 'bot-work-events', 'state-invalidation', 'local-user-intent', ATTACHMENT_CAPABILITY]
+export const HUB_CAPABILITIES = [...CAPABILITIES, 'bounded-bot-collaboration', 'principal-avatars', 'principal-publication', 'public-profiles', 'bot-work-events', 'state-invalidation', 'local-user-intent', ATTACHMENT_CAPABILITY]
 export const DEFAULT_LIMITS = { maxTextBytes: 65536, maxEnvelopeBytes: 131072, maxMembers: 64, maxPendingDeliveries: 10000,
   maxPrincipals: 64, maxMembershipsPerInstance: 64, maxPendingInvitesPerInstance: 64, maxCausalDepth: 8, maxAiDeliveriesPerRoot: 32 }
 
@@ -25,6 +25,26 @@ export function canonical(value) {
 export const hash = value => createHash('sha256').update(canonical(value)).digest('hex')
 // The request ID is echoed into every response and can contain 256 BMP chars.
 export const responseBytes = value => Buffer.byteLength(JSON.stringify({ id: '', ok: true, value })) + 256 * 3
+
+export function normalizePublicProfile(input) {
+  requireThat(input && typeof input === 'object' && !Array.isArray(input)
+    && Object.keys(input).every(key => ['headline', 'summary', 'expertise', 'languages'].includes(key)), 'INVALID_PUBLIC_PROFILE')
+  const text = (value, limit, multiline = false) => {
+    requireThat(typeof value === 'string' && value.isWellFormed() && [...value].length <= limit
+      && !(multiline ? /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/ : /[\u0000-\u001f\u007f-\u009f]/).test(value), 'INVALID_PUBLIC_PROFILE')
+    return value.trim()
+  }
+  const list = (value, limit) => {
+    requireThat(Array.isArray(value) && value.length <= limit, 'INVALID_PUBLIC_PROFILE')
+    const items = value.map(item => text(item, 32))
+    requireThat(items.every(Boolean), 'INVALID_PUBLIC_PROFILE')
+    return [...new Set(items)]
+  }
+  const profile = { headline: text(input.headline ?? '', 80), summary: text(input.summary ?? '', 1000, true),
+    expertise: list(input.expertise ?? [], 12), languages: list(input.languages ?? [], 8) }
+  requireThat(Buffer.byteLength(JSON.stringify(profile)) <= 8192, 'INVALID_PUBLIC_PROFILE')
+  return profile
+}
 
 export function normalizeMessage(input, author, limits) {
   requireThat(input?.protocol === PROTOCOL, 'PROTOCOL_VERSION_UNSUPPORTED')

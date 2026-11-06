@@ -1,8 +1,9 @@
 import { managementCSS } from './management-style.js'
+import { directoryMarkup, directoryScript, directoryCSS } from './management-directory.js'
 
 export const managementPage = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DS-Bot Hub</title>
-<style>${managementCSS}</style>
-<main><header class="hub-header"><span class="hub-mark" aria-hidden="true">↔</span><h1>DS-Bot Hub</h1></header><p class="intro">Approve only devices whose fingerprint you have checked with their owner. Device names are unverified.</p><section id="login"><h2>Administrator sign in</h2><form id="sign-in" method="post" action="/admin/login" autocomplete="on"><label>Username <input name="username" value="admin" autocomplete="username" readonly></label><label>Password <input id="password" name="password" type="password" autocomplete="current-password" placeholder="Administrator password" required></label><button type="submit">Sign in</button></form><p>Your browser can remember this password in its password manager. DS-Bot does not save it in browser storage. Use only a trusted HTTPS address.</p></section><p id="error" role="status"></p><div id="content" hidden><p id="live-status" role="status"></p><button id="logout">Sign out</button><button id="revoke-sessions">Sign out all sessions</button><section class="hub-code"><h2>Hub code</h2><button id="copy-code" type="button" disabled>Copy Hub code</button><details><summary>Show code and trust details</summary><p>Give this code only through a trusted channel. A v2 code includes public CA trust bound to this Hub; do not accept a code from an unverified connection. New devices still need approval.</p><code id="code"></code></details></section><section><h2>Device requests</h2><div id="requests"></div></section><section><h2>Devices</h2><div id="instances"></div></section></div></main><script src="/admin/app.js" defer></script></html>`
+<style>${managementCSS}${directoryCSS}</style>
+<main><header class="hub-header"><span class="hub-mark" aria-hidden="true">↔</span><h1>DS-Bot Hub</h1></header><p class="intro">Approve only devices whose fingerprint you have checked with their owner. Device names are unverified.</p><section id="login"><h2>Administrator sign in</h2><form id="sign-in" method="post" action="/admin/login" autocomplete="on"><label>Username <input name="username" value="admin" autocomplete="username" readonly></label><label>Password <input id="password" name="password" type="password" autocomplete="current-password" placeholder="Administrator password" required></label><button type="submit">Sign in</button></form><p>Your browser can remember this password in its password manager. DS-Bot does not save it in browser storage. Use only a trusted HTTPS address.</p></section><p id="error" role="status"></p><div id="content" hidden><p id="live-status" role="status"></p><button id="logout">Sign out</button><button id="revoke-sessions">Sign out all sessions</button>${directoryMarkup}<section class="hub-code"><h2>Hub code</h2><button id="copy-code" type="button" disabled>Copy Hub code</button><details><summary>Show code and trust details</summary><p>Give this code only through a trusted channel. A v2 code includes public CA trust bound to this Hub; do not accept a code from an unverified connection. New devices still need approval.</p><code id="code"></code></details></section><section><h2>Device requests</h2><div id="requests"></div></section><section><h2>Devices</h2><div id="instances"></div></section></div></main><script src="/admin/app.js" defer></script></html>`
 export const managementScript = `
 let csrf, revision = '', refreshFlight, refreshAgain = false, watchTimer, watchController, watchEpoch = 0, failures = 0;
 const $ = id => document.getElementById(id);
@@ -32,7 +33,9 @@ function renameForm(instance) {
   };
   return form;
 }
+${directoryScript}
 function render(value) {
+  updateDirectory(value.participants ?? []);
   $('code').textContent = value.code || 'Set the reachable WSS address in the Hub configuration.'; $('copy-code').disabled = !value.code;
   const requests = new Map([...$('requests').children].map(row => [row.dataset.requestId, row]));
   const requestRows = value.requests.map(r => {
@@ -105,7 +108,8 @@ function resume() {
       if (epoch !== watchEpoch) return;
       if (e.message === 'UNAUTHENTICATED') { csrf = undefined; $('content').hidden = true; $('login').hidden = false; error(Error('Sign in again to see current Hub status.')); return; }
       $('live-status').textContent = 'Status may be out of date. Reconnecting… ' + (/^[A-Z][A-Z0-9_]{0,63}$/.test(e.message) ? '[' + e.message + ']' : 'Could not read Hub status.');
-      for (const node of document.querySelectorAll('.instance-connection')) node.textContent = 'Connection status unavailable';
+      for (const node of document.querySelectorAll('.instance-connection,.directory-connection')) node.textContent = 'Connection status unavailable';
+      for (const node of document.querySelectorAll('.directory-presence')) node.dataset.connected = 'unknown';
       delay = Math.min(30000, 1000 * 2 ** Math.min(failures++, 5)) * (0.8 + Math.random() * 0.4);
     }
     if (epoch === watchEpoch && csrf && document.visibilityState !== 'hidden') watchTimer = setTimeout(watch, delay);

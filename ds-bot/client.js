@@ -42,6 +42,42 @@ module.exports = __toCommonJS(index_exports);
 // src/client/i18n.js
 var NAMESPACE = "ds-bot";
 var ZH = {
+  "Remote profile": "远程展示资料",
+  "Saved on this device. Published Bots sync this profile to their authorized Remote audience. Keep private instructions and secrets out.": "资料保存在本机，已发布的 Bot 会同步给获授权的远程联系人。请勿填写内部指令和秘密。",
+  "Headline": "职责或专业称号",
+  "Skills": "技能",
+  "Public headline": "对外称号",
+  "Public summary": "对外简介",
+  "Public skills": "对外技能",
+  "Public languages": "对外交流语言",
+  "Separate keywords with commas": "关键词用逗号分隔",
+  "Separate languages with commas": "交流语言用逗号分隔",
+  "Save public profile": "保存对外资料",
+  "Public profile changed elsewhere. Your draft is retained; reopen this Bot before saving again.": "对外资料已在其他位置修改，已保留编辑内容。请重新打开该 Bot，核对后再保存。",
+  "The public profile appears to contain private credentials. Remove them before saving.": "对外资料中可能包含私密凭据，请移除后再保存。",
+  "The public profile could not be synchronized. Check the Hub connection and try again.": "对外资料同步失败，请检查 Hub 连接后重试。",
+  "Unable to load profile details": "无法加载完整资料",
+  "Profile saved, but the latest details could not be loaded": "资料已保存，但无法加载最新详情",
+  "Loading profile details…": "正在加载完整资料…",
+  "Reload profile details": "重新加载完整资料",
+  "Directory filter": "目录筛选",
+  "Profile and Bots": "资料与 Bot",
+  "Expertise": "专长",
+  "Languages": "交流语言",
+  "Role or specialty": "职责或专长",
+  "Profile summary": "资料简介",
+  "Expertise (comma-separated)": "专长（用逗号分隔）",
+  "Languages (comma-separated)": "交流语言（用逗号分隔）",
+  "Describe your responsibilities and the help you can offer. Only share information intended for your contacts.": "介绍你的职责及可以提供的帮助，仅填写适合向联系人展示的信息。",
+  "Profile changed elsewhere. Your edits are kept. Review the latest profile before saving.": "资料已在其他位置修改，已保留你的编辑。请先核对最新资料再保存。",
+  "Unable to load the latest profile": "无法加载最新资料",
+  "Latest shared profile": "最新共享资料",
+  "No role or specialty": "尚未填写职责或专长",
+  "No profile summary": "尚未填写简介",
+  "Review latest profile": "核对最新资料",
+  "Upgrade the Hub to edit public profiles.": "请升级 Hub 以支持公开资料编辑。",
+  "The public profile is invalid. Check the field lengths and try again.": "公开资料无效，请检查字段长度后重试。",
+  "The Hub returned an invalid public profile. Refresh before trying again.": "Hub 返回的公开资料无效，请刷新后重试。",
   "IP notes": "IP 备注",
   "IP note": "IP 备注",
   "IP address": "IP 地址",
@@ -240,7 +276,6 @@ var ZH = {
   "Check approval": "检查审批",
   "Cancel request": "取消申请",
   "Approved. The device configuration is saved through the app and will reload. Existing settings are preserved.": "接入已批准。应用已保存设备配置并将重新加载，其他已有设置保留。",
-  "Manual configuration guide": "手动配置引导",
   "Status unavailable": "状态暂不可用",
   "prepared": "已准备",
   "pending": "待处理",
@@ -297,22 +332,7 @@ var ZH = {
   "An operation is not confirmed. Check status, then retry the same action.": "有操作尚未确认。请核对状态，再重试同一操作。",
   "Remove mention": "取消点名",
   "Join Hub": "加入 Hub",
-  "Pairing guide": "设备接入引导",
-  "Close guide": "关闭引导",
-  "Hub configuration example": "Hub 配置示例",
-  "Device configuration example": "新设备配置示例",
-  "1. Hub owner": "1. Hub 管理员",
-  "2. New device": "2. 新设备",
-  "3. Verify the connection": "3. 验证连接",
-  "The Hub owner must authorize each device in the Hub configuration and restart the Hub. This guide does not pair a device or change permissions.": "每台设备都需要 Hub 管理员在 Hub 配置中授权并重启 Hub。本引导不会直接配对设备或修改权限。",
-  "Agree on a unique, stable instanceId for the new device. Keep existing peer entries and add the new peer to the Hub configuration.": "为新设备约定唯一且稳定的 instanceId。保留已有 peer，在 Hub 配置中添加新 peer。",
-  "Use credentialEnv to name a private environment variable. The Hub and this device need the same dedicated pairing credential value, supplied privately through each local secret mechanism. The environment variable names may differ.": "credentialEnv 只填写私密环境变量的名称。Hub 与此设备使用相同的专用配对凭据值，分别通过各自本机的秘密机制提供；两端环境变量名称可以不同。",
-  "Provide a reachable trusted WSS address whose certificate matches its hostname. Restart the Hub with the updated peer configuration and its private launch environment.": "提供新设备可访问、证书受信任且与主机名匹配的 WSS 地址。更新 peer 配置后，使用私密启动环境重启 Hub。",
-  "Quit the app, including its tray process. Merge the communication settings into the existing bot configuration in your own profile cordis.patch.yml. Use the exact instanceId approved by the Hub owner.": "退出应用及其托盘进程。在自己配置目录的 cordis.patch.yml 中，将 communication 设置合并到已有 bot 配置。使用 Hub 管理员批准的准确 instanceId。",
-  "Set the trusted WSS url, credentialEnv, humanDisplayName and publishedBotIds. Publish only Bot IDs from this device that you intend to make available. Each instance has one person identity; rename it under Personal settings.": "填写受信任的 WSS url、credentialEnv、humanDisplayName 和 publishedBotIds。只发布本设备上明确希望开放的 Bot ID。每个实例保留一位用户身份，可在“个人设置”中改名。",
-  "Supply the pairing credential to the app launch environment through your local secret mechanism, then restart the app. Never put the value in configuration, command arguments, URLs, screenshots or chat.": "通过本机秘密机制把配对凭据提供给应用启动环境，然后重启应用。不要把凭据值写进配置、命令参数、URL、截图或聊天。",
-  "Open Remote communication on both devices. Check Connected to Hub, then New message: verify the other device’s Human and published Bots under its observed IP and exact instance identity. A shared IP does not merge devices.": "在两端打开“远程通信”，确认“已连接通信服务”，再打开“发起私聊”，按观察到的 IP 和准确实例身份核对对方的用户及已发布 Bot。相同 IP 不会合并设备。",
-  "If disconnected, check the exact instanceId, matching privately supplied credential, trusted certificate and hostname, and Hub restart. Readiness alone does not prove pairing. Revoked devices need the Hub owner to increase pairingRevision before re-pairing.": "连接失败时，检查准确 instanceId、私密提供的匹配凭据、受信任的证书及主机名，并确认 Hub 已重启。服务就绪不等于配对成功。被撤销的设备需要 Hub 管理员提高 pairingRevision 后才能重新配对。",
+  "Add a device": "添加设备",
   "Remote communication": "远程通信",
   "Human profile and connection": "本人资料与连接",
   "Human name": "本人名称",
@@ -13980,6 +14000,74 @@ function MemoryCard({ bot, actions }) {
     )
   );
 }
+var publicProfileDraft = (profile) => ({
+  headline: profile?.headline ?? "",
+  summary: profile?.summary ?? "",
+  expertise: (profile?.expertise ?? []).join(", "),
+  languages: (profile?.languages ?? []).join(", ")
+});
+var publicProfileList = (value) => value.split(/[,，\n]/).map((item) => item.trim()).filter(Boolean);
+function BotPublicProfile({ bot, actions }) {
+  const [draft, setDraft] = (0, import_react31.useState)(() => publicProfileDraft(bot.publicProfile));
+  const [base, setBase] = (0, import_react31.useState)(() => ({ draft: publicProfileDraft(bot.publicProfile), revision: bot.publicProfile?.revision ?? 0 }));
+  const [busy, setBusy] = (0, import_react31.useState)(false), [error, setError] = (0, import_react31.useState)("");
+  const active = (0, import_react31.useRef)(true), edits = (0, import_react31.useRef)(0);
+  (0, import_react31.useEffect)(() => {
+    active.current = true;
+    return () => {
+      active.current = false;
+    };
+  }, []);
+  const dirty = JSON.stringify(draft) !== JSON.stringify(base.draft);
+  (0, import_react31.useEffect)(() => {
+    if (!dirty && !busy) {
+      const next = publicProfileDraft(bot.publicProfile);
+      setDraft(next);
+      setBase({ draft: next, revision: bot.publicProfile?.revision ?? 0 });
+    }
+  }, [bot.publicProfile?.revision]);
+  const change = (key, value) => {
+    edits.current++;
+    setDraft((current) => ({ ...current, [key]: value }));
+  };
+  const commit = async () => {
+    if (busy || !dirty) return;
+    const submitted = draft, edit = edits.current;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await actions.updateBot(bot.id, {
+        expectedProfileRevision: base.revision,
+        publicProfile: {
+          headline: submitted.headline,
+          summary: submitted.summary,
+          expertise: publicProfileList(submitted.expertise),
+          languages: publicProfileList(submitted.languages)
+        }
+      });
+      if (!active.current) return;
+      setBase({ draft: submitted, revision: result?.publicProfile?.revision ?? base.revision + 1 });
+      if (edit === edits.current) setDraft(submitted);
+    } catch (failure) {
+      if (active.current) setError(failure?.message ?? t("Unable to update profile"));
+    } finally {
+      if (active.current) setBusy(false);
+    }
+  };
+  return (0, import_react31.createElement)(
+    Card2,
+    { title: t("Remote profile") },
+    (0, import_react31.createElement)("p", { className: "bt-set-hint" }, t("Saved on this device. Published Bots sync this profile to their authorized Remote audience. Keep private instructions and secrets out.")),
+    (0, import_react31.createElement)(Row, { label: t("Headline"), stack: true }, (0, import_react31.createElement)("input", { className: "bt-bs-input", "aria-label": t("Public headline"), value: draft.headline, maxLength: 80, onChange: (event) => change("headline", event.target.value) })),
+    (0, import_react31.createElement)(Row, { label: t("About"), stack: true }, (0, import_react31.createElement)("textarea", { className: "bt-bs-input bt-bs-area", "aria-label": t("Public summary"), value: draft.summary, maxLength: 1e3, onChange: (event) => change("summary", event.target.value) })),
+    (0, import_react31.createElement)(Row, { label: t("Skills"), hint: t("Separate keywords with commas"), stack: true }, (0, import_react31.createElement)("input", { className: "bt-bs-input", "aria-label": t("Public skills"), value: draft.expertise, onChange: (event) => change("expertise", event.target.value) })),
+    (0, import_react31.createElement)(Row, { label: t("Languages"), hint: t("Separate languages with commas"), stack: true }, (0, import_react31.createElement)("input", { className: "bt-bs-input", "aria-label": t("Public languages"), value: draft.languages, onChange: (event) => change("languages", event.target.value) })),
+    (0, import_react31.createElement)("button", { type: "button", className: "bt-soft bt-soft-sm", disabled: busy || !dirty, onClick: () => {
+      void commit();
+    } }, t(busy ? "Saving…" : "Save public profile")),
+    error ? (0, import_react31.createElement)("p", { className: "bt-comm-error", role: "alert" }, error) : null
+  );
+}
 function BotSettingsForm({ bot, roster, actions, run: run2 }) {
   const [editing, setEditing] = (0, import_react31.useState)(false);
   const [confirming, setConfirming] = (0, import_react31.useState)(false);
@@ -14065,6 +14153,7 @@ function BotSettingsForm({ bot, roster, actions, run: run2 }) {
         onChange: (value) => save2({ private: value })
       })
     ),
+    (0, import_react31.createElement)(BotPublicProfile, { key: bot.id, bot, actions }),
     (0, import_react31.createElement)(
       Card2,
       { title: t("Instructions") },
@@ -21224,214 +21313,17 @@ function communicationLogEvents(events) {
   });
 }
 
-// src/client/communication-profile.js
-var import_react53 = require("react");
-var images = /* @__PURE__ */ new Map(), requests = /* @__PURE__ */ new Map(), authorized = /* @__PURE__ */ new Map();
-var avatarScope = "legacy";
-function safeAvatarImage(value) {
-  return typeof value === "string" && value.length <= 16e4 && /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/]+={0,2}$/.test(value) ? value : null;
-}
-function syncAvatarDirectory(contacts, scope = "legacy") {
-  if (scope !== avatarScope) {
-    avatarScope = scope;
-    images.clear();
-    requests.clear();
-  }
-  authorized.clear();
-  for (const person of contacts) if (person.avatar?.imageRevision) authorized.set(person.principalId, person.avatar.imageRevision);
-  for (const key of images.keys()) {
-    const [, principalId, revision] = JSON.parse(key);
-    if (authorized.get(principalId) !== revision) images.delete(key);
-  }
-}
-function CommunicationAvatar({ person, request, allowed: allowed2 = true, size = 28 }) {
-  const revision = allowed2 ? person.avatar?.imageRevision : null;
-  const scope = avatarScope, key = JSON.stringify([scope, person.principalId, revision]);
-  const [loaded, setLoaded] = (0, import_react53.useState)(null);
-  (0, import_react53.useEffect)(() => {
-    let active = true;
-    setLoaded(null);
-    if (!revision) return void 0;
-    const cached = images.get(key);
-    if (cached) {
-      setLoaded({ key, image: cached });
-      return void 0;
-    }
-    if (!requests.has(key)) {
-      const promise = request({ endpoint: "avatar", principalId: person.principalId, revision }).then((value2) => {
-        const image2 = value2.principalId && value2.principalId !== person.principalId || value2.revision && value2.revision !== revision ? null : safeAvatarImage(value2.image);
-        if (image2 && scope === avatarScope && authorized.get(person.principalId) === revision) images.set(key, image2);
-        return image2;
-      }).catch(() => null).finally(() => requests.delete(key));
-      requests.set(key, promise);
-    }
-    void requests.get(key).then((image2) => {
-      if (active && image2) setLoaded({ key, image: image2 });
-    });
-    return () => {
-      active = false;
-    };
-  }, [key, request, revision, person.principalId]);
-  const image = loaded?.key === key ? loaded.image : null;
-  const bot = person.kind === "bot" || person.principalId?.startsWith("bot:");
-  const value = principalAvatar(person.kind === "human" || person.principalId?.startsWith("human:") ? person.displayName ?? "Human" : person.principalId, person.displayName ?? "");
-  return (0, import_react53.createElement)(
-    "span",
-    {
-      className: "bt-comm-avatar",
-      "data-avatar": value.variant,
-      "data-kind": bot ? "bot" : person.kind,
-      "data-avatar-id": person.principalId,
-      "data-initials": !bot && !image ? value.initials : void 0,
-      "data-has-image": Boolean(image),
-      "aria-hidden": true,
-      style: { width: size, height: size, flexBasis: size, fontSize: Math.min(11, size * 0.45), lineHeight: 1, overflow: "hidden" }
-    },
-    bot ? (0, import_react53.createElement)(BotMark, { bot: { id: person.avatar?.seed ?? person.principalId, color: person.avatar?.color, avatar: { shape: person.avatar?.shape, ...image ? { image } : {} } }, size }) : image ? (0, import_react53.createElement)("img", { src: image, alt: "", width: size, height: size, draggable: false }) : null
-  );
-}
-function HumanProfile({ human, request, operation, onSaved, convertImage = avatarImage }) {
-  const [name, setName] = (0, import_react53.useState)(human.displayName ?? "Human"), [avatar, setAvatar] = (0, import_react53.useState)(void 0);
-  const [busy, setBusy] = (0, import_react53.useState)(false), [error, setError] = (0, import_react53.useState)("");
-  const generation = (0, import_react53.useRef)(0), fileOrder = (0, import_react53.useRef)(0), edits = (0, import_react53.useRef)(0);
-  const [base, setBase] = (0, import_react53.useState)({ name: human.displayName ?? "Human" });
-  (0, import_react53.useEffect)(() => () => {
-    generation.current += 1;
-    fileOrder.current += 1;
-  }, []);
-  const dirty = name !== base.name || avatar !== void 0;
-  const upload = async (file) => {
-    if (!file) return;
-    const order = ++fileOrder.current;
-    try {
-      const image = await convertImage(file);
-      if (!safeAvatarImage(image)) throw new Error(t("Choose a PNG, JPEG, WebP, or GIF image"));
-      if (order === fileOrder.current) {
-        edits.current += 1;
-        setAvatar({ image });
-        setError("");
-      }
-    } catch (failure) {
-      if (order === fileOrder.current) setError(failure.message ?? t("Unable to update profile"));
-    }
-  };
-  const commit = async () => {
-    if (busy || !dirty) return;
-    const token = generation.current, revision = edits.current, submittedName = name;
-    const payload = { ...name === base.name ? {} : { displayName: name }, ...avatar === void 0 ? {} : { avatar } };
-    setBusy(true);
-    setError("");
-    try {
-      const result = await operation("profile-human", payload);
-      if (token !== generation.current) return;
-      if (result.status === "queued") {
-        setError(t("An operation is not confirmed. Check status, then retry the same action."));
-        return;
-      }
-      setBase({ name: submittedName });
-      if (revision === edits.current) setAvatar(void 0);
-      onSaved?.();
-    } catch {
-      if (token === generation.current) setError(t("Unable to update profile"));
-    } finally {
-      if (token === generation.current) setBusy(false);
-    }
-  };
-  return (0, import_react53.createElement)(
-    "section",
-    { className: "bt-comm-profile" },
-    (0, import_react53.createElement)("div", { className: "bt-comm-profile-preview" }, avatar?.image ? (0, import_react53.createElement)("img", { src: avatar.image, alt: t("Avatar preview"), width: 64, height: 64 }) : (0, import_react53.createElement)(CommunicationAvatar, { person: { ...human, displayName: name, ...avatar === null ? { avatar: {} } : {} }, request, size: 64 })),
-    (0, import_react53.createElement)("label", { className: "bt-comm-field" }, t("Human name"), (0, import_react53.createElement)("input", { value: name, "aria-label": t("Human name"), onChange: (event) => {
-      edits.current += 1;
-      setName(event.target.value);
-    } })),
-    (0, import_react53.createElement)("label", { className: "bt-comm-field" }, t("Upload avatar"), (0, import_react53.createElement)("input", { type: "file", accept: "image/png,image/jpeg,image/webp,image/gif", "aria-label": t("Upload avatar"), onChange: (event) => {
-      void upload(event.target.files?.[0]);
-      event.target.value = "";
-    } })),
-    (0, import_react53.createElement)("button", { type: "button", onClick: () => {
-      fileOrder.current += 1;
-      edits.current += 1;
-      setAvatar(null);
-    } }, t("Reset avatar")),
-    (0, import_react53.createElement)("button", { type: "button", disabled: busy || !dirty || !name.trim(), onClick: () => {
-      void commit();
-    }, "data-dirty": dirty, "aria-label": t("Save profile") }, t("Save profile")),
-    error ? (0, import_react53.createElement)("p", { className: "bt-comm-error", role: "alert" }, error) : null
-  );
-}
-
-// src/client/communication-contacts.js
-var import_react54 = require("react");
-function contactDirectory(contacts, relations = [], humanPrincipalId) {
-  const people = [...new Map(contacts.map((person) => [person.principalId, person])).values()];
-  const humans = people.filter((person) => person.kind === "human").sort((a, b) => a.principalId < b.principalId ? -1 : a.principalId > b.principalId ? 1 : 0);
-  const owners = /* @__PURE__ */ new Map();
-  for (const human of humans) if (human.homeInstanceId && !owners.has(human.homeInstanceId)) owners.set(human.homeInstanceId, human.principalId);
-  const active = new Map(relations.filter((item) => item.active).map((item) => [item.otherHumanPrincipalId, item]));
-  const directory = new Map(humans.filter((person) => person.principalId !== humanPrincipalId).map((person) => [person.principalId, { person, available: true, bots: [], relation: active.get(person.principalId) }]));
-  for (const [id, relation] of active) if (id !== humanPrincipalId && !directory.has(id)) directory.set(id, { person: { principalId: id, displayName: id, kind: "human" }, available: false, bots: [], relation });
-  const otherBots = [];
-  for (const bot of people.filter((person) => person.kind === "bot")) {
-    const owner = directory.get(owners.get(bot.homeInstanceId));
-    if (owner) owner.bots.push(bot);
-    else otherBots.push(bot);
-  }
-  return { people: [...directory.values()], otherBots };
-}
-function ContactDirectory({ contacts, relations, humanPrincipalId, instanceId, request, busy, onMessage, onRemove, confirm, addressNotes = {}, connectionKnown }) {
-  const [query, setQuery] = (0, import_react54.useState)("");
-  const labels = contactLabels(contacts), { people, otherBots } = contactDirectory(contacts, relations, humanPrincipalId);
-  const needle = query.trim().toLocaleLowerCase();
-  const matches = (person) => [labels.get(person.principalId), person.displayName, person.principalId, person.instanceLabel, person.homeInstanceId, person.ipAddress, addressNotes[normalizeIpAddress(person.ipAddress)]].some((value) => value?.toLocaleLowerCase().includes(needle));
-  const shown = people.filter((item) => matches(item.person) || item.bots.some(matches)), bots = otherBots.filter(matches);
-  const identity = (person, allowed2 = true) => (0, import_react54.createElement)(
-    "span",
-    { className: "bt-comm-directory-person" },
-    (0, import_react54.createElement)(CommunicationAvatar, { person, request, allowed: allowed2 }),
-    (0, import_react54.createElement)("span", null, (0, import_react54.createElement)("strong", null, labels.get(person.principalId) ?? person.displayName ?? person.principalId), (0, import_react54.createElement)("small", null, t(person.kind === "bot" ? "Bot" : "Human"), person.homeInstanceId && instanceId ? ` · ${t(person.homeInstanceId === instanceId ? "Local" : "Remote")}` : "", person.kind === "bot" && person.homeInstanceId ? ` · ${person.instanceLabel ?? person.homeInstanceId}` : "", " · ", t(connectionKnown === false || typeof person.connected !== "boolean" ? "Connection status unavailable" : person.connected ? "Connected to Hub" : "Disconnected from Hub")))
-  );
-  const message = (person) => onMessage ? (0, import_react54.createElement)("button", { type: "button", disabled: busy, "aria-label": `${t("Message")} ${labels.get(person.principalId) ?? person.displayName}`, onClick: () => onMessage(person.principalId) }, t("Message")) : null;
-  const botRow = (person) => (0, import_react54.createElement)("li", { key: person.principalId, "data-principal-id": person.principalId }, identity(person), message(person));
-  return (0, import_react54.createElement)(
-    "section",
-    { className: "bt-comm-directory", "aria-label": t("Connected contacts") },
-    (0, import_react54.createElement)("div", { className: "bt-comm-directory-heading" }, (0, import_react54.createElement)("h3", null, t("Connected contacts")), (0, import_react54.createElement)("span", { className: "bt-comm-count" }, people.length)),
-    (0, import_react54.createElement)("label", { className: "bt-comm-field" }, t("Find a contact or Bot"), (0, import_react54.createElement)("input", { type: "search", value: query, "aria-label": t("Find a contact or Bot"), onChange: (event) => setQuery(event.target.value) })),
-    shown.map(({ person, available, bots: bots2, relation }) => (0, import_react54.createElement)(
-      "article",
-      { key: person.principalId, className: "bt-comm-contact-card", "data-contact-id": person.principalId },
-      (0, import_react54.createElement)("div", { className: "bt-comm-contact-card-head" }, identity(person, available), available ? message(person) : null),
-      person.homeInstanceId ? (0, import_react54.createElement)("p", { className: "bt-comm-reference" }, person.instanceLabel ?? person.homeInstanceId, " · ", t(person.ipAddress || "Address unavailable")) : null,
-      addressNotes[normalizeIpAddress(person.ipAddress)] ? (0, import_react54.createElement)("p", { className: "bt-comm-ip-note" }, t("IP note"), ": ", addressNotes[normalizeIpAddress(person.ipAddress)]) : null,
-      !available ? (0, import_react54.createElement)("p", { className: "bt-comm-reference", role: "status" }, t("Contact details are not available in the current directory.")) : null,
-      (0, import_react54.createElement)("h4", null, t("Their Bots")),
-      bots2.length ? (0, import_react54.createElement)("ul", { className: "bt-comm-contact-bots" }, bots2.map(botRow)) : (0, import_react54.createElement)("p", { className: "bt-comm-reference" }, t("No Bots shared with you")),
-      (0, import_react54.createElement)(
-        "details",
-        { className: "bt-comm-contact-info" },
-        (0, import_react54.createElement)("summary", null, t("Contact details")),
-        (0, import_react54.createElement)(
-          "dl",
-          null,
-          (0, import_react54.createElement)("dt", null, t("Human identity")),
-          (0, import_react54.createElement)("dd", null, (0, import_react54.createElement)("code", null, person.principalId)),
-          person.homeInstanceId ? (0, import_react54.createElement)(import_react54.Fragment, null, (0, import_react54.createElement)("dt", null, t("Device identity")), (0, import_react54.createElement)("dd", null, (0, import_react54.createElement)("code", null, person.homeInstanceId))) : null,
-          relation ? (0, import_react54.createElement)(import_react54.Fragment, null, (0, import_react54.createElement)("dt", null, t("Bots you share with this contact")), (0, import_react54.createElement)("dd", null, (relation.botPrincipalIds ?? []).map((id) => labels.get(id) ?? id).join(", ") || t("None"))) : null
-        ),
-        bots2.length ? (0, import_react54.createElement)("ul", { className: "bt-comm-bot-identities" }, bots2.map((bot) => (0, import_react54.createElement)("li", { key: bot.principalId }, labels.get(bot.principalId) ?? bot.displayName, ": ", (0, import_react54.createElement)("code", null, bot.principalId)))) : null,
-        relation ? (0, import_react54.createElement)("button", { type: "button", className: "bt-comm-danger", disabled: busy, onClick: () => onRemove(relation) }, t(confirm === person.principalId ? "Confirm contact removal" : "Remove contact")) : null
-      )
-    )),
-    bots.length ? (0, import_react54.createElement)("section", { className: "bt-comm-contact-card" }, (0, import_react54.createElement)("h3", null, t("Other available Bots")), (0, import_react54.createElement)("ul", { className: "bt-comm-contact-bots" }, bots.map(botRow))) : null,
-    !shown.length && !bots.length ? (0, import_react54.createElement)("p", { className: "bt-comm-reference", role: "status" }, t(needle ? "No matching contacts or Bots." : "No contacts yet. Add someone with their user code.")) : null
-  );
-}
-
 // src/shared/communication-diagnostics.js
 var communicationDescriptions = {
   COMMUNICATION_RESET_INCOMPLETE: "Complete federation reset was interrupted. Stop the Host and rerun the same reset command before using Remote communication.",
   COMMUNICATION_BROWSER_RESET_REQUIRED: "Federation data was reset. Refresh this tab to clear its old communication drafts and pending actions before continuing.",
+  PUBLIC_PROFILE_SECRET_REFUSED: "The public profile appears to contain private credentials. Remove them before saving.",
+  PUBLIC_PROFILE_SYNC_FAILED: "The public profile could not be synchronized. Check the Hub connection and try again.",
+  PUBLIC_PROFILE_VERSION_CONFLICT: "Profile changed elsewhere. Your edits are kept. Review the latest profile before saving.",
+  PROFILE_VERSION_CONFLICT: "Profile changed elsewhere. Your edits are kept. Review the latest profile before saving.",
+  PUBLIC_PROFILE_CAPABILITY_REQUIRED: "Upgrade the Hub to edit public profiles.",
+  INVALID_PUBLIC_PROFILE: "The public profile is invalid. Check the field lengths and try again.",
+  INVALID_PUBLIC_PROFILE_RESPONSE: "The Hub returned an invalid public profile. Refresh before trying again.",
   INVALID_IP_ADDRESS: "Enter a valid IPv4 or IPv6 address. Ports are optional; use brackets around IPv6 with a port.",
   INVALID_IP_NOTE: "Use an IP note of at most 160 characters without line breaks or hidden control characters.",
   IP_NOTE_LIMIT: "Up to 256 IP notes can be saved for this Hub. Clear an old note before adding another.",
@@ -21778,6 +21670,11 @@ function communicationError(error, { bot, reloadRequired = false } = {}) {
 var knownCommunicationFailure = (error) => Object.hasOwn(communicationDescriptions, error?.code ?? "");
 var communicationFailure = (error) => knownCommunicationFailure(error) ? t(communicationDescriptions[error.code]) + ` [${error.code}]` : t("The action could not be confirmed. Check current status before trying again.");
 var definitive = /* @__PURE__ */ new Set([
+  "PUBLIC_PROFILE_VERSION_CONFLICT",
+  "PROFILE_VERSION_CONFLICT",
+  "INVALID_PUBLIC_PROFILE",
+  "PUBLIC_PROFILE_SECRET_REFUSED",
+  "PUBLIC_PROFILE_CAPABILITY_REQUIRED",
   "INSTANCE_AUTHENTICATION_REQUIRED",
   "AMBIGUOUS_MENTION",
   "UNKNOWN_MENTION",
@@ -21807,6 +21704,404 @@ var definitive = /* @__PURE__ */ new Set([
   "OPERATION_ID_CONFLICT"
 ]);
 var operationOutcomeUncertain = (error) => !definitive.has(error?.code);
+
+// src/client/communication-profile.js
+var import_react53 = require("react");
+var images = /* @__PURE__ */ new Map(), requests = /* @__PURE__ */ new Map(), authorized = /* @__PURE__ */ new Map();
+var avatarScope = "legacy";
+function safeAvatarImage(value) {
+  return typeof value === "string" && value.length <= 16e4 && /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/]+={0,2}$/.test(value) ? value : null;
+}
+function syncAvatarDirectory(contacts, scope = "legacy") {
+  if (scope !== avatarScope) {
+    avatarScope = scope;
+    images.clear();
+    requests.clear();
+  }
+  authorized.clear();
+  for (const person of contacts) if (person.avatar?.imageRevision) authorized.set(person.principalId, person.avatar.imageRevision);
+  for (const key of images.keys()) {
+    const [, principalId, revision] = JSON.parse(key);
+    if (authorized.get(principalId) !== revision) images.delete(key);
+  }
+}
+function CommunicationAvatar({ person, request, allowed: allowed2 = true, size = 28 }) {
+  const revision = allowed2 ? person.avatar?.imageRevision : null;
+  const scope = avatarScope, key = JSON.stringify([scope, person.principalId, revision]);
+  const [loaded, setLoaded] = (0, import_react53.useState)(null);
+  (0, import_react53.useEffect)(() => {
+    let active = true;
+    setLoaded(null);
+    if (!revision) return void 0;
+    const cached = images.get(key);
+    if (cached) {
+      setLoaded({ key, image: cached });
+      return void 0;
+    }
+    if (!requests.has(key)) {
+      const promise = request({ endpoint: "avatar", principalId: person.principalId, revision }).then((value2) => {
+        const image2 = value2.principalId && value2.principalId !== person.principalId || value2.revision && value2.revision !== revision ? null : safeAvatarImage(value2.image);
+        if (image2 && scope === avatarScope && authorized.get(person.principalId) === revision) images.set(key, image2);
+        return image2;
+      }).catch(() => null).finally(() => requests.delete(key));
+      requests.set(key, promise);
+    }
+    void requests.get(key).then((image2) => {
+      if (active && image2) setLoaded({ key, image: image2 });
+    });
+    return () => {
+      active = false;
+    };
+  }, [key, request, revision, person.principalId]);
+  const image = loaded?.key === key ? loaded.image : null;
+  const bot = person.kind === "bot" || person.principalId?.startsWith("bot:");
+  const value = principalAvatar(person.kind === "human" || person.principalId?.startsWith("human:") ? person.displayName ?? "Human" : person.principalId, person.displayName ?? "");
+  return (0, import_react53.createElement)(
+    "span",
+    {
+      className: "bt-comm-avatar",
+      "data-avatar": value.variant,
+      "data-kind": bot ? "bot" : person.kind,
+      "data-avatar-id": person.principalId,
+      "data-initials": !bot && !image ? value.initials : void 0,
+      "data-has-image": Boolean(image),
+      "aria-hidden": true,
+      style: { width: size, height: size, flexBasis: size, fontSize: Math.min(11, size * 0.45), lineHeight: 1, overflow: "hidden" }
+    },
+    bot ? (0, import_react53.createElement)(BotMark, { bot: { id: person.avatar?.seed ?? person.principalId, color: person.avatar?.color, avatar: { shape: person.avatar?.shape, ...image ? { image } : {} } }, size }) : image ? (0, import_react53.createElement)("img", { src: image, alt: "", width: size, height: size, draggable: false }) : null
+  );
+}
+var profileValues = (value) => ({
+  headline: value?.headline ?? "",
+  summary: value?.summary ?? "",
+  expertise: value?.expertise ?? [],
+  languages: value?.languages ?? []
+});
+var profileDraft = (value) => ({ ...profileValues(value), expertise: (value?.expertise ?? []).join(", "), languages: (value?.languages ?? []).join(", ") });
+var profileTerms = (value) => [...new Set(value.split(/[,，\n]/).map((term) => term.trim()).filter(Boolean))];
+var submittedProfile = (draft) => ({ headline: draft.headline.trim(), summary: draft.summary.trim(), expertise: profileTerms(draft.expertise), languages: profileTerms(draft.languages) });
+function PublicProfileFields({ profile, onChange, disabled = false }) {
+  const field = (key, label, limit, multiline = false) => (0, import_react53.createElement)(
+    "label",
+    { className: "bt-comm-field" },
+    t(label),
+    (0, import_react53.createElement)(multiline ? "textarea" : "input", {
+      value: profile[key],
+      "aria-label": t(label),
+      disabled,
+      maxLength: limit,
+      ...multiline ? { rows: 4 } : {},
+      onChange: (event) => onChange(key, event.target.value)
+    })
+  );
+  return (0, import_react53.createElement)(
+    "div",
+    { className: "bt-comm-public-profile-fields" },
+    field("headline", "Role or specialty", 80),
+    field("summary", "Profile summary", 1e3, true),
+    field("expertise", "Expertise (comma-separated)", 500),
+    field("languages", "Languages (comma-separated)", 280)
+  );
+}
+function HumanProfile({ human, request, operation, onSaved, convertImage = avatarImage }) {
+  const [name, setName] = (0, import_react53.useState)(human.displayName ?? "Human"), [avatar, setAvatar] = (0, import_react53.useState)(void 0);
+  const [busy, setBusy] = (0, import_react53.useState)(false), [error, setError] = (0, import_react53.useState)("");
+  const generation = (0, import_react53.useRef)(0), fileOrder = (0, import_react53.useRef)(0), edits = (0, import_react53.useRef)(0), loadedInfo = (0, import_react53.useRef)(false);
+  const [base, setBase] = (0, import_react53.useState)({ name: human.displayName ?? "Human" });
+  const [profile, setProfile] = (0, import_react53.useState)(() => profileDraft(human.publicProfile));
+  const [profileBase, setProfileBase] = (0, import_react53.useState)(() => ({ ...profileValues(human.publicProfile), version: human.publicProfile?.version ?? 0 }));
+  const [conflict, setConflict] = (0, import_react53.useState)(false), [latest, setLatest] = (0, import_react53.useState)(null);
+  const [profileReady, setProfileReady] = (0, import_react53.useState)(false), [profileLoading, setProfileLoading] = (0, import_react53.useState)(true), [profileLoadError, setProfileLoadError] = (0, import_react53.useState)("");
+  (0, import_react53.useEffect)(() => () => {
+    generation.current += 1;
+    fileOrder.current += 1;
+  }, []);
+  const infoDirty = JSON.stringify(submittedProfile(profile)) !== JSON.stringify(profileValues(profileBase));
+  const identityDirty = name !== base.name || avatar !== void 0;
+  const dirty = identityDirty || infoDirty;
+  const checkedInfo = (result) => {
+    const value = result?.publicProfile;
+    if (result?.principalId !== human.principalId || !value || value.truncated || !Number.isSafeInteger(value.version) || value.version < 0) throw new Error("INVALID_PUBLIC_PROFILE_RESPONSE");
+    return value;
+  };
+  (0, import_react53.useEffect)(() => {
+    let active = true;
+    loadedInfo.current = false;
+    setProfileReady(false);
+    setProfileLoading(true);
+    setProfileLoadError("");
+    void request({ endpoint: "human-profile-info" }).then((result) => {
+      if (!active) return;
+      const value = checkedInfo(result);
+      setProfile(profileDraft(value));
+      setProfileBase({ ...profileValues(value), version: value.version });
+      setProfileReady(true);
+      loadedInfo.current = true;
+    }).catch((failure) => {
+      if (active) setProfileLoadError(knownCommunicationFailure(failure) ? communicationFailure(failure) : t("Unable to load profile details"));
+    }).finally(() => {
+      if (active) setProfileLoading(false);
+    });
+    return () => {
+      active = false;
+    };
+  }, [human.principalId, request]);
+  const upload = async (file) => {
+    if (!file) return;
+    const order = ++fileOrder.current;
+    try {
+      const image = await convertImage(file);
+      if (!safeAvatarImage(image)) throw new Error(t("Choose a PNG, JPEG, WebP, or GIF image"));
+      if (order === fileOrder.current) {
+        edits.current += 1;
+        setAvatar({ image });
+        setError("");
+      }
+    } catch (failure) {
+      if (order === fileOrder.current) setError(failure.message ?? t("Unable to update profile"));
+    }
+  };
+  const commit = async () => {
+    if (busy || !dirty || conflict || infoDirty && !profileReady) return;
+    const token = generation.current, revision = edits.current, submittedName = name;
+    const payload = { ...name === base.name ? {} : { displayName: name }, ...avatar === void 0 ? {} : { avatar } };
+    const info = submittedProfile(profile);
+    setBusy(true);
+    setError("");
+    try {
+      if (identityDirty) {
+        const result = await operation("profile-human", payload);
+        if (token !== generation.current) return;
+        if (result.status === "queued") {
+          setError(t("An operation is not confirmed. Check status, then retry the same action."));
+          return;
+        }
+        setBase({ name: submittedName });
+        if (revision === edits.current) setAvatar(void 0);
+      }
+      if (infoDirty) {
+        const result = await operation("profile-human-info", { expectedVersion: profileBase.version, profile: info });
+        if (token !== generation.current) return;
+        if (result.status === "queued") {
+          setError(t("An operation is not confirmed. Check status, then retry the same action."));
+          return;
+        }
+        if (!result.publicProfile || !Number.isSafeInteger(result.publicProfile.version)) throw new Error("INVALID_PUBLIC_PROFILE_RESPONSE");
+        setProfileBase({ ...profileValues(result.publicProfile), version: result.publicProfile.version });
+        setLatest(null);
+        try {
+          const current = checkedInfo(await request({ endpoint: "human-profile-info" }));
+          if (token !== generation.current) return;
+          if (current.version < result.publicProfile.version) throw new Error("INVALID_PUBLIC_PROFILE_RESPONSE");
+          if (current.version > result.publicProfile.version) {
+            setLatest(profileValues(current));
+            setConflict(true);
+            setError(t("Profile changed elsewhere. Your edits are kept. Review the latest profile before saving."));
+          } else setProfileBase({ ...profileValues(current), version: current.version });
+        } catch {
+          if (token !== generation.current) return;
+          setProfileReady(false);
+          setProfileLoadError(t("Profile saved, but the latest details could not be loaded"));
+        }
+      }
+      onSaved?.();
+    } catch (failure) {
+      if (token !== generation.current) return;
+      if (["PROFILE_VERSION_CONFLICT", "PUBLIC_PROFILE_VERSION_CONFLICT"].includes(failure.code) || ["PROFILE_VERSION_CONFLICT", "PUBLIC_PROFILE_VERSION_CONFLICT"].includes(failure.message)) {
+        setConflict(true);
+        setError(t("Profile changed elsewhere. Your edits are kept. Review the latest profile before saving."));
+      } else setError(knownCommunicationFailure(failure) ? communicationFailure(failure) : t("Unable to update profile"));
+    } finally {
+      if (token === generation.current) setBusy(false);
+    }
+  };
+  const reviewLatest = async () => {
+    if (busy) return;
+    const token = generation.current;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await request({ endpoint: "human-profile-info" });
+      if (token !== generation.current) return;
+      const value = checkedInfo(result);
+      if (!loadedInfo.current) setProfile(profileDraft(value));
+      setProfileBase({ ...profileValues(value), version: value.version });
+      setLatest(profileValues(value));
+      setConflict(false);
+      setProfileReady(true);
+      setProfileLoadError("");
+      loadedInfo.current = true;
+    } catch {
+      if (token === generation.current) setError(t("Unable to load the latest profile"));
+    } finally {
+      if (token === generation.current) setBusy(false);
+    }
+  };
+  return (0, import_react53.createElement)(
+    "section",
+    { className: "bt-comm-profile" },
+    (0, import_react53.createElement)("div", { className: "bt-comm-profile-preview" }, avatar?.image ? (0, import_react53.createElement)("img", { src: avatar.image, alt: t("Avatar preview"), width: 64, height: 64 }) : (0, import_react53.createElement)(CommunicationAvatar, { person: { ...human, displayName: name, ...avatar === null ? { avatar: {} } : {} }, request, size: 64 })),
+    (0, import_react53.createElement)("label", { className: "bt-comm-field" }, t("Human name"), (0, import_react53.createElement)("input", { value: name, "aria-label": t("Human name"), onChange: (event) => {
+      edits.current += 1;
+      setName(event.target.value);
+    } })),
+    (0, import_react53.createElement)("label", { className: "bt-comm-field" }, t("Upload avatar"), (0, import_react53.createElement)("input", { type: "file", accept: "image/png,image/jpeg,image/webp,image/gif", "aria-label": t("Upload avatar"), onChange: (event) => {
+      void upload(event.target.files?.[0]);
+      event.target.value = "";
+    } })),
+    (0, import_react53.createElement)("button", { type: "button", onClick: () => {
+      fileOrder.current += 1;
+      edits.current += 1;
+      setAvatar(null);
+    } }, t("Reset avatar")),
+    (0, import_react53.createElement)("p", { className: "bt-comm-reference" }, t("Describe your responsibilities and the help you can offer. Only share information intended for your contacts.")),
+    profileLoading ? (0, import_react53.createElement)("p", { className: "bt-comm-reference", role: "status" }, t("Loading profile details…")) : null,
+    profileLoadError ? (0, import_react53.createElement)("p", { className: "bt-comm-error", role: "alert" }, profileLoadError) : null,
+    (0, import_react53.createElement)(PublicProfileFields, { profile, disabled: busy || !profileReady, onChange: (key, value) => setProfile((current) => ({ ...current, [key]: value })) }),
+    latest ? (0, import_react53.createElement)(
+      "section",
+      { className: "bt-comm-latest-profile", "aria-label": t("Latest shared profile") },
+      (0, import_react53.createElement)("h3", null, t("Latest shared profile")),
+      (0, import_react53.createElement)("p", null, latest.headline || t("No role or specialty")),
+      (0, import_react53.createElement)("p", null, latest.summary || t("No profile summary")),
+      (0, import_react53.createElement)("p", null, latest.expertise.join(", ")),
+      (0, import_react53.createElement)("p", null, latest.languages.join(", "))
+    ) : null,
+    conflict || profileLoadError ? (0, import_react53.createElement)("button", { type: "button", disabled: busy, onClick: () => {
+      void reviewLatest();
+    } }, t(conflict ? "Review latest profile" : "Reload profile details")) : null,
+    (0, import_react53.createElement)("button", { type: "button", disabled: busy || !dirty || !name.trim() || conflict || infoDirty && !profileReady, onClick: () => {
+      void commit();
+    }, "data-dirty": dirty, "aria-label": t("Save profile") }, t("Save profile")),
+    error ? (0, import_react53.createElement)("p", { className: "bt-comm-error", role: "alert" }, error) : null
+  );
+}
+
+// src/client/communication-contacts.js
+var import_react54 = require("react");
+function contactDirectory(contacts, relations = [], humanPrincipalId) {
+  const people = [...new Map(contacts.map((person) => [person.principalId, person])).values()];
+  const humans = people.filter((person) => person.kind === "human").sort((a, b) => a.principalId < b.principalId ? -1 : a.principalId > b.principalId ? 1 : 0);
+  const owners = /* @__PURE__ */ new Map();
+  for (const human of humans) if (human.homeInstanceId && !owners.has(human.homeInstanceId)) owners.set(human.homeInstanceId, human.principalId);
+  const active = new Map(relations.filter((item) => item.active).map((item) => [item.otherHumanPrincipalId, item]));
+  const directory = new Map(humans.filter((person) => person.principalId !== humanPrincipalId).map((person) => [person.principalId, { person, available: true, bots: [], relation: active.get(person.principalId) }]));
+  for (const [id, relation] of active) if (id !== humanPrincipalId && !directory.has(id)) directory.set(id, { person: { principalId: id, displayName: id, kind: "human" }, available: false, bots: [], relation });
+  const otherBots = [];
+  for (const bot of people.filter((person) => person.kind === "bot")) {
+    const ownerId = Object.hasOwn(bot, "ownerPrincipalId") ? bot.ownerPrincipalId : owners.get(bot.homeInstanceId);
+    const owner = directory.get(ownerId);
+    if (owner?.available) owner.bots.push(bot);
+    else otherBots.push(bot);
+  }
+  return { people: [...directory.values()], otherBots };
+}
+var normalized = (value) => String(value ?? "").normalize("NFKC").toLocaleLowerCase();
+var profileValues2 = (profile) => [profile?.headline, profile?.summary, ...Array.isArray(profile?.expertise) ? profile.expertise : [], ...Array.isArray(profile?.languages) ? profile.languages : []];
+function contactMatches(person, query, { label, addressNotes = {} } = {}) {
+  const needle = normalized(query).trim();
+  return !needle || [
+    label,
+    person.displayName,
+    person.principalId,
+    person.instanceLabel,
+    person.homeInstanceId,
+    person.ipAddress,
+    addressNotes[normalizeIpAddress(person.ipAddress)],
+    ...profileValues2(person.publicProfile)
+  ].some((value) => normalized(value).includes(needle));
+}
+function ContactDirectory({ contacts, relations, humanPrincipalId, instanceId, request, busy, onMessage, onRemove, confirm, addressNotes = {}, connectionKnown }) {
+  const [query, setQuery] = (0, import_react54.useState)(""), [view, setView] = (0, import_react54.useState)("all");
+  const labels = contactLabels(contacts), { people, otherBots } = contactDirectory(contacts, relations, humanPrincipalId);
+  const needle = query.trim(), matches = (person) => contactMatches(person, query, { label: labels.get(person.principalId), addressNotes });
+  const shown = people.filter((item) => matches(item.person) || item.bots.some(matches));
+  const allBots = [...people.flatMap((item) => item.bots), ...otherBots];
+  const bots = (view === "bots" ? allBots : otherBots).filter(matches);
+  const connection = (person) => t(connectionKnown === false || typeof person.connected !== "boolean" ? "Connection status unavailable" : person.connected ? "Connected to Hub" : "Disconnected from Hub");
+  const identity = (person, allowed2 = true) => (0, import_react54.createElement)(
+    "span",
+    { className: "bt-comm-directory-person" },
+    (0, import_react54.createElement)(CommunicationAvatar, { person, request, allowed: allowed2, size: 36 }),
+    (0, import_react54.createElement)(
+      "span",
+      null,
+      (0, import_react54.createElement)("strong", null, labels.get(person.principalId) ?? person.displayName ?? person.principalId),
+      person.publicProfile?.headline ? (0, import_react54.createElement)("span", { className: "bt-comm-directory-headline" }, person.publicProfile.headline) : null,
+      (0, import_react54.createElement)(
+        "small",
+        null,
+        t(person.kind === "bot" ? "Bot" : "Human"),
+        person.homeInstanceId && instanceId ? ` · ${t(person.homeInstanceId === instanceId ? "Local" : "Remote")}` : "",
+        person.instanceLabel ? ` · ${person.instanceLabel}` : "",
+        " · ",
+        connection(person)
+      )
+    )
+  );
+  const message = (person) => onMessage ? (0, import_react54.createElement)("button", { type: "button", disabled: busy, "aria-label": `${t("Message")} ${labels.get(person.principalId) ?? person.displayName}`, onClick: () => onMessage(person.principalId) }, t("Message")) : null;
+  const profile = (person) => {
+    const value = person.publicProfile, expertise = Array.isArray(value?.expertise) ? value.expertise : [], languages = Array.isArray(value?.languages) ? value.languages : [];
+    return value?.summary || expertise.length || languages.length ? (0, import_react54.createElement)(
+      "div",
+      { className: "bt-comm-directory-profile" },
+      value.summary ? (0, import_react54.createElement)("p", { className: "bt-comm-directory-summary" }, value.summary) : null,
+      expertise.length ? (0, import_react54.createElement)("ul", { className: "bt-comm-directory-skills", "aria-label": t("Expertise") }, expertise.map((item) => (0, import_react54.createElement)("li", { key: item }, item))) : null,
+      languages.length ? (0, import_react54.createElement)("p", { className: "bt-comm-reference" }, t("Languages"), ": ", languages.join(", ")) : null
+    ) : null;
+  };
+  const botRow = (person) => (0, import_react54.createElement)(
+    "li",
+    { key: person.principalId, "data-principal-id": person.principalId, className: "bt-comm-directory-bot" },
+    (0, import_react54.createElement)("div", { className: "bt-comm-directory-row" }, identity(person), message(person)),
+    profile(person)
+  );
+  const filter = (value, label, count) => (0, import_react54.createElement)("button", { key: value, type: "button", "aria-pressed": view === value, "aria-label": t(label), onClick: () => setView(value) }, t(label), (0, import_react54.createElement)("span", { className: "bt-comm-count", "aria-hidden": true }, count));
+  const showPeople = view !== "bots", showBots = view !== "contacts";
+  return (0, import_react54.createElement)(
+    "section",
+    { className: "bt-comm-directory bt-comm-directory-list", "aria-label": t("Connected contacts") },
+    (0, import_react54.createElement)("div", { className: "bt-comm-directory-heading" }, (0, import_react54.createElement)("h3", null, t("Connected contacts")), (0, import_react54.createElement)("span", { className: "bt-comm-count" }, people.length)),
+    (0, import_react54.createElement)("label", { className: "bt-comm-field" }, t("Find a contact or Bot"), (0, import_react54.createElement)("input", { type: "search", value: query, "aria-label": t("Find a contact or Bot"), onChange: (event) => setQuery(event.target.value) })),
+    (0, import_react54.createElement)("div", { className: "bt-comm-directory-filters", role: "group", "aria-label": t("Directory filter") }, filter("all", "All", people.length + allBots.length), filter("contacts", "Contacts", people.length), filter("bots", "Published Bots", allBots.length)),
+    showPeople ? shown.map(({ person, available, bots: ownedBots, relation }) => {
+      const visibleBots = matches(person) ? ownedBots : ownedBots.filter(matches);
+      return (0, import_react54.createElement)(
+        "article",
+        { key: person.principalId, className: "bt-comm-contact-card", "data-contact-id": person.principalId },
+        (0, import_react54.createElement)("div", { className: "bt-comm-contact-card-head" }, identity(person, available), available ? message(person) : null),
+        !available ? (0, import_react54.createElement)("p", { className: "bt-comm-reference", role: "status" }, t("Contact details are not available in the current directory.")) : null,
+        (0, import_react54.createElement)(
+          "details",
+          { className: "bt-comm-directory-about", open: Boolean(needle) },
+          (0, import_react54.createElement)("summary", null, t("Profile and Bots"), (0, import_react54.createElement)("span", { className: "bt-comm-count" }, visibleBots.length)),
+          profile(person),
+          (0, import_react54.createElement)("h4", null, t("Their Bots")),
+          visibleBots.length ? (0, import_react54.createElement)("ul", { className: "bt-comm-contact-bots" }, visibleBots.map(botRow)) : (0, import_react54.createElement)("p", { className: "bt-comm-reference" }, t("No Bots shared with you"))
+        ),
+        (0, import_react54.createElement)(
+          "details",
+          { className: "bt-comm-contact-info" },
+          (0, import_react54.createElement)("summary", null, t("Contact details")),
+          person.homeInstanceId ? (0, import_react54.createElement)("p", { className: "bt-comm-reference" }, person.instanceLabel ?? person.homeInstanceId, " · ", t(person.ipAddress || "Address unavailable")) : null,
+          addressNotes[normalizeIpAddress(person.ipAddress)] ? (0, import_react54.createElement)("p", { className: "bt-comm-ip-note" }, t("IP note"), ": ", addressNotes[normalizeIpAddress(person.ipAddress)]) : null,
+          (0, import_react54.createElement)(
+            "dl",
+            null,
+            (0, import_react54.createElement)("dt", null, t("Human identity")),
+            (0, import_react54.createElement)("dd", null, (0, import_react54.createElement)("code", null, person.principalId)),
+            person.homeInstanceId ? (0, import_react54.createElement)(import_react54.Fragment, null, (0, import_react54.createElement)("dt", null, t("Device identity")), (0, import_react54.createElement)("dd", null, (0, import_react54.createElement)("code", null, person.homeInstanceId))) : null,
+            relation ? (0, import_react54.createElement)(import_react54.Fragment, null, (0, import_react54.createElement)("dt", null, t("Bots you share with this contact")), (0, import_react54.createElement)("dd", null, (relation.botPrincipalIds ?? []).map((id) => labels.get(id) ?? id).join(", ") || t("None"))) : null
+          ),
+          ownedBots.length ? (0, import_react54.createElement)("ul", { className: "bt-comm-bot-identities" }, ownedBots.map((bot) => (0, import_react54.createElement)("li", { key: bot.principalId }, labels.get(bot.principalId) ?? bot.displayName, ": ", (0, import_react54.createElement)("code", null, bot.principalId)))) : null,
+          relation && onRemove ? (0, import_react54.createElement)("button", { type: "button", className: "bt-comm-danger", disabled: busy, onClick: () => onRemove(relation) }, t(confirm === person.principalId ? "Confirm contact removal" : "Remove contact")) : null
+        )
+      );
+    }) : null,
+    showBots && bots.length ? (0, import_react54.createElement)("section", { className: "bt-comm-contact-card bt-comm-directory-bot-list" }, (0, import_react54.createElement)("h3", null, t(view === "bots" ? "Published Bots" : "Other available Bots")), (0, import_react54.createElement)("ul", { className: "bt-comm-contact-bots" }, bots.map(botRow))) : null,
+    !(showPeople && shown.length || showBots && bots.length) ? (0, import_react54.createElement)("p", { className: "bt-comm-reference", role: "status" }, t(needle ? "No matching contacts or Bots." : view === "bots" ? "No Bots shared with you" : "No contacts yet. Add someone with their user code.")) : null
+  );
+}
 
 // src/client/communication-address-notes.js
 var import_react55 = require("react");
@@ -22032,7 +22327,7 @@ function hubManagementAddress(value) {
     return null;
   }
 }
-function AddDevice({ request, manualGuide, displayName = "Human", revision }) {
+function AddDevice({ request, displayName = "Human", revision }) {
   const [code, setCode] = (0, import_react57.useState)(""), [name, setName] = (0, import_react57.useState)(displayName), [hub, setHub] = (0, import_react57.useState)(null);
   const [storage, setStorage] = (0, import_react57.useState)(null), [enrollments, setEnrollments] = (0, import_react57.useState)([]), [busy, setBusy] = (0, import_react57.useState)(false), [error, setError] = (0, import_react57.useState)("");
   const [absentHub, setAbsentHub] = (0, import_react57.useState)(null);
@@ -22275,7 +22570,6 @@ function AddDevice({ request, manualGuide, displayName = "Human", revision }) {
       } }, t(lifecycle.kind === "leave" ? "Confirm leaving" : "Confirm forgetting")),
       (0, import_react57.createElement)("button", { type: "button", disabled: busy, onClick: () => setLifecycle(null) }, t("Cancel"))
     ) : null,
-    (0, import_react57.createElement)("details", { className: "bt-comm-manual-guide" }, (0, import_react57.createElement)("summary", null, t("Manual configuration guide")), manualGuide),
     liveError ? (0, import_react57.createElement)("p", { className: "bt-comm-reference", role: "status" }, t("Status may be out of date."), " ", liveError) : null,
     error ? (0, import_react57.createElement)("p", { className: "bt-comm-error", role: "alert" }, error) : null
   );
@@ -23248,8 +23542,6 @@ var communicationCSS = `
 }
 @media(prefers-reduced-motion:reduce){.bt-comm-frame{transition:none}}
 
-.bt-comm-pairing-guide pre{white-space:pre-wrap;overflow-wrap:anywhere;user-select:text;background:var(--bt-sidebar);padding:12px;border:1px solid var(--bt-line);border-radius:8px}
-.bt-comm-pairing-guide li{margin:8px 0}
 .bt-comm-avatar{width:28px;height:28px;flex:0 0 28px;display:inline-grid;place-items:center;border-radius:50%;background:var(--bt-bubble);color:var(--bt-ink);font:500 11px/16px var(--bt-font);vertical-align:middle;margin-right:8px}
 .bt-comm-avatar::before{content:attr(data-initials)}
 .bt-comm-avatar[data-avatar="1"]{background:var(--bt-tag-bg);color:var(--bt-tag-ink)}
@@ -23284,7 +23576,6 @@ var communicationCSS = `
 .bt-comm-bot-choices{border:1px solid var(--bt-line);border-radius:8px;margin:12px 0;padding:8px 12px;min-width:0}
 .bt-comm-bot-choices legend{font-size:12px;color:var(--bt-ink-2)}
 .bt-comm-user-code{font:500 15px/20px ui-monospace,SFMono-Regular,monospace;user-select:all}
-.bt-comm-manual-guide{margin-top:16px;border-top:1px solid var(--bt-line);padding-top:8px}
 .bt-comm-set-card{padding:12px;border:1px solid var(--bt-line);border-radius:12px;background:var(--bt-card)}
 
 .bt-comm-avatar[data-kind=human][data-avatar="0"]{background:color-mix(in srgb,var(--bt-accent) 14%,var(--bt-card));color:var(--bt-accent)}
@@ -23448,6 +23739,30 @@ var communicationCSS = `
 }
 `;
 
+// src/client/communication-directory-styles.js
+var communicationDirectoryCSS = `
+.bt-comm-directory-list .bt-comm-directory-filters{display:flex;flex-wrap:wrap;gap:4px;padding:4px;margin:12px 0 4px;border-radius:10px;background:var(--bt-sidebar)}
+.bt-comm-directory-list .bt-comm-directory-filters button{display:inline-flex;align-items:center;gap:6px;flex:1;justify-content:center;margin:0;padding:6px 10px;border:1px solid transparent;border-radius:8px;background:transparent;font-size:12px;line-height:16px;color:var(--bt-ink-2)}
+.bt-comm-directory-list .bt-comm-directory-filters button[aria-pressed=true]{background:var(--bt-card);border-color:var(--bt-line);color:var(--bt-ink)}
+.bt-comm-directory-list>.bt-comm-contact-card{margin:0;padding:16px 0;border:0;border-bottom:1px solid var(--bt-line);border-radius:0;background:transparent}
+.bt-comm-directory-list>.bt-comm-contact-card:last-of-type{border-bottom:0}
+.bt-comm-directory-list .bt-comm-directory-person{gap:12px}
+.bt-comm-directory-list .bt-comm-directory-headline{font-size:12px;line-height:16px;color:var(--bt-ink)}
+.bt-comm-directory-list .bt-comm-directory-about{margin:8px 0 0 48px;min-width:0}
+.bt-comm-directory-list .bt-comm-directory-about>summary{display:flex;align-items:center;gap:8px;width:fit-content;cursor:pointer;min-height:28px;padding:4px 0;color:var(--bt-ink-2);font-size:12px;line-height:16px}
+.bt-comm-directory-list .bt-comm-directory-about[open]>summary{color:var(--bt-ink)}
+.bt-comm-directory-list .bt-comm-directory-profile{min-width:0;margin:8px 0 12px}
+.bt-comm-directory-list .bt-comm-directory-summary{margin:0 0 8px;font-size:13px;line-height:18px;overflow-wrap:anywhere;white-space:pre-wrap}
+.bt-comm-directory-list .bt-comm-directory-skills{display:flex;flex-wrap:wrap;gap:6px;list-style:none;margin:0;padding:0}
+.bt-comm-directory-list .bt-comm-directory-skills>li{padding:2px 8px;border-radius:999px;background:var(--bt-tag-bg);color:var(--bt-tag-ink);font-size:11px;line-height:16px;overflow-wrap:anywhere;max-width:100%}
+.bt-comm-directory-list .bt-comm-contact-bots>.bt-comm-directory-bot{display:block;padding:12px 0;border-top:1px solid var(--bt-line)}
+.bt-comm-directory-list .bt-comm-directory-row{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0}
+.bt-comm-directory-list .bt-comm-directory-bot>.bt-comm-directory-profile{margin-left:48px;margin-bottom:0}
+.bt-comm-directory-list .bt-comm-contact-info{margin-left:48px;border:0;padding-top:0;margin-top:4px}
+.bt-comm-directory-list .bt-comm-directory-bot-list>h3{font-size:12px;line-height:16px;color:var(--bt-ink-2);margin:0 0 8px}
+@media(max-width:480px){.bt-comm-directory-list .bt-comm-directory-about,.bt-comm-directory-list .bt-comm-contact-info{margin-left:0}.bt-comm-directory-list .bt-comm-directory-bot>.bt-comm-directory-profile{margin-left:0}.bt-comm-directory-list .bt-comm-directory-filters button{padding:6px}.bt-comm-directory-list .bt-comm-directory-person{gap:8px}}
+`;
+
 // src/client/communication.js
 var import_react65 = require("react");
 var import_react_dom11 = require("react-dom");
@@ -23505,43 +23820,6 @@ async function communicationRequest(body) {
   const result = await response.json();
   if (!result.ok) throw Object.assign(new Error(result.error?.code ?? "COMMUNICATION_UNAVAILABLE"), { code: result.error?.code, phase: result.error?.phase });
   return result.value;
-}
-var hubPairingExample = JSON.stringify({ peers: [{ instanceId: "new-device", instanceLabel: "New device", pairingRevision: 1, credentialEnv: "DSBOT_HUB_NEW_DEVICE_CREDENTIAL" }] }, null, 2);
-var clientPairingExample = `communication:
-  enabled: true
-  instanceId: new-device
-  url: wss://hub.example.test:3190/communication
-  credentialEnv: DSBOT_COMMUNICATION_CREDENTIAL
-  humanDisplayName: New device Human
-  publishedBotIds: [REPLACE_WITH_LOCAL_BOT_ID]`;
-function PairingGuide({ connectionLabel }) {
-  return (0, import_react65.createElement)(
-    "div",
-    { className: "bt-comm-pairing-guide" },
-    (0, import_react65.createElement)("p", null, t("The Hub owner must authorize each device in the Hub configuration and restart the Hub. This guide does not pair a device or change permissions.")),
-    (0, import_react65.createElement)("h3", null, t("1. Hub owner")),
-    (0, import_react65.createElement)(
-      "ol",
-      null,
-      (0, import_react65.createElement)("li", null, t("Agree on a unique, stable instanceId for the new device. Keep existing peer entries and add the new peer to the Hub configuration.")),
-      (0, import_react65.createElement)("li", null, t("Use credentialEnv to name a private environment variable. The Hub and this device need the same dedicated pairing credential value, supplied privately through each local secret mechanism. The environment variable names may differ.")),
-      (0, import_react65.createElement)("li", null, t("Provide a reachable trusted WSS address whose certificate matches its hostname. Restart the Hub with the updated peer configuration and its private launch environment."))
-    ),
-    (0, import_react65.createElement)("pre", { "aria-label": t("Hub configuration example") }, (0, import_react65.createElement)("code", null, hubPairingExample)),
-    (0, import_react65.createElement)("h3", null, t("2. New device")),
-    (0, import_react65.createElement)(
-      "ol",
-      null,
-      (0, import_react65.createElement)("li", null, t("Quit the app, including its tray process. Merge the communication settings into the existing bot configuration in your own profile cordis.patch.yml. Use the exact instanceId approved by the Hub owner.")),
-      (0, import_react65.createElement)("li", null, t("Set the trusted WSS url, credentialEnv, humanDisplayName and publishedBotIds. Publish only Bot IDs from this device that you intend to make available. Each instance has one person identity; rename it under Personal settings.")),
-      (0, import_react65.createElement)("li", null, t("Supply the pairing credential to the app launch environment through your local secret mechanism, then restart the app. Never put the value in configuration, command arguments, URLs, screenshots or chat."))
-    ),
-    (0, import_react65.createElement)("pre", { "aria-label": t("Device configuration example") }, (0, import_react65.createElement)("code", null, clientPairingExample)),
-    (0, import_react65.createElement)("h3", null, t("3. Verify the connection")),
-    (0, import_react65.createElement)("p", { role: "status" }, t("This device"), ": ", t(connectionLabel)),
-    (0, import_react65.createElement)("p", null, t("Open Remote communication on both devices. Check Connected to Hub, then New message: verify the other device’s Human and published Bots under its observed IP and exact instance identity. A shared IP does not merge devices.")),
-    (0, import_react65.createElement)("p", null, t("If disconnected, check the exact instanceId, matching privately supplied credential, trusted certificate and hostname, and Hub restart. Readiness alone does not prove pairing. Revoked devices need the Hub owner to increase pairingRevision before re-pairing."))
-  );
 }
 function ReferenceQuote({ conversationId, membershipEpoch, messageId, request, labels, onJump }) {
   const [source, setSource] = (0, import_react65.useState)(null), [unavailable, setUnavailable] = (0, import_react65.useState)(false);
@@ -24311,7 +24589,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
       } },
       (0, import_react65.createElement)(
         "section",
-        { ref: chooser, className: `bt-comm-modal${activePanel === "thread" ? " bt-comm-thread-popover" : ""}${activePanel === "manage-contacts" ? " bt-comm-contacts-modal" : ""}`, style: activePanel === "thread" ? threadPosition : void 0, role: "dialog", "aria-modal": true, "aria-label": t(activePanel === "search" ? "Search" : activePanel === "settings" ? "Personal settings" : activePanel === "thread" ? "Message replies" : activePanel === "activity" ? "Activity details" : activePanel === "participant" ? "Participant information" : activePanel === "manage-contacts" ? "Manage contacts" : activePanel === "profile" ? "Human profile" : activePanel === "pairing" ? "Pairing guide" : activePanel === "group" ? "New group" : "New message") },
+        { ref: chooser, className: `bt-comm-modal${activePanel === "thread" ? " bt-comm-thread-popover" : ""}${activePanel === "manage-contacts" ? " bt-comm-contacts-modal" : ""}`, style: activePanel === "thread" ? threadPosition : void 0, role: "dialog", "aria-modal": true, "aria-label": t(activePanel === "search" ? "Search" : activePanel === "settings" ? "Personal settings" : activePanel === "thread" ? "Message replies" : activePanel === "activity" ? "Activity details" : activePanel === "participant" ? "Participant information" : activePanel === "manage-contacts" ? "Manage contacts" : activePanel === "profile" ? "Human profile" : activePanel === "pairing" ? "Add a device" : activePanel === "group" ? "New group" : "New message") },
         activePanel === "thread" ? (0, import_react65.createElement)("button", { type: "button", onClick: () => {
           setActivePanel("");
           chooserTrigger.current?.focus();
@@ -24319,7 +24597,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
         (0, import_react65.createElement)(
           "div",
           { className: activePanel === "thread" ? "bt-comm-thread-heading" : "bt-comm-modal-head" },
-          (0, import_react65.createElement)("h2", null, t(activePanel === "search" ? "Search" : activePanel === "settings" ? "Personal settings" : activePanel === "thread" ? "Message replies" : activePanel === "activity" ? "Activity details" : activePanel === "participant" ? "Participant information" : activePanel === "manage-contacts" ? "Manage contacts" : activePanel === "profile" ? "Human profile" : activePanel === "pairing" ? "Pairing guide" : activePanel === "group" ? "New group" : "New message")),
+          (0, import_react65.createElement)("h2", null, t(activePanel === "search" ? "Search" : activePanel === "settings" ? "Personal settings" : activePanel === "thread" ? "Message replies" : activePanel === "activity" ? "Activity details" : activePanel === "participant" ? "Participant information" : activePanel === "manage-contacts" ? "Manage contacts" : activePanel === "profile" ? "Human profile" : activePanel === "pairing" ? "Add a device" : activePanel === "group" ? "New group" : "New message")),
           activePanel !== "thread" ? (0, import_react65.createElement)(
             "div",
             { className: "bt-comm-modal-actions" },
@@ -24407,7 +24685,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
           const expectedScope = state?.addressNotesScope;
           const result = await request({ endpoint: "set-address-note", address, note, expectedScope });
           setState((current) => current?.addressNotesScope === expectedScope ? { ...current, addressNotes: result.addressNotes } : current);
-        }, onMessage: messageContact, messageBusy: busy }) : activePanel === "profile" ? (0, import_react65.createElement)(HumanProfile, { key: scope, human: contacts.find((person) => person.principalId === state?.humanPrincipalId) ?? { principalId: state?.humanPrincipalId ?? "human:local", displayName: t("You"), kind: "human" }, request, operation }) : activePanel === "pairing" ? (0, import_react65.createElement)(AddDevice, { request, revision: `${team.communicationEnabled}:${team.communicationHubId}:${state?.managementRevision ?? ""}:${state?.connected ?? false}`, displayName: contacts.find((person) => person.principalId === state?.humanPrincipalId)?.displayName ?? t("You"), manualGuide: (0, import_react65.createElement)(PairingGuide, { connectionLabel }) }) : (0, import_react65.createElement)(
+        }, onMessage: messageContact, messageBusy: busy }) : activePanel === "profile" ? (0, import_react65.createElement)(HumanProfile, { key: scope, human: contacts.find((person) => person.principalId === state?.humanPrincipalId) ?? { principalId: state?.humanPrincipalId ?? "human:local", displayName: t("You"), kind: "human" }, request, operation }) : activePanel === "pairing" ? (0, import_react65.createElement)(AddDevice, { request, revision: `${team.communicationEnabled}:${team.communicationHubId}:${state?.managementRevision ?? ""}:${state?.connected ?? false}`, displayName: contacts.find((person) => person.principalId === state?.humanPrincipalId)?.displayName ?? t("You") }) : (0, import_react65.createElement)(
           import_react65.Fragment,
           null,
           activePanel === "group" ? (0, import_react65.createElement)("label", { className: "bt-comm-field" }, t("Group name"), (0, import_react65.createElement)("input", { value: title, onChange: (event) => setTitle(event.target.value), "aria-label": t("Group name") })) : null,
@@ -24446,7 +24724,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
             });
           }, { className: "bt-comm-primary", disabled: busy || !title.trim() }) : null
         ),
-        btn(activePanel === "pairing" ? "Close guide" : "Cancel", () => {
+        btn(activePanel === "pairing" ? "Close" : "Cancel", () => {
           setActivePanel("");
           chooserTrigger.current?.focus();
         })
@@ -24646,7 +24924,7 @@ function installCommunication(ctx, { roster, surface }) {
   const panel = createSource(read(OPEN, false));
   ctx.effect(() => {
     const style = document.createElement("style");
-    style.textContent = communicationCSS;
+    style.textContent = communicationCSS + communicationDirectoryCSS;
     document.head.append(style);
     return () => style.remove();
   }, "ds-bot: communication styles");

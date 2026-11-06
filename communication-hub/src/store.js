@@ -5,7 +5,7 @@ import { dirname } from 'node:path'
 import { acquireDatabaseLock } from './database-lock.js'
 import { ATTACHMENT_CAPABILITY } from './attachments.js'
 import { MAX_AVATAR_LENGTH, AVATAR_CHUNK_LENGTH, avatarRevision, validAvatarRevision, normalizeAvatar, validateAvatarImage } from './avatars.js'
-import { CAPABILITIES, HUB_CAPABILITIES, DEFAULT_LIMITS, PROTOCOL, CommunicationError, hash, identifier, normalizeMessage, requireThat, responseBytes } from './protocol.js'
+import { CAPABILITIES, HUB_CAPABILITIES, DEFAULT_LIMITS, PROTOCOL, CommunicationError, hash, identifier, normalizeMessage, normalizePublicProfile, requireThat, responseBytes } from './protocol.js'
 
 export class HubStore {
   constructor(path, { limits = {}, beforeCommit, databaseLock } = {}) {
@@ -17,7 +17,7 @@ export class HubStore {
     try {
     this.db = new DatabaseSync(path)
     const version=this.db.prepare('PRAGMA user_version').get().user_version
-    if(version>4)throw new CommunicationError('SCHEMA_VERSION_UNSUPPORTED')
+    if(version>5)throw new CommunicationError('SCHEMA_VERSION_UNSUPPORTED')
     this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;
       CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY);
       INSERT OR IGNORE INTO schema_version VALUES (1);
@@ -37,6 +37,7 @@ export class HubStore {
       CREATE TABLE IF NOT EXISTS hub_instance_names (instance_id TEXT PRIMARY KEY REFERENCES instances(id), label TEXT NOT NULL, version INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS principal_preferences (principal_id TEXT PRIMARY KEY REFERENCES principals(id), display_name TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS principal_profiles (principal_id TEXT PRIMARY KEY REFERENCES principals(id), default_name TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS principal_public_profiles (principal_id TEXT PRIMARY KEY REFERENCES principals(id), body TEXT NOT NULL, version INTEGER NOT NULL, updated_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS principal_publication (principal_id TEXT PRIMARY KEY REFERENCES principals(id), published INTEGER NOT NULL CHECK(published IN (0,1)));
       CREATE TABLE IF NOT EXISTS principal_avatar (principal_id TEXT PRIMARY KEY REFERENCES principals(id), descriptor TEXT NOT NULL, image_revision TEXT, image TEXT);
       CREATE TABLE IF NOT EXISTS avatar_uploads (principal_id TEXT PRIMARY KEY REFERENCES principals(id), upload_id TEXT NOT NULL, revision TEXT NOT NULL, total_length INTEGER NOT NULL, data TEXT NOT NULL);
@@ -63,7 +64,8 @@ export class HubStore {
     })
     if(version<3)this.transaction(()=>this.db.exec('INSERT OR IGNORE INTO schema_version VALUES (3); PRAGMA user_version=3;'))
     if(version<4)this.transaction(()=>this.db.exec('INSERT OR IGNORE INTO schema_version VALUES (4); PRAGMA user_version=4;'))
-    requireThat(this.db.prepare('SELECT max(version) version FROM schema_version').get().version === 4, 'SCHEMA_VERSION_UNSUPPORTED')
+    if(version<5)this.transaction(()=>this.db.exec('INSERT OR IGNORE INTO schema_version VALUES (5); PRAGMA user_version=5;'))
+    requireThat(this.db.prepare('SELECT max(version) version FROM schema_version').get().version === 5, 'SCHEMA_VERSION_UNSUPPORTED')
     if (!this.db.prepare('SELECT 1 FROM causal_schema WHERE version=1').get()) this.transaction(()=>{
       const latestHuman = new Map()
       for (const row of this.db.prepare('SELECT m.*,p.kind FROM messages m JOIN principals p ON p.id=m.author_id ORDER BY m.conversation_id,m.seq').all()) {
@@ -160,7 +162,74 @@ export class HubStore {
     this.check(auth)
     if(input.principalId!==undefined)this.principal(auth,input.principalId)
     const rows=this.db.prepare("SELECT p.id principalId,p.instance_id homeInstanceId,p.kind,coalesce(n.display_name,p.name) displayName,i.label instanceLabel,a.address ipAddress FROM principals p JOIN instances i ON i.id=p.instance_id LEFT JOIN instance_addresses a ON a.instance_id=i.id LEFT JOIN principal_preferences n ON n.principal_id=p.id LEFT JOIN principal_publication pub ON pub.principal_id=p.id WHERE i.trusted=1 AND (p.kind<>'bot' OR coalesce(pub.published,1)=1) ORDER BY p.id").all().map(person=>({...person,avatar:this.avatarOf(person.principalId),connected:this.isInstanceConnected?.(person.homeInstanceId)===true}))
-    return this.directoryFilter?this.directoryFilter(auth,rows,input.principalId):rows
+    return this.participantProfiles(this.directoryFilter?this.directoryFilter(auth,rows,input.principalId):rows, { maxBytes: this.limits.maxEnvelopeBytes })
+  }
+  ownerOfPrincipal(principalId) {
+    return this.db.prepare("SELECT h.id FROM principals p JOIN principals h ON h.instance_id=p.instance_id AND h.kind='human' WHERE p.id=? ORDER BY h.id LIMIT 1").get(principalId)?.id ?? null
+  }
+  publicProfileOf(principalId) {
+    const row = this.db.prepare('SELECT body,version,updated_at FROM principal_public_profiles WHERE principal_id=?').get(principalId)
+    return row ? { ...JSON.parse(row.body), version: row.version, updatedAt: row.updated_at }
+      : { headline: '', summary: '', expertise: [], languages: [], version: 0, updatedAt: null }
+  }
+  participantProfiles(rows, { maxBytes } = {}) {
+    const visible = new Set(rows.map(person => person.principalId))
+    const result = rows.map(person => {
+      const owner = person.kind === 'human' ? person.principalId : this.ownerOfPrincipal(person.principalId)
+      return { ...person, ownerPrincipalId: visible.has(owner) ? owner : null }
+    })
+    if (maxBytes === undefined) return result.map(person => ({ ...person, publicProfile: this.publicProfileOf(person.principalId) }))
+    // Optional presentation metadata must not make an otherwise readable identity list overflow.
+    for (const field of ['ipAddress', 'instanceLabel', 'avatar']) {
+      if (responseBytes(result) <= maxBytes) break
+      for (const person of result) delete person[field]
+    }
+    if (responseBytes(result) > maxBytes) for (const person of result) person.ownerPrincipalId = null
+    let remaining = maxBytes - responseBytes(result)
+    for (let index = 0; index < result.length; index += 1) {
+      const person = result[index], full = this.publicProfileOf(person.principalId)
+      const share = Math.floor(remaining / (result.length - index))
+      const compact = (headline, summary, expertise, languages) => ({
+        ...full, headline: [...full.headline].slice(0, headline).join(''), summary: [...full.summary].slice(0, summary).join(''),
+        expertise: full.expertise.slice(0, expertise), languages: full.languages.slice(0, languages), truncated: true,
+      })
+      const candidates = [full, compact(80, 160, 6, 4), compact(80, 80, 4, 2), compact(80, 0, 3, 0),
+        compact(40, 0, 0, 0), compact(0, 0, 0, 0), { version: full.version, truncated: true }]
+      for (const profile of candidates) {
+        const bytes = Buffer.byteLength(',"publicProfile":' + JSON.stringify(profile))
+        if (bytes > share) continue
+        person.publicProfile = profile; remaining -= bytes; break
+      }
+    }
+    return result
+  }
+  readPublicProfile(auth, input) {
+    requireThat(input && Object.keys(input).every(key => ['principalId','targetPrincipalId'].includes(key)), 'INVALID_REQUEST')
+    this.principal(auth, identifier(input.principalId))
+    const target = identifier(input.targetPrincipalId)
+    const own = this.db.prepare('SELECT 1 FROM principals WHERE id=? AND instance_id=?').get(target, auth.instanceId)
+    const contact = this.contacts(auth, { principalId: input.principalId }).some(person => person.principalId === target)
+    const shared = this.db.prepare(`SELECT 1 FROM memberships us JOIN memberships them ON them.conversation_id=us.conversation_id
+      JOIN conversations c ON c.id=us.conversation_id JOIN principals p ON p.id=them.principal_id JOIN instances i ON i.id=p.instance_id
+      WHERE us.principal_id=? AND them.principal_id=? AND us.active=1 AND them.active=1 AND c.kind='group' AND c.closed=0 AND i.trusted=1 LIMIT 1`)
+      .get(input.principalId, target)
+    requireThat(own || contact || shared, 'FORBIDDEN')
+    return { principalId: target, publicProfile: this.publicProfileOf(target) }
+  }
+  updatePublicProfile(auth, input) {
+    requireThat(input && Object.keys(input).every(key => ['principalId','operationId','expectedVersion','profile'].includes(key)), 'INVALID_REQUEST')
+    const principal = this.principal(auth, identifier(input.principalId))
+    requireThat(['human', 'bot'].includes(principal.kind), 'INVALID_REQUEST')
+    requireThat(Number.isSafeInteger(input.expectedVersion) && input.expectedVersion >= 0 && input.expectedVersion < Number.MAX_SAFE_INTEGER, 'INVALID_REQUEST')
+    const profile = normalizePublicProfile(input.profile)
+    return this.operation(auth, input.operationId, input, () => {
+      const current = this.publicProfileOf(principal.principalId)
+      requireThat(current.version === input.expectedVersion, 'PUBLIC_PROFILE_VERSION_CONFLICT')
+      const version = current.version + 1, updatedAt = new Date().toISOString()
+      this.db.prepare('INSERT INTO principal_public_profiles VALUES (?,?,?,?) ON CONFLICT(principal_id) DO UPDATE SET body=excluded.body,version=excluded.version,updated_at=excluded.updated_at')
+        .run(principal.principalId, JSON.stringify(profile), version, updatedAt)
+      return { principalId: principal.principalId, publicProfile: { ...profile, version, updatedAt } }
+    })
   }
   isPublished(principalId) {
     const row=this.db.prepare('SELECT p.kind,coalesce(pub.published,1) published FROM principals p LEFT JOIN principal_publication pub ON pub.principal_id=p.id WHERE p.id=?').get(principalId)
@@ -285,6 +354,9 @@ export class HubStore {
     const shared=this.db.prepare("SELECT 1 FROM memberships them JOIN conversations c ON c.id=them.conversation_id JOIN memberships us ON us.conversation_id=c.id JOIN principals p ON p.id=us.principal_id WHERE them.principal_id=? AND them.active=1 AND us.active=1 AND c.kind='group' AND c.closed=0 AND p.instance_id=? LIMIT 1").get(input.principalId,auth.instanceId)
     const visible=this.canReadPrincipalAvatar ? this.canReadPrincipalAvatar(auth,input.principalId) : this.contacts(auth).some(person=>person.principalId===input.principalId)
     requireThat(target.instance_id===auth.instanceId||shared||visible===true,'FORBIDDEN')
+    return this.avatarImage(input)
+  }
+  avatarImage(input) {
     requireThat(validAvatarRevision(input.imageRevision),'INVALID_AVATAR_REVISION')
     const offset=input.offset??0,limit=input.limit??AVATAR_CHUNK_LENGTH
     requireThat(Number.isSafeInteger(offset)&&offset>=0&&Number.isSafeInteger(limit)&&limit>0&&limit<=AVATAR_CHUNK_LENGTH,'INVALID_AVATAR_CHUNK')
@@ -722,8 +794,10 @@ export class HubStore {
     this.member(auth,input.conversationId,input.principalId,input.membershipEpoch)
     this.dmPolicy?.(input.conversationId)
     const conversation=this.db.prepare('SELECT title,kind,version,routing_mode,admin_bot,owner_id FROM conversations WHERE id=?').get(input.conversationId)
-    const members=this.db.prepare('SELECT p.id principalId,p.kind,p.name displayName,p.instance_id homeInstanceId,i.label instanceLabel,m.manager,m.role,m.speaking_mode speakingMode FROM memberships m JOIN principals p ON p.id=m.principal_id JOIN instances i ON i.id=p.instance_id WHERE m.conversation_id=? AND m.active=1 ORDER BY p.id').all(input.conversationId).map(person=>({...person,published:this.isPublished(person.principalId),avatar:this.avatarOf(person.principalId)}))
-    return {conversationId:input.conversationId,title:conversation.title,kind:conversation.kind,membershipVersion:conversation.version,routingMode:conversation.routing_mode,adminBotPrincipalId:conversation.admin_bot,ownerPrincipalId:conversation.owner_id,members}
+    const result = {conversationId:input.conversationId,title:conversation.title,kind:conversation.kind,membershipVersion:conversation.version,routingMode:conversation.routing_mode,adminBotPrincipalId:conversation.admin_bot,ownerPrincipalId:conversation.owner_id,members:[]}
+    const maxBytes = this.limits.maxEnvelopeBytes - responseBytes(result) + responseBytes([])
+    result.members=this.participantProfiles(this.db.prepare('SELECT p.id principalId,p.kind,p.name displayName,p.instance_id homeInstanceId,i.label instanceLabel,m.manager,m.role,m.speaking_mode speakingMode FROM memberships m JOIN principals p ON p.id=m.principal_id JOIN instances i ON i.id=p.instance_id WHERE m.conversation_id=? AND m.active=1 ORDER BY p.id').all(input.conversationId).map(person=>({...person,published:this.isPublished(person.principalId),avatar:this.avatarOf(person.principalId)})), { maxBytes })
+    return result
   }
   acknowledgeCursor(auth,input) {
     const member=this.member(auth,input.conversationId,input.principalId,input.membershipEpoch)
