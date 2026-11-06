@@ -5,8 +5,28 @@ import { tmpdir, hostname } from 'node:os'
 import { join } from 'node:path'
 import { zstdCompressSync } from 'node:zlib'
 import { DatabaseSync } from 'node:sqlite'
+import { fileURLToPath } from 'node:url'
+import fsPromises from 'node:fs/promises'
+import { syncBuiltinESMExports } from 'node:module'
 import { parse } from 'yaml'
 import { resetFederation, RESET_CONFIRMATION, federationResetStatus } from '../src/host/federation/reset.js'
+
+test('canonical path spelling changes do not prevent safe dry-run and erasure', async t => {
+  const f = await fixture(t), nativeRealpath = fsPromises.realpath
+  t.mock.method(fsPromises, 'realpath', async (...args) => {
+    const value = await nativeRealpath(...args)
+    return typeof value === 'string' && value.startsWith(f.root) ? value.toUpperCase() : value
+  })
+  syncBuiltinESMExports()
+  t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports() })
+  assert.notEqual(await fsPromises.realpath(f.home), f.home)
+  const before = await snapshot(f.root)
+  const dry = await resetFederation({ ...f.options, confirm: undefined })
+  assert.equal(dry.dryRun, true)
+  assert.deepEqual(await snapshot(f.root), before)
+  assert.equal((await resetFederation(f.options)).erased, true)
+  assert.equal((await resetFederation({ ...f.options, confirm: undefined })).queueFiles, 0)
+})
 
 async function fixture(t) {
   const root = await mkdtemp(join(tmpdir(), 'dsbot-reset-'))
@@ -91,7 +111,7 @@ test('active local or unknown remote Host lock is rejected before erasing', asyn
 
 test('symlink/hardlink and local Session ownership conflicts fail before any erase', async t => {
   const f = await fixture(t), target = join(f.home, 'communication-workspaces', 'outside-link')
-  await symlink(f.ordinary, target)
+  await symlink(f.ordinary, target, process.platform === 'win32' ? 'junction' : 'dir')
   await assert.rejects(resetFederation(f.options), { code: 'RESET_UNSAFE_PATH' }); await rm(target)
   const alias = join(f.root, 'credential-alias'); await link(f.credentials, alias)
   await assert.rejects(resetFederation(f.options), { code: 'RESET_UNSAFE_PATH' }); await rm(alias)
@@ -126,7 +146,7 @@ test('ordinary group sessions map and historical parts are protected even inside
 test('plain offline CLI resolves only public SDK exports and reports dry-run and confirmed erasure', async t => {
   const { spawnSync } = await import('node:child_process')
   const f = await fixture(t)
-  const args = [new URL('../bin/dsbot-reset.mjs', import.meta.url).pathname, '--home', f.home, '--profile', f.profile,
+  const args = [fileURLToPath(new URL('../bin/dsbot-reset.mjs', import.meta.url)), '--home', f.home, '--profile', f.profile,
     '--credentials', f.credentials, '--sessions', f.sessions, '--attachments-home', f.root, '--storage-root', f.options.storageRoot]
   const dry = spawnSync(process.execPath, args, { encoding: 'utf8', env: process.env })
   assert.equal(dry.status, 0, dry.stderr); assert.equal(JSON.parse(dry.stdout).dryRun, true)
@@ -288,7 +308,7 @@ test('complete CLI removes actual public JSON projection/workspace residue and p
   const checkpoint = cwd => JSON.stringify({ version: projectionCacheDomainSpec.version, record: { identity: { createdAt: 1, cwd, formatVersion: 4, isSeeded: false, inheritedEventCount: 0 }, rows: { title: { ver: 1, seq: -1, val: { text: cwd } } } } })
   const ordinary = checkpoint(f.root)
   await writeFile(join(cache, 'remote-one.json'), checkpoint(cwd)); await writeFile(join(cache, 'local-ordinary.json'), ordinary)
-  const args = [new URL('../bin/dsbot-reset.mjs', import.meta.url).pathname, '--home', f.home, '--profile', f.profile, '--credentials', f.credentials, '--sessions', f.sessions, '--attachments-home', f.root, '--storage-root', root]
+  const args = [fileURLToPath(new URL('../bin/dsbot-reset.mjs', import.meta.url)), '--home', f.home, '--profile', f.profile, '--credentials', f.credentials, '--sessions', f.sessions, '--attachments-home', f.root, '--storage-root', root]
   const before = await readFile(workspacePath)
   const dry = spawnSync(process.execPath, args, { encoding: 'utf8', env: process.env })
   assert.equal(dry.status, 0, dry.stderr); assert.equal(JSON.parse(dry.stdout).projectionRecords, 1)
@@ -392,7 +412,7 @@ test('unmaterialized credentials in a missing parent have no temporary files and
 
 test('a missing credential parent does not bypass an unsafe existing ancestor', async t => {
   const f = await fixture(t), alias = join(f.root, 'linked-home')
-  await symlink(f.home, alias)
+  await symlink(f.home, alias, process.platform === 'win32' ? 'junction' : 'dir')
   await assert.rejects(resetFederation({ ...f.options, credentials: join(alias, 'absent', '.credentials.yaml') }), { code: 'RESET_UNSAFE_PATH' })
   assert.equal((await federationResetStatus(f.home)).pending, false)
 })

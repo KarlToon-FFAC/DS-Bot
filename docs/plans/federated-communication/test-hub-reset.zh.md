@@ -27,6 +27,8 @@
 
 ### 客户端六类路径
 
+路径必须为绝对、词法规范化的实际 provider 路径。Windows 的大小写规范化或 DOS 短名称展开本身不代表路径不安全；离线重置逐级检查目标及所有已存在祖先，拒绝符号链接、junction 和不适用的文件硬链接。缺失目标也检查其已有祖先。不要通过统一转小写或跳过路径检查来处理 `RESET_UNSAFE_PATH`。
+
 1. **DSH_HOME**：app 设置 → General → Locations 的实际数据位置。`start.ps1 -DataRoot R` 使用 `R/data`。安装版可能由 `DS_BOT_HOME` 覆盖，不能根据 `%APPDATA%`、`~/.dsh` 或示例猜。
 2. **插件 home**：实际 `id: bot` 配置的 `home`；未覆盖时为 `<DSH_HOME>/bot`。它不是整个 DSH_HOME。
 3. **生效 profile/覆盖层**：核对实际启动 profile 的基础配置（如确实加载的 `cordis.yml`）、`cordis.patch.yml` 及所有 `patchFiles`。app 的常用 patch 为 `<DSH_HOME>/profiles/ds-bot/cordis.patch.yml`；测试启动器可能另加载 `<DSH_HOME>/bench.patch.yml`。每个实际生效的文件都重复传入 `--profile`，不仅是含 `communication` 的文件，还要覆盖 Session、JSON storage、domain backend、查询索引等 provider 设置，防止漏清或误删。不存在或不生效的文件不能照抄。

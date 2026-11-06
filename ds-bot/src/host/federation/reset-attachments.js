@@ -1,5 +1,6 @@
 import { createReadStream } from 'node:fs'
-import { lstat, readdir, realpath } from 'node:fs/promises'
+import { lstat, readdir } from 'node:fs/promises'
+import { assertResetAncestors } from './reset-path.js'
 import { resolve, dirname, join, isAbsolute, relative, basename } from 'node:path'
 import { createHash } from 'node:crypto'
 import { createZstdDecompress } from 'node:zlib'
@@ -13,8 +14,9 @@ const digestPattern = /^[a-f0-9]{64}$/
 async function checked(path, directory = false, optional = false) {
   if (!isAbsolute(path) || resolve(path) !== path) fail('RESET_ATTACHMENT_ABSOLUTE_PATH_REQUIRED', path)
   let stat
+  await assertResetAncestors(path, target => fail('RESET_ATTACHMENT_UNSAFE_PATH', target))
   try { stat = await lstat(path) } catch (error) { if (optional && error.code === 'ENOENT') return null; throw error }
-  if (stat.isSymbolicLink() || (directory ? !stat.isDirectory() : !stat.isFile()) || await realpath(path) !== path) fail('RESET_ATTACHMENT_UNSAFE_PATH', path)
+  if (stat.isSymbolicLink() || (directory ? !stat.isDirectory() : !stat.isFile())) fail('RESET_ATTACHMENT_UNSAFE_PATH', path)
   return stat
 }
 async function walk(root, files = []) {

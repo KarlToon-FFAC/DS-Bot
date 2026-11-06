@@ -1,5 +1,6 @@
-import { lstat, readdir, readFile, realpath } from 'node:fs/promises'
-import { resolve, isAbsolute, relative, join, dirname, basename } from 'node:path'
+import { lstat, readdir, readFile } from 'node:fs/promises'
+import { resolve, isAbsolute, relative, join, basename } from 'node:path'
+import { assertResetAncestors } from './reset-path.js'
 import { createHash } from 'node:crypto'
 import { Context } from '@deepseek-ai/cordis'
 import Storage from '@deepseek-ai/dsh-storage'
@@ -18,8 +19,7 @@ async function checked(path, directory, optional = false) {
   let stat
   try { stat = await lstat(path) } catch (error) { if (error.code !== 'ENOENT' || !optional) fail(path) }
   if (stat && (stat.isSymbolicLink() || (directory ? !stat.isDirectory() : !stat.isFile() || stat.nlink !== 1))) fail(path)
-  let ancestor = path
-  while (true) { try { if (await realpath(ancestor) !== ancestor) fail(path); break } catch (error) { if (error.code !== 'ENOENT') fail(path); ancestor = dirname(ancestor) } }
+  try { await assertResetAncestors(path, fail) } catch { fail(path) }
   return stat
 }
 async function readDocument(path, fingerprints) {

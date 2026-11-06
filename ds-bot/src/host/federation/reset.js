@@ -1,6 +1,6 @@
 // Offline maintenance only. No Hub request, enrollment, or recovery is attempted.
 import { createReadStream } from 'node:fs'
-import { lstat, realpath, readdir, readFile, open, rename, rm, rmdir } from 'node:fs/promises'
+import { lstat, readdir, readFile, open, rename, rm, rmdir } from 'node:fs/promises'
 import { dirname, join, resolve, isAbsolute, relative, basename } from 'node:path'
 import { hostname } from 'node:os'
 import { randomUUID, createHash } from 'node:crypto'
@@ -8,6 +8,7 @@ import { createZstdDecompress } from 'node:zlib'
 import { DatabaseSync } from 'node:sqlite'
 import { parseDocument, isMap, isSeq } from 'yaml'
 import { homeLock, pidAlive } from '../home-lock.js'
+import { assertResetAncestors } from './reset-path.js'
 
 export const RESET_CONFIRMATION = 'ERASE-ALL-FEDERATION-DATA'
 const fail = (code, target) => { throw Object.assign(new Error(code), { code, ...(target ? { target } : {}) }) }
@@ -25,10 +26,7 @@ export async function checkedPath(path, kind, optional = false) {
   const value = await info(path)
   if (!value && !optional) fail('RESET_PATH_MISSING', path)
   if (value?.isSymbolicLink() || value?.nlink > 1 && kind === 'file' || value && (kind === 'file' ? !value.isFile() : !value.isDirectory())) fail('RESET_UNSAFE_PATH', path)
-  // Check every existing ancestor, including the missing-file case.
-  let parent = value ? path : dirname(path)
-  while (!(await info(parent))) parent = dirname(parent)
-  if (await realpath(parent) !== parent) fail('RESET_UNSAFE_PATH', path)
+  await assertResetAncestors(path, target => fail('RESET_UNSAFE_PATH', target))
   return value
 }
 async function syncDirectory(path) {

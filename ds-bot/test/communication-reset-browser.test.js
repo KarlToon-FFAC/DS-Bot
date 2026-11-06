@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { clearCommunicationBrowserState } from '../src/client/communication-reset.js'
@@ -28,7 +29,7 @@ test('production request preflight clears browser memory before any old mutation
   const { build } = await import('esbuild'), { runInNewContext } = await import('node:vm')
   const { createRequire } = await import('node:module'), { join } = await import('node:path')
   const harness = createRequire(join(process.env.DSH_HARNESS, 'package.json'))
-  const { outputFiles } = await build({ entryPoints: [new URL('../src/client/communication.js', import.meta.url).pathname], bundle: true, platform: 'browser', format: 'cjs', external: ['react', 'react-dom', '@deepseek-ai/dsh-client-ui-primitives'], write: false })
+  const { outputFiles } = await build({ entryPoints: [fileURLToPath(new URL('../src/client/communication.js', import.meta.url))], bundle: true, platform: 'browser', format: 'cjs', external: ['react', 'react-dom', '@deepseek-ai/dsh-client-ui-primitives'], write: false })
   const session = storage({ 'ds-bot:communication:attempts': 'old intent' }), local = storage({ 'ds-bot:communication:drafts': 'old draft' }), calls = []
   let reloads = 0
   const load = () => {
@@ -54,7 +55,7 @@ test('concurrent stale preflights cannot send and late draft callbacks cannot su
   const { build } = await import('esbuild'), { runInNewContext } = await import('node:vm')
   const { createRequire } = await import('node:module'), { join } = await import('node:path')
   const harness = createRequire(join(process.env.DSH_HARNESS, 'package.json'))
-  const { outputFiles } = await build({ stdin: { contents: "export { communicationRequest } from './src/client/communication.js'; export * from './src/client/communication-reset.js'", resolveDir: new URL('..', import.meta.url).pathname }, bundle: true, platform: 'browser', format: 'cjs', external: ['react', 'react-dom', '@deepseek-ai/dsh-client-ui-primitives'], write: false })
+  const { outputFiles } = await build({ stdin: { contents: "export { communicationRequest } from './src/client/communication.js'; export * from './src/client/communication-reset.js'", resolveDir: fileURLToPath(new URL('..', import.meta.url)) }, bundle: true, platform: 'browser', format: 'cjs', external: ['react', 'react-dom', '@deepseek-ai/dsh-client-ui-primitives'], write: false })
   const session = storage({ 'ds-bot:communication:attempts': 'old intent' }), local = storage({}), waiting = [], calls = []
   let reloads = 0, deferred = true
   const response = body => ({ status: 200, json: async () => ({ ok: true, value: body.endpoint === 'reset-status' ? { pending: false, browserEpoch: epoch } : { accepted: true } }) })
