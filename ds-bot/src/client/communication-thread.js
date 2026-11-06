@@ -1,3 +1,4 @@
+import { useMentionDismiss } from './communication-mentions.js'
 import { useLiveRefresh } from './communication-live.js'
 import { readCommunicationBrowserState, saveCommunicationBrowserState } from './communication-reset.js'
 import { randomId } from './random-id.js'
@@ -13,7 +14,7 @@ import { ArrowUpIcon, PlusIcon, CloseIcon } from './icons.js'
 
 // Viewing replies never creates a message, marks unseen main-history pages read,
 // or changes the Bot causal budget. Reply uses the existing composer intent.
-export function CommunicationThread({ member, messageId, request, canSpeak, onReply, onInspect, selectedBranch = false }) {
+export function CommunicationThread({ member, messageId, request, canSpeak, onReply, onInspect, chronological = false }) {
   const [page, setPage] = useState(null), [error, setError] = useState(false), [loading, setLoading] = useState(false)
   const [collapsed, setCollapsed] = useState(new Set()), [recovery, setRecovery] = useState(0)
   const failedRead = useRef(false)
@@ -25,14 +26,14 @@ export function CommunicationThread({ member, messageId, request, canSpeak, onRe
     failedRead.current = false
     setPage(null); setCollapsed(new Set()); setError(false); setLoading(true)
     void request({ endpoint: 'thread', conversationId: member.conversationId, membershipEpoch: member.membershipEpoch, messageId }).then(async value => {
-      if (selectedBranch && !value.events?.some(event => event.message?.messageId === messageId)) {
+      if (chronological && !value.events?.some(event => event.message?.messageId === messageId)) {
         const selected = await request({ endpoint: 'reference', conversationId: member.conversationId, membershipEpoch: member.membershipEpoch, messageId })
         if (selected.message?.messageId === messageId) value = { ...value, events: [...(value.events??[]), selected] }
       }
       if (token === order.current && value.conversationId === member.conversationId && value.membershipEpoch === member.membershipEpoch && value.messageId === messageId) setPage(value)
     }).catch(() => { if (token === order.current) { failedRead.current = true; setPage(null); setError(true) } }).finally(() => { if (token === order.current) setLoading(false) })
     return () => { order.current += 1 }
-  }, [member.conversationId, member.membershipEpoch, member.watermark, messageId, request, selectedBranch, recovery])
+  }, [member.conversationId, member.membershipEpoch, member.watermark, messageId, request, chronological, recovery])
   useLiveRefresh(async () => { if (failedRead.current) { failedRead.current = false; setRecovery(value => value + 1) } }, () => {}, request)
   const more = async () => {
     if (loading || !page?.hasMore) return
@@ -59,27 +60,20 @@ export function CommunicationThread({ member, messageId, request, canSpeak, onRe
     rendered.add(message.messageId)
     const person = members.find(item => item.principalId === message.author.principalId) ?? { ...message.author, displayName: t('Participant') }
     const parent = messages.get(message.replyToMessageId)
-    const replies = selectedBranch ? [] : (children.get(message.messageId) ?? []).filter(child => !rendered.has(child.message.messageId))
+    const replies = chronological ? [] : (children.get(message.messageId) ?? []).filter(child => !rendered.has(child.message.messageId))
     const hidden = collapsed.has(message.messageId)
     return h('li', { key: message.messageId, 'data-thread-depth': level, 'data-thread-deep': level > 4 || undefined },
       h('article', { 'data-thread-message-id': message.messageId, 'data-thread-selected': message.messageId === messageId, style: { '--reply-depth': Math.min(level, 4) } },
         h('div', { className: 'bt-comm-person-label' }, h(CommunicationAvatar, { person, request, allowed: members.includes(person), size: 24 }), h('strong', { title: person.principalId }, labels.get(person.principalId) ?? t('Participant'))),
-        parent && !selectedBranch ? h('p', { className: 'bt-comm-thread-parent' }, t('Reply to'), ' ', labels.get(parent.author.principalId) ?? t('Participant'), ': ', referenceExcerpt(parent.content.text)) : null,
+        parent && !chronological ? h('p', { className: 'bt-comm-thread-parent' }, t('Reply to'), ' ', labels.get(parent.author.principalId) ?? t('Participant'), ': ', referenceExcerpt(parent.content.text)) : null,
         h('div', { className: 'bt-comm-body' }, h(CommunicationMessage, { message, members, request, onInspect })),
         h(CommunicationMessageActions,{message,onReply:canSpeak?onReply:undefined},h('time', null, new Date(event.serverAcceptedAt).toLocaleString()),
           replies.length ? h('button', { type: 'button', 'aria-expanded': !hidden, onClick: () => setCollapsed(old => { const next = new Set(old); if (hidden) next.delete(message.messageId); else next.add(message.messageId); return next }) }, t(hidden ? 'Show {count} replies' : 'Hide replies', { count: replies.length })) : null)),
       replies.length && !hidden ? h('ol', { className: 'bt-comm-thread-branches' }, replies.map(child => renderBranch(child, level + 1))) : null)
   }
   let roots = (page?.events ?? []).filter(event => !messages.has(event.message.replyToMessageId) || event.message.replyToMessageId === event.message.messageId)
-  if(selectedBranch){
-    const visible=new Set(),pending=[messageId]
-    while(pending.length){
-      const id=pending.pop()
-      if(visible.has(id))continue
-      visible.add(id)
-      for(const event of children.get(id)??[])pending.push(event.message.messageId)
-    }
-    roots=(page?.events??[]).filter(event=>visible.has(event.message.messageId)).sort((a,b)=>a.conversationSeq-b.conversationSeq)
+  if(chronological){
+    roots=[...(page?.events??[])].sort((a,b)=>a.conversationSeq-b.conversationSeq)
   }
   return h('div', { className: 'bt-comm-thread' },
     h('p', { className: 'bt-comm-reference' }, t(canSpeak ? 'Replies stay in this conversation. Select Reply to continue an exact message.' : 'Replies stay in this conversation.')),
@@ -105,6 +99,7 @@ export function ThreadReplyComposer({ storageKey, member, target, request, onSen
   const [draft, setDraft] = useState(initial), [busy, setBusy] = useState(false), [error, setError] = useState('')
   const [completion, setCompletion] = useState(null), [index,setIndex] = useState(0)
   const input = useRef(null), composing = useRef(false), flight = useRef(false), alive = useRef(true)
+  useMentionDismiss(input, Boolean(completion), () => setCompletion(null))
   useEffect(() => { alive.current=true;return () => { alive.current = false } }, [])
   const members = member.info?.members ?? [], labels = contactLabels(members)
   const currentTarget = draft.attempt?.replyToMessageId ?? target?.messageId

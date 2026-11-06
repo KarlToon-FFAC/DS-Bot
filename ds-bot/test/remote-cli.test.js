@@ -10,6 +10,7 @@ import { prepare, execute, main, help } from '../bin/dsbot-remote.mjs'
 import { install, remotePackagePaths } from '../src/host/prompt.js'
 
 const requests = {
+  'set-conversation-archived':{conversationId:'private',membershipEpoch:'epoch',archived:true,expectedScope:'synthetic-local-scope'},
   'bot-dm-history':{conversationId:'private',localBotId:'worker',membershipEpoch:'epoch',limit:10},
   'bot-dm-reference':{conversationId:'private',localBotId:'worker',membershipEpoch:'epoch',messageId:'one'},
   'participant-profile':{conversationId:'group',membershipEpoch:'epoch',targetPrincipalId:'bot:b:expert'},

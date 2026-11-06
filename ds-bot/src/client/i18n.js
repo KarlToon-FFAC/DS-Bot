@@ -5,6 +5,20 @@
 export const NAMESPACE = 'ds-bot'
 
 const ZH = {
+  'Update and restart the Hub to support independent proactive Bot tasks. The message was not sent.': '请更新并重启 Hub，以支持 Bot 独立主动任务。本条消息未发送。',
+  'Archive private chat': '归档私聊',
+  'Restore private chat': '恢复私聊',
+  'Archived private chats': '已归档私聊',
+  'No archived private chats.': '暂无已归档私聊。',
+  'Archived chats stay hidden until you restore them. Messages continue to be received and saved.': '归档后会保持隐藏，直到你手动恢复。消息仍会接收并保存。',
+  'Confirm member removal': '确认移除成员',
+  'The selected member will become the group owner.': '选中的成员将成为群主。',
+  'Removing a contact also removes their Bots from this group.': '移除联系人时，其所属 Bot 也会一起移出本群。',
+  'You and your Bots will leave this group.': '你和你所属的 Bot 将退出本群。',
+  'This ends the group for every member.': '此操作会为所有成员解散群聊。',
+  'The previous user code will stop working. Existing contacts are retained.': '原用户码将失效，已建立的联系人关系会保留。',
+  'This revokes the contact relationship and access to shared private conversations.': '此操作会撤销联系人关系和共享私聊的访问权限。',
+
   'From contact': '所属联系人',
   'Owner information unavailable': '所属联系人信息暂不可用',
   'Public profile': '公开资料',

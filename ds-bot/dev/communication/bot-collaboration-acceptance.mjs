@@ -164,6 +164,33 @@ try{
   assert.ok(burstRows.every(message=>eventFor(burst,message.id).causality.depth<8))
   record('same-input-same-target-burst-deduplicates-thirty-four-repeats',{rootMessageId:burstRoot.messageId,toolMessages:35,aiDeliveries:aiCount,suppressedMessages:suppressed.length})
 
+  const coordinator=await a.client.request('/api/bot',{endpoint:'create-bot',payload:{name:'LocalCoordinator',role:'Local test coordinator'}})
+  const startLocal=async command=>a.client.request('/api/bot',{endpoint:'send',payload:{sessionId:coordinator.id,text:`转告 CollabA: ${command}`}})
+  const proactiveGroup=await topology.group(`Independent local tasks ${nonce}`,[a.bot,b.bot],{allowSpeaking:false})
+  await policy(a,proactiveGroup,a.bot,'active')
+  for(const index of [1,2]){
+    const tag=`local-group-${nonce}-${index}`
+    await startLocal(`COMM-POST ${proactiveGroup} ${b.bot} COMM-ECHO ${tag}`)
+    await until(()=>topology.hasText(a,proactiveGroup,`Communication reply ${tag}`),'remote reply to a genuine local-team-initiated group task',60000)
+    const value=await stats(),sent=groupMessages(value,proactiveGroup).find(row=>row.author_id===a.bot&&body(row).content.text===`COMM-ECHO ${tag}`),payload=body(sent)
+    assert.ok(!payload.responseToDeliveryId&&!payload.causationDeliveryId&&!payload.localUserIntent)
+    assert.deepEqual(eventFor(value,sent.id).causality,{rootMessageId:sent.id,parentMessageId:null,depth:0})
+    assert.equal(value.deliveries.find(row=>row.message_id===sent.id&&row.recipient_id===b.bot).ai,1)
+  }
+  record('two-real-local-team-group-tasks-to-the-same-Bot-have-independent-roots-and-both-wake-it')
+  let proactiveDm
+  for(const index of [1,2]){
+    const tag=`local-dm-${nonce}-${index}`
+    await startLocal(`COMM-SEND ${b.bot} ${tag}`)
+    const value=await until(async()=>{const value=await stats();return value.messages.some(row=>row.author_id===b.bot&&body(row).content.text===`Communication reply ${tag}`)&&value},'remote reply to a genuine local-team-initiated Bot DM',60000)
+    const sent=value.messages.find(row=>row.author_id===a.bot&&body(row).content.text===`COMM-ECHO ${tag}`),payload=body(sent)
+    proactiveDm??=sent.conversation_id;assert.equal(sent.conversation_id,proactiveDm)
+    assert.ok(!payload.responseToDeliveryId&&!payload.causationDeliveryId&&!payload.localUserIntent)
+    assert.deepEqual(eventFor(value,sent.id).causality,{rootMessageId:sent.id,parentMessageId:null,depth:0})
+    assert.equal(value.deliveries.find(row=>row.message_id===sent.id&&row.recipient_id===b.bot).ai,1)
+  }
+  record('two-real-local-team-Bot-DM-tasks-wake-the-peer-in-the-same-existing-DM')
+
   const recoveryGroup=await topology.group(`Recovery correlation ${nonce}`,[a.bot,b.bot],{allowSpeaking:false})
   await a.client.api({operation:'production-hold',point:'after-export',conversationId:recoveryGroup})
   const recoveryRoot=await chain(a,recoveryGroup,`recovery-${nonce}`)

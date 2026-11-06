@@ -22,7 +22,7 @@ async function ui(check) {
     requestAnimationFrame: dom.window.requestAnimationFrame, cancelAnimationFrame: dom.window.cancelAnimationFrame })
   const { createRoot } = harness('react-dom/client'), root = createRoot(dom.window.document.getElementById('root')), doc = dom.window.document
   const render = async node => act(async () => root.render(node))
-  const click = async label => { const node = [...doc.querySelectorAll('button')].find(button => button.textContent === label); assert.ok(node, label); await act(async () => node.click()) }
+  const click = async label => { const node = [...([...doc.querySelectorAll('dialog[open]:not([data-closing=true])')].at(-1) ?? doc).querySelectorAll('button')].find(button => button.textContent === label); assert.ok(node, label); await act(async () => node.click()) }
   const edit = async (label, value) => act(async () => {
     const node = doc.querySelector(`[aria-label="${label}"]`)
     const kind = node.tagName === 'TEXTAREA' ? dom.window.HTMLTextAreaElement : dom.window.HTMLInputElement

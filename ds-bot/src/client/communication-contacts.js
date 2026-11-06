@@ -33,7 +33,7 @@ export function contactMatches(person, query, { label, addressNotes = {} } = {})
     addressNotes[normalizeIpAddress(person.ipAddress)], ...profileValues(person.publicProfile)].some(value => normalized(value).includes(needle))
 }
 
-export function ContactDirectory({ contacts, relations, humanPrincipalId, instanceId, request, busy, onMessage, onRemove, confirm, addressNotes = {}, connectionKnown }) {
+export function ContactDirectory({ contacts, relations, humanPrincipalId, instanceId, request, busy, onMessage, onRemove, addressNotes = {}, connectionKnown }) {
   const [query, setQuery] = useState(''), [view, setView] = useState('all')
   const labels = contactLabels(contacts), { people, otherBots } = contactDirectory(contacts, relations, humanPrincipalId, instanceId)
   const needle = query.trim(), matches = person => contactMatches(person, query, { label: labels.get(person.principalId), addressNotes })
@@ -76,7 +76,7 @@ export function ContactDirectory({ contacts, relations, humanPrincipalId, instan
             person.homeInstanceId ? h(Fragment, null, h('dt', null, t('Device identity')), h('dd', null, h('code', null, person.homeInstanceId))) : null,
             relation ? h(Fragment, null, h('dt', null, t('Bots you share with this contact')), h('dd', null, (relation.botPrincipalIds ?? []).map(id => labels.get(id) ?? id).join(', ') || t('None'))) : null),
           ownedBots.length ? h('ul', { className: 'bt-comm-bot-identities' }, ownedBots.map(bot => h('li', { key: bot.principalId }, labels.get(bot.principalId) ?? bot.displayName, ': ', h('code', null, bot.principalId)))) : null,
-          relation && onRemove ? h('button', { type: 'button', className: 'bt-comm-danger', disabled: busy, onClick: () => onRemove(relation) }, t(confirm === person.principalId ? 'Confirm contact removal' : 'Remove contact')) : null))
+          relation && onRemove ? h('button', { type: 'button', className: 'bt-comm-danger', disabled: busy, onClick: () => onRemove(relation) }, t('Remove contact')) : null))
     }) : null,
     showBots && bots.length ? h('section', { className: 'bt-comm-contact-card bt-comm-directory-bot-list' }, h('h3', null, t(view === 'bots' ? 'Published Bots' : 'Other available Bots')), h('ul', { className: 'bt-comm-contact-bots' }, bots.map(botRow))) : null,
     !(showPeople && shown.length || showBots && bots.length) ? h('p', { className: 'bt-comm-reference', role: 'status' }, t(needle ? 'No matching contacts or Bots.' : view === 'bots' ? 'No Bots shared with you' : 'No contacts yet. Add someone with their user code.')) : null)

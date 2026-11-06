@@ -67,10 +67,10 @@ test('active tool branches and all-Bot expansion exclude the author and share a 
   assert.equal(suppressed.causality.rootMessageId, human.messageId)
   f.store.close(); f.store = new HubStore(f.path, { limits: f.limits })
   assert.deepEqual(f.store.publish(f.a, suppressedInput), suppressed)
-  const omitted = f.send(f.A, { mentions: [{ principalId: f.B }] })
-  assert.equal(omitted.dispatchSuppressed, 'DUPLICATE_HANDOFF')
-  assert.equal(omitted.causality.rootMessageId, human.messageId)
-  assert.equal(f.store.db.prepare('SELECT sum(ai_deliveries) n FROM causal_roots').get().n, 3)
+  const fresh = f.send(f.A, { mentions: [{ principalId: f.B }] })
+  assert.equal(fresh.dispatchSuppressed, undefined)
+  assert.equal(fresh.causality.rootMessageId, fresh.messageId)
+  assert.equal(f.store.db.prepare('SELECT ai_deliveries n FROM causal_roots WHERE id=?').get(`message:${human.messageId}`).n, 3)
   const final = f.send(f.A, { responseToDeliveryId: grant, replyToMessageId: human.messageId })
   assert.deepEqual(f.ai(final), [])
   const nextHuman = f.send(f.H, { mentions: [{ principalId: f.B }] })
@@ -95,19 +95,23 @@ test('depth limit accepts the final visible message without continuing the loop 
   assert.equal(f.store.db.prepare('SELECT sum(ai_deliveries) n FROM causal_roots').get().n, 3)
 })
 
-test('Bot-only DMs cannot allocate a fresh root by omitting cause and eventually stop automatic replies', t => {
+test('a Bot DM stops one automatic chain but a genuinely new proactive message starts a separate task', t => {
   const f = fixture(t, { maxCausalDepth: 3, maxAiDeliveriesPerRoot: 4 })
   const dm = f.store.createDm(f.a, f.op({ principalId: f.A, otherPrincipalId: f.B })).conversationId
-  let parent
-  for (const actor of [f.A, f.B, f.A]) {
+  let parent, root
+  for (const actor of [f.A, f.B, f.A, f.B]) {
     const member = f.member(actor, dm)
     const extra = parent ? { responseToDeliveryId: f.grant(parent, actor), replyToMessageId: parent.messageId } : {}
     parent = f.send(actor, { conversationId: dm, membershipEpoch: member.membershipEpoch, ...extra })
+    root ??= parent.causality.rootMessageId
   }
   assert.equal(parent.dispatchSuppressed, 'CAUSAL_LIMIT')
+  const continuation = f.send(f.A, { conversationId: dm, membershipEpoch: f.member(f.A, dm).membershipEpoch, replyToMessageId: parent.messageId })
+  assert.equal(continuation.causality.rootMessageId, root)
+  assert.equal(continuation.dispatchSuppressed, 'CAUSAL_LIMIT')
   const fresh = f.send(f.A, { conversationId: dm, membershipEpoch: f.member(f.A, dm).membershipEpoch })
-  assert.equal(fresh.causality.rootMessageId, parent.causality.rootMessageId)
-  assert.equal(fresh.dispatchSuppressed, 'CAUSAL_LIMIT')
+  assert.deepEqual(fresh.causality, { rootMessageId: fresh.messageId, parentMessageId: null, depth: 0 })
+  assert.equal(fresh.dispatchSuppressed, undefined);assert.deepEqual(f.ai(fresh), [f.B])
 })
 
 test('causal grants require stored AI delivery, exact author, current epoch and conversation; root/depth cannot be supplied', t => {
@@ -303,4 +307,41 @@ test('a local-user root cannot borrow another device, a Bot identity or a remote
   assert.throws(() => f.send(f.A, { localUserIntent: { principalId: f.A, intentId: 'bot-not-human' } }), { code: 'INVALID_CAUSATION_GRANT' })
   assert.throws(() => f.send(f.A, { localUserIntent: { principalId: f.H, intentId: 'mixed' }, causationDeliveryId: grant }), { code: 'INVALID_CAUSATION_GRANT' })
   assert.throws(() => f.send(f.H, { localUserIntent: { principalId: f.H, intentId: 'human-is-already-a-root' } }), { code: 'INVALID_CAUSATION_GRANT' })
+})
+
+
+test('new active group tasks do not reuse an old Human input or an earlier outbound handoff key',t=>{
+ const f=fixture(t,{},true),human=f.send(f.H,{mentions:[{principalId:f.A}]})
+ const old=f.send(f.A,{causationDeliveryId:f.grant(human,f.A),activationTargets:[{principalId:f.B}]})
+ const inputs=[f.input(f.A,{activationTargets:[{principalId:f.B}]}),f.input(f.A,{activationTargets:[{principalId:f.B}]})]
+ const messages=inputs.map(input=>f.store.publish(f.a,input))
+ for(const result of messages){assert.deepEqual(f.ai(result),[f.B]);assert.equal(result.dispatchSuppressed,undefined);assert.deepEqual(result.causality,{rootMessageId:result.messageId,parentMessageId:null,depth:0})}
+ assert.notEqual(messages[0].causality.rootMessageId,messages[1].causality.rootMessageId)
+ const reply=f.send(f.A,{replyToMessageId:human.messageId,activationTargets:[{principalId:f.B}]})
+ assert.equal(reply.dispatchSuppressed,'DUPLICATE_HANDOFF','an actual reply to the same input retains deduplication')
+ const deliveries=f.store.db.prepare('SELECT count(*) n FROM deliveries').get().n
+ f.store.close();f.store=new HubStore(f.path)
+ assert.deepEqual(f.store.publish(f.a,inputs[1]),messages[1])
+ assert.equal(f.store.db.prepare('SELECT count(*) n FROM deliveries').get().n,deliveries)
+ assert.equal(f.store.accepted(f.store.db.prepare('SELECT * FROM messages WHERE id=?').get(old.messageId)).causality.rootMessageId,human.messageId)
+})
+
+test('long Bot-only DMs have independent proactive tasks beyond 32 deliveries while per-input duplicate handoffs remain bounded',t=>{
+ const f=fixture(t),dm=f.store.createDm(f.a,f.op({principalId:f.A,otherPrincipalId:f.B})).conversationId
+ f.store.db.prepare('INSERT INTO causal_roots(id,conversation_id,ai_deliveries) VALUES (?,?,?)').run(`genesis:${dm}`,dm,32)
+ const sent=[]
+ for(let index=0;index<40;index++){
+  const actor=index%2?f.B:f.A,target=actor===f.A?f.B:f.A
+  const result=f.send(actor,{conversationId:dm,membershipEpoch:f.member(actor,dm).membershipEpoch})
+  assert.deepEqual(f.ai(result),[target]);assert.equal(result.dispatchSuppressed,undefined)
+  assert.deepEqual(result.causality,{rootMessageId:result.messageId,parentMessageId:null,depth:0});sent.push(result)
+ }
+ assert.equal(new Set(sent.map(result=>result.causality.rootMessageId)).size,40)
+ assert.equal(f.store.db.prepare('SELECT ai_deliveries FROM causal_roots WHERE id=?').get(`genesis:${dm}`).ai_deliveries,32)
+ const parent=sent.at(-1),grant=f.grant(parent,f.A)
+ const result=f.send(f.A,{conversationId:dm,membershipEpoch:f.member(f.A,dm).membershipEpoch,causationDeliveryId:grant})
+ assert.deepEqual(f.ai(result),[f.B]);assert.equal(result.causality.depth,1)
+ const duplicate=f.send(f.A,{conversationId:dm,membershipEpoch:f.member(f.A,dm).membershipEpoch,causationDeliveryId:grant})
+ assert.equal(duplicate.dispatchSuppressed,'DUPLICATE_HANDOFF');assert.deepEqual(f.ai(duplicate),[])
+ assert.equal(duplicate.causality.rootMessageId,parent.causality.rootMessageId)
 })

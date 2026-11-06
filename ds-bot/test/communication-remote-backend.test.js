@@ -242,3 +242,26 @@ test('legacy durable reclaim is not replayed to an older Hub and does not block 
     assert.equal(queue.db.prepare('SELECT count(*) n FROM outbox').get().n, 2)
   } finally { queue.close(); rmSync(dir, { recursive: true, force: true }) }
 })
+
+test('a queued proactive Bot task refuses an old Hub without blocking unrelated operations',async()=>{
+ const queue=new CommunicationQueue(':memory:',{instanceId:'a'})
+ try{
+  const bot=queue.localPrincipal('bot','worker','Worker')
+  queue.enqueueMessage({protocol:'dsbot-communication/1',type:'message.publish',messageId:'new-task',conversationId:'private',
+   author:{principalId:bot.principalId,homeInstanceId:'a',kind:'bot'},clientCreatedAt:'2026-11-06T00:00:00Z',
+   content:{format:'text',text:'New local task'},mentions:[],activationTargets:[],replyToMessageId:null,membershipEpoch:'epoch'})
+  queue.enqueueOperation('group.create',{operationId:'other-operation',principalId:'human:a:owner',title:'Unrelated'})
+  const calls=[],transport={connected:true,queue,welcome:{capabilities:[]},request:async(type,payload)=>{
+   calls.push(type)
+   if(type==='message.publish')assert.fail('an old Hub must not silently consume a new proactive task')
+   if(type==='group.create')return {conversationId:'group',operationId:payload.operationId}
+   if(type==='memberships.list')return {memberships:[],invites:[]}
+   if(type==='deliveries.pull')return []
+   assert.fail(`Unexpected request: ${type}`)
+  }}
+  await CommunicationTransport.prototype.synchronize.call(transport)
+  assert.equal(queue.outboxStatus('new-task').error,'PROACTIVE_ROOT_CAPABILITY_REQUIRED')
+  assert.equal(queue.outboxStatus('other-operation').state,'accepted')
+  assert.ok(!calls.includes('message.publish'))
+ }finally{queue.close()}
+})

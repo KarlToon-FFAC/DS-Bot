@@ -1,3 +1,4 @@
+import { CommunicationDialog, CommunicationActionDialog } from './communication-dialog.js'
 import { BotPublicProfile } from './bot-settings.js'
 import { call } from './api.js'
 import { createElement as h, Fragment, useEffect, useRef, useState } from 'react'
@@ -177,17 +178,16 @@ export function AddDevice({ request, displayName = 'Human', revision }) {
         h('button',{type:'button',disabled:busy||!resumeConfirmed[item.hubId],onClick:()=>{void run(async token=>{const value=await request({endpoint:'resume-hub',hubId:item.hubId,confirmedUrl:item.url,confirmResume:true});if(token===generation.current){update(value);setResumeConfirmed({});await refreshStorage(token)}})}},t('Resume this Hub'))):null,
       !item.requestId ? h('p', { role: 'status' }, t('Device identity is saved locally. No request ID exists yet; access has not been requested from the Hub.')) : null,
       item.requestId && ['prepared', 'pending'].includes(item.status) ? h('button', { type: 'button', disabled: busy, onClick: () => { void run(async token => { const value = await request({ endpoint: 'cancel-hub-join', hubId: item.hubId }); if (token === generation.current) update(value) }) } }, t('Cancel request')) : null)),
-    lifecycle?h('section',{className:'bt-comm-address',role:'alertdialog','aria-label':t(lifecycle.kind==='leave'?'Leave this Hub':'Forget this Hub')},
-      h('h3',null,t(lifecycle.kind==='leave'?'Leave this Hub':'Forget this Hub')),
-      h('code',null,lifecycle.item.hubId),h('p',null,lifecycle.item.url),
-      h('p',null,t(lifecycle.kind==='leave'?'Revoke server access and group memberships. Chat history stays. Transfer or dissolve groups owned by this device first.':'Delete this Hub configuration, device key and saved CA trust. Leave or cancel pending approval first. Other Hubs are unaffected. Retained history cannot be attached to a new identity.')),
-      lifecycle.kind==='forget'?h('label',{className:'bt-comm-check'},h('input',{type:'checkbox',checked:deleteHistory,onChange:event=>setDeleteHistory(event.target.checked)}),t('Also permanently delete this Hub communication queue and cached files. DSH session journals and browser drafts are retained.')):null,
-      h('button',{type:'button',disabled:busy,onClick:()=>{void run(async token=>{
-        const item=lifecycle.item
-        await request(lifecycle.kind==='leave'?{endpoint:'leave-hub',hubId:item.hubId,confirmedUrl:item.url,confirmLeave:true}:{endpoint:'forget-hub',hubId:item.hubId,confirmedUrl:item.url,confirmForget:true,deleteLocalHistory:deleteHistory,...(deleteHistory?{confirmDeleteLocalHistory:true}:{})})
-        if(token===generation.current){setLifecycle(null);await refreshStorage(token)}
-      })}},t(lifecycle.kind==='leave'?'Confirm leaving':'Confirm forgetting')),
-      h('button',{type:'button',disabled:busy,onClick:()=>setLifecycle(null)},t('Cancel'))):null,
+    h(CommunicationDialog, {open:Boolean(lifecycle),title:lifecycle?.kind === 'leave' ? 'Leave this Hub' : 'Forget this Hub',onClose:()=>setLifecycle(null),busy,error,alert:true,
+      actions:h('div',{className:'bt-comm-operation-buttons'},h('button',{type:'button',disabled:busy,onClick:()=>setLifecycle(null),'data-dialog-cancel':true},t('Cancel')),
+        h('button',{type:'button',className:'bt-comm-danger',disabled:busy,onClick:()=>{void run(async token=>{
+          const item=lifecycle.item
+          await request(lifecycle.kind==='leave'?{endpoint:'leave-hub',hubId:item.hubId,confirmedUrl:item.url,confirmLeave:true}:{endpoint:'forget-hub',hubId:item.hubId,confirmedUrl:item.url,confirmForget:true,deleteLocalHistory:deleteHistory,...(deleteHistory?{confirmDeleteLocalHistory:true}:{})})
+          if(token===generation.current){setLifecycle(null);await refreshStorage(token)}
+        })}},t(lifecycle?.kind==='leave'?'Confirm leaving':'Confirm forgetting')))},
+      lifecycle ? h(Fragment,null,h('code',null,lifecycle.item.hubId),h('p',null,lifecycle.item.url),
+        h('p',null,t(lifecycle.kind==='leave'?'Revoke server access and group memberships. Chat history stays. Transfer or dissolve groups owned by this device first.':'Delete this Hub configuration, device key and saved CA trust. Leave or cancel pending approval first. Other Hubs are unaffected. Retained history cannot be attached to a new identity.')),
+        lifecycle.kind==='forget'?h('label',{className:'bt-comm-check'},h('input',{type:'checkbox',checked:deleteHistory,disabled:busy,onChange:event=>setDeleteHistory(event.target.checked)}),t('Also permanently delete this Hub communication queue and cached files. DSH session journals and browser drafts are retained.')):null) : null),
     liveError ? h('p', { className: 'bt-comm-reference', role: 'status' }, t('Status may be out of date.'), ' ', liveError) : null,
     error ? h('p', { className: 'bt-comm-error', role: 'alert' }, error) : null)
 }
@@ -226,7 +226,7 @@ export function OwnRemoteProfile({ request, operation, revision, bots = [] }) {
     working.current = true; loadOrder.current += 1
     const token = ++generation.current
     setBusy(true); setError(''); setLiveError('')
-    try { await work(); if (token === generation.current) await load() }
+    try { const result = await work(); if (token === generation.current) await load(); return result ?? true }
     catch (failure) {
       if (token === generation.current) {
         setError(failure.code === 'PUBLICATION_CHANGED' ? t('Published Bots changed elsewhere. Your selection is retained. Discard your changes to review the current list before saving again.') : enrollmentFailure(failure))
@@ -234,6 +234,7 @@ export function OwnRemoteProfile({ request, operation, revision, bots = [] }) {
           try { await load() } catch { /* Keep the original conflict; never replay the mutation. */ }
         }
       }
+      return false
     }
     finally { working.current = false; if (token === generation.current) setBusy(false) }
   }
@@ -243,7 +244,8 @@ export function OwnRemoteProfile({ request, operation, revision, bots = [] }) {
     error ? h('p', { className: 'bt-comm-error', role: 'alert' }, error) : null,
     h('h3', null, t('Your user code')), h('p', { className: 'bt-comm-user-code', tabIndex: 0 }, code || t('Loading…')),
     h('p', { className: 'bt-comm-reference' }, t('Share this code with the person you want to add. Contacts can reach your published Bots.')),
-    h('button', { type: 'button', disabled: busy || !code, onClick: () => { if (confirm !== 'rotate') setConfirm('rotate'); else { setConfirm(''); void run(() => operation('rotate-user-code', {})) } } }, t(confirm === 'rotate' ? 'Confirm code rotation' : 'Rotate user code')),
+    h('button', { type: 'button', disabled: busy || !code, onClick: () => setConfirm('rotate') }, t('Rotate user code')),
+    h(CommunicationActionDialog,{open:confirm==='rotate',title:'Rotate user code',confirmLabel:'Confirm code rotation',onClose:()=>setConfirm(''),danger:true,error,onConfirm:()=>run(()=>operation('rotate-user-code',{}))},h('p',null,t('The previous user code will stop working. Existing contacts are retained.'))),
     h('details', { className: 'bt-comm-contact-section', open: true }, h('summary', null, t('Published Bots')), h(BotChoices, { bots: available.bots, selected: published, onChange: value => { if (!publicationDirty.current) publicationBase.current = [...available.publishedBotIds]; publicationDirty.current = true; setPublished(value) }, label: 'Bots available to contacts' }),
       h('button', { type: 'button', disabled: busy || JSON.stringify([...published].sort()) === JSON.stringify([...available.publishedBotIds].sort()), 'data-dirty': JSON.stringify([...published].sort()) !== JSON.stringify([...available.publishedBotIds].sort()), onClick: () => { void run(async () => { await operation('publish-bots', { localBotIds: published, expectedPublishedBotIds: publicationBase.current ?? available.publishedBotIds }); publicationDirty.current = false; publicationBase.current = null }) } }, t('Save published Bots')),
       available.bots.map(item => { const bot = bots.find(bot => bot.id === item.id); return bot ? h('details', { key: item.id, className: 'bt-comm-local-profile' }, h('summary', null, item.name, ' · ', t('Remote profile')), h(BotPublicProfile, { bot, actions: publicProfileActions })) : null }),
@@ -271,7 +273,7 @@ export function ContactManager({ request, operation, contacts, humanPrincipalId,
     working.current = true; loadOrder.current += 1
     const token = ++generation.current
     setBusy(true); setError(''); setLiveError('')
-    try { await work(); if (token === generation.current) await load() }
+    try { const result = await work(); if (token === generation.current) await load(); return result ?? true }
     catch (failure) {
       if (token === generation.current) {
         setError(failure.code === 'PUBLICATION_CHANGED' ? t('Published Bots changed elsewhere. Your selection is retained. Discard your changes to review the current list before saving again.') : enrollmentFailure(failure))
@@ -279,6 +281,7 @@ export function ContactManager({ request, operation, contacts, humanPrincipalId,
           try { await load() } catch { /* Keep the original conflict; never replay the mutation. */ }
         }
       }
+      return false
     }
     finally { working.current = false; if (token === generation.current) setBusy(false) }
   }
@@ -286,11 +289,8 @@ export function ContactManager({ request, operation, contacts, humanPrincipalId,
   return h('div', { className: 'bt-comm-contact-manager' },
     liveError ? h('p', { className: 'bt-comm-reference', role: 'status' }, t('Status may be out of date.'), ' ', liveError) : null,
     error ? h('p', { className: 'bt-comm-error', role: 'alert' }, error) : null,
-    h(ContactDirectory, { contacts, relations: data?.relations ?? [], humanPrincipalId, instanceId, request, addressNotes, connectionKnown: liveError ? false : connectionKnown, busy: busy || messageBusy, onMessage, confirm, onRemove: item => {
-      const id = item.otherHumanPrincipalId
-      if (confirm !== id) setConfirm(id)
-      else { setConfirm(''); void run(() => operation('revoke-contact', { otherHumanPrincipalId: id, expectedVersion: item.version })) }
-    } }),
+    h(ContactDirectory, { contacts, relations: data?.relations ?? [], humanPrincipalId, instanceId, request, addressNotes, connectionKnown: liveError ? false : connectionKnown, busy: busy || messageBusy, onMessage, onRemove: item => setConfirm(item) }),
+    h(CommunicationActionDialog,{open:Boolean(confirm),title:'Remove contact',confirmLabel:'Confirm contact removal',onClose:()=>setConfirm(''),danger:true,error,onConfirm:()=>run(()=>operation('revoke-contact',{otherHumanPrincipalId:confirm.otherHumanPrincipalId,expectedVersion:confirm.version}))},h('p',null,contacts.find(person=>person.principalId===confirm?.otherHumanPrincipalId)?.displayName ?? confirm?.otherHumanPrincipalId),h('p',null,t('This revokes the contact relationship and access to shared private conversations.'))),
     h(AddressNotes, { contacts, notes: addressNotes, onSave: onSaveAddressNote, busy: busy || messageBusy }),
     h('details', { className: 'bt-comm-contact-section' }, h('summary', null, t('Add a contact')),
     h('label', { className: 'bt-comm-field' }, t('Other user code'), h('input', { value: userCode, maxLength: 64, 'aria-label': t('Other user code'), onChange: event => setUserCode(event.target.value) })),

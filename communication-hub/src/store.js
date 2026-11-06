@@ -765,12 +765,14 @@ export class HubStore {
         const parent=this.db.prepare('SELECT * FROM message_causality WHERE message_id=?').get(cause.message_id)
         requireThat(parent,'INVALID_CAUSATION_GRANT')
         rootId=parent.root_id;parentMessageId=cause.message_id;depth=parent.depth+1
+      }else if(!message.replyToMessageId){
+        // A new proactive message is its own task. Remote-response tools always
+        // carry a delivery grant from the host, even without a visible reply.
+        rootId=`message:${message.messageId}`
       }else{
-        const human=this.db.prepare("SELECT m.id FROM messages m JOIN principals p ON p.id=m.author_id WHERE m.conversation_id=? AND p.kind='human' ORDER BY m.seq DESC LIMIT 1").get(message.conversationId)
-        rootId=human ? `message:${human.id}` : `genesis:${message.conversationId}`
-        const incoming=this.db.prepare('SELECT c.message_id,c.depth FROM message_causality c JOIN messages m ON m.id=c.message_id JOIN deliveries d ON d.message_id=m.id WHERE c.root_id=? AND d.recipient_id=? AND d.membership_epoch=? AND d.ai=1 ORDER BY m.seq DESC LIMIT 1').get(rootId,author.principalId,sender.epoch)
-        parentMessageId=incoming?.message_id ?? human?.id ?? null
-        depth=(incoming?.depth ?? 0)+1
+        const parent=this.db.prepare('SELECT * FROM message_causality WHERE message_id=?').get(message.replyToMessageId)
+        requireThat(parent,'INVALID_CAUSATION_GRANT')
+        rootId=parent.root_id;parentMessageId=message.replyToMessageId;depth=parent.depth+1
       }
       this.db.prepare('INSERT OR IGNORE INTO causal_roots(id,conversation_id) VALUES (?,?)').run(rootId,message.conversationId)
       const causality={rootMessageId:rootId.startsWith('message:')?rootId.slice(8):rootId,parentMessageId,depth}

@@ -44,6 +44,7 @@ const schemas = {
   'hub-join-status': { hubId: text }, 'cancel-hub-join': { hubId: text },
   'bot-dm-history': {conversationId:text,localBotId:text,membershipEpoch:text,after:integer,before:integer,limit:integer,latest:'boolean'},
   'bot-dm-reference': {conversationId:text,localBotId:text,membershipEpoch:text,messageId:text},
+  'set-conversation-archived': {conversationId:text,membershipEpoch:text,localBotId:text,archived:'boolean',expectedScope:text},
   'participant-profile': {conversationId:text,membershipEpoch:text,targetPrincipalId:text,localBotId:text},
   'user-code': {}, 'rotate-user-code': { operationId: text },
   'request-contact': { userCode: text, localBotIds: 'strings', operationId: text },
@@ -61,6 +62,7 @@ const schemas = {
 const required = {
   'bot-dm-history':['conversationId','localBotId','membershipEpoch'],
   'bot-dm-reference':['conversationId','localBotId','membershipEpoch','messageId'],
+  'set-conversation-archived':['conversationId','membershipEpoch','archived','expectedScope'],
   'participant-profile':['conversationId','membershipEpoch','targetPrincipalId'],
   thread: ['conversationId', 'messageId'],
   members: ['conversationId'], history: ['conversationId'], reference: ['conversationId', 'messageId'], read: ['conversationId', 'seq'],

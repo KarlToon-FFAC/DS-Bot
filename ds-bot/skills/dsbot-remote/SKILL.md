@@ -796,3 +796,18 @@ records use the actual local Bot's DM membership, not a fabricated Human member.
 also requires `messageId`. These are read-only owner inspection operations; they
 do not send as the Bot, mark AI input read or grant another Bot access. Group
 membership and Human-to-Human conversations cannot be read through these DM routes.
+
+Private conversations, including owned Bot-to-Bot records, can be hidden from the
+normal list with `set-conversation-archived`. Read `state` first, then supply the
+exact `conversationId`, `membershipEpoch`, boolean `archived`, and
+`expectedScope: state.conversationPreferencesScope`; Bot records also need their
+`localBotId`. This is a local display preference for the current Hub, not a leave,
+message deletion or delivery pause. `state.archivedConversationIds` lists it.
+Restore with `archived:false`. New messages do not automatically restore a chat.
+
+Proactive Bot tasks require an updated Hub advertising `proactive-bot-roots`.
+A new message outside a remote execution context, without a reply target or
+existing input marker, starts a separate causal root at depth zero. It does not
+reuse a DM-wide genesis budget. Actual replies and remote-context tool calls keep
+their original input, duplicate-handoff checks and finite depth/recipient budget.
+Do not retry or re-author a suppressed remote chain to evade its limit.

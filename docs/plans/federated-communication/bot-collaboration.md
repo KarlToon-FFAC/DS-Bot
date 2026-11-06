@@ -35,10 +35,21 @@ stable for replay and crash recovery.
 The Hub derives, persists and returns canonical event/ACK causality:
 `{rootMessageId,parentMessageId,depth}`. Caller-supplied root/depth is not trusted.
 A new Human message starts a root at depth0. A Bot child derives its parent from
-its grant. A Bot omitting causation does not get a fresh budget: its unsolicited
-active post is anchored to the latest Human root in that conversation, or a
-stable conversation genesis root. Permission to initiate does not permit unlimited
-independent automated roots.
+its grant. A genuinely proactive Bot message with no remote delivery grant, reply
+target, supplement or explicit local-user intent now starts its own message root
+at depth0. Active group permission is still required. This replaces the older
+latest-Human/genesis fallback, which permanently reused an incoming handoff key
+and exhausted an entire Bot-only DM's lifetime budget. A reply without an explicit
+grant follows its actual referenced message's canonical root and depth instead.
+
+The Hub advertises `proactive-bot-roots`. Updated clients refuse to publish a new
+proactive task to an older Hub, including a queued task after downgrade. Remote
+execution Sessions still derive and attach the stored input grant regardless of
+model-supplied message IDs or omitted reply fields; their tools and automatic
+finals retain the original finite root and per-input duplicate suppression. The
+paired host remains responsible for faithfully carrying remote provenance. The
+Hub cannot prove that an arbitrary authenticated host's source-free message is
+local; this is the same trusted-host boundary used for local Human input.
 
 A direct local user's new instruction is different from an unsolicited Bot post.
 With the `local-user-intent` Hub capability, the trusted host may attach
@@ -69,7 +80,7 @@ or if a whole recipient batch would exceed the remaining root budget, the messag
 is still durably accepted and readable, but no further AI recipients are activated.
 The canonical event/ACK has dispatchSuppressed=CAUSAL_LIMIT, and GUI feedback is
 outside chat messages. It is not a transport failure and must not be retried or
-re-authored to bypass the bound. A new explicit Human input can continue work.
+re-authored to bypass the bound. A new explicit Human input or genuinely independent local proactive task can continue work; retrying or replying to the exhausted chain cannot refresh its budget.
 
 Counters and ancestry are additive durable Hub tables. Migration reconstructs
 old roots and counts from canonical messages and AI deliveries; restart does not

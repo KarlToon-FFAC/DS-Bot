@@ -9,7 +9,12 @@ export function communicationMentions(text, contacts, explicit = [], { displayOn
   const literalQuotes = String(text).replace(/^[\t ]*>[^\n]*/gm, line => ' '.repeat(line.length))
   const candidates = contacts.map(contact => ({ ...contact, name: contact.displayName }))
   for (const span of mentionSpans(literalQuotes, candidates, { unknown: true, reservedAllFirst: true })) {
-    if (span.unknown) { if (displayOnly) continue; fail('UNKNOWN_MENTION') }
+    if (span.unknown) {
+      // An unknown @ embedded in prose, such as 收到@你的消息, is literal text.
+      // Explicit recipient tokens and stale picker IDs still fail validation.
+      if (displayOnly || span.start > 0 && /[\p{L}\p{N}]/u.test(literalQuotes[span.start - 1])) continue
+      fail('UNKNOWN_MENTION')
+    }
     if (span.all) {
       for(const contact of contacts)if(contact.kind==='bot'||contact.principalId.startsWith('bot:'))selected.add(contact.principalId)
       continue

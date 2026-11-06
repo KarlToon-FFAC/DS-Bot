@@ -243,3 +243,15 @@ test('a verified local-user intent cannot silently degrade on an older Hub or en
   assert.throws(() => CommunicationRuntime.prototype.sendHuman.call({}, { messageId: 'id', clientCreatedAt: new Date().toISOString(),
     localUserIntent: intent }), { code: 'INVALID_REQUEST' })
 })
+
+test('new proactive tasks fail explicitly against an old Hub while a remote grant cannot be erased by tool arguments',async()=>{
+ const runtime={transport:{welcome:{capabilities:[]}}}
+ assert.throws(()=>CommunicationRuntime.prototype.message.call(runtime,'bot:a:one','dm',{text:'new task'}),{code:'PROACTIVE_ROOT_CAPABILITY_REQUIRED'})
+ let message
+ const scoped={member:()=>({kind:'dm',membershipEpoch:'epoch'}),message:(_actor,_conversation,input)=>{message=input;return input},
+  queue:{commitExports:(_id,_outputs,_positions,factory)=>{factory();return ['message']},outboxStatus:()=>({state:'pending'})}}
+ await CommunicationRuntime.prototype.sendBot.call(scoped,{principalId:'bot:a:one'},
+  {conversationId:'dm',text:'A new-looking message',replyToMessageId:null,causationDeliveryId:null},
+  {callId:'call',agent:{id:'remote-session'},communicationSource:'stored-tool-call',communicationBinding:{conversationId:'dm',membershipEpoch:'epoch'},communicationCausation:{causationDeliveryId:'actual-delivery',replyToMessageId:'actual-parent'}})
+ assert.equal(message.causationDeliveryId,'actual-delivery');assert.equal(message.replyToMessageId,'actual-parent')
+})

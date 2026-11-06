@@ -35,7 +35,7 @@ async function pane({ enabled = true, snapshot, storage = {}, localStored = {}, 
   }
   let root = createRoot(dom.window.document.getElementById('root'))
   const doc = dom.window.document
-  const button = label => [...doc.querySelectorAll('button')].find(node => node.textContent === label || node.getAttribute('aria-label') === label)
+  const button = label => [...([...doc.querySelectorAll('dialog[open]:not([data-closing=true])')].at(-1) ?? doc).querySelectorAll('button')].find(node => node.textContent === label || node.getAttribute('aria-label') === label)
   const click = async label => {
     if (!button(label) && ['New group','New message'].includes(label)) await act(async()=>button('New…').click())
     assert.ok(button(label), `button: ${label}`); await act(async () => button(label).click())
@@ -414,7 +414,7 @@ test('floating replies show chronological messages without repeated quotes and p
   })
 })
 
-test('message hover icons copy without sending and open only the selected branch with its own reply composer',async()=>{
+test('message hover icons copy without sending and show the root and sibling replies while retaining the selected reply target',async()=>{
  const events=['Root','Selected branch','Child','Unrelated sibling'].map((text,i)=>({type:'message',conversationSeq:i+1,serverAcceptedAt:'2026-11-04T00:00:00Z',message:{messageId:`m${i}`,author:membership.info.members[0],content:{text},mentions:[],replyToMessageId:i===2?'m1':i?'m0':null}}))
  let copied=''
  await pane({snapshot:{...state(),conversations:[membership]},history:events,handle:async body=>body.endpoint==='thread'?{conversationId:'group',membershipEpoch:'epoch',messageId:body.messageId,rootMessageId:'m0',watermark:4,events,hasMore:false}:{}},async({dom,doc,click,edit,calls})=>{
@@ -428,9 +428,9 @@ test('message hover icons copy without sending and open only the selected branch
   const trigger=selected.querySelector('button[aria-label="Reply"]')
   await act(async()=>trigger.click())
   const popup=doc.querySelector('.bt-comm-thread-popover');assert.equal(popup.getAttribute('role'),'dialog')
-  assert.equal(doc.querySelectorAll('.bt-comm-thread-log article').length,2)
-  assert.equal(doc.querySelector('[data-thread-message-id="m0"]'),null)
-  assert.equal(doc.querySelector('[data-thread-message-id="m3"]'),null)
+  assert.equal(doc.querySelectorAll('.bt-comm-thread-log article').length,4)
+  assert.ok(doc.querySelector('[data-thread-message-id="m0"]'))
+  assert.ok(doc.querySelector('[data-thread-message-id="m3"]'))
   await edit(popup.querySelector('textarea'),'Reply from the floating window')
   await click('Send reply')
   const send=calls.find(call=>call.endpoint==='send')
@@ -652,6 +652,7 @@ test('Human and group rename send authenticated versioned requests and failed se
     assert.equal(configure.membershipEpoch, 'epoch')
     assert.equal(configure.expectedVersion, 1)
     assert.ok(configure.operationId)
+    await click('Close member settings')
     await edit(doc.querySelector('.bt-comm-main textarea'), 'Existing draft')
     await click('Activity details')
     assert.equal(button('Copy to draft').disabled, true)
@@ -767,8 +768,8 @@ test('member permissions explain authorized delegation for both Bot modes withou
   ] } }]
   await pane({ snapshot }, async ({ doc, click, calls }) => {
     await click('Shared group')
-    const drawer = doc.querySelector('.bt-comm-members')
-    await act(async () => drawer.querySelector('summary').click())
+    await act(async () => doc.querySelector('.bt-comm-members>summary').click())
+    const drawer = doc.querySelector('dialog[aria-label="Group members and receiving rules"]')
     assert.match(drawer.textContent, /Both Bot modes may @mention current group Bots in an authorized final reply/)
     assert.match(drawer.textContent, /Reply-only Bots cannot initiate messages or send proactively with tools/)
     assert.match(drawer.textContent, /Active Bots may also initiate with tools/)
@@ -821,7 +822,7 @@ test('one dirty Save atomically submits the drawer draft and closing discards un
     await act(async () => doc.querySelector('.bt-comm-members summary').click())
     const save = () => doc.querySelector('[aria-label="Save group settings"]')
     assert.equal(save().disabled, true)
-    assert.equal([...doc.querySelectorAll('.bt-comm-members button')].filter(node => node.textContent.startsWith('Save')).length, 1)
+    assert.equal([...doc.querySelectorAll('dialog[aria-label="Group members and receiving rules"] button')].filter(node => node.textContent.startsWith('Save')).length, 1)
     await edit(doc.querySelector('input[aria-label="Group name"]'), 'Atomic title')
     await edit(doc.querySelector('[data-principal-id="bot:a:one"] select[aria-label="Speaking permission"]'), 'active')
     await edit(doc.querySelector('select[aria-label="Receiving rule"]'), 'admin')
@@ -857,7 +858,7 @@ test('concurrent polling and a stale save retain edits until the drawer is close
     assert.equal(doc.querySelector('input[aria-label="Group name"]').value, 'Local draft')
     await click('Save')
     assert.equal(doc.querySelector('input[aria-label="Group name"]').value, 'Local draft')
-    assert.match(doc.querySelector('.bt-comm-members [role=alert]').textContent, /Group settings changed/)
+    assert.match(doc.querySelector('dialog[aria-label="Group members and receiving rules"] [role=alert]').textContent, /Group settings changed/)
     assert.equal(doc.querySelector('[aria-label="Save group settings"]').dataset.dirty, 'true')
     await click('Close member settings')
     await act(async () => doc.querySelector('.bt-comm-members summary').click())
@@ -905,6 +906,7 @@ test('late settings responses cannot overwrite another group or a reopened drawe
     await edit(doc.querySelector('input[aria-label="Group name"]'), 'Reopened edit')
     await act(async () => release())
     assert.equal(doc.querySelector('input[aria-label="Group name"]').value, 'Reopened edit')
+    await click('Close member settings')
     await click('Other group')
     await act(async () => doc.querySelector('.bt-comm-members summary').click())
     await edit(doc.querySelector('input[aria-label="Group name"]'), 'Other local edit')
@@ -918,7 +920,7 @@ test('all group members can inspect current member information while non-manager
   await pane({ snapshot }, async ({ doc, click, calls }) => {
     await click('Shared group')
     await act(async () => doc.querySelector('.bt-comm-members summary').click())
-    const drawer = doc.querySelector('.bt-comm-members')
+    const drawer = doc.querySelector('dialog[aria-label="Group members and receiving rules"]')
     assert.match(drawer.textContent, /Owner/)
     assert.equal(drawer.querySelector('select,input'), null)
     assert.equal(drawer.querySelector('[aria-label="Save group settings"]'), null)
@@ -995,7 +997,7 @@ test('an acknowledged settings save stays confirmed when the follow-up status re
     await edit(doc.querySelector('input[aria-label="Group name"]'), 'Committed')
     await click('Save')
     assert.equal(doc.querySelector('[aria-label="Save group settings"]').disabled, true)
-    assert.equal(doc.querySelector('.bt-comm-members [role=alert]'), null)
+    assert.equal(doc.querySelector('dialog[aria-label="Group members and receiving rules"] [role=alert]'), null)
     await edit(doc.querySelector('input[aria-label="Group name"]'), 'Next committed')
     await click('Save')
     assert.deepEqual(versions, [1, 2])
@@ -1074,7 +1076,7 @@ test('routine failures, queues and reconciliation have no bottom console and act
       { id: 'bot-owned', type: 'invite', state: 'failed', conversationId: 'group', principalId: 'bot:a:private', error: 'SECRET_BOT_FAILURE' }],
     errors: [{ bindingId: 'here', conversationId: 'group', code: 'CURRENT_RECONCILE' }, { bindingId: 'elsewhere', conversationId: 'other', code: 'OTHER_RECONCILE' }],
     exportFailures: [{ messageId: 'export', conversationId: 'group', code: 'CURRENT_EXPORT' }] }
-  await pane({ snapshot, handle: async body => { if (body.endpoint === 'send') throw Object.assign(new Error('denied'), { code: 'SPEAKING_FORBIDDEN' }); return {} } }, async ({ doc, click, edit, calls }) => {
+  await pane({ snapshot, handle: async body => { if (body.endpoint === 'send') throw Object.assign(new Error('uncertain'), { code: 'REQUEST_TIMEOUT' }); return {} } }, async ({ doc, click, edit, calls }) => {
     await click('Shared group')
     assert.equal(doc.querySelector('.bt-comm-feedback,.bt-comm-status-help,.bt-comm-activity,.bt-comm-toast'), null)
     assert.doesNotMatch(doc.querySelector('.bt-comm-main footer').textContent, /Send failed|Operation|not confirmed|CURRENT_RECONCILE|CURRENT_EXPORT|Queued messages|About message status/)
@@ -1088,7 +1090,7 @@ test('routine failures, queues and reconciliation have no bottom console and act
     await click('Cancel')
     await edit(doc.querySelector('.bt-comm-main textarea'), 'Retained original intent')
     await click('Send message')
-    assert.match(doc.querySelector('.bt-comm-toast').textContent, /read-only access/)
+    assert.match(doc.querySelector('.bt-comm-toast').textContent, /timed out/)
     assert.equal(doc.querySelector('.bt-comm-main textarea').value, 'Retained original intent')
     assert.ok([...doc.querySelectorAll('footer>button')].some(button => button.textContent === 'Retry same send'))
     await click('Dismiss notification')
@@ -1394,5 +1396,106 @@ test('Bot-to-Bot records have a dedicated read-only conversation without a Human
   assert.match(doc.querySelector('.bt-comm-archive-notice').textContent,/Read-only/)
   assert.equal(doc.querySelector('textarea[aria-label="Communication message"]'),null)
   assert.ok(!calls.some(body=>['send','read','accept'].includes(body.endpoint)))
+ })
+})
+
+test('Hub forgetting is a separate top-layer confirmation, cancellation never mutates, and errors stay beside the confirmation',async()=>{
+ const hub={hubId:'saved-hub',url:'wss://synthetic.example.test/communication',status:'approved',departed:false}
+ await pane({snapshot:state(),handle:async body=>{
+  if(body.endpoint==='onboarding-storage')return {enrollments:[hub]}
+  if(body.endpoint==='forget-hub')throw Object.assign(new Error('synthetic'),{code:'HUB_SELECTION_CHANGED'})
+  return {}
+ }},async({dom,doc,click,calls})=>{
+  await click('Personal settings');await click('Join Hub');await click('Forget this Hub')
+  const dialog=doc.querySelector('dialog[aria-label="Forget this Hub"]')
+  assert.equal(dialog.parentElement,doc.body);assert.equal(dialog.open,true)
+  assert.ok(dialog.contains(doc.activeElement));assert.ok(dialog.querySelector('.bt-comm-operation-footer'))
+  await click('Cancel');assert.equal(calls.some(body=>body.endpoint==='forget-hub'),false)
+  await click('Forget this Hub');await click('Confirm forgetting')
+  assert.ok(dialog.querySelector('[role=alert]'))
+  assert.equal(calls.filter(body=>body.endpoint==='forget-hub').length,1)
+  await act(async()=>doc.activeElement.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true})))
+  assert.ok(doc.querySelector('[aria-label="Add a device"]'),'Escape closes only the confirmation')
+ })
+})
+
+test('private chats and Bot DM records archive into one separate collection, stay hidden on refresh, and restore without sending',async()=>{
+ const other={principalId:'human:b:buddy',displayName:'Buddy',kind:'human'}
+ const dm={...membership,conversationId:'human-private',kind:'dm',info:{members:[membership.info.members[0],other]}}
+ const botRecord={...dm,conversationId:'bot-private',archive:true,viewerBotId:'worker',viewerPrincipalId:'bot:a:worker',info:{members:[{principalId:'bot:a:worker',displayName:'Worker',kind:'bot'},{principalId:'bot:b:expert',displayName:'Expert',kind:'bot'}]}}
+ let snapshot={...state(),conversationPreferencesScope:'local-scope',archivedConversationIds:[],conversations:[membership,dm],botConversations:[botRecord]}
+ await pane({getState:()=>snapshot,handle:async body=>{
+  if(body.endpoint==='set-conversation-archived'){
+   assert.equal(body.expectedScope,'local-scope');assert.equal(body.membershipEpoch,'epoch')
+   const ids=new Set(snapshot.archivedConversationIds);if(body.archived)ids.add(body.conversationId);else ids.delete(body.conversationId)
+   snapshot={...snapshot,archivedConversationIds:[...ids]};return {archivedConversationIds:[...ids]}
+  }
+  if(body.endpoint==='bot-dm-history')return {conversationId:'bot-private',events:[]}
+  return {}
+ }},async({doc,click,calls,autoRefresh,remount})=>{
+  await click('Buddy');await click('Archive private chat')
+  assert.equal(doc.querySelector('nav[aria-label="Communication conversations"] [data-conversation-id="human-private"]'),null)
+  await click('Worker ↔ Expert');await click('Archive private chat')
+  assert.equal(doc.querySelector('nav[aria-label="Bot private chats"]'),null)
+  await autoRefresh();await remount();await click('Archived private chats')
+  const dialog=doc.querySelector('[aria-label="Archived private chats"][role=dialog]')
+  assert.equal(dialog.querySelectorAll('.bt-comm-archive-row').length,2)
+  await click('Restore private chat Buddy');await click('Cancel')
+  assert.ok(doc.querySelector('nav [data-conversation-id="human-private"]'))
+  assert.ok(doc.querySelector('nav [data-conversation-id="group"]'),'groups remain visible')
+  assert.equal(calls.filter(body=>body.endpoint==='set-conversation-archived'&&body.localBotId==='worker').length,1)
+  assert.ok(!calls.some(body=>['send','remove','accept','dissolve'].includes(body.endpoint)))
+ })
+})
+
+test('group members are compact contact rows with nested Bots and invitation/removal each open their own dialog',async()=>{
+ const buddy={principalId:'human:b:buddy',displayName:'Buddy',kind:'human',role:'member',speakingMode:'readOnly'}
+ const bot={principalId:'bot:b:tester',displayName:'Tester',kind:'bot',role:'member',speakingMode:'passive',ownerPrincipalId:buddy.principalId}
+ const extra={...bot,principalId:'bot:b:extra',displayName:'Extra'}
+ const snapshot={...state(),contacts:[buddy,bot,extra],conversations:[{...membership,info:{members:[...membership.info.members,buddy,bot]}}]}
+ let finish
+ await pane({snapshot,handle:body=>body.endpoint==='invite'?new Promise(resolve=>{finish=resolve}):{}},async({doc,click,calls})=>{
+  await click('Shared group');await click('View conversation details')
+  const group=doc.querySelector('dialog[aria-label="Group members and receiving rules"]')
+  assert.equal(group.parentElement,doc.body)
+  const contact=group.querySelector('[data-member-contact="human:b:buddy"]'),row=contact.querySelector('[data-principal-id="bot:b:tester"]')
+  assert.ok(contact.querySelector('.bt-comm-member-bots').contains(row));assert.equal(row.open,false)
+  assert.equal(contact.querySelector('details[data-principal-id="human:b:buddy"]').open,false)
+  await act(async()=>row.querySelector('summary').click());assert.equal(row.open,true)
+  assert.ok(row.querySelector('[aria-label="Speaking permission"]'))
+  await click('Remove from group');assert.ok(doc.querySelector('dialog[aria-label="Remove from group"]'))
+  assert.equal(calls.some(body=>body.endpoint==='remove'),false);await click('Cancel')
+  await click('Invite participant')
+  const invite=doc.querySelector('dialog[aria-label="Invite participant"]');assert.equal(invite.parentElement,doc.body)
+  await act(async()=>invite.querySelector('[aria-label="Invite Extra"]').click());await click('Invite')
+  assert.equal(calls.filter(body=>body.endpoint==='invite').length,1);assert.equal([...invite.querySelectorAll('button')].find(node=>node.textContent==='Invite').disabled,true)
+  await act(async()=>finish({joined:true}));assert.equal(calls.find(body=>body.endpoint==='invite').inviteePrincipalId,extra.principalId)
+  assert.equal(group.open,true)
+  await click('Close member settings');assert.equal(doc.activeElement,doc.querySelector('.bt-comm-title-pill'))
+ })
+})
+
+test('UNKNOWN_MENTION after Enter preserves the exact Chinese draft, releases editing and navigation, and uses a new ID after correction',async()=>{
+ const beta={principalId:'bot:b:beta',displayName:'贝塔',kind:'bot'}
+ const snapshot={...state(),contacts:[beta],conversations:[{...membership,info:{members:[...membership.info.members,beta]}},{...membership,conversationId:'other',title:'Other group'}]}
+ let reject=true
+ await pane({snapshot,handle:async body=>{
+  if(body.endpoint==='send'&&reject)throw Object.assign(new Error('synthetic'),{code:'UNKNOWN_MENTION'})
+  return {}
+ }},async({dom,doc,click,edit,calls,remount})=>{
+  await click('Shared group')
+  const text='@贝塔 你收到@你的消息了吗',input=()=>doc.querySelector('textarea[aria-label="Communication message"]')
+  await edit(input(),text)
+  await act(async()=>input().dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Enter',bubbles:true})))
+  assert.equal(input().value,text);assert.equal(input().disabled,false)
+  assert.match(doc.querySelector('.bt-comm-toast').textContent,/UNKNOWN_MENTION/)
+  await click('Other group');await click('Shared group');await remount()
+  assert.equal(input().value,text);assert.equal(input().disabled,false)
+  await click('Personal settings');await click('Close dialog')
+  reject=false;await edit(input(),'@贝塔 已修正')
+  await click('Send message')
+  const sends=calls.filter(body=>body.endpoint==='send')
+  assert.equal(sends.length,2);assert.notEqual(sends[0].messageId,sends[1].messageId)
+  assert.equal(input().value,'');assert.equal(input().disabled,false)
  })
 })

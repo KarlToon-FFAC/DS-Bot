@@ -25,3 +25,12 @@ test('reserved all-Bot mentions cannot be captured by Human or Bot display names
     assert.deepEqual(communicationMentions('Exact identity notification', contacts, ['human:a:user']), [{ principalId: 'human:a:user' }])
   }
 })
+
+
+test('a known Chinese recipient plus an inline prose @ resolves only the actual member while explicit unknown recipients still fail',()=>{
+ const contacts=[{principalId:'bot:b:beta',displayName:'贝塔',kind:'bot'}]
+ assert.deepEqual(communicationMentions('@贝塔 你收到@你的消息了吗',contacts),[{principalId:'bot:b:beta'}])
+ assert.deepEqual(communicationMentions('请@贝塔查看',contacts),[{principalId:'bot:b:beta'}])
+ assert.throws(()=>communicationMentions('@陌生成员 你好',contacts),{code:'UNKNOWN_MENTION'})
+ assert.throws(()=>communicationMentions('普通文字',contacts,['bot:b:removed']),{code:'UNKNOWN_MENTION'})
+})

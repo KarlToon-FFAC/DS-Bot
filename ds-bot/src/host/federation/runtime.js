@@ -1,4 +1,4 @@
-import { botDmRecords } from './bot-dm-records.js'
+import { botDmRecords, botDmContext } from './bot-dm-records.js'
 import { join } from 'node:path'
 import { mkdir } from 'node:fs/promises'
 import { createHash, randomUUID } from 'node:crypto'
@@ -437,6 +437,8 @@ export class CommunicationRuntime {
     // Without a current participant snapshot, an @all expansion cannot be scoped safely.
     const all = mentionSpans(text.replace(/^[\t ]*>[^\n]*/gm, line => ' '.repeat(line.length)), []).some(span => span.all)
     const bot = principalId.startsWith('bot:')
+    if (bot && !replyToMessageId && !responseToDeliveryId && !causationDeliveryId && !localUserIntent && !updateForMessageId
+      && this.transport?.welcome && !this.transport.welcome.capabilities.includes('proactive-bot-roots')) fail('PROACTIVE_ROOT_CAPABILITY_REQUIRED')
     if (!bot && all && (!members || info.membershipVersion !== this.member(principalId, conversationId, membershipEpoch).membershipVersion)) fail('AUTHORIZATION_PENDING')
     return { protocol: PROTOCOL, type: 'message.publish', messageId, conversationId,
       author: { principalId, homeInstanceId: this.queue.instanceId, kind: principalId.startsWith('human:') ? 'human' : 'bot' },
@@ -620,6 +622,7 @@ export class CommunicationRuntime {
           [...this.contacts, ...(this.conversations.get(member.conversationId)?.members ?? [])]),
         unread: this.queue.unread(member.conversationId, member.principalId, member.membershipEpoch) })),
       botConversations: botDmRecords(this),
+      archivedConversationIds: this.queue.archivedConversations(), conversationPreferencesScope: addressNotesScope(this),
       invites: this.queue.invites(), outbox: this.queue.outboxFor(this.human.principalId).map(item => ({ ...item, deliveries: this.deliveryStates.get(item.id) ?? [] })),
       errors: [...this.errors].flatMap(([bindingId,code]) => {
         const binding = this.queue.bindings().find(item => item.id === bindingId)
@@ -628,6 +631,15 @@ export class CommunicationRuntime {
       exportFailures: this.queue.exportFailures().filter(item => memberships.some(member => member.conversationId === item.conversationId)) }
   }
   addressNotesScope() { return addressNotesScope(this) }
+  setConversationArchived(input) {
+    if (this.rt.readOnly?.() !== undefined) fail('COMMUNICATION_READ_ONLY')
+    if (input.expectedScope !== addressNotesScope(this)) fail('HUB_SELECTION_CHANGED')
+    const member = input.localBotId === undefined ? this.member(this.human.principalId, input.conversationId, input.membershipEpoch)
+      : botDmContext(this, input).member
+    if (typeof input.membershipEpoch !== 'string') fail('MEMBERSHIP_EPOCH_REQUIRED')
+    if (member.kind !== 'dm') fail('INVALID_REQUEST')
+    return this.queue.setConversationArchived(input.conversationId, input.archived)
+  }
   setAddressNote(input) {
     if (this.rt.readOnly?.() !== undefined) fail('COMMUNICATION_READ_ONLY')
     if (input.expectedScope !== this.addressNotesScope()) fail('HUB_SELECTION_CHANGED')

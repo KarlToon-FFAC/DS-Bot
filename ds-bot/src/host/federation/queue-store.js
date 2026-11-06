@@ -36,6 +36,7 @@ export class CommunicationQueue {
       CREATE TABLE IF NOT EXISTS tool_reply_completions (delivery_id TEXT PRIMARY KEY,binding_id TEXT NOT NULL,message_id TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS relationship_memory (scope TEXT NOT NULL,id TEXT NOT NULL,body TEXT NOT NULL,PRIMARY KEY(scope,id));
       CREATE TABLE IF NOT EXISTS local_address_notes (address TEXT PRIMARY KEY,note TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS archived_conversations (conversation_id TEXT PRIMARY KEY);
       `)
     if (version < 2) {
       this.db.exec('BEGIN IMMEDIATE')
@@ -56,6 +57,17 @@ export class CommunicationQueue {
     this.limits = JSON.parse(this.db.prepare('SELECT value FROM metadata WHERE key=?').get('limits')?.value ?? '{"maxTextBytes":65536,"maxEnvelopeBytes":131072}')
   }
   close() { this.authorized = false; this.db.close() }
+  archivedConversations() {
+    return this.db.prepare('SELECT conversation_id FROM archived_conversations ORDER BY conversation_id').all().map(row => row.conversation_id)
+  }
+  setConversationArchived(conversationId, archived) {
+    requireValue(typeof conversationId === 'string' && conversationId.length > 0 && conversationId.length <= 256 && typeof archived === 'boolean', 'INVALID_REQUEST')
+    return this.transaction(() => {
+      if (archived) this.db.prepare('INSERT OR IGNORE INTO archived_conversations VALUES (?)').run(conversationId)
+      else this.db.prepare('DELETE FROM archived_conversations WHERE conversation_id=?').run(conversationId)
+      return { archivedConversationIds: this.archivedConversations() }
+    })
+  }
   addressNotes() {
     return Object.fromEntries(this.db.prepare('SELECT address,note FROM local_address_notes ORDER BY address').all().map(row => [row.address, row.note]))
   }

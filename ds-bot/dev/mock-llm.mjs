@@ -148,7 +148,7 @@ function decide(body) {
     const recovering = current.startsWith('[Local transport recovery notice]')
     const stagedHandoff = isResults(last) && blocks.some(block => block.type === 'tool_result' && JSON.stringify(block.content).includes('staged'));
     const commandText = (recovering || stagedHandoff) ? messages.findLast(message => message.role === 'user' && textOf(message.content).includes('[Communication delivery]'))?.content : last?.content
-    const command = textOf(commandText).split('Current message:\n').at(-1).trimStart().split('\n')[0].trim()
+    const command = textOf(commandText).split('Current message:\n').at(-1).replace(/^\[(?:Message from|Reply from|Group chat|Group post from)[^\n]*\]\r?\n/, '').trimStart().split('\n')[0].trim()
       const collaboration = /^COMM-COLLAB FINAL (\d+) (\S+) (\S+) (\S+)(?:\s+@\S+)*$/.exec(command)
       if ((!communicationResults || stagedHandoff) && collaboration) {
         const remaining = Number(collaboration[1]), [, , tag, nextName, returnName] = collaboration

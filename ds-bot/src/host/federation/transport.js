@@ -211,6 +211,9 @@ export class CommunicationTransport {
           this.queue.validateMessage(item.payload)
           if(item.payload.attachments?.length&&!this.welcome.capabilities.includes(ATTACHMENT_CAPABILITY))throw errorWith('ATTACHMENT_CAPABILITY_REQUIRED')
           if(item.payload.localUserIntent&&!this.welcome.capabilities.includes('local-user-intent'))throw errorWith('UNSUPPORTED_CAPABILITY')
+          const message=item.payload
+          if(message.author?.kind==='bot'&&!message.replyToMessageId&&!message.responseToDeliveryId&&!message.causationDeliveryId&&!message.localUserIntent&&!message.updateForMessageId
+            &&!this.welcome.capabilities.includes('proactive-bot-roots'))throw errorWith('PROACTIVE_ROOT_CAPABILITY_REQUIRED')
         }
         this.queue.accepted(item.id, await this.request(item.type, item.payload))
       }
