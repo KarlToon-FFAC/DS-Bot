@@ -213,11 +213,12 @@ async function publish(peer) {
 }
 async function contactAndGroup(label, attachments = []) {
   const [a, b] = topology.peers, code = await api(b, 'user-code')
-  const request = await topology.operation(a, 'request-contact', { userCode: code.userCode, localBotIds: [a.botId] })
+  const request = await topology.operation(a, 'request-contact', { userCode: code.userCode })
   const incoming = await until(async () => (await api(b, 'contact-requests')).find(value => value.requestId === request.requestId && value.direction === 'incoming'), 'contact request received')
-  await topology.operation(b, 'accept-contact', { requestId: incoming.requestId, expectedVersion: incoming.version, localBotIds: [b.botId] })
+  await topology.operation(b, 'accept-contact', { requestId: incoming.requestId, expectedVersion: incoming.version })
   await until(async () => (await api(a, 'state')).contacts.some(value => value.principalId === b.bot) && (await api(b, 'state')).contacts.some(value => value.principalId === a.bot), 'mutual selected Bot consent')
   const conversationId = await topology.group(`Reset ${label}`, [a.bot, b.human, b.bot], { allowSpeaking: false })
+  assert.ok(!(await api(a,'state')).invites.some(item=>item.conversationId===conversationId&&item.principalId===a.bot),'The local Bot joins without an invitation acceptance step')
   const tag = `${label}-${nonce}`, sent = await topology.send(a, conversationId, `COMM-ECHO ${tag}`, [b.bot], { attachments })
   const reply = await until(async () => (await topology.history(a, conversationId)).events.find(event => event.message?.author.principalId === b.bot && event.message.content.text === `Communication reply ${tag}`)?.message, 'actual remote DSH Mock reply', 60000)
   assert.ok(reply.responseToDeliveryId)

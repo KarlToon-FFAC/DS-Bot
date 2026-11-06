@@ -5,6 +5,16 @@
 export const NAMESPACE = 'ds-bot'
 
 const ZH = {
+  'Share this code with the person you want to add. Contacts can reach your published Bots.': '将此用户码分享给要添加的人。联系人可访问你已发布的 Bot。',
+  'Selecting a Bot also includes its owner. Remote participants confirm one invitation before joining.': '选中 Bot 后会自动带上所属联系人。远端参与者统一确认邀请后入群。',
+  'Invitation details': '邀请详情',
+  'Invitation source': '邀请来源',
+  'Source address': '来源地址',
+  'Source unavailable': '来源信息不可用',
+  'Target group': '目标群聊',
+  'Invited participants': '受邀对象',
+  'This invitation is no longer pending.': '此邀请已处理或已失效。',
+
   'This Hub has not migrated to v2 pairing codes. Configure its public CA and restart the Hub, then copy a new v2 code. Resetting data does not perform this migration.': '此 Hub 尚未迁移到 v2 配对码。请配置公开 CA 并重启 Hub，然后重新复制 v2 码。重置数据不会完成此迁移。',
   "Remote profile": "远程展示资料",
   "Saved on this device. Published Bots sync this profile to their authorized Remote audience. Keep private instructions and secrets out.": "资料保存在本机，已发布的 Bot 会同步给获授权的远程联系人。请勿填写内部指令和秘密。",

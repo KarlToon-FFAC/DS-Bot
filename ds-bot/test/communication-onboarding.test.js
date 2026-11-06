@@ -280,17 +280,17 @@ test('a corrupted record or mismatched keypair fails without a proof', async () 
   socket.close()
 })
 
-test('contact enrollment derives the actual Human, defaults Bot grants to none and validates every explicit local Bot', async () => {
+test('contact enrollment derives the actual Human, uses published Bots by default and validates every explicit local Bot', async () => {
   const f = fixture(), calls = []
   f.rt.botOf = id => id === 'local-bot' ? { id } : undefined
   f.rt.communication = { human: { principalId: 'human:local:local-user' }, bots: new Map([['local-bot', { principalId: 'bot:local:local-bot' }]]),
-    transport: { connected: true, request: async (type, payload) => { calls.push({ type, payload }); return { ok: true } } } }
+    transport: { connected: true, welcome:{capabilities:['published-contact-scope']}, request: async (type, payload) => { calls.push({ type, payload }); return { ok: true } } } }
   await f.onboarding.handle('contact-request', { operationId: 'request-op', userCode: 'synthetic-user-code' }, human)
-  assert.deepEqual(calls.at(-1), { type: 'contact.request', payload: { principalId: 'human:local:local-user', operationId: 'request-op', userCode: 'synthetic-user-code', botPrincipalIds: [] } })
+  assert.deepEqual(calls.at(-1), { type: 'contact.request', payload: { principalId: 'human:local:local-user', operationId: 'request-op', userCode: 'synthetic-user-code', sharePublishedBots: true } })
   await f.onboarding.handle('contact-accept', { operationId: 'accept-op', requestId: 'request-id', expectedVersion: 1, localBotIds: ['local-bot', 'local-bot'] }, human)
   assert.deepEqual(calls.at(-1).payload.botPrincipalIds, ['bot:local:local-bot'])
   await f.onboarding.handle('contact-accept', { operationId: 'accept-empty', requestId: 'request-id', expectedVersion: 1, botPrincipalIds: ['bot:remote:other'] }, human)
-  assert.deepEqual(calls.at(-1).payload.botPrincipalIds, [], 'raw principal IDs never grant a Bot')
+  assert.equal(calls.at(-1).payload.sharePublishedBots, true, 'raw principal IDs cannot replace the published Bot policy')
   await assert.rejects(f.onboarding.handle('contact-accept', { operationId: 'bad', requestId: 'r', expectedVersion: 1, localBotIds: ['unknown'] }, human), { code: 'INVALID_BOT_SCOPE' })
   await assert.rejects(f.onboarding.handle('contact-request', { operationId: 'spoof', userCode: 'x', principalId: 'human:other:person' }, human), { code: 'AUTHOR_MISMATCH' })
   await assert.rejects(f.onboarding.handle('contact-reject', { operationId: 'reject', requestId: 'request-id' }, human), { code: 'INVALID_REQUEST' })
@@ -301,6 +301,10 @@ test('contact enrollment derives the actual Human, defaults Bot grants to none a
     assert.equal(calls.at(-1).payload.principalId, 'human:local:local-user')
   }
   assert.equal(f.saves, 0, 'contact operations never create device credentials')
+  f.rt.communication.transport.welcome.capabilities=[]
+  const before=calls.length
+  await assert.rejects(f.onboarding.handle('contact-request',{operationId:'old-hub',userCode:'synthetic-user-code'},human),{code:'UNSUPPORTED_CAPABILITY'})
+  assert.equal(calls.length,before)
 })
 
 test('Human publication lists only local Bot metadata and updates the exact selection through the public configuration editor', async () => {

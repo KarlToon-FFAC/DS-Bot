@@ -57,7 +57,7 @@ test('public profile search supports Chinese and normalized skill names without 
     assert.equal(api.contactMatches(buddy, '质量管理'), true)
     assert.equal(api.contactMatches(bot, '浏览器'), true)
     assert.equal(api.contactMatches(bot, 'ＰＬＡＹＷＲＩＧＨＴ'), true)
-    assert.equal(api.contactMatches(bot, '中文'), true)
+    assert.equal(api.contactMatches(bot, '中文'), false)
     assert.equal(api.contactMatches(bot, '测试负责人'), false)
   })
 })

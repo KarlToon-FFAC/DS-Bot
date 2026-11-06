@@ -456,6 +456,11 @@ export class HubStore {
       requireThat(pending<this.limits.maxPendingInvitesPerInstance,'INVITE_LIMIT')
       const id=randomUUID()
       this.db.prepare('INSERT INTO invites(id,conversation_id,principal_id,inviter_id) VALUES (?,?,?,?)').run(id,input.conversationId,input.inviteePrincipalId,input.principalId)
+      const target=this.db.prepare('SELECT kind,instance_id FROM principals WHERE id=?').get(input.inviteePrincipalId)
+      const actor=this.principal(auth,input.principalId)
+      if(target.kind==='bot' && target.instance_id===auth.instanceId && actor.kind==='human' && this.ownerOfPrincipal(input.inviteePrincipalId)===input.principalId){
+        return {inviteId:id,joined:true,...this.joinInvitedPrincipal({id,conversation_id:input.conversationId,principal_id:input.inviteePrincipalId,inviter_id:input.principalId,active:1},input.inviteePrincipalId)}
+      }
       return {inviteId:id}
     })
   }
@@ -464,22 +469,25 @@ export class HubStore {
     return this.operation(auth,input.operationId,input,()=>{
       const invite=this.db.prepare('SELECT * FROM invites WHERE id=?').get(input.inviteId)
       requireThat(invite?.principal_id===input.principalId,'FORBIDDEN')
-      const current=this.db.prepare('SELECT * FROM memberships WHERE conversation_id=? AND principal_id=?').get(invite.conversation_id,input.principalId)
-      if(current?.active)return {conversationId:invite.conversation_id,membershipEpoch:current.epoch,joinSeq:current.join_seq}
-      requireThat(invite.active,'INVITE_REVOKED')
-      requireThat(this.db.prepare('SELECT owner_id FROM conversations WHERE id=?').get(invite.conversation_id).owner_id!==input.principalId,'OWNER_UNAVAILABLE')
-      if(!current)this.requireMembershipCapacity(input.principalId)
-      const inviter=this.db.prepare('SELECT active,role FROM memberships WHERE conversation_id=? AND principal_id=?').get(invite.conversation_id,invite.inviter_id)
-      requireThat(inviter?.active&&['owner','admin'].includes(inviter.role),'INVITE_REVOKED')
-      const count=this.db.prepare('SELECT count(*) count FROM memberships WHERE conversation_id=? AND active=1').get(invite.conversation_id).count
-      requireThat(count<this.limits.maxMembers,'MEMBER_LIMIT')
-      const epoch=randomUUID()
-      const event=this.event(invite.conversation_id,'membership.joined',{principalId:input.principalId,membershipEpoch:epoch})
-      this.db.prepare("INSERT INTO memberships(conversation_id,principal_id,epoch,join_seq,active,manager,role,speaking_mode) VALUES (?,?,?,?,1,0,'member',?) ON CONFLICT(conversation_id,principal_id) DO UPDATE SET epoch=excluded.epoch,join_seq=excluded.join_seq,active=1,manager=0,role='member',speaking_mode=excluded.speaking_mode").run(invite.conversation_id,input.principalId,epoch,event.conversationSeq,input.principalId.startsWith('bot:')?'passive':'readOnly')
-      this.db.prepare('UPDATE conversations SET version=version+1 WHERE id=?').run(invite.conversation_id)
-      this.db.prepare('UPDATE invites SET active=0 WHERE id=?').run(invite.id)
-      return {conversationId:invite.conversation_id,membershipEpoch:epoch,joinSeq:event.conversationSeq}
+      return this.joinInvitedPrincipal(invite,input.principalId)
     })
+  }
+  joinInvitedPrincipal(invite,principalId) {
+    const current=this.db.prepare('SELECT * FROM memberships WHERE conversation_id=? AND principal_id=?').get(invite.conversation_id,principalId)
+    if(current?.active){this.db.prepare('UPDATE invites SET active=0 WHERE id=?').run(invite.id);return {conversationId:invite.conversation_id,membershipEpoch:current.epoch,joinSeq:current.join_seq}}
+    requireThat(invite.active,'INVITE_REVOKED')
+    requireThat(this.db.prepare('SELECT owner_id FROM conversations WHERE id=?').get(invite.conversation_id).owner_id!==principalId,'OWNER_UNAVAILABLE')
+    if(!current)this.requireMembershipCapacity(principalId)
+    const inviter=this.db.prepare('SELECT active,role FROM memberships WHERE conversation_id=? AND principal_id=?').get(invite.conversation_id,invite.inviter_id)
+    requireThat(inviter?.active&&['owner','admin'].includes(inviter.role),'INVITE_REVOKED')
+    const count=this.db.prepare('SELECT count(*) count FROM memberships WHERE conversation_id=? AND active=1').get(invite.conversation_id).count
+    requireThat(count<this.limits.maxMembers,'MEMBER_LIMIT')
+    const epoch=randomUUID()
+    const event=this.event(invite.conversation_id,'membership.joined',{principalId:principalId,membershipEpoch:epoch})
+    this.db.prepare("INSERT INTO memberships(conversation_id,principal_id,epoch,join_seq,active,manager,role,speaking_mode) VALUES (?,?,?,?,1,0,'member',?) ON CONFLICT(conversation_id,principal_id) DO UPDATE SET epoch=excluded.epoch,join_seq=excluded.join_seq,active=1,manager=0,role='member',speaking_mode=excluded.speaking_mode").run(invite.conversation_id,principalId,epoch,event.conversationSeq,principalId.startsWith('bot:')?'passive':'readOnly')
+    this.db.prepare('UPDATE conversations SET version=version+1 WHERE id=?').run(invite.conversation_id)
+    this.db.prepare('UPDATE invites SET active=0 WHERE id=?').run(invite.id)
+    return {conversationId:invite.conversation_id,membershipEpoch:epoch,joinSeq:event.conversationSeq}
   }
   remove(auth,input) {
     this.principal(auth,input.principalId)
@@ -766,7 +774,7 @@ export class HubStore {
   memberships(auth) {
     this.check(auth)
     const members=this.db.prepare('SELECT m.*,c.title,c.kind,c.version,c.routing_mode,c.admin_bot,c.owner_id,c.closed,c.seq FROM memberships m JOIN principals p ON p.id=m.principal_id JOIN conversations c ON c.id=m.conversation_id WHERE p.instance_id=?').all(auth.instanceId)
-    const invites=this.db.prepare('SELECT i.id inviteId,i.conversation_id conversationId,i.principal_id principalId,c.title FROM invites i JOIN principals p ON p.id=i.principal_id JOIN conversations c ON c.id=i.conversation_id WHERE p.instance_id=? AND i.active=1').all(auth.instanceId)
+    const invites=this.db.prepare('SELECT i.id inviteId,i.conversation_id conversationId,i.principal_id principalId,p.name principalName,i.inviter_id inviterPrincipalId,source.name inviterName,source.instance_id inviterInstanceId,a.address inviterIpAddress,c.title FROM invites i JOIN principals p ON p.id=i.principal_id JOIN principals source ON source.id=i.inviter_id LEFT JOIN instance_addresses a ON a.instance_id=source.instance_id JOIN conversations c ON c.id=i.conversation_id WHERE p.instance_id=? AND i.active=1').all(auth.instanceId)
     return {memberships:members.map(m=>({conversationId:m.conversation_id,principalId:m.principal_id,membershipEpoch:m.epoch,joinSeq:m.join_seq,active:Boolean(m.active),manager:Boolean(m.manager),role:m.role,speakingMode:m.speaking_mode,ownerPrincipalId:m.owner_id,dissolved:Boolean(m.closed),title:m.title,kind:m.kind,membershipVersion:m.version,routingMode:m.routing_mode,adminBotPrincipalId:m.admin_bot,watermark:m.seq})),invites}
   }
   sync(auth,input) {

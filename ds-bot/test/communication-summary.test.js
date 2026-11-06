@@ -140,3 +140,13 @@ test('successful synchronization clears recovered transport errors while preserv
     assert.equal(runtime.snapshot().error, 'BACKPRESSURE')
   } finally { CommunicationTransport.prototype.start = start; await runtime?.close() }
 })
+
+
+test('legacy local-owner Bot invitations reconcile automatically while remote and unknown sources await consent',async t=>{
+  const f=fixture(t),calls=[]
+  f.runtime.bots=new Map([['worker',f.bot]])
+  f.queue.db.prepare('INSERT INTO metadata VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run('invites',JSON.stringify(['local','remote','unknown'].map(inviteId=>({inviteId,principalId:f.bot.principalId,...(inviteId==='unknown'?{}:{inviterPrincipalId:inviteId==='local'?f.human.principalId:'human:b:other'})}))))
+  f.runtime.operation=async(_actor,_type,payload)=>calls.push(payload.inviteId)
+  await CommunicationRuntime.prototype.acceptBotInvites.call(f.runtime,{localOnly:true})
+  assert.deepEqual(calls,['local'])
+})

@@ -4,7 +4,7 @@ import { contactLabels } from './communication-model.js'
 import { t } from './i18n.js'
 import { normalizeIpAddress } from '../shared/ip-address.js'
 
-export function contactDirectory(contacts, relations = [], humanPrincipalId) {
+export function contactDirectory(contacts, relations = [], humanPrincipalId, instanceId) {
   const people = [...new Map(contacts.map(person => [person.principalId, person])).values()]
   const humans = people.filter(person => person.kind === 'human').sort((a, b) => a.principalId < b.principalId ? -1 : a.principalId > b.principalId ? 1 : 0)
   const owners = new Map()
@@ -17,6 +17,7 @@ export function contactDirectory(contacts, relations = [], humanPrincipalId) {
   const otherBots = []
   for (const bot of people.filter(person => person.kind === 'bot')) {
     const ownerId = Object.hasOwn(bot, 'ownerPrincipalId') ? bot.ownerPrincipalId : owners.get(bot.homeInstanceId)
+    if (humanPrincipalId && ownerId === humanPrincipalId || instanceId && (bot.homeInstanceId === instanceId || bot.principalId.startsWith(`bot:${instanceId}:`))) continue
     const owner = directory.get(ownerId)
     if (owner?.available) owner.bots.push(bot)
     else otherBots.push(bot)
@@ -25,7 +26,7 @@ export function contactDirectory(contacts, relations = [], humanPrincipalId) {
 }
 
 const normalized = value => String(value ?? '').normalize('NFKC').toLocaleLowerCase()
-const profileValues = profile => [profile?.headline, profile?.summary, ...(Array.isArray(profile?.expertise) ? profile.expertise : []), ...(Array.isArray(profile?.languages) ? profile.languages : [])]
+const profileValues = profile => [profile?.headline, profile?.summary, ...(Array.isArray(profile?.expertise) ? profile.expertise : [])]
 export function contactMatches(person, query, { label, addressNotes = {} } = {}) {
   const needle = normalized(query).trim()
   return !needle || [label, person.displayName, person.principalId, person.instanceLabel, person.homeInstanceId, person.ipAddress,
@@ -34,7 +35,7 @@ export function contactMatches(person, query, { label, addressNotes = {} } = {})
 
 export function ContactDirectory({ contacts, relations, humanPrincipalId, instanceId, request, busy, onMessage, onRemove, confirm, addressNotes = {}, connectionKnown }) {
   const [query, setQuery] = useState(''), [view, setView] = useState('all')
-  const labels = contactLabels(contacts), { people, otherBots } = contactDirectory(contacts, relations, humanPrincipalId)
+  const labels = contactLabels(contacts), { people, otherBots } = contactDirectory(contacts, relations, humanPrincipalId, instanceId)
   const needle = query.trim(), matches = person => contactMatches(person, query, { label: labels.get(person.principalId), addressNotes })
   const shown = people.filter(item => matches(item.person) || item.bots.some(matches))
   const allBots = [...people.flatMap(item => item.bots), ...otherBots]
@@ -47,11 +48,10 @@ export function ContactDirectory({ contacts, relations, humanPrincipalId, instan
         person.instanceLabel ? ` · ${person.instanceLabel}` : '', ' · ', connection(person))))
   const message = person => onMessage ? h('button', { type: 'button', disabled: busy, 'aria-label': `${t('Message')} ${labels.get(person.principalId) ?? person.displayName}`, onClick: () => onMessage(person.principalId) }, t('Message')) : null
   const profile = person => {
-    const value = person.publicProfile, expertise = Array.isArray(value?.expertise) ? value.expertise : [], languages = Array.isArray(value?.languages) ? value.languages : []
-    return value?.summary || expertise.length || languages.length ? h('div', { className: 'bt-comm-directory-profile' },
+    const value = person.publicProfile, expertise = Array.isArray(value?.expertise) ? value.expertise : []
+    return value?.summary || expertise.length ? h('div', { className: 'bt-comm-directory-profile' },
       value.summary ? h('p', { className: 'bt-comm-directory-summary' }, value.summary) : null,
-      expertise.length ? h('ul', { className: 'bt-comm-directory-skills', 'aria-label': t('Expertise') }, expertise.map(item => h('li', { key: item }, item))) : null,
-      languages.length ? h('p', { className: 'bt-comm-reference' }, t('Languages'), ': ', languages.join(', ')) : null) : null
+      expertise.length ? h('ul', { className: 'bt-comm-directory-skills', 'aria-label': t('Expertise') }, expertise.map(item => h('li', { key: item }, item))) : null) : null
   }
   const botRow = person => h('li', { key: person.principalId, 'data-principal-id': person.principalId, className: 'bt-comm-directory-bot' },
     h('div', { className: 'bt-comm-directory-row' }, identity(person), message(person)), profile(person))

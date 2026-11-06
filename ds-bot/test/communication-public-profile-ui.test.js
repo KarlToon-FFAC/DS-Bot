@@ -51,10 +51,9 @@ test('Human responsibilities save independently with a profile version and no ca
     await edit('Role or specialty', '测试负责人')
     await edit('Profile summary', '负责测试策略和回归验证。')
     await edit('Expertise (comma-separated)', '测试, automation，测试')
-    await edit('Languages (comma-separated)', '中文, English')
     await click('Save profile')
     assert.deepEqual(calls, [{ endpoint: 'profile-human-info', expectedVersion: 4, profile: {
-      headline: '测试负责人', summary: '负责测试策略和回归验证。', expertise: ['测试', 'automation'], languages: ['中文', 'English'],
+      headline: '测试负责人', summary: '负责测试策略和回归验证。', expertise: ['测试', 'automation'], languages: ['English'],
     } }])
     assert.equal(doc.querySelector('[aria-label="Save profile"]').disabled, true)
     assert.equal(doc.querySelector('[aria-label="Role or specialty"]').value, '测试负责人', 'a stale parent snapshot cannot replace an accepted edit')

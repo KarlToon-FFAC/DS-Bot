@@ -81,7 +81,7 @@ export class LocalTopology {
     for(const principalId of members){
       const owner=this.peers.find(peer=>[peer.human,peer.bot].includes(principalId));assert.ok(owner)
       const invite=await this.operation(a,'invite',{conversationId,inviteePrincipalId:principalId})
-      await this.operation(owner,'accept',{inviteId:invite.inviteId,recipientPrincipalId:principalId})
+      if(!invite.joined)await this.operation(owner,'accept',{inviteId:invite.inviteId,recipientPrincipalId:principalId})
       const member=await until(async()=>{const value=(await a.api({endpoint:'state'})).conversations.find(item=>item.conversationId===conversationId);return value?.info?.members.some(person=>person.principalId===principalId)&&value.info.membershipVersion===value.membershipVersion&&value},'owner sees accepted membership before next mutation')
       if(allowSpeaking){
         await this.operation(a,'policy',{conversationId,targetPrincipalId:principalId,expectedVersion:member.membershipVersion,speakingMode:principalId.startsWith('bot:')?'active':'speak'})

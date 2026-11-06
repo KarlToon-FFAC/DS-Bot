@@ -89,9 +89,10 @@ test('settings preserve owner/admin restrictions, current epoch checks and admin
     assert.equal(f.member(f.H).membershipVersion, version)
   }
   assert.throws(() => f.store.settings(f.a, f.op({ ...f.scope(), membershipEpoch: 'old', title: 'Stale' })), { code: 'MEMBERSHIP_REVOKED' })
-  const invite = f.store.invite(f.b, f.op({ ...f.scope(f.R), inviteePrincipalId: f.G }))
+  const target = f.store.register(f.a, {localId:'pending-remote',kind:'bot',displayName:'Pending remote'}).principalId
+  const invite = f.store.invite(f.b, f.op({ ...f.scope(f.R), inviteePrincipalId: target }))
   f.store.settings(f.a, f.op({ ...f.scope(), policies: [{ targetPrincipalId: f.R, role: 'member' }] }))
-  assert.throws(() => f.store.accept(f.b, f.op({ principalId: f.G, inviteId: invite.inviteId })), { code: 'INVITE_REVOKED' })
+  assert.throws(() => f.store.accept(f.a, f.op({ principalId: target, inviteId: invite.inviteId })), { code: 'INVITE_REVOKED' })
 })
 
 test('Human and active Bot explicit replies route to the exact current Bot without mutating payload mentions or hash', t => {

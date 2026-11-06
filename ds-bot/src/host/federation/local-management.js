@@ -80,6 +80,7 @@ export function localManagementTools(rt, { ensure, enrollment }) {
         if (rt.communication !== comm) fail('COMMUNICATION_PAIRING_CONFLICT')
         const guard = managementGuard(rt, exec)
         if (action === 'list') return { scope: 'local-user', contacts: await comm.transport.request('contacts.list', { principalId: comm.human.principalId }) }
+        if (['request', 'accept'].includes(action)) input.localBotIds ??= []
         if (['request', 'accept', 'reject', 'cancel', 'revoke', 'rotate-user-code'].includes(action)) {
           input.operationId ??= `contact-${createHash('sha256').update(authority.sourceKey).digest('hex')}`
           await approveManagement(rt, exec, { action, hub: comm.settings.url, ...input })

@@ -123,7 +123,7 @@ export class CommunicationRuntime {
         // Recovery assembles prompts inside process(). Its current canonical scope
         // must be usable before that work can finish the first synchronization.
         this.authorizedProjection = { generation, socket }
-        if (settings.autoAcceptBotInvites) await this.acceptBotInvites()
+        await this.acceptBotInvites({ localOnly: !settings.autoAcceptBotInvites })
         const assertProjection = () => {
           if (this.transport.generation !== generation || this.transport.socket !== socket || !this.hasAuthorizedProjection()) fail('CONNECTION_LOST')
         }
@@ -147,9 +147,9 @@ export class CommunicationRuntime {
       principal.displayName = registered.displayName
     }
   }
-  async acceptBotInvites() {
+  async acceptBotInvites({ localOnly = false } = {}) {
     const ids = new Set([...this.bots.values()].map(bot => bot.principalId))
-    for (const invite of this.queue.invites().filter(item => ids.has(item.principalId))) {
+    for (const invite of this.queue.invites().filter(item => ids.has(item.principalId) && (!localOnly || item.inviterPrincipalId === this.human.principalId))) {
       const id = operationId(`accept:${invite.inviteId}`)
       if (this.queue.outboxStatus(id)?.state === 'failed') continue
       try { await this.operation(invite.principalId, 'group.accept', { inviteId: invite.inviteId }, id) }

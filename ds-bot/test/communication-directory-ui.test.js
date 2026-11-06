@@ -8,7 +8,7 @@ import { build } from 'esbuild'
 
 const harness = createRequire(join(process.env.DSH_HARNESS, 'package.json'))
 const { JSDOM } = harness('jsdom'), React = harness('react'), { act } = React
-const { outputFiles } = await build({ stdin: { contents: "export * from './communication-live.js'; export * from './communication-contacts.js'; export * from './communication-address-notes.js'; export * from './communication-profile.js'; export * from './communication-onboarding.js'; export * from './communication-list.js'; export { BotMark } from './mark.js'", resolveDir: fileURLToPath(new URL('../src/client/', import.meta.url)), loader: 'js' },
+const { outputFiles } = await build({ stdin: { contents: "export * from './communication-group.js'; export * from './communication-live.js'; export * from './communication-contacts.js'; export * from './communication-address-notes.js'; export * from './communication-profile.js'; export * from './communication-onboarding.js'; export * from './communication-list.js'; export { BotMark } from './mark.js'", resolveDir: fileURLToPath(new URL('../src/client/', import.meta.url)), loader: 'js' },
   bundle: true, platform: 'browser', format: 'cjs', external: ['react', 'react-dom', '@deepseek-ai/dsh-client-ui-primitives'], write: false })
 
 async function ui(check) {
@@ -161,41 +161,19 @@ test('Hub code review reveals the actual address and storage before a Human expl
   })
 })
 
-test('contact requests and acceptance share no Bots by default and always use exact locally owned IDs', async () => {
+test('contact requests use published Bots without per-request sharing or local publication controls', async () => {
   await ui(async ({ exports: api, doc, render, click, edit }) => {
-    const mutations = [], available = { bots: [{ id: 'local-one', name: 'One' }, { id: 'local-two', name: 'Two' }], publishedBotIds: ['local-one'] }
-    const request = async body => {
-      if (body.endpoint === 'user-code') return { userCode: 'ABCD-EF12' }
-      if (body.endpoint === 'available-bots') return available
-      if (body.endpoint === 'contact-requests') return [{ requestId: 'incoming', direction: 'incoming', status: 'pending', senderName: 'Other person', senderPrincipalId: 'human:b:other', version: 4 }]
-      if (body.endpoint === 'contact-relations') return []
-      throw new Error('Unexpected read')
-    }
-    const operation = async (endpoint, body) => { mutations.push({ endpoint, ...body }); return {} }
-    await render(React.createElement(api.ContactManager, { request, operation, contacts: [] }))
-    assert.equal([...doc.querySelectorAll('input[type=checkbox]')].filter(node => node.closest('fieldset').querySelector('legend').textContent.startsWith('Bots to share')).some(node => node.checked), false)
-    await edit('Other user code', 'OTHER-CODE')
-    await click('Request contact')
-    assert.deepEqual([...mutations[0].localBotIds], [])
-    await click('Accept contact')
-    assert.equal(mutations[1].requestId, 'incoming')
-    assert.equal(mutations[1].expectedVersion, 4)
-    assert.deepEqual([...mutations[1].localBotIds], [])
-    const outgoing = [...doc.querySelectorAll('fieldset')].find(node => node.querySelector('legend').textContent === 'Bots to share with this request')
-    await act(async () => outgoing.querySelector('input').click())
-    await edit('Other user code', 'NEXT-CODE')
-    await click('Request contact')
-    assert.deepEqual([...mutations[2].localBotIds], ['local-one'])
-    assert.equal(Object.hasOwn(mutations[2], 'principalId'), false)
-    const publication = [...doc.querySelectorAll('details')].find(node => node.querySelector('summary').textContent === 'Published Bots')
-    await act(async () => publication.querySelector('summary').click())
-    await act(async () => publication.querySelector('[data-local-bot-id="local-two"]').click())
-    await click('Save published Bots')
-    assert.equal(mutations[3].endpoint, 'publish-bots')
-    assert.deepEqual([...mutations[3].localBotIds], ['local-one', 'local-two'])
+    const mutations = [], reads = []
+    const request = async body => { reads.push(body.endpoint); return body.endpoint === 'contact-requests' ? [{requestId:'incoming',direction:'incoming',status:'pending',senderName:'Other',version:4}] : [] }
+    await render(React.createElement(api.ContactManager, {request,operation:async(endpoint,body)=>{mutations.push({endpoint,...body});return {}},contacts:[]}))
+    assert.equal(doc.querySelectorAll('fieldset').length,0)
+    assert.doesNotMatch(doc.body.textContent,/Your user code|Bots to share/)
+    await edit('Other user code','OTHER-CODE'); await click('Request contact'); await click('Accept contact')
+    assert.equal(mutations[0].userCode,'OTHER-CODE');assert.equal(mutations[1].requestId,'incoming');assert.equal(mutations[1].expectedVersion,4)
+    assert.ok(mutations.every(item=>!Object.hasOwn(item,'localBotIds')))
+    assert.ok(reads.every(endpoint=>['contact-requests','contact-relations'].includes(endpoint)))
   })
 })
-
 
 test('contact rejection, cancellation, code rotation and revocation stay explicit and versioned', async () => {
   await ui(async ({ exports: api, render, click }) => {
@@ -218,16 +196,12 @@ test('contact rejection, cancellation, code rotation and revocation stay explici
     await click('Cancel request')
     assert.equal(mutations[1].endpoint, 'cancel-contact')
     assert.equal(mutations[1].expectedVersion, 5)
-    await click('Rotate user code')
-    assert.equal(mutations.length, 2)
-    await click('Confirm code rotation')
-    assert.equal(mutations[2].endpoint, 'rotate-user-code')
     await click('Remove contact')
-    assert.equal(mutations.length, 3)
+    assert.equal(mutations.length, 2)
     await click('Confirm contact removal')
-    assert.equal(mutations[3].endpoint, 'revoke-contact')
-    assert.equal(mutations[3].otherHumanPrincipalId, 'human:c:friend')
-    assert.equal(mutations[3].expectedVersion, 7)
+    assert.equal(mutations[2].endpoint, 'revoke-contact')
+    assert.equal(mutations[2].otherHumanPrincipalId, 'human:c:friend')
+    assert.equal(mutations[2].expectedVersion, 7)
   })
 })
 
@@ -295,14 +269,14 @@ test('management defaults to contacts while requests, add forms and publication 
     await render(React.createElement(api.ContactManager, { contacts, request, operation: async () => assert.fail('opening is read-only') }))
     assert.ok(doc.querySelector('[data-contact-id="human:a:owner"]'))
     const sections = [...doc.querySelectorAll('.bt-comm-contact-section')]
-    assert.equal(sections.length, 3)
+    assert.equal(sections.length, 2)
     assert.ok(sections.every(section => !section.open))
     const pending = sections.find(section => section.querySelector('summary').textContent.startsWith('Contact requests'))
     assert.equal(pending.querySelector('.bt-comm-count').textContent, '1')
     await act(async () => pending.querySelector('summary').click())
     assert.equal(pending.open, true)
     assert.equal(sections[0].open, false)
-    assert.equal(calls.length, 4)
+    assert.equal(calls.length, 2)
   })
 })
 
@@ -320,7 +294,7 @@ test('a contact version conflict reloads terminal requests and relations without
     await render(React.createElement(api.ContactManager, { request, operation, contacts: [] }))
     await click('Accept contact')
     assert.equal(mutations.length, 1)
-    assert.equal(reads, 8, 'one complete read refresh after the conflict')
+    assert.equal(reads, 4, 'one complete read refresh after the conflict')
     assert.equal([...doc.querySelectorAll('button')].some(button => button.textContent === 'Accept contact'), false)
     assert.match(doc.querySelector('.bt-comm-contact-section:nth-of-type(2)').textContent, /accepted/)
     assert.ok(doc.querySelector('[data-contact-id="human:a:owner"]'))
@@ -409,7 +383,7 @@ test('live contact hints refresh incoming decisions without discarding unsaved p
       if (body.endpoint === 'contact-relations') return []
       throw Error('Unexpected read')
     }
-    const pane = revision => React.createElement(api.ContactManager, { request, revision, operation: async () => assert.fail('refresh must not mutate'), contacts: [] })
+    const pane = revision => React.createElement(React.Fragment, null, React.createElement(api.ContactManager, { request, revision, operation: async () => assert.fail('refresh must not mutate'), contacts: [] }), React.createElement(api.OwnRemoteProfile, {request,revision,operation:async()=>assert.fail('refresh must not mutate')}))
     await render(pane(1))
     const box = doc.querySelector('[data-local-bot-id="two"]')
     await act(async () => box.click())
@@ -557,7 +531,7 @@ test('publication edits freeze their expected base across live changes and prese
       canonical = [...body.localBotIds]
       return { publishedBotIds: [...canonical] }
     }
-    const pane = revision => React.createElement(api.ContactManager, { request, operation, contacts: [], revision })
+    const pane = revision => React.createElement(api.OwnRemoteProfile, { request, operation, revision })
     await render(pane(1))
     const field = id => [...doc.querySelectorAll('fieldset')].find(node => node.querySelector('legend').textContent === 'Bots available to contacts').querySelector(`[data-local-bot-id="${id}"]`)
     await act(async () => field('two').click())
@@ -599,5 +573,33 @@ test('an old accepted contact ACK never overwrites a newer canonical cancelled r
     assert.match(requests.textContent, /cancelled/)
     assert.doesNotMatch(requests.textContent, /accepted/)
     assert.equal(doc.querySelector('[data-contact-id]'), null)
+  })
+})
+
+
+test('personal profile owns user code rotation and publication editing while Contacts never shows local Bots', async () => {
+  await ui(async ({exports:api,doc,render,click})=>{
+    const calls=[],mutations=[],request=async body=>{calls.push(body.endpoint);return body.endpoint==='user-code'?{userCode:'MY-PROFILE-CODE'}:{bots:[{id:'local',name:'Local'}],publishedBotIds:['local']}}
+    await render(React.createElement(api.OwnRemoteProfile,{request,operation:async(endpoint,body)=>{mutations.push({endpoint,...body});return {}},bots:[{id:'local',name:'Local',publicProfile:{headline:'Testing',revision:0}}]}))
+    assert.match(doc.body.textContent,/MY-PROFILE-CODE/)
+    assert.equal(doc.querySelector('[data-local-bot-id="local"]').checked,true)
+    assert.equal(doc.querySelector('[aria-label="Public headline"]').value,'Testing')
+    assert.equal(doc.querySelector('[aria-label="Public languages"]'),null)
+    await click('Rotate user code');assert.equal(mutations.length,0);await click('Confirm code rotation')
+    assert.equal(mutations[0].endpoint,'rotate-user-code')
+    assert.ok(calls.every(endpoint=>['user-code','available-bots'].includes(endpoint)))
+    const contacts=[{principalId:'human:a:owner',kind:'human',homeInstanceId:'a',displayName:'Me'}, {principalId:'bot:a:local',kind:'bot',displayName:'Local'}, {principalId:'human:b:buddy',kind:'human',homeInstanceId:'b',displayName:'Buddy'}, {principalId:'bot:b:remote',kind:'bot',ownerPrincipalId:'human:b:buddy',homeInstanceId:'b',displayName:'Remote'}]
+    await render(React.createElement(api.ContactDirectory,{contacts,humanPrincipalId:'human:a:owner',instanceId:'a',request:async()=>({})}))
+    await act(async()=>doc.querySelector('[aria-label="Published Bots"]').click())
+    assert.equal(doc.querySelector('[data-principal-id="bot:a:local"]'),null)
+    assert.ok(doc.querySelector('[data-principal-id="bot:b:remote"]'))
+  })
+})
+
+test('invitation aggregation never combines different groups or unverified or different source identities',async()=>{
+  await ui(async({exports:api})=>{
+    const base={conversationId:'group',title:'Same title',inviterPrincipalId:'human:remote:one'}
+    const groups=api.invitationGroups([{...base,inviteId:'one',principalId:'bot:a:one'},{...base,inviteId:'two',principalId:'bot:a:two'},{...base,inviteId:'three',inviterPrincipalId:'human:remote:two'},{...base,inviteId:'four',conversationId:'other'},{inviteId:'legacy-one',conversationId:'group'},{inviteId:'legacy-two',conversationId:'group'}])
+    assert.equal(groups.length,5);assert.equal(groups[0].targets.length,2)
   })
 })

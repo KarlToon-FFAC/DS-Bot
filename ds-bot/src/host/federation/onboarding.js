@@ -672,6 +672,11 @@ export class CommunicationOnboarding {
     }
     const mutations = new Set(['contact-request', 'contact-accept', 'contact-reject', 'contact-cancel', 'contact-revoke', 'rotate-user-code'])
     const operationId = mutations.has(action) ? operation(input.operationId) : undefined
+    const contactScope = () => {
+      if (input.localBotIds !== undefined) return { botPrincipalIds: botPrincipalIds() }
+      if (!comm.transport.welcome?.capabilities?.includes('published-contact-scope')) fail('UNSUPPORTED_CAPABILITY')
+      return { sharePublishedBots: true }
+    }
     let type, payload = { principalId }
     switch (action) {
       case 'user-code': type = 'contact.code'; break
@@ -680,11 +685,11 @@ export class CommunicationOnboarding {
       case 'contact-relations': type = 'contact.relations'; break
       case 'contact-request':
         if (typeof input.userCode !== 'string' || input.userCode.length > 4096 || !input.userCode) fail('INVALID_REQUEST')
-        type = 'contact.request'; payload = { ...payload, operationId, userCode: input.userCode, botPrincipalIds: botPrincipalIds() }; break
+        type = 'contact.request'; payload = { ...payload, operationId, userCode: input.userCode, ...contactScope() }; break
       case 'contact-accept': case 'contact-reject': case 'contact-cancel':
         if (!identifier(input.requestId)) fail('INVALID_REQUEST')
         type = `contact.${action.slice(8)}`; payload = { ...payload, operationId, requestId: input.requestId, expectedVersion: version(input.expectedVersion),
-          ...(action === 'contact-accept' ? { botPrincipalIds: botPrincipalIds() } : {}) }; break
+          ...(action === 'contact-accept' ? contactScope() : {}) }; break
       case 'contact-revoke':
         if (typeof input.otherHumanPrincipalId !== 'string' || !/^human:[A-Za-z0-9_-]+:[A-Za-z0-9_-]+$/.test(input.otherHumanPrincipalId)) fail('INVALID_REQUEST')
         type = 'contact.revoke'; payload = { ...payload, operationId, otherHumanPrincipalId: input.otherHumanPrincipalId, expectedVersion: version(input.expectedVersion) }; break

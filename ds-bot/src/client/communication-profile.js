@@ -61,7 +61,7 @@ export function PublicProfileFields({ profile, onChange, disabled = false }) {
       ...(multiline ? { rows: 4 } : {}), onChange: event => onChange(key, event.target.value) }))
   return h('div', { className: 'bt-comm-public-profile-fields' },
     field('headline', 'Role or specialty', 80), field('summary', 'Profile summary', 1000, true),
-    field('expertise', 'Expertise (comma-separated)', 500), field('languages', 'Languages (comma-separated)', 280))
+    field('expertise', 'Expertise (comma-separated)', 500))
 }
 
 export function HumanProfile({ human, request, operation, onSaved, convertImage = avatarImage }) {
@@ -176,7 +176,7 @@ export function HumanProfile({ human, request, operation, onSaved, convertImage 
     h(PublicProfileFields, { profile, disabled: busy || !profileReady, onChange: (key, value) => setProfile(current => ({ ...current, [key]: value })) }),
     latest ? h('section', { className: 'bt-comm-latest-profile', 'aria-label': t('Latest shared profile') }, h('h3', null, t('Latest shared profile')),
       h('p', null, latest.headline || t('No role or specialty')), h('p', null, latest.summary || t('No profile summary')),
-      h('p', null, latest.expertise.join(', ')), h('p', null, latest.languages.join(', '))) : null,
+      h('p', null, latest.expertise.join(', '))) : null,
     conflict || profileLoadError ? h('button', { type: 'button', disabled: busy, onClick: () => { void reviewLatest() } }, t(conflict ? 'Review latest profile' : 'Reload profile details')) : null,
     h('button', { type: 'button', disabled: busy || !dirty || !name.trim() || conflict || infoDirty && !profileReady, onClick: () => { void commit() }, 'data-dirty': dirty, 'aria-label': t('Save profile') }, t('Save profile')),
     error ? h('p', { className: 'bt-comm-error', role: 'alert' }, error) : null)

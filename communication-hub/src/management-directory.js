@@ -66,7 +66,6 @@ function renderDirectoryProfile(person) {
   const about = text('p', profile.summary || 'No introduction yet.'); about.className = 'directory-about';
   pane.replaceChildren(header, connection, about);
   if (profile.expertise?.length) { pane.append(text('h4', person.kind === 'bot' ? 'Skills' : 'Responsibilities and expertise'), directoryTags(profile.expertise)); }
-  if (profile.languages?.length) { pane.append(text('h4', 'Languages'), directoryTags(profile.languages)); }
   if (person.kind === 'human') {
     const bots = directoryPeople.filter(p => p.kind === 'bot' && p.ownerPrincipalId === person.principalId);
     pane.append(text('h4', 'Published Bots'));
@@ -85,7 +84,7 @@ function renderDirectoryProfile(person) {
 function renderDirectory() {
   const focused = document.activeElement?.dataset.directoryId;
   const query = $('directory-search').value.trim().toLocaleLowerCase();
-  const people = directoryPeople.filter(p => p.kind === directoryKind && (!query || [p.displayName, p.principalId, p.instanceLabel, publicProfile(p).headline, publicProfile(p).summary, ...(publicProfile(p).expertise ?? []), ...(publicProfile(p).languages ?? [])].some(value => typeof value === 'string' && value.toLocaleLowerCase().includes(query))));
+  const people = directoryPeople.filter(p => p.kind === directoryKind && (!query || [p.displayName, p.principalId, p.instanceLabel, publicProfile(p).headline, publicProfile(p).summary, ...(publicProfile(p).expertise ?? [])].some(value => typeof value === 'string' && value.toLocaleLowerCase().includes(query))));
   $('show-contacts').setAttribute('aria-pressed', String(directoryKind === 'human')); $('show-bots').setAttribute('aria-pressed', String(directoryKind === 'bot'));
   $('directory-count').textContent = people.length + (directoryKind === 'bot' ? ' Bots' : ' contacts');
   if (!people.some(p => p.principalId === directorySelection)) directorySelection = people[0]?.principalId;

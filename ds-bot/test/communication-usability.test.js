@@ -493,9 +493,39 @@ test('unconfigured communication explains pairing without API calls, and keyboar
   })
 })
 
+test('one invitation detail dialog includes all targets from the exact same inviter and accepts each once', async () => {
+  const snapshot=state(), accepted=[]
+  snapshot.invites=['human:a:owner','bot:a:one','bot:a:two'].map((principalId,index)=>({inviteId:`invite-${index}`,conversationId:'remote-group',title:'Remote review',principalId,principalName:`Target ${index}`,inviterPrincipalId:'human:b:buddy',inviterName:'Buddy',inviterIpAddress:'192.0.2.20'}))
+  await pane({snapshot,handle:async body=>{assert.equal(body.endpoint,'accept');accepted.push(body);snapshot.invites=snapshot.invites.filter(item=>item.inviteId!==body.inviteId);return {conversationId:'remote-group'}}},async({doc,click})=>{
+    assert.equal(doc.querySelectorAll('[data-invitation-group]').length,1)
+    assert.equal([...doc.querySelectorAll('.bt-comm-nav button')].some(node=>node.textContent==='Accept invitation'),false)
+    await act(async()=>doc.querySelector('[data-invitation-group]').click())
+    const dialog=doc.querySelector('[aria-label="Invitation details"]')
+    assert.match(dialog.textContent,/Buddy/);assert.match(dialog.textContent,/192.0.2.20/);assert.equal(dialog.querySelectorAll('li').length,3)
+    await click('Accept invitation')
+    assert.equal(accepted.length,3);assert.equal(accepted[0].recipientPrincipalId,'human:a:owner')
+    assert.equal(new Set(accepted.map(item=>item.operationId)).size,3)
+    assert.equal(doc.querySelectorAll('[data-invitation-group]').length,0)
+  })
+})
+
+test('group creation selects only Bots, shows contact and IP together, and deduplicates the automatic owner invite', async () => {
+  const snapshot=state(), invited=[]
+  snapshot.contacts=[{principalId:'human:b:buddy',displayName:'Buddy',kind:'human',homeInstanceId:'b',ipAddress:'192.0.2.20'},...['one','two'].map(id=>({principalId:`bot:b:${id}`,kind:'bot',displayName:id,ownerPrincipalId:'human:b:buddy',homeInstanceId:'b'}))]
+  await pane({snapshot,handle:async body=>{if(body.endpoint==='create-group')return {conversationId:'created'};assert.equal(body.endpoint,'invite');invited.push(body.inviteePrincipalId);return {}}},async({doc,click,edit})=>{
+    await click('New group');await edit(doc.querySelector('[aria-label="Group name"]'),'Review')
+    const heading=[...doc.querySelectorAll('.bt-comm-group-contact-heading')].find(node=>node.textContent.includes('Buddy'))
+    assert.match(heading.textContent,/192.0.2.20/);assert.equal(heading.querySelector('input'),null)
+    const boxes=doc.querySelectorAll('.bt-comm-group-choices input[type=checkbox]');assert.equal(boxes.length,2)
+    for(const box of boxes)await act(async()=>box.click())
+    await click('Create and invite')
+    assert.deepEqual(invited,['human:b:buddy','bot:b:one','bot:b:two'])
+  })
+})
+
 test('partial invitations preserve the created group and never create another group or silently retry invitations', async () => {
   const snapshot = state(), invitations = []
-  snapshot.contacts = ['human:b:person', 'bot:b:chief'].map((principalId, index) => ({ principalId, displayName: index ? 'Chief' : 'Person', homeInstanceId: 'b', instanceLabel: 'Other device', kind: index ? 'bot' : 'human' }))
+  snapshot.contacts = ['human:b:person', 'bot:b:chief'].map((principalId, index) => ({ principalId, displayName: index ? 'Chief' : 'Person', homeInstanceId: 'b', instanceLabel: 'Other device', kind: index ? 'bot' : 'human', ownerPrincipalId: 'human:b:person' }))
   await pane({ snapshot, handle: async body => {
     if (body.endpoint === 'create-group') { snapshot.conversations = [membership]; return { conversationId: 'group' } }
     if (body.endpoint === 'invite') { invitations.push(body); if (invitations.length === 2) throw Object.assign(new Error('denied'), { code: 'FORBIDDEN' }); return {} }
@@ -647,11 +677,11 @@ test('automatic device setup stays available without the manual configuration gu
       assert.equal(setup.querySelector('[aria-label="Hub configuration example"]'), null)
       assert.equal(setup.querySelector('[aria-label="Device configuration example"]'), null)
       assert.doesNotMatch(setup.textContent, /Manual configuration guide|publishedBotIds|credentialEnv/)
-      assert.equal(calls.filter(call => !['state', 'onboarding-storage', 'memory-settings', 'human-profile-info'].includes(call.endpoint)).length, 0, JSON.stringify(calls.map(call => call.endpoint)))
+      assert.equal(calls.filter(call => !['state', 'onboarding-storage', 'memory-settings', 'human-profile-info', 'user-code', 'available-bots'].includes(call.endpoint)).length, 0, JSON.stringify(calls.map(call => call.endpoint)))
       await act(async () => doc.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })))
       assert.equal(doc.querySelector('.bt-comm-modal'), null)
       assert.equal(panel.getSnapshot(), true)
-      assert.equal(calls.filter(call => !['state', 'onboarding-storage', 'memory-settings', 'human-profile-info'].includes(call.endpoint)).length, 0, JSON.stringify(calls.map(call => call.endpoint)))
+      assert.equal(calls.filter(call => !['state', 'onboarding-storage', 'memory-settings', 'human-profile-info', 'user-code', 'available-bots'].includes(call.endpoint)).length, 0, JSON.stringify(calls.map(call => call.endpoint)))
     })
   }
 })
@@ -1141,14 +1171,14 @@ test('publication diagnostics retain real safe errors and refresh local settings
     }
     assert.fail('Unexpected endpoint '+body.endpoint)
   }},async({ autoRefresh,doc,click,calls,button})=>{
-    await click('Contacts')
+    await click('Personal settings')
     await act(async()=>[...doc.querySelectorAll('summary')].find(node=>node.textContent==='Published Bots').click())
-    const publication = () => [...doc.querySelectorAll('.bt-comm-contact-manager fieldset')].find(node=>node.querySelector('legend').textContent==='Bots available to contacts').querySelector('[data-local-bot-id="one"]')
+    const publication = () => [...doc.querySelectorAll('.bt-comm-own-profile fieldset')].find(node=>node.querySelector('legend').textContent==='Bots available to contacts').querySelector('[data-local-bot-id="one"]')
     assert.ok(publication(),'local publication state remains readable when Hub contact reads fail')
     await act(async()=>publication().click())
     await click('Save published Bots')
-    assert.match(doc.querySelector('.bt-comm-contact-manager .bt-comm-error').textContent,/CONFIG_EDIT_OVERLAID.*COMMUNICATION_CONFIG_WRITE_FAILED/)
-    assert.equal(saves,1);assert.doesNotMatch(doc.querySelector('.bt-comm-contact-manager').textContent,/DO_NOT_DISPLAY_RAW/)
+    assert.match(doc.querySelector('.bt-comm-own-profile .bt-comm-error').textContent,/CONFIG_EDIT_OVERLAID.*COMMUNICATION_CONFIG_WRITE_FAILED/)
+    assert.equal(saves,1);assert.doesNotMatch(doc.querySelector('.bt-comm-own-profile').textContent,/DO_NOT_DISPLAY_RAW/)
     mode='ack-lost';await click('Save published Bots');assert.equal(saves,2)
     await autoRefresh()
     assert.equal(saves,2,'refresh performs reads only')
@@ -1293,6 +1323,8 @@ test('automatic main-state failures announce stale status and recover without re
 test('personal memory settings update and recover automatically without writing preferences', async () => {
   let localMemory = true, fail = false
   await pane({ snapshot: state(), handle: async body => {
+    if(body.endpoint==='user-code')return {userCode:'SYNTHETIC'}
+    if(body.endpoint==='available-bots')return {bots:[],publishedBotIds:[]}
     assert.equal(body.endpoint, 'memory-settings')
     if (fail) throw Object.assign(Error('Synthetic read failure'), { code: 'CONNECTION_LOST' })
     return { localMemory }

@@ -1,4 +1,11 @@
 export const communicationCSS = `
+.bt-comm-group-contact-heading{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px}
+.bt-comm-group-contact .bt-comm-check{padding-left:28px}
+.bt-comm-invitations>button{display:flex;align-items:center;justify-content:space-between;width:100%;margin:4px 0}
+.bt-comm-invitation-details dd{margin:4px 0 12px;overflow-wrap:anywhere}
+.bt-comm-invitation-details li{margin:8px 0}
+.bt-comm-invitation-details li code{display:block;color:var(--bt-ink-2)}
+
 .bt-comm-ip-notes{margin-top:16px;padding-top:12px;border-top:1px solid var(--bt-line);min-width:0}
 .bt-comm-ip-note-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:8px 0;min-width:0}
 .bt-comm-ip-note-row>span{min-width:0;overflow-wrap:anywhere}
@@ -95,7 +102,7 @@ export const communicationCSS = `
 .bt-comm-empty p{max-width:420px;margin:0;line-height:22px}
 .bt-comm-empty-symbol{width:56px;height:56px;display:grid;place-items:center;border-radius:18px;background:var(--bt-bubble);color:var(--bt-ink-2);font-size:22px;line-height:34px}
 .bt-comm-log{flex:1;min-height:80px;overflow:auto;overscroll-behavior:contain;padding:8px 0;scrollbar-gutter:stable}
-.bt-comm-log:empty{display:none}
+.bt-comm-log:empty{display:block}
 .bt-comm-log article{max-width:min(880px,90%);padding:12px 16px;border-radius:18px;background:var(--bt-bubble);margin:12px 0;overflow-wrap:anywhere;font-size:14px;line-height:24px}
 .bt-comm-log article[data-self=true]{margin-left:auto;background:var(--bt-user);color:var(--bt-user-ink)}
 .bt-comm-log article[data-failed=true]{outline:1px solid var(--bt-danger);outline-offset:2px}
@@ -261,7 +268,7 @@ export const communicationCSS = `
 .bt-comm-message-actions{grid-column:2;grid-row:3;justify-content:flex-start;gap:6px;min-height:24px;margin:0;padding-inline:6px;color:var(--bt-ink-3)}
 .bt-comm-message-actions button{border:0;background:none;min-height:24px;padding:2px 5px;color:var(--bt-ink-2);opacity:0;transition:opacity .12s}
 .bt-comm-log article:is(:hover,:focus-within) .bt-comm-message-actions button{opacity:1}
-.bt-comm-main>footer{position:relative;flex-shrink:0;width:calc(100% - 48px);max-width:960px;align-self:center;padding:10px 48px 10px 14px;border:.5px solid var(--bt-line-2);border-radius:22px;background:var(--bt-main);box-shadow:0 1px 4px color-mix(in srgb,var(--bt-ink) 4%,transparent)}
+.bt-comm-main>footer{margin-top:auto;position:relative;flex-shrink:0;width:calc(100% - 48px);max-width:960px;align-self:center;padding:10px 48px 10px 14px;border:.5px solid var(--bt-line-2);border-radius:22px;background:var(--bt-main);box-shadow:0 1px 4px color-mix(in srgb,var(--bt-ink) 4%,transparent)}
 .bt-comm-main footer .bt-comm-compose-field{margin:0;display:block}
 .bt-comm-frame .bt-comm-main footer textarea{border:0;background:none;min-height:46px;max-height:180px;padding:0;font-size:14px;line-height:23px;resize:vertical;border-radius:0}
 .bt-comm-frame footer textarea:focus-visible{outline:0}

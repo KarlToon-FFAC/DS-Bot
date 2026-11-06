@@ -3,7 +3,8 @@
 The Contacts toolbar button is the single entry to contact management. Personal
 settings contains the user's profile, local-memory permission and Hub connection.
 Its connection action is **Join Hub** (加入 Hub); returning from that guide restores
-focus to the same action. Published Bots remain under Contacts.
+focus to the same action. The user code, publication controls and public Bot profile editors belong to the
+personal profile in settings; Contacts lists remote people and their Bots.
 
 ## Automatic reads, explicit actions
 

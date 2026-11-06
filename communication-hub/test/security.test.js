@@ -71,10 +71,11 @@ test('an absent owner cannot recover and no longer reserves an unusable member s
   accept(invite())
   store.policy(a, scoped(A, { targetPrincipalId: B, role: 'admin', expectedVersion: store.members(a, scoped(A)).membershipVersion }))
   const C = store.register(b, { localId: 'C', kind: 'bot', displayName: 'C' }).principalId
-  const invitation = store.invite(b, scoped(B, { inviteePrincipalId: C }))
+  assert.throws(() => store.invite(b, scoped(B, { inviteePrincipalId: C })), {code:'MEMBER_LIMIT'})
   store.revokeInstance('a'); store.configurePeer('a', 'A', 2)
   const next = store.connect('a', 'A', CAPABILITIES)
-  store.accept(b, { operationId: randomUUID(), principalId: C, inviteId: invitation.inviteId })
+  const invitation = store.invite(b, scoped(B, { inviteePrincipalId: C }))
+  assert.equal(invitation.joined,true)
   assert.equal(store.db.prepare('SELECT count(*) n FROM memberships WHERE conversation_id=? AND active=1').get(group).n, 2)
   assert.equal(store.members(b, scoped(B)).ownerPrincipalId, A)
   assert.throws(() => store.authorize(next, { principalId: A, conversationId: group }), { code: 'NOT_A_MEMBER' })

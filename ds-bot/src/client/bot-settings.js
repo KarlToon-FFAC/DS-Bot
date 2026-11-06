@@ -213,7 +213,6 @@ export function BotPublicProfile({ bot, actions }) {
     h(Row, { label: t('Headline'), stack: true }, h('input', { className: 'bt-bs-input', 'aria-label': t('Public headline'), value: draft.headline, maxLength: 80, onChange: event => change('headline', event.target.value) })),
     h(Row, { label: t('About'), stack: true }, h('textarea', { className: 'bt-bs-input bt-bs-area', 'aria-label': t('Public summary'), value: draft.summary, maxLength: 1000, onChange: event => change('summary', event.target.value) })),
     h(Row, { label: t('Skills'), hint: t('Separate keywords with commas'), stack: true }, h('input', { className: 'bt-bs-input', 'aria-label': t('Public skills'), value: draft.expertise, onChange: event => change('expertise', event.target.value) })),
-    h(Row, { label: t('Languages'), hint: t('Separate languages with commas'), stack: true }, h('input', { className: 'bt-bs-input', 'aria-label': t('Public languages'), value: draft.languages, onChange: event => change('languages', event.target.value) })),
     h('button', { type: 'button', className: 'bt-soft bt-soft-sm', disabled: busy || !dirty, onClick: () => { void commit() } }, t(busy ? 'Saving…' : 'Save public profile')),
     error ? h('p', { className: 'bt-comm-error', role: 'alert' }, error) : null)
 }

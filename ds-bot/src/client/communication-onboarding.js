@@ -1,3 +1,5 @@
+import { BotPublicProfile } from './bot-settings.js'
+import { call } from './api.js'
 import { createElement as h, Fragment, useEffect, useRef, useState } from 'react'
 import { CommunicationAvatar } from './communication-profile.js'
 import { ContactDirectory } from './communication-contacts.js'
@@ -196,22 +198,24 @@ function BotChoices({ bots, selected, onChange, label }) {
     h(BotMark, { bot, size: 24 }), bot.name, h('span', { className: 'bt-comm-reference' }, bot.id))) : h('p', { className: 'bt-comm-reference' }, t('No published Bots')))
 }
 
-export function ContactManager({ request, operation, contacts, humanPrincipalId, instanceId, onMessage, messageBusy, addressNotes, onSaveAddressNote, revision, connectionKnown }) {
-  const [data, setData] = useState(null), [code, setCode] = useState(''), [userCode, setUserCode] = useState('')
-  const [published, setPublished] = useState([]), [share, setShare] = useState([]), [incomingShares, setIncomingShares] = useState({})
+const publicProfileActions = { updateBot: (id, changes) => call('update-bot', { id, ...changes }) }
+
+export function OwnRemoteProfile({ request, operation, revision, bots = [] }) {
+  const [data, setData] = useState(null), [code, setCode] = useState('')
+  const [published, setPublished] = useState([])
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [confirm, setConfirm] = useState('')
   const generation = useRef(0), loadOrder = useRef(0), working = useRef(false), publicationDirty = useRef(false), publicationBase = useRef(null)
   const [liveError, setLiveError] = useState('')
   const load = async () => {
     const token = generation.current, order = ++loadOrder.current
     const results = await Promise.allSettled([
-      request({ endpoint: 'user-code' }), request({ endpoint: 'contact-requests' }), request({ endpoint: 'contact-relations' }), request({ endpoint: 'available-bots' }),
+      request({ endpoint: 'user-code' }), request({ endpoint: 'available-bots' }),
     ])
     if (token !== generation.current || order !== loadOrder.current) return
-    const [ownCode, requests, relations, available] = results.map(result => result.status === 'fulfilled' ? result.value : null)
+    const [ownCode, available] = results.map(result => result.status === 'fulfilled' ? result.value : null)
     if (ownCode) setCode(ownCode.userCode)
     if (available && !publicationDirty.current) setPublished(available.publishedBotIds ?? [])
-    setData(previous => ({ requests: requests ?? previous?.requests ?? [], relations: relations ?? previous?.relations ?? [], available: available ?? previous?.available ?? { bots: [], publishedBotIds: [] } }))
+    setData(previous => ({ available: available ?? previous?.available ?? { bots: [], publishedBotIds: [] } }))
     const failed = results.find(result => result.status === 'rejected')
     if (failed) throw failed.reason
   }
@@ -233,8 +237,51 @@ export function ContactManager({ request, operation, contacts, humanPrincipalId,
     }
     finally { working.current = false; if (token === generation.current) setBusy(false) }
   }
-  const available = data?.available ?? { bots: [], publishedBotIds: [] }
-  const sharedBots = available.bots.filter(bot => available.publishedBotIds.includes(bot.id))
+  const available = { bots: data?.available?.bots ?? [], publishedBotIds: data?.available?.publishedBotIds ?? [] }
+  return h('div', { className: 'bt-comm-own-profile' },
+    liveError ? h('p', { className: 'bt-comm-reference', role: 'status' }, t('Status may be out of date.'), ' ', liveError) : null,
+    error ? h('p', { className: 'bt-comm-error', role: 'alert' }, error) : null,
+    h('h3', null, t('Your user code')), h('p', { className: 'bt-comm-user-code', tabIndex: 0 }, code || t('Loading…')),
+    h('p', { className: 'bt-comm-reference' }, t('Share this code with the person you want to add. Contacts can reach your published Bots.')),
+    h('button', { type: 'button', disabled: busy || !code, onClick: () => { if (confirm !== 'rotate') setConfirm('rotate'); else { setConfirm(''); void run(() => operation('rotate-user-code', {})) } } }, t(confirm === 'rotate' ? 'Confirm code rotation' : 'Rotate user code')),
+    h('details', { className: 'bt-comm-contact-section', open: true }, h('summary', null, t('Published Bots')), h(BotChoices, { bots: available.bots, selected: published, onChange: value => { if (!publicationDirty.current) publicationBase.current = [...available.publishedBotIds]; publicationDirty.current = true; setPublished(value) }, label: 'Bots available to contacts' }),
+      h('button', { type: 'button', disabled: busy || JSON.stringify([...published].sort()) === JSON.stringify([...available.publishedBotIds].sort()), 'data-dirty': JSON.stringify([...published].sort()) !== JSON.stringify([...available.publishedBotIds].sort()), onClick: () => { void run(async () => { await operation('publish-bots', { localBotIds: published, expectedPublishedBotIds: publicationBase.current ?? available.publishedBotIds }); publicationDirty.current = false; publicationBase.current = null }) } }, t('Save published Bots')),
+      available.bots.map(item => { const bot = bots.find(bot => bot.id === item.id); return bot ? h('details', { key: item.id, className: 'bt-comm-local-profile' }, h('summary', null, item.name, ' · ', t('Remote profile')), h(BotPublicProfile, { bot, actions: publicProfileActions })) : null }),
+      publicationDirty.current ? h('button', { type: 'button', disabled: busy, onClick: () => { publicationDirty.current = false; publicationBase.current = null; setPublished([...available.publishedBotIds]); setError('') } }, t('Discard publication changes')) : null))
+}
+
+export function ContactManager({ request, operation, contacts, humanPrincipalId, instanceId, onMessage, messageBusy, addressNotes, onSaveAddressNote, revision, connectionKnown }) {
+  const [data, setData] = useState(null), [userCode, setUserCode] = useState('')
+  const [busy, setBusy] = useState(false), [error, setError] = useState(''), [confirm, setConfirm] = useState('')
+  const generation = useRef(0), loadOrder = useRef(0), working = useRef(false)
+  const [liveError, setLiveError] = useState('')
+  const load = async () => {
+    const token = generation.current, order = ++loadOrder.current
+    const results = await Promise.allSettled([request({ endpoint: 'contact-requests' }), request({ endpoint: 'contact-relations' })])
+    if (token !== generation.current || order !== loadOrder.current) return
+    const [requests, relations] = results.map(result => result.status === 'fulfilled' ? result.value : null)
+    setData(previous => ({ requests: requests ?? previous?.requests ?? [], relations: relations ?? previous?.relations ?? [] }))
+    const failed = results.find(result => result.status === 'rejected')
+    if (failed) throw failed.reason
+  }
+  useEffect(() => () => { generation.current += 1; loadOrder.current += 1 }, [request])
+  useLiveRefresh(async () => { if (working.current) return; const token = generation.current; await load(); if (token === generation.current) setLiveError('') }, failure => setLiveError(failureLabel(failure)), request, revision)
+  const run = async work => {
+    if (working.current) return
+    working.current = true; loadOrder.current += 1
+    const token = ++generation.current
+    setBusy(true); setError(''); setLiveError('')
+    try { await work(); if (token === generation.current) await load() }
+    catch (failure) {
+      if (token === generation.current) {
+        setError(failure.code === 'PUBLICATION_CHANGED' ? t('Published Bots changed elsewhere. Your selection is retained. Discard your changes to review the current list before saving again.') : enrollmentFailure(failure))
+        if (['CONTACT_VERSION_CONFLICT', 'PUBLICATION_CHANGED'].includes(failure.code)) {
+          try { await load() } catch { /* Keep the original conflict; never replay the mutation. */ }
+        }
+      }
+    }
+    finally { working.current = false; if (token === generation.current) setBusy(false) }
+  }
   const pending = (data?.requests ?? []).filter(item => item.status === 'pending').length
   return h('div', { className: 'bt-comm-contact-manager' },
     liveError ? h('p', { className: 'bt-comm-reference', role: 'status' }, t('Status may be out of date.'), ' ', liveError) : null,
@@ -246,23 +293,15 @@ export function ContactManager({ request, operation, contacts, humanPrincipalId,
     } }),
     h(AddressNotes, { contacts, notes: addressNotes, onSave: onSaveAddressNote, busy: busy || messageBusy }),
     h('details', { className: 'bt-comm-contact-section' }, h('summary', null, t('Add a contact')),
-    h('h3', null, t('Your user code')), h('p', { className: 'bt-comm-user-code', tabIndex: 0 }, code || t('Loading…')),
-    h('p', { className: 'bt-comm-reference' }, t('Share this code with the person you want to add. Both people choose which local Bots to share; none are selected by default.')),
-    h('button', { type: 'button', disabled: busy || !code, onClick: () => { if (confirm !== 'rotate') setConfirm('rotate'); else { setConfirm(''); void run(() => operation('rotate-user-code', {})) } } }, t(confirm === 'rotate' ? 'Confirm code rotation' : 'Rotate user code')),
     h('label', { className: 'bt-comm-field' }, t('Other user code'), h('input', { value: userCode, maxLength: 64, 'aria-label': t('Other user code'), onChange: event => setUserCode(event.target.value) })),
-    h(BotChoices, { bots: sharedBots, selected: share, onChange: setShare, label: 'Bots to share with this request' }),
-    h('button', { type: 'button', disabled: busy || !userCode.trim(), onClick: () => { void run(async () => { await operation('request-contact', { userCode, localBotIds: share }); setUserCode(''); setShare([]) }) } }, t('Request contact')),
+    h('button', { type: 'button', disabled: busy || !userCode.trim(), onClick: () => { void run(async () => { await operation('request-contact', { userCode }); setUserCode('') }) } }, t('Request contact')),
     ),
     h('details', { className: 'bt-comm-contact-section' }, h('summary', null, t('Contact requests'), pending ? h('span', { className: 'bt-comm-count', 'aria-label': `${pending} ${t('pending')}` }, pending) : null),
     (data?.requests ?? []).map(item => h('section', { key: item.requestId, className: 'bt-comm-address' },
       h('p', { title: item.senderPrincipalId ?? item.requestId }, item.senderPrincipalId ? h(CommunicationAvatar, { person: contacts.find(person => person.principalId === item.senderPrincipalId) ?? { principalId: item.senderPrincipalId, displayName: item.senderName, kind: 'human' }, request, allowed: contacts.some(person => person.principalId === item.senderPrincipalId) }) : null, item.senderName ?? t('Outgoing request'), ' · ', statusLabel(item.status)),
       item.status === 'pending' && item.direction === 'incoming' ? h(Fragment, null,
-        h(BotChoices, { bots: sharedBots, selected: incomingShares[item.requestId] ?? [], label: 'Bots to share when accepting', onChange: ids => setIncomingShares(current => ({ ...current, [item.requestId]: ids })) }),
-        h('button', { type: 'button', disabled: busy, onClick: () => { void run(() => operation('accept-contact', { requestId: item.requestId, expectedVersion: item.version, localBotIds: incomingShares[item.requestId] ?? [] })) } }, t('Accept contact')),
+        h('button', { type: 'button', disabled: busy, onClick: () => { void run(() => operation('accept-contact', { requestId: item.requestId, expectedVersion: item.version })) } }, t('Accept contact')),
         h('button', { type: 'button', disabled: busy, onClick: () => { void run(() => operation('reject-contact', { requestId: item.requestId, expectedVersion: item.version })) } }, t('Reject contact'))) :
         item.status === 'pending' ? h('button', { type: 'button', disabled: busy, onClick: () => { void run(() => operation('cancel-contact', { requestId: item.requestId, expectedVersion: item.version })) } }, t('Cancel request')) : null)),
-    !(data?.requests ?? []).length ? h('p', { className: 'bt-comm-reference' }, t('No contact requests')) : null),
-    h('details', { className: 'bt-comm-contact-section' }, h('summary', null, t('Published Bots')), h(BotChoices, { bots: available.bots, selected: published, onChange: value => { if (!publicationDirty.current) publicationBase.current = [...available.publishedBotIds]; publicationDirty.current = true; setPublished(value) }, label: 'Bots available to contacts' }),
-      h('button', { type: 'button', disabled: busy || JSON.stringify([...published].sort()) === JSON.stringify([...available.publishedBotIds].sort()), 'data-dirty': JSON.stringify([...published].sort()) !== JSON.stringify([...available.publishedBotIds].sort()), onClick: () => { void run(async () => { await operation('publish-bots', { localBotIds: published, expectedPublishedBotIds: publicationBase.current ?? available.publishedBotIds }); publicationDirty.current = false; publicationBase.current = null }) } }, t('Save published Bots')),
-      publicationDirty.current ? h('button', { type: 'button', disabled: busy, onClick: () => { publicationDirty.current = false; publicationBase.current = null; setPublished([...available.publishedBotIds]); setError('') } }, t('Discard publication changes')) : null))
+    !(data?.requests ?? []).length ? h('p', { className: 'bt-comm-reference' }, t('No contact requests')) : null))
 }

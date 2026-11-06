@@ -221,8 +221,9 @@ export class HubManagement {
       return { userCode: this.ensureCode(input.principalId), hubId: this.hubId }
     })
   }
-  scope(auth, ids = []) {
+  scope(auth, ids = [], sharePublishedBots = false) {
     requireThat(Array.isArray(ids) && ids.length <= this.store.limits.maxPrincipals && new Set(ids).size === ids.length, 'INVALID_REQUEST')
+    if (sharePublishedBots) { requireThat(ids.length === 0, 'INVALID_REQUEST'); return JSON.stringify(['*']) }
     for (const id of ids) requireThat(this.store.principal(auth, identifier(id)).kind === 'bot', 'INVALID_REQUEST')
     return JSON.stringify([...ids].sort())
   }
@@ -240,7 +241,7 @@ export class HubManagement {
     requireThat(typeof input.userCode === 'string' && input.userCode.length <= 64, 'INVALID_REQUEST')
     return this.op(auth, input, () => {
       this.rate('contact:global', 100); this.rate(`contact:${auth.instanceId}`, 10)
-      const scope = this.scope(auth, input.botPrincipalIds)
+      const scope = this.scope(auth, input.botPrincipalIds, input.sharePublishedBots === true)
       this.cleanup()
       // A private rejection must not reveal itself by freeing a sender-visible slot.
       requireThat(this.db.prepare("SELECT count(*) n FROM hub_contact_requests WHERE sender=? AND (status='pending' OR (status='rejected' AND expires_at>?))").get(input.principalId, this.now()).n < 20, 'CONTACT_LIMIT')
@@ -277,7 +278,7 @@ export class HubManagement {
   respondContact(auth, input, action) {
     requireThat(['accept', 'reject', 'cancel'].includes(action), 'INVALID_REQUEST')
     return this.op(auth, { ...input, action }, () => {
-      const scope = action === 'accept' ? this.scope(auth, input.botPrincipalIds) : '[]'
+      const scope = action === 'accept' ? this.scope(auth, input.botPrincipalIds, input.sharePublishedBots === true) : '[]'
       this.cleanup()
       const row = this.db.prepare('SELECT * FROM hub_contact_requests WHERE id=?').get(input.requestId)
       const state = row && this.contactRequestState(row, input.principalId)
@@ -309,8 +310,14 @@ export class HubManagement {
       return { revoked: true }
     })
   }
+  scopedBots(humanId, serialized, publishedOnly = false) {
+    const ids = JSON.parse(serialized)
+    if (!ids.includes('*')) return ids
+    return this.db.prepare("SELECT p.id FROM principals p JOIN principals h ON h.instance_id=p.instance_id WHERE h.id=? AND p.kind='bot'").all(humanId)
+      .map(row => row.id).filter(id => this.owner(id) === humanId && (!publishedOnly || this.store.isPublished(id)))
+  }
   fenceDms(relation, reason) {
-    const left = JSON.stringify([relation.left_id, ...JSON.parse(relation.left_scope)]), right = JSON.stringify([relation.right_id, ...JSON.parse(relation.right_scope)])
+    const left = JSON.stringify([relation.left_id, ...this.scopedBots(relation.left_id, relation.left_scope)]), right = JSON.stringify([relation.right_id, ...this.scopedBots(relation.right_id, relation.right_scope)])
     const conversations = this.db.prepare(`SELECT c.id FROM conversations c WHERE c.kind='dm'
       AND EXISTS(SELECT 1 FROM memberships m WHERE m.conversation_id=c.id AND m.principal_id IN (SELECT value FROM json_each(?)))
       AND EXISTS(SELECT 1 FROM memberships m WHERE m.conversation_id=c.id AND m.principal_id IN (SELECT value FROM json_each(?)))`).all(left, right)
@@ -336,7 +343,7 @@ export class HubManagement {
     const row = a && b && this.db.prepare('SELECT * FROM hub_contacts WHERE pair=?').get(JSON.stringify([a, b].sort()))
     if (!row) return !this.peer(actor.instance_id) && !this.peer(target.instance_id)
     if (!row.active) return false
-    const permits = id => { const human = this.owner(id); return id === human || JSON.parse(human === row.left_id ? row.left_scope : row.right_scope).includes(id) }
+    const permits = id => { const human = this.owner(id), ids = JSON.parse(human === row.left_id ? row.left_scope : row.right_scope); return id === human || (ids.includes('*') ? this.store.isPublished(id) : ids.includes(id)) }
     return permits(actorId) && permits(targetId)
   }
   filterDirectory(auth, rows, principalId) {
@@ -354,6 +361,6 @@ export class HubManagement {
   }
   relations(auth, input) {
     this.human(auth, input.principalId)
-    return this.db.prepare('SELECT * FROM hub_contacts WHERE left_id=? OR right_id=?').all(input.principalId, input.principalId).map(row => ({ otherHumanPrincipalId: row.left_id === input.principalId ? row.right_id : row.left_id, active: Boolean(row.active), version: row.version, contactEpoch: row.epoch, botPrincipalIds: JSON.parse(row.left_id === input.principalId ? row.left_scope : row.right_scope) }))
+    return this.db.prepare('SELECT * FROM hub_contacts WHERE left_id=? OR right_id=?').all(input.principalId, input.principalId).map(row => ({ otherHumanPrincipalId: row.left_id === input.principalId ? row.right_id : row.left_id, active: Boolean(row.active), version: row.version, contactEpoch: row.epoch, botPrincipalIds: this.scopedBots(input.principalId, row.left_id === input.principalId ? row.left_scope : row.right_scope, true) }))
   }
 }
