@@ -53,7 +53,7 @@ choose **Update this Hub CA trust**, then reconcile the saved request. This
 preserves the existing enrolled identity. It neither silently joins another Hub
 nor approves an enrollment. A same-CA leaf renewal normally requires no new code.
 
-Older v1 codes contain only Hub ID/URL and cannot bootstrap private-CA trust.
+V1 codes are rejected with `HUB_V2_MIGRATION_REQUIRED`; configure the Hub for signed v2 codes before pairing.
 Prefer upgrading the Hub/client to signed codes, or use an already trusted server
 certificate for that legacy deployment. A TLS-intercepting corporate proxy is a
 separate administrator-controlled trust boundary; review its route and policy

@@ -1,3 +1,4 @@
+import { caFixture } from './fixtures/hub-ca-fixture.mjs'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { mkdtemp, mkdir, writeFile, readFile, rm, symlink, link, readdir } from 'node:fs/promises'
@@ -161,7 +162,7 @@ test('resetting old static configuration and Hub enables fresh code enrollment, 
   const { HubManagement } = await import('../../communication-hub/src/management-store.js')
   const { startHub } = await import('../../communication-hub/src/server.js')
   const { resetHub, RESET_CONFIRMATION: HUB_CONFIRMATION } = await import('../../communication-hub/src/reset.js')
-  const { CommunicationOnboarding, openEnrollmentSocket, communicationAuthentication, communicationQueueSettings } = await import('../src/host/federation/onboarding.js')
+  const { CommunicationOnboarding, openEnrollmentSocket, communicationAuthentication, communicationQueueSettings, decodeHubCode } = await import('../src/host/federation/onboarding.js')
   const { CommunicationQueue } = await import('../src/host/federation/queue-store.js')
   const f = await fixture(t), databasePath = join(f.root, 'hub.sqlite'), configPath = join(f.root, 'hub.json')
   await writeFile(configPath, JSON.stringify({ databasePath, peers: [{ instanceId: 'old-static-client', credentialEnv: 'OLD_STATIC_TEST' }], management: { enabled: true } }))
@@ -169,7 +170,9 @@ test('resetting old static configuration and Hub enables fresh code enrollment, 
   oldStore.configurePeer('old-static-client', 'Old synthetic client'); oldStore.close()
   resetHub({ configPath, confirmation: HUB_CONFIRMATION })
   await resetFederation(f.options)
-  const hub = await startHub({ databasePath, host: '127.0.0.1', port: 0, peers: [], management: { enabled: true, password: 'synthetic-test-password-123' } })
+  const certificates = caFixture(); t.after(() => certificates.close())
+  const rootCA = certificates.ca('reset-root'), leaf = certificates.leaf('reset-leaf', rootCA)
+  const hub = await startHub({ databasePath, host: '127.0.0.1', port: 0, peers: [], tls: {cert:leaf.cert,key:leaf.key}, management: { enabled: true, pairingCa:rootCA.pem, password: 'synthetic-test-password-123' } })
   t.after(() => hub.close())
   assert.notEqual(hub.management.hubId, oldHubId)
   assert.equal(hub.store.db.prepare('SELECT count(*) n FROM instances').get().n, 0)
@@ -181,14 +184,14 @@ test('resetting old static configuration and Hub enables fresh code enrollment, 
     modifyRecord: async (key, update) => { const next = await update(structuredClone(records.get(key))); if (next !== undefined) records.set(key, next) },
   }, configEditor: { entries: () => [{ options: { name: 'ds-bot', id: 'bot' } }], edit: async (_entry, update) => { rt.config = update(structuredClone(rt.config)) } } } }
   const onboarding = new CommunicationOnboarding(rt, { allowLoopback: true })
-  const fresh = { hubId: hub.management.hubId, url: hub.url }, hubCode = 'dsbot-hub:1:' + Buffer.from(JSON.stringify(fresh)).toString('base64url')
-  const joined = await onboarding.handle('join', { hubCode, confirmedHubId: fresh.hubId, confirmedUrl: fresh.url, displayName: 'Fresh synthetic client' }, { human: true })
+  const fresh = { hubId: hub.management.hubId, url: hub.url }, hubCode = hub.management.info().code, reviewed = decodeHubCode(hubCode, {allowLoopback:true})
+  const joined = await onboarding.handle('join', { hubCode, confirmedTrustFingerprint: reviewed.trustFingerprint, confirmedHubId: fresh.hubId, confirmedUrl: fresh.url, displayName: 'Fresh synthetic client' }, { human: true })
   assert.equal(joined.status, 'pending')
   hub.management.decide({ requestId: joined.requestId, action: 'approve', expectedVersion: 1 })
   const approved = await onboarding.handle('status', { hubId: fresh.hubId }, { human: true })
   assert.equal(approved.status, 'approved'); assert.equal(rt.config.communication.hubId, fresh.hubId)
   assert.equal(rt.config.communication.credentialEnv, undefined)
-  const socket = await openEnrollmentSocket(fresh.url, { allowLoopback: true })
+  const socket = await openEnrollmentSocket(fresh.url, { allowLoopback: true, trust: reviewed.trust, hubId: fresh.hubId })
   try {
     const auth = communicationAuthentication(rt, rt.config.communication.credentialKey, rt.config.communication)
     const welcome = await auth((type, payload) => socket.request(type, payload), (await import('../src/host/federation/transport.js')).communicationCapabilities())

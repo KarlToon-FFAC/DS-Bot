@@ -1,3 +1,4 @@
+import { testHubInput } from './fixtures/v2-hub-code.mjs'
 import assert from 'node:assert/strict'
 import {test} from 'node:test'
 import {mkdtempSync,rmSync,writeFileSync,readFileSync,existsSync,mkdirSync,symlinkSync} from 'node:fs'
@@ -9,8 +10,7 @@ import {CommunicationQueue} from '../src/host/federation/queue-store.js'
 
 const human={human:true},clone=value=>value===undefined?undefined:structuredClone(value)
 const hubs=[{hubId:'hub-A',url:'wss://192.168.10.1:3190/communication'},{hubId:'hub-B',url:'wss://192.168.10.2:3190/communication'}]
-const code=hub=>'dsbot-hub:1:'+Buffer.from(JSON.stringify(hub)).toString('base64url')
-const joinInput=hub=>({hubCode:code(hub),displayName:'Synthetic device',confirmedHubId:hub.hubId,confirmedUrl:hub.url})
+const joinInput=hub=>({...testHubInput(hub),displayName:'Synthetic device'})
 function fixture(t){
  const home=mkdtempSync(join(tmpdir(),'dsbot-hub-profile-'))
  t.after(()=>{assert.equal(dirname(resolve(home)),resolve(tmpdir()));assert.ok(basename(home).startsWith('dsbot-hub-profile-'));rmSync(home,{recursive:true,force:true})})
@@ -54,8 +54,8 @@ test('one active Hub retains distinct queues, keys and outbox across same-Hub re
  const writes=f.writes.length
  const status=await f.api.handle('status',{hubId:a.hubId},human)
  assert.equal(status.paused,true);assert.equal(f.writes.length,writes,'read-only approval status cannot reactivate a paused queue')
- await assert.rejects(f.api.handle('resume-hub',{hubId:a.hubId,confirmedUrl:a.url},human),{code:'HUB_RESUME_CONFIRMATION_REQUIRED'})
- f.restart();await f.api.handle('resume-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmResume:true},human)
+ await assert.rejects(f.api.handle('resume-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmedTrustFingerprint:testHubInput(a).confirmedTrustFingerprint},human),{code:'HUB_RESUME_CONFIRMATION_REQUIRED'})
+ f.restart();await f.api.handle('resume-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmedTrustFingerprint:testHubInput(a).confirmedTrustFingerprint,confirmResume:true},human)
  assert.equal(f.rt.config.communication.enabled,true)
  assert.equal(f.records.get(communicationCredentialKey(a.hubId)).payload.publicKey===keyA,true)
  await f.api.handle('switch-hub',{...joinInput(b),expectedCurrentHubId:a.hubId},human)
@@ -68,9 +68,9 @@ test('one active Hub retains distinct queues, keys and outbox across same-Hub re
  assert.notEqual(original.dataPath,other.dataPath,'even identical instance IDs at different Hubs get distinct databases')
  assert.equal(f.records.get(communicationCredentialKey(b.hubId)).payload.publicKey===keyA,false)
  const newQueue=new CommunicationQueue(other.dataPath,{instanceId:second.instanceId});assert.equal(newQueue.pendingOutbox().length,0);newQueue.close()
- await f.api.handle('switch-hub',{hubId:a.hubId,confirmedHubId:a.hubId,confirmedUrl:a.url,expectedCurrentHubId:b.hubId},human)
+ await f.api.handle('switch-hub',{hubId:a.hubId,confirmedHubId:a.hubId,confirmedUrl:a.url,confirmedTrustFingerprint:testHubInput(a).confirmedTrustFingerprint,expectedCurrentHubId:b.hubId},human)
  assert.equal(f.rt.config.communication.humanDisplayName,'Name on A');assert.deepEqual(f.rt.config.communication.publishedBotIds,['local-Bot'])
- f.restart();await f.api.handle('resume-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmResume:true},human)
+ f.restart();await f.api.handle('resume-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmedTrustFingerprint:testHubInput(a).confirmedTrustFingerprint,confirmResume:true},human)
  const restored=await communicationQueueSettings(f.rt,communicationCredentialKey(a.hubId),f.rt.config.communication)
  assert.equal(restored.dataPath,original.dataPath)
  const retained=new CommunicationQueue(restored.dataPath,{instanceId:first.instanceId});assert.equal(retained.pendingOutbox()[0].id,'retained-operation');retained.close()
@@ -89,7 +89,7 @@ test('storage without Hub ID always lists selected state, so selecting the joine
   assert.equal(view.enrollments.length,1)
   assert.equal(view.enrollments[0].paused,paused)
   const before=[f.writes.length,f.network.length],key=f.records.get(communicationCredentialKey(a.hubId)).payload.publicKey
-  const result=await f.api.handle('switch-hub',{hubId:a.hubId,expectedCurrentHubId:view.selectedHub.hubId,confirmedHubId:a.hubId,confirmedUrl:a.url},human)
+  const result=await f.api.handle('switch-hub',{hubId:a.hubId,expectedCurrentHubId:view.selectedHub.hubId,confirmedHubId:a.hubId,confirmedUrl:a.url,confirmedTrustFingerprint:testHubInput(a).confirmedTrustFingerprint},human)
   assert.equal(result.selected,true)
   assert.deepEqual([f.writes.length,f.network.length],before,'no request, reconnect or config rewrite on same-Hub selection')
   assert.equal(f.records.get(communicationCredentialKey(a.hubId)).payload.publicKey,key)
@@ -106,10 +106,10 @@ test('storage without Hub ID always lists selected state, so selecting the joine
 test('missing saved identity and stale UI selection give explicit errors without joining or generating keys',async t=>{
  const f=fixture(t),a=hubs[0]
  await f.api.handle('join',joinInput(a),human)
- await assert.rejects(f.api.handle('switch-hub',{hubId:a.hubId,confirmedHubId:a.hubId,confirmedUrl:a.url},human),{code:'HUB_SELECTION_CHANGED'})
+ await assert.rejects(f.api.handle('switch-hub',{hubId:a.hubId,confirmedHubId:a.hubId,confirmedUrl:a.url,confirmedTrustFingerprint:testHubInput(a).confirmedTrustFingerprint},human),{code:'HUB_SELECTION_CHANGED'})
  f.records.clear()
  const before=[f.writes.length,f.network.length]
- await assert.rejects(f.api.handle('switch-hub',{hubId:a.hubId,confirmedHubId:a.hubId,confirmedUrl:a.url,expectedCurrentHubId:a.hubId},human),{code:'JOIN_NOT_SUBMITTED'})
+ await assert.rejects(f.api.handle('switch-hub',{hubId:a.hubId,confirmedHubId:a.hubId,confirmedUrl:a.url,confirmedTrustFingerprint:testHubInput(a).confirmedTrustFingerprint,expectedCurrentHubId:a.hubId},human),{code:'JOIN_NOT_SUBMITTED'})
  await assert.rejects(f.api.handle('switch-hub',{...joinInput(a),expectedCurrentHubId:a.hubId},human),{code:'JOIN_NOT_SUBMITTED'})
  assert.equal(f.records.size,0)
  assert.deepEqual([f.writes.length,f.network.length],before)
@@ -125,10 +125,10 @@ test('edit interruption leaves a durable pause; explicit resume recovers and rev
  let authSent=false
  await assert.rejects(communicationAuthentication(f.rt,communicationCredentialKey(a.hubId),f.rt.config.communication)(async()=>{authSent=true}),{code:'HUB_PAUSED'})
  assert.equal(authSent,false)
- f.failEdit=false;f.restart();await f.api.handle('resume-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmResume:true},human)
+ f.failEdit=false;f.restart();await f.api.handle('resume-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmedTrustFingerprint:testHubInput(a).confirmedTrustFingerprint,confirmResume:true},human)
  assert.ok(f.starts>0);assert.equal(f.records.get(communicationCredentialKey(a.hubId)).payload.paused,false)
  await f.api.handle('disconnect-hub',{hubId:a.hubId},human);f.revoked=true
- await assert.rejects(f.api.handle('resume-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmResume:true},human),{code:'UNAUTHENTICATED'})
+ await assert.rejects(f.api.handle('resume-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmedTrustFingerprint:testHubInput(a).confirmedTrustFingerprint,confirmResume:true},human),{code:'UNAUTHENTICATED'})
  assert.equal(f.rt.config.communication.enabled,false);assert.equal(f.records.get(communicationCredentialKey(a.hubId)).payload.paused,true)
 })
 
@@ -149,14 +149,14 @@ test('interrupted resume requires explicit reconciliation and status cannot fini
  await f.api.handle('join',joinInput(a),human);f.activate()
  await f.api.handle('disconnect-hub',{hubId:a.hubId},human)
  f.failEdit=true
- await assert.rejects(f.api.handle('resume-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmResume:true},human),{code:'STORAGE_UNAVAILABLE'})
+ await assert.rejects(f.api.handle('resume-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmedTrustFingerprint:testHubInput(a).confirmedTrustFingerprint,confirmResume:true},human),{code:'STORAGE_UNAVAILABLE'})
  assert.equal(f.rt.config.communication.enabled,false)
  assert.equal(f.records.get(communicationCredentialKey(a.hubId)).payload.requiresResume,true)
  f.failEdit=false;f.restart()
  const writes=f.writes.length
  assert.equal((await f.api.handle('status',{hubId:a.hubId},human)).paused,true)
  assert.equal(f.writes.length,writes)
- await f.api.handle('resume-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmResume:true},human)
+ await f.api.handle('resume-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmedTrustFingerprint:testHubInput(a).confirmedTrustFingerprint,confirmResume:true},human)
  assert.equal(f.records.get(communicationCredentialKey(a.hubId)).payload.requiresResume,false)
  assert.equal(f.rt.config.communication.enabled,true)
 })
@@ -166,17 +166,17 @@ test('signed leave, revoked-status reconciliation and forgetting separate access
  await f.api.handle('join',joinInput(a),human);f.activate()
  const oldKey=f.records.get(communicationCredentialKey(a.hubId)).payload.publicKey
  writeFileSync(join(f.rt.home,'communication.sqlite'),'retained synthetic history')
- await assert.rejects(f.api.handle('leave-hub',{hubId:a.hubId,confirmedUrl:a.url},human),{code:'HUB_LEAVE_CONFIRMATION_REQUIRED'})
- await assert.rejects(f.api.handle('forget-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmForget:true,deleteLocalHistory:false},human),{code:'HUB_LEAVE_REQUIRED'})
- const left=await f.api.handle('leave-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmLeave:true},human)
+ await assert.rejects(f.api.handle('leave-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmedTrustFingerprint:testHubInput(a).confirmedTrustFingerprint},human),{code:'HUB_LEAVE_CONFIRMATION_REQUIRED'})
+ await assert.rejects(f.api.handle('forget-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmedTrustFingerprint:testHubInput(a).confirmedTrustFingerprint,confirmForget:true,deleteLocalHistory:false},human),{code:'HUB_LEAVE_REQUIRED'})
+ const left=await f.api.handle('leave-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmedTrustFingerprint:testHubInput(a).confirmedTrustFingerprint,confirmLeave:true},human)
  assert.equal(left.left,true);assert.equal(f.rt.config.communication.enabled,false)
  assert.equal(f.records.get(communicationCredentialKey(a.hubId)).payload.departed,true)
  f.restart()
- const status=await f.api.handle('hub-leave-status',{hubId:a.hubId,confirmedUrl:a.url},human)
+ const status=await f.api.handle('hub-leave-status',{hubId:a.hubId,confirmedUrl:a.url,confirmedTrustFingerprint:testHubInput(a).confirmedTrustFingerprint},human)
  assert.equal(status.left,true)
  await assert.rejects(f.api.handle('join',joinInput(a),human),{code:'HUB_LEFT'})
- await assert.rejects(f.api.handle('forget-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmForget:true,deleteLocalHistory:true},human),{code:'HUB_FORGET_CONFIRMATION_REQUIRED'})
- const forgotten=await f.api.handle('forget-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmForget:true,deleteLocalHistory:false},human)
+ await assert.rejects(f.api.handle('forget-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmedTrustFingerprint:testHubInput(a).confirmedTrustFingerprint,confirmForget:true,deleteLocalHistory:true},human),{code:'HUB_FORGET_CONFIRMATION_REQUIRED'})
+ const forgotten=await f.api.handle('forget-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmedTrustFingerprint:testHubInput(a).confirmedTrustFingerprint,confirmForget:true,deleteLocalHistory:false},human)
  assert.equal(forgotten.historyRetained,true);assert.equal(f.rt.config.communication,undefined)
  assert.equal(f.records.size,0)
  assert.equal(readFileSync(join(f.rt.home,'communication.sqlite'),'utf8'),'retained synthetic history')
@@ -195,7 +195,7 @@ test('forgetting one inactive Hub deletes only its scoped cache and leaves the a
  const settings=await communicationQueueSettings(f.rt,communicationCredentialKey(b.hubId),f.rt.config.communication)
  const queue=new CommunicationQueue(settings.dataPath,{instanceId:'shared-instance'});queue.close()
  await f.api.handle('leave-hub',{hubId:b.hubId,confirmedUrl:b.url,confirmLeave:true},human)
- await f.api.handle('switch-hub',{hubId:a.hubId,confirmedHubId:a.hubId,confirmedUrl:a.url,expectedCurrentHubId:b.hubId},human)
+ await f.api.handle('switch-hub',{hubId:a.hubId,confirmedHubId:a.hubId,confirmedUrl:a.url,confirmedTrustFingerprint:testHubInput(a).confirmedTrustFingerprint,expectedCurrentHubId:b.hubId},human)
  const config=clone(f.rt.config),key=f.records.get(communicationCredentialKey(a.hubId)).payload.publicKey
  const result=await f.api.handle('forget-hub',{hubId:b.hubId,confirmedUrl:b.url,confirmForget:true,deleteLocalHistory:true,confirmDeleteLocalHistory:true},human)
  assert.equal(result.historyRetained,false);assert.equal(existsSync(settings.dataPath),false)
@@ -206,16 +206,16 @@ test('forgetting one inactive Hub deletes only its scoped cache and leaves the a
 test('signed status after explicit administrator repair clears only the departed fence and still requires resume',async t=>{
  const f=fixture(t),a=hubs[0]
  await f.api.handle('join',joinInput(a),human);f.activate()
- await f.api.handle('leave-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmLeave:true},human)
+ await f.api.handle('leave-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmedTrustFingerprint:testHubInput(a).confirmedTrustFingerprint,confirmLeave:true},human)
  const key=f.records.get(communicationCredentialKey(a.hubId)).payload.publicKey
  f.revoked=false;f.restart()
  const before=f.writes.length
- assert.equal((await f.api.handle('hub-leave-status',{hubId:a.hubId,confirmedUrl:a.url},human)).left,false)
+ assert.equal((await f.api.handle('hub-leave-status',{hubId:a.hubId,confirmedUrl:a.url,confirmedTrustFingerprint:testHubInput(a).confirmedTrustFingerprint},human)).left,false)
  const record=f.records.get(communicationCredentialKey(a.hubId)).payload
  assert.equal(record.departed,false);assert.equal(record.paused,true);assert.equal(record.requiresResume,true)
  assert.equal(f.writes.length,before,'status cannot activate the paused configuration')
- await assert.rejects(f.api.handle('forget-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmForget:true,deleteLocalHistory:false},human),{code:'HUB_LEAVE_REQUIRED'})
- await f.api.handle('resume-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmResume:true},human)
+ await assert.rejects(f.api.handle('forget-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmedTrustFingerprint:testHubInput(a).confirmedTrustFingerprint,confirmForget:true,deleteLocalHistory:false},human),{code:'HUB_LEAVE_REQUIRED'})
+ await f.api.handle('resume-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmedTrustFingerprint:testHubInput(a).confirmedTrustFingerprint,confirmResume:true},human)
  assert.equal(f.rt.config.communication.enabled,true)
  assert.equal(f.records.get(communicationCredentialKey(a.hubId)).payload.publicKey,key)
 })
@@ -226,7 +226,7 @@ test('forget rejects a concurrent Hub selection without clearing the other confi
  f.records.get(communicationCredentialKey(a.hubId)).payload.departed=true
  const original=join(f.rt.home,'communication.sqlite');writeFileSync(original,'keep history')
  f.rt.communication.close=async()=>{f.rt.config.communication={...b,enabled:false,instanceId:'other-instance',credentialKey:communicationCredentialKey(b.hubId)}}
- await assert.rejects(f.api.handle('forget-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmForget:true,deleteLocalHistory:true,confirmDeleteLocalHistory:true},human),{code:'HUB_SELECTION_CHANGED'})
+ await assert.rejects(f.api.handle('forget-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmedTrustFingerprint:testHubInput(a).confirmedTrustFingerprint,confirmForget:true,deleteLocalHistory:true,confirmDeleteLocalHistory:true},human),{code:'HUB_SELECTION_CHANGED'})
  assert.equal(f.rt.config.communication.hubId,b.hubId)
  assert.equal(readFileSync(original,'utf8'),'keep history')
  assert.equal(f.records.size,1)
@@ -245,7 +245,7 @@ test('forget refuses linked cache roots and linked parents without following the
   mkdirSync(target);writeFileSync(join(target,'keep.txt'),'untouched')
   if(linkParent)symlinkSync(outside,parent,'junction')
   else{mkdirSync(parent);symlinkSync(target,join(parent,scope),'junction')}
-  await assert.rejects(f.api.handle('forget-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmForget:true,deleteLocalHistory:true,confirmDeleteLocalHistory:true},human),{code:'COMMUNICATION_CREDENTIAL_MISMATCH'})
+  await assert.rejects(f.api.handle('forget-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmedTrustFingerprint:testHubInput(a).confirmedTrustFingerprint,confirmForget:true,deleteLocalHistory:true,confirmDeleteLocalHistory:true},human),{code:'COMMUNICATION_CREDENTIAL_MISMATCH'})
   assert.equal(readFileSync(join(target,'keep.txt'),'utf8'),'untouched')
   assert.equal(f.records.size,1)
  }
@@ -257,14 +257,14 @@ test('forget checks key replacement before deleting files and preserves an inter
  f.records.get(communicationCredentialKey(a.hubId)).payload.departed=true
  const original=join(f.rt.home,'communication.sqlite');writeFileSync(original,'keep history')
  f.rt.communication.close=async()=>{f.records.get(communicationCredentialKey(a.hubId)).payload.publicKey='synthetic-concurrently-replaced-key'}
- await assert.rejects(f.api.handle('forget-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmForget:true,deleteLocalHistory:true,confirmDeleteLocalHistory:true},human),{code:'COMMUNICATION_PAIRING_CONFLICT'})
+ await assert.rejects(f.api.handle('forget-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmedTrustFingerprint:testHubInput(a).confirmedTrustFingerprint,confirmForget:true,deleteLocalHistory:true,confirmDeleteLocalHistory:true},human),{code:'COMMUNICATION_PAIRING_CONFLICT'})
  assert.equal(readFileSync(original,'utf8'),'keep history');assert.equal(f.records.size,1)
  const other=fixture(t)
  await other.api.handle('join',joinInput(a),human)
  other.records.get(communicationCredentialKey(a.hubId)).payload.departed=true
  const remove=other.rt.ctx.credentials.deleteRecord
  other.rt.ctx.credentials.deleteRecord=async()=>{throw Error('synthetic provider failure')}
- const input={hubId:a.hubId,confirmedUrl:a.url,confirmForget:true,deleteLocalHistory:false}
+ const input={hubId:a.hubId,confirmedUrl:a.url,confirmedTrustFingerprint:testHubInput(a).confirmedTrustFingerprint,confirmForget:true,deleteLocalHistory:false}
  await assert.rejects(other.api.handle('forget-hub',input,human),{code:'COMMUNICATION_CREDENTIAL_DELETE_FAILED'})
  assert.equal(other.records.size,1)
  other.rt.ctx.credentials.deleteRecord=remove
@@ -274,7 +274,7 @@ test('forget checks key replacement before deleting files and preserves an inter
 
 test('forget refuses pending requests, absent deletion support, forged authority and unsafe queue scope',async t=>{
  const f=fixture(t),a=hubs[0];await f.api.handle('join',joinInput(a),human)
- const input={hubId:a.hubId,confirmedUrl:a.url,confirmForget:true,deleteLocalHistory:true,confirmDeleteLocalHistory:true}
+ const input={hubId:a.hubId,confirmedUrl:a.url,confirmedTrustFingerprint:testHubInput(a).confirmedTrustFingerprint,confirmForget:true,deleteLocalHistory:true,confirmDeleteLocalHistory:true}
  await assert.rejects(f.api.handle('forget-hub',input,{human:true,agent:{}}),{code:'HUMAN_REQUIRED'})
  const record=f.records.get(communicationCredentialKey(a.hubId));record.payload.status='pending'
  await assert.rejects(f.api.handle('forget-hub',input,human),{code:'HUB_CANCEL_REQUIRED'})
@@ -289,11 +289,11 @@ test('legacy static pairing can pause/resume its exact address but cannot be gue
  const f=fixture(t),a=hubs[0]
  f.rt.config.communication={enabled:true,url:a.url,instanceId:'legacy',credentialEnv:'PRIVATE_LAUNCH_ONLY'};f.activate()
  await assert.rejects(f.api.handle('disconnect-hub',{confirmedUrl:hubs[1].url},human),{code:'HUB_CONFIRMATION_REQUIRED'})
- await f.api.handle('disconnect-hub',{confirmedUrl:a.url},human)
+ await f.api.handle('disconnect-hub',{confirmedUrl:a.url,confirmedTrustFingerprint:testHubInput(a).confirmedTrustFingerprint},human)
  assert.equal(f.rt.config.communication.enabled,false)
  assert.equal(f.records.size,0)
  await assert.rejects(f.api.handle('switch-hub',joinInput(hubs[1]),human),{code:'LEGACY_HUB_SWITCH_REQUIRES_REENROLLMENT'})
- await f.api.handle('resume-hub',{confirmedUrl:a.url,confirmResume:true},human)
+ await f.api.handle('resume-hub',{confirmedUrl:a.url,confirmedTrustFingerprint:testHubInput(a).confirmedTrustFingerprint,confirmResume:true},human)
  assert.equal(f.rt.config.communication.enabled,true)
  assert.equal(f.rt.config.communication.credentialEnv,'PRIVATE_LAUNCH_ONLY')
  assert.equal(f.network.length,0,'no identity guessed or new key generated')
@@ -309,16 +309,16 @@ test('local disconnect works after device revocation; verified repair alone neve
  assert.equal(paused.paused,true);assert.equal(paused.localOnly,true)
  assert.equal(f.network.length,before,'local pause does not authenticate against a revoked Hub device')
  assert.equal(f.rt.config.communication.enabled,false)
- await assert.rejects(f.api.handle('resume-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmResume:true},human),{code:'UNAUTHENTICATED'})
- const status=await f.api.handle('hub-leave-status',{hubId:a.hubId,confirmedUrl:a.url},human)
+ await assert.rejects(f.api.handle('resume-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmedTrustFingerprint:testHubInput(a).confirmedTrustFingerprint,confirmResume:true},human),{code:'UNAUTHENTICATED'})
+ const status=await f.api.handle('hub-leave-status',{hubId:a.hubId,confirmedUrl:a.url,confirmedTrustFingerprint:testHubInput(a).confirmedTrustFingerprint},human)
  assert.equal(status.left,true);assert.equal(f.records.get(key).payload.departed,true)
  await assert.rejects(f.api.handle('join',joinInput(a),human),{code:'HUB_LEFT'})
  f.revoked=false
- const repaired=await f.api.handle('hub-leave-status',{hubId:a.hubId,confirmedUrl:a.url},human)
+ const repaired=await f.api.handle('hub-leave-status',{hubId:a.hubId,confirmedUrl:a.url,confirmedTrustFingerprint:testHubInput(a).confirmedTrustFingerprint},human)
  assert.equal(repaired.left,false);assert.equal(f.records.get(key).payload.departed,false)
  assert.equal(f.records.get(key).payload.paused,true)
  assert.equal(f.rt.config.communication.enabled,false,'repair observation is not permission to resume pending work')
- await f.api.handle('resume-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmResume:true},human)
+ await f.api.handle('resume-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmedTrustFingerprint:testHubInput(a).confirmedTrustFingerprint,confirmResume:true},human)
  assert.equal(f.rt.config.communication.instanceId,enrolled.instanceId)
  assert.equal(f.records.get(key).payload.publicKey,originalKey)
  assert.equal(f.rt.config.communication.enabled,true)

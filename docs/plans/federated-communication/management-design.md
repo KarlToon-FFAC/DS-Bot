@@ -4,7 +4,7 @@ Implementation baseline: `37738c6`. This design uses public DSH APIs and additiv
 
 ## Public Hub identity
 
-`GET /hub-info` returns `{hubId,url,code}` when the operator configured a reachable communication URL. `hubId` is a persisted UUID. `code` is `dsbot-hub:1:` followed by base64url UTF-8 JSON `{hubId,url}`. The URL includes the full `/communication` WSS endpoint; only isolated loopback development accepts WS. No userinfo, query, fragment or redirect is allowed. A Hub code is public location metadata, never an authentication grant. Clients must retain the selected Hub ID and exact origin and validate TLS normally. A short opaque code cannot locate a machine without a separate discovery service.
+`GET /hub-info` returns `{hubId,url,code}` when the operator configured a reachable communication URL. `hubId` is a persisted UUID. `code` is exclusively a signed `dsbot-hub:2:` payload binding the Hub ID, URL, public CA, leaf certificate and expiry. V1 codes fail with `HUB_V2_MIGRATION_REQUIRED`; managed CLI deployment requires public CA and matching WSS/TLS configuration. The URL includes the full `/communication` WSS endpoint; only isolated loopback development accepts WS. No userinfo, query, fragment or redirect is allowed. A Hub code is public location metadata, never an authentication grant. Clients must retain the selected Hub ID and exact origin and validate TLS normally. A short opaque code cannot locate a machine without a separate discovery service.
 
 ## Enrollment wire contract
 

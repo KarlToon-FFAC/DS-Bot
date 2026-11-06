@@ -39,7 +39,7 @@ test('signed Hub code binds CA, endpoint, identity, signature and lifetime; lega
     assert.throws(() => signedHubCode('hub-test', url, { caPem: root.pem, certificatePem: mismatch.cert, privateKey: mismatch.key }), { code: 'INVALID_CONFIG' })
     assert.throws(() => signedHubCode('hub-test', url, { caPem: leaf.key, certificatePem: leaf.cert, privateKey: leaf.key }), { code: 'INVALID_CONFIG' })
     const legacy = 'dsbot-hub:1:' + Buffer.from(JSON.stringify({hubId:'hub-test',url})).toString('base64url')
-    assert.equal(decodeHubCode(legacy, {allowLoopback:true}).trust, undefined)
+    assert.throws(() => decodeHubCode(legacy, {allowLoopback:true}), {code:'HUB_V2_MIGRATION_REQUIRED'})
   } finally { f.close() }
 })
 

@@ -127,7 +127,7 @@ test('Human profile stages name, upload and reset behind one dirty Save without 
 
 test('Hub code review reveals the actual address and storage before a Human explicitly submits or cancels a join', async () => {
   await ui(async ({ exports: api, doc, render, click, edit }) => {
-    const calls = [], hub = { version: 1, hubId: 'hub-one', url: 'wss://hub.example.test:3190/communication' }
+    const calls = [], hub = { version: 2, trustFingerprint:'a'.repeat(64), hubId: 'hub-one', url: 'wss://hub.example.test:3190/communication' }
     const request = async body => {
       calls.push(body)
       if (body.endpoint === 'onboarding-storage') return { storage: { defaultProvider: 'owner-acl-plaintext', encryptedByDefault: false, agentIsolation: false }, enrollments: [] }

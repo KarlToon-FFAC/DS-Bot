@@ -1,6 +1,15 @@
+import { testHubCode, testHubInput } from './fixtures/v2-hub-code.mjs'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { install } from '../src/host/communication.js'
+
+test('v1 pairing fails as unmigrated before credentials, network or config can be touched', async () => {
+  const {CommunicationOnboarding,decodeHubCode}=await import('../src/host/federation/onboarding.js')
+  const code='dsbot-hub:1:'+Buffer.from(JSON.stringify({hubId:'old-test-hub',url:'wss://127.0.0.1:3190/communication'})).toString('base64url')
+  for (const options of [{},{allowLoopback:true}]) assert.throws(()=>decodeHubCode(code,options),{code:'HUB_V2_MIGRATION_REQUIRED'})
+  const onboarding=new CommunicationOnboarding({config:{},ctx:{}},{connect:()=>{throw Error('network must not be used')}})
+  await assert.rejects(onboarding.handle('join',{hubCode:code},{human:true}),{code:'HUB_V2_MIGRATION_REQUIRED'})
+})
 
 test('unconfigured instances expose only authenticated Human setup routes without enrolling or adding communication send tools', async () => {
   let route, loaded = 0
@@ -11,7 +20,7 @@ test('unconfigured instances expose only authenticated Human setup routes withou
   const call = async body => (await route.fetch(new Request('http://127.0.0.1/api/communication', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }))).json()
   assert.equal((await call({ endpoint: 'state' })).value.enabled, false)
   const url = 'wss://hub.example.test/communication', hubId = 'synthetic-hub'
-  const hubCode = 'dsbot-hub:1:' + Buffer.from(JSON.stringify({ hubId, url })).toString('base64url')
+  const hubCode = testHubCode({hubId,url})
   const decoded = await call({ endpoint: 'decode-hub-code', hubCode })
   assert.equal(decoded.ok, true)
   assert.equal(decoded.value.url, url)
@@ -32,7 +41,7 @@ test('enrollment HTTP diagnostics expose only safe failure phase and never an un
   } }
   install(rt)
   const hub = { hubId: 'diagnostic-test', url: 'wss://hub.example.test/communication' }
-  const response = await route.fetch(new Request('http://127.0.0.1/api/communication', { method: 'POST', body: JSON.stringify({ endpoint: 'join-hub', hubCode: 'dsbot-hub:1:' + Buffer.from(JSON.stringify(hub)).toString('base64url'), displayName: 'Synthetic device', confirmedHubId: hub.hubId, confirmedUrl: hub.url }) }))
+  const response = await route.fetch(new Request('http://127.0.0.1/api/communication', { method: 'POST', body: JSON.stringify({ endpoint: 'join-hub', ...testHubInput(hub), displayName: 'Synthetic device' }) }))
   const body = await response.json()
   assert.equal(body.error.code, 'COMMUNICATION_CREDENTIAL_READ_FAILED')
   assert.equal(body.error.phase, 'COMMUNICATION_CREDENTIAL_READ_FAILED')

@@ -1,3 +1,6 @@
+import WebSocket from 'ws'
+import { caFixture } from '../../test/fixtures/hub-ca-fixture.mjs'
+import { trustedHubFetch } from './trusted-hub-fetch.mjs'
 // Real owned DSH profiles, public Human APIs, offline reset CLIs and deterministic Mock.
 // Run serially: node ds-bot/dev/communication/complete-reset-acceptance.mjs [--keep-profiles]
 import assert from 'node:assert/strict'
@@ -36,7 +39,10 @@ const topology = new LocalTopology({ prefix: `hub-onboard-${nonce}-complete-rese
 const output = join(topology.root, `${topology.prefix}-acceptance.json`)
 const hubConfig = join(topology.root, `${topology.prefix}-hub.json`)
 const hubDatabase = join(topology.root, `${topology.prefix}-hub.sqlite`)
-const origin = `http://127.0.0.1:${options.hub}`
+const certificates = caFixture(), authority = certificates.ca('reset-v2-root'), leaf = certificates.leaf('reset-v2-leaf', authority)
+const origin = `https://127.0.0.1:${options.hub}`
+topology.url = `wss://127.0.0.1:${options.hub}/communication`
+const fetchHub = (url, options) => trustedHubFetch(url, options, authority.pem)
 const adminPassword = randomBytes(24).toString('base64url'), staticCredential = randomBytes(32).toString('hex')
 const staticInstance = `reset-static-${nonce}`
 const environment = Object.fromEntries(Object.entries(process.env).filter(([key]) => ['PATH', 'HOME', 'USER', 'LANG', 'LC_ALL', 'TMPDIR', 'TMP', 'TEMP', 'SystemRoot'].includes(key)))
@@ -52,7 +58,7 @@ const fail = (code, target) => { throw Object.assign(new Error(code), { code, ..
 const hash = value => createHash('sha256').update(value).digest('hex')
 let hubProcess, adminCookie, csrf, shuttingDown = false, ownsHubFiles = false
 const bench = topology.bench.bind(topology)
-topology.bench = (peer, action, extra = {}) => bench(peer, action, { DSBOT_COMMUNICATION_OWNER_PID: String(process.pid), DSBOT_COMMUNICATION_ONBOARDING_FIXTURE: '1', DSBOT_COMMUNICATION_CONFIG: '', DSBOT_COMMUNICATION_CREDENTIAL: '', DSBOT_WEB_OPEN: '0', ...extra })
+topology.bench = (peer, action, extra = {}) => bench(peer, action, { DSBOT_COMMUNICATION_OWNER_PID: String(process.pid), DSBOT_COMMUNICATION_ONBOARDING_FIXTURE: '1', DSBOT_COMMUNICATION_CONFIG: '', DSBOT_COMMUNICATION_CREDENTIAL: '', DSBOT_WEB_OPEN: '0', NODE_EXTRA_CA_CERTS: authority.cert, DSBOT_COMMUNICATION_TEST_CA_FILE:authority.cert, ...extra })
 
 function files(root) {
   if (!existsSync(root)) return []
@@ -109,14 +115,14 @@ async function command(script, args, extra = {}) {
 }
 async function startHub() {
   assert.ok(!hubProcess || hubProcess.exitCode !== null || hubProcess.signalCode !== null)
-  hubProcess = spawn(process.execPath, [join(repo, 'communication-hub/src/cli.js'), hubConfig], { windowsHide: true, stdio: ['ignore', 'ignore', 'ignore'], env: { ...environment, DSBOT_RESET_TEST_ADMIN: adminPassword, DSBOT_RESET_TEST_STATIC: staticCredential } })
+  hubProcess = spawn(process.execPath, [join(repo, 'communication-hub/src/cli.js'), hubConfig], { windowsHide: true, stdio: ['ignore', 'ignore', 'ignore'], env: { ...environment, DSBOT_RESET_TEST_ADMIN: adminPassword, DSBOT_RESET_TEST_STATIC: staticCredential, DSBOT_RESET_TEST_CERT: leaf.cert, DSBOT_RESET_TEST_KEY: leaf.key } })
   let spawnError
   hubProcess.once('error', error => { spawnError = error })
   await until(async () => {
     if (spawnError || hubProcess.exitCode !== null || hubProcess.signalCode !== null) fail('ACCEPTANCE_HUB_START_FAILED')
-    try { const response = await fetch(origin + '/health', { signal: AbortSignal.timeout(2000) }); return response.ok } catch { return false }
+    try { const response = await fetchHub(origin + '/health', { signal: AbortSignal.timeout(2000) }); return response.ok } catch { return false }
   }, 'owned CLI Hub ready', 20000)
-  const info = await (await fetch(origin + '/hub-info', { signal: AbortSignal.timeout(10000) })).json()
+  const info = await (await fetchHub(origin + '/hub-info', { signal: AbortSignal.timeout(10000) })).json()
   assert.ok(info.hubId && info.code)
   return info
 }
@@ -129,7 +135,7 @@ async function stopHub() {
   if (code !== 0 || signal) fail('ACCEPTANCE_HUB_NORMAL_STOP_FAILED')
 }
 async function admin(path, input = {}, session = { cookie: adminCookie, csrf }) {
-  const response = await fetch(origin + '/admin/api/' + path, { method: 'POST', headers: { 'content-type': 'application/json', origin, ...(session.cookie ? { cookie: session.cookie, 'x-csrf-token': session.csrf } : {}) }, body: JSON.stringify(input), signal: AbortSignal.timeout(15000) })
+  const response = await fetchHub(origin + '/admin/api/' + path, { method: 'POST', headers: { 'content-type': 'application/json', origin, ...(session.cookie ? { cookie: session.cookie, 'x-csrf-token': session.csrf } : {}) }, body: JSON.stringify(input), signal: AbortSignal.timeout(15000) })
   const result = await response.json()
   if (!result.ok) fail(result.error?.code ?? 'ACCEPTANCE_ADMIN_INVALID_RESPONSE')
   if (path === 'login') {
@@ -139,7 +145,7 @@ async function admin(path, input = {}, session = { cookie: adminCookie, csrf }) 
   return result.value
 }
 async function rpc(type, payload) {
-  const socket = new WebSocket(topology.url)
+  const socket = new WebSocket(topology.url, {ca:authority.pem})
   try {
     await new Promise((accept, reject) => { socket.addEventListener('open', accept, { once: true }); socket.addEventListener('error', () => reject(new Error('ACCEPTANCE_SOCKET_FAILED')), { once: true }); setTimeout(() => reject(new Error('ACCEPTANCE_SOCKET_TIMEOUT')), 15000).unref() })
     return await new Promise((accept, reject) => {
@@ -179,7 +185,7 @@ async function connected(peer, hubId) {
 }
 async function enroll(peer, info) {
   const reviewed = await api(peer, 'decode-hub-code', { hubCode: info.code })
-  const pending = await api(peer, 'join-hub', { hubCode: info.code, confirmedHubId: reviewed.hubId, confirmedUrl: reviewed.url, displayName: `Reset test ${peer.id.toUpperCase()}` })
+  const pending = await api(peer, 'join-hub', { hubCode: info.code, confirmedHubId: reviewed.hubId, confirmedUrl: reviewed.url, confirmedTrustFingerprint: reviewed.trustFingerprint, displayName: `Reset test ${peer.id.toUpperCase()}` })
   assert.equal(pending.status, 'pending')
   const request = (await admin('state')).requests.find(value => value.requestId === pending.requestId)
   assert.equal(request?.status, 'pending')
@@ -322,7 +328,7 @@ try {
   for (const port of ports) await freePort(port)
   for (const peer of topology.peers) { peer.home = join(repo, `.dsh-test-${peer.name}`); assert.equal(existsSync(peer.home), false, 'Acceptance cannot reuse a pre-existing profile') }
   assert.equal(existsSync(hubConfig), false); assert.equal(existsSync(hubDatabase), false)
-  writeFileSync(hubConfig, JSON.stringify({ databasePath: basename(hubDatabase), host: '127.0.0.1', port: options.hub, peers: [{ instanceId: staticInstance, credentialEnv: 'DSBOT_RESET_TEST_STATIC' }], management: { enabled: true, adminPasswordEnv: 'DSBOT_RESET_TEST_ADMIN', url: topology.url } }, null, 2) + '\n', { mode: 0o600, flag: 'wx' })
+  writeFileSync(hubConfig, JSON.stringify({ databasePath: basename(hubDatabase), host: '127.0.0.1', port: options.hub, peers: [{ instanceId: staticInstance, credentialEnv: 'DSBOT_RESET_TEST_STATIC' }], tls: {certificateEnv:'DSBOT_RESET_TEST_CERT',privateKeyEnv:'DSBOT_RESET_TEST_KEY'}, management: { enabled: true, pairingCaFile:authority.cert, adminPasswordEnv: 'DSBOT_RESET_TEST_ADMIN', url: topology.url } }, null, 2) + '\n', { mode: 0o600, flag: 'wx' })
   ownsHubFiles = true
   for (const peer of topology.peers) peer.owned = true
   const oldHub = await startHub()
@@ -428,7 +434,7 @@ try {
   record('actual-Node-remote-CLI-reconciles-reset-generation-without-reenrollment')
   stage('old Hub code rejected by public Human API')
   const a = topology.peers[0], reviewedOld = await api(a, 'decode-hub-code', { hubCode: oldHub.code })
-  await assert.rejects(api(a, 'join-hub', { hubCode: oldHub.code, confirmedHubId: reviewedOld.hubId, confirmedUrl: reviewedOld.url, displayName: 'Stale code must not enroll' }), { code: 'INVALID_ENROLLMENT_CHALLENGE' })
+  await assert.rejects(api(a, 'join-hub', { hubCode: oldHub.code, confirmedHubId: reviewedOld.hubId, confirmedUrl: reviewedOld.url, confirmedTrustFingerprint: reviewedOld.trustFingerprint, displayName: 'Stale code must not enroll' }), { code: 'INVALID_ENROLLMENT_CHALLENGE' })
   assert.equal((await admin('state')).requests.length, 0)
   // A failed enrollment prepares a local key by design; erase that attempted state too.
   await topology.bench(a, 'stop'); await clientReset(a, true); await startPeer(a)
@@ -475,4 +481,5 @@ try {
   } else { evidence.ownedArtifactsRemoved = false; evidence.retainedReason = options.keep ? 'explicit keep-profiles' : 'failed acceptance retained for diagnosis; no residual cleanup claimed' }
   save()
   console.log(`Evidence ${relative(repo, output)}`)
+  certificates.close()
 }

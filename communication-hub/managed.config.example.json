@@ -4,7 +4,13 @@
   "databasePath": "./data/hub.sqlite",
   "management": {
     "enabled": true,
-    "adminPasswordEnv": "DSBOT_HUB_ADMIN_PASSWORD"
+    "adminPasswordEnv": "DSBOT_HUB_ADMIN_PASSWORD",
+    "url": "wss://hub.example.test:3190/communication",
+    "pairingCaFile": "./certs/ca.pem"
   },
-  "peers": []
+  "peers": [],
+  "tls": {
+    "certificateEnv": "DSBOT_HUB_TLS_CERT",
+    "privateKeyEnv": "DSBOT_HUB_TLS_KEY"
+  }
 }

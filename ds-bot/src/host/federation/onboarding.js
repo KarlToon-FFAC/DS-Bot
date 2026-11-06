@@ -11,7 +11,7 @@ import { communicationCapabilities } from './transport.js'
 
 const PROTOCOL = 'dsbot-communication/1'
 const RECORD_TYPE = 'dsbot-communication-signing-key'
-const PREFIX = 'dsbot-hub:1:'
+const PREFIX = 'dsbot-hub:2:'
 const MAX_CHALLENGE_MS = 65000
 const statuses = new Set(['pending', 'approved', 'rejected', 'cancelled', 'expired'])
 const fail = code => { throw Object.assign(new Error(code), { code }) }
@@ -61,8 +61,8 @@ function permittedAddress(address, allowLoopback) {
 }
 
 export function decodeHubCode(code, options) {
-  const v2 = typeof code === 'string' && code.startsWith('dsbot-hub:2:')
-  if (typeof code !== 'string' || code.length > (v2 ? 65536 : 4096) || !v2 && !code.startsWith(PREFIX)) fail('INVALID_HUB_CODE')
+  if (typeof code === 'string' && code.startsWith('dsbot-hub:1:')) fail('HUB_V2_MIGRATION_REQUIRED')
+  if (typeof code !== 'string' || code.length > 65536 || !code.startsWith(PREFIX)) fail('INVALID_HUB_CODE')
   const encoded = code.slice(PREFIX.length)
   if (!/^[A-Za-z0-9_-]+$/.test(encoded)) fail('INVALID_HUB_CODE')
   let body
@@ -72,14 +72,10 @@ export function decodeHubCode(code, options) {
     body = JSON.parse(bytes.toString('utf8'))
   } catch { fail('INVALID_HUB_CODE') }
   if (!body || Array.isArray(body) || !identifier(body.hubId)) fail('INVALID_HUB_CODE')
-  if (v2) {
-    const url = validateHubUrl(body.url, options)
-    if (url !== body.url || !url.startsWith('wss:')) fail('INVALID_HUB_CODE')
-    const trust = verifyHubCode(body)
-    return { version: 2, hubId: body.hubId, url, trust, trustFingerprint: trust.fingerprint, expiresAt: body.expiresAt }
-  }
-  if (Object.keys(body).sort().join(',') !== 'hubId,url') fail('INVALID_HUB_CODE')
-  return { version: 1, hubId: body.hubId, url: validateHubUrl(body.url, options) }
+  const url = validateHubUrl(body.url, options)
+  if (url !== body.url || !url.startsWith('wss:')) fail('INVALID_HUB_CODE')
+  const trust = verifyHubCode(body)
+  return { version: 2, hubId: body.hubId, url, trust, trustFingerprint: trust.fingerprint, expiresAt: body.expiresAt }
 }
 
 export const communicationCredentialKey = hubId => {

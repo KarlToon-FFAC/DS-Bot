@@ -1,3 +1,4 @@
+import { testHubCode, testHubInput } from './fixtures/v2-hub-code.mjs'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { verify, generateKeyPairSync } from 'node:crypto'
@@ -7,8 +8,8 @@ import { CommunicationOnboarding, communicationAuthentication, communicationCred
   connectHubSocket, decodeHubCode, enrollmentSigningText, openEnrollmentSocket, validateHubUrl } from '../src/host/federation/onboarding.js'
 
 const hub = { hubId: 'hub-isolated-test', url: 'wss://192.168.1.20:3190/communication' }
-const hubCode = value => `dsbot-hub:1:${Buffer.from(JSON.stringify(value)).toString('base64url')}`
-const joinInput = { hubCode: hubCode(hub), displayName: 'Isolated device', confirmedHubId: hub.hubId, confirmedUrl: hub.url }
+const hubCode = testHubCode
+const joinInput = { ...testHubInput(hub), displayName: 'Isolated device' }
 const human = { human: true }
 const clone = value => value === undefined ? undefined : structuredClone(value)
 
@@ -57,14 +58,14 @@ function fixture({ current = {}, failSave = 0, challengeChange, responseStatus =
 }
 
 test('Hub codes identify version, exact endpoint and Hub; private LAN WSS is allowed, unsafe schemes and metadata are rejected', () => {
-  assert.deepEqual(decodeHubCode(hubCode(hub)), { version: 1, ...hub })
+  assert.equal(decodeHubCode(hubCode(hub)).version, 2)
   for (const url of ['ws://192.168.1.20/communication', 'https://example.com/communication', 'wss://u:p@example.com/communication',
     'wss://example.com/communication?secret=no', 'wss://example.com/communication#fragment', 'wss://example.com/elsewhere',
     'wss://169.254.169.254/communication', 'wss://100.100.100.200/communication', 'wss://[fe80::1]/communication',
     'wss://[::ffff:127.0.0.1]/communication', 'wss://localhost/communication', 'wss://0.0.0.0/communication']) {
-    assert.throws(() => decodeHubCode(hubCode({ ...hub, url })))
+    assert.throws(() => validateHubUrl(url))
   }
-  for (const code of ['dsbot-hub:2:abc', 'dsbot-hub:1:abc=', hubCode({ ...hub, credential: 'not allowed' }), hubCode({ ...hub, hubId: '' })]) assert.throws(() => decodeHubCode(code), { code: 'INVALID_HUB_CODE' })
+  for (const code of ['dsbot-hub:2:abc', hubCode({ ...hub, credential: 'not allowed' }), hubCode({ ...hub, hubId: '' })]) assert.throws(() => decodeHubCode(code), { code: 'INVALID_HUB_CODE' })
   assert.throws(() => validateHubUrl('ws://127.0.0.1:3190/communication'), { code: 'TLS_REQUIRED' })
   assert.equal(validateHubUrl('ws://127.0.0.1:3190/communication', { allowLoopback: true }), 'ws://127.0.0.1:3190/communication')
 })

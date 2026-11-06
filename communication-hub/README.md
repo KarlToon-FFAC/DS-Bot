@@ -74,15 +74,16 @@ stable Hub ID: it is a locator, not a secret, discovery service or NAT traversal
 Loopback plaintext is for local isolated tests only. This service does not install
 certificates, open firewall rules or create a persistent system service.
 
-For a private CA, set `management.pairingCaFile` to the public PEM root bundle
+All managed deployments require v2 codes. Set `management.pairingCaFile` to the public PEM root bundle
 (relative to the config file), alongside the existing TLS cert/key settings. The
 Hub then issues signed `dsbot-hub:2:` codes valid for at most seven days. Give the
 code through a trusted channel: it contains public trust material, not an admin
 credential, and cannot authenticate its own source. The client reviews the exact
 address/Hub ID/CA fingerprint and saves trust only for that Hub. No client CA file,
 environment variable or system trust change is needed. Clients predating v2 must
-upgrade; legacy v1 codes keep strict ambient TLS and cannot bootstrap a private
-CA. Renewing a leaf under the same CA needs no re-pairing. For CA rotation, obtain
+upgrade. V1 codes are rejected with `HUB_V2_MIGRATION_REQUIRED`. Missing public CA,
+WSS address or TLS credentials stops the deployment CLI before it opens the database;
+resetting data does not migrate this configuration. Renewing a leaf under the same CA needs no re-pairing. For CA rotation, obtain
 a new trusted code and use **Update this Hub CA trust** in the device setup guide;
 this keeps the device identity. Remove expired roots from overlap bundles before
 they expire. Codes do not create routes, public DNS, firewall rules or NAT tunnels.

@@ -21,8 +21,10 @@ continues to be checked. A renewed leaf under the same CA works normally. A new
 CA requires a fresh trusted v2 code and explicit confirmation for the same Hub ID
 and URL; updating trust preserves the existing device key and enrollment. CA root
 bundles can overlap during rotation. No silent downgrade to ambient trust.
-Legacy v1 codes retain existing strict TLS behavior; a private-CA legacy Hub must
-upgrade/configure a v2 code to offer environment-free pairing. Old clients reject
+Only v2 pairing codes are accepted. V1 codes fail with
+`HUB_V2_MIGRATION_REQUIRED`. Managed deployments require a reachable WSS URL,
+a public CA bundle and matching TLS certificate/key; missing prerequisites prevent
+CLI startup. Resetting data does not migrate this configuration. Old clients reject
 v2 codes rather than partially accepting trust material. Scoped credential records
 use version 2, which old clients reject on rollback instead of reverting to
 ambient TLS. Legacy records remain version 1. No NAT traversal added.

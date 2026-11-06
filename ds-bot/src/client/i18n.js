@@ -5,6 +5,7 @@
 export const NAMESPACE = 'ds-bot'
 
 const ZH = {
+  'This Hub has not migrated to v2 pairing codes. Configure its public CA and restart the Hub, then copy a new v2 code. Resetting data does not perform this migration.': '此 Hub 尚未迁移到 v2 配对码。请配置公开 CA 并重启 Hub，然后重新复制 v2 码。重置数据不会完成此迁移。',
   "Remote profile": "远程展示资料",
   "Saved on this device. Published Bots sync this profile to their authorized Remote audience. Keep private instructions and secrets out.": "资料保存在本机，已发布的 Bot 会同步给获授权的远程联系人。请勿填写内部指令和秘密。",
   "Headline": "职责或专业称号",
@@ -141,7 +142,6 @@ const ZH = {
   "This device already has a Hub identity. Explicitly update this Hub CA trust using the reviewed new code, then check the saved request.": "本设备已有 Hub 身份。请核对新码并明确更新此 Hub 的 CA 信任，再检查已有申请。",
   "Accept this code only from a trusted channel. Its own certificate cannot authenticate an untrusted source.": "请只接受可信渠道提供的 Hub 码，码内证书不能证明不可信来源的身份。",
   "Hub CA fingerprint": "Hub CA 指纹",
-  "Legacy code: ask the Hub owner for a v2 code to pair a private CA without environment settings.": "此为旧版 Hub 码。请向 Hub 管理者索取新版码，以免手动配置私有 CA。",
   "Update this Hub CA trust": "更新此 Hub 的 CA 信任",
   "This DSH runtime lacks the required isolated communication preset API. Check the supported DSH version.": "此 DSH 运行时缺少远程通信所需的隔离预设 API，请核对受支持的 DSH 版本。",
   "An isolated communication preset is already registered. Check for duplicate DS Bot plugin instances; do not remove isolation.": "远程通信隔离预设已被注册，请检查是否重复加载 DS Bot 插件，勿移除隔离限制。",

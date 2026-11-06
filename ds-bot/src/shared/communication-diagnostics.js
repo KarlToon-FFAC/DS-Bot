@@ -1,4 +1,5 @@
 export const communicationDescriptions = {
+  HUB_V2_MIGRATION_REQUIRED: 'This Hub has not migrated to v2 pairing codes. Configure its public CA and restart the Hub, then copy a new v2 code. Resetting data does not perform this migration.',
   COMMUNICATION_RESET_INCOMPLETE: 'Complete federation reset was interrupted. Stop the Host and rerun the same reset command before using Remote communication.',
   COMMUNICATION_BROWSER_RESET_REQUIRED: 'Federation data was reset. Refresh this tab to clear its old communication drafts and pending actions before continuing.',
   PUBLIC_PROFILE_SECRET_REFUSED: 'The public profile appears to contain private credentials. Remove them before saving.',

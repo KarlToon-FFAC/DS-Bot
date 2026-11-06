@@ -47,3 +47,18 @@ test('public Bot list supports skill search and treats profile content as text',
   search.value = 'missing'; search.dispatchEvent(new window.Event('input'))
   assert.match(doc.querySelector('#directory-list').textContent, /No matching/)
 })
+
+
+test('Hub code view refuses an old backend response and only enables copying v2 codes', t => {
+  const window = fixture(t), doc = window.document
+  window.eval('globalThis.showCode = value => render({requests:[],instances:[],...value});')
+  for (const value of [{code:'dsbot-hub:1:synthetic'}, {codeError:'HUB_V2_MIGRATION_REQUIRED'}]) {
+    window.showCode(value)
+    assert.equal(doc.getElementById('copy-code').disabled,true)
+    assert.match(doc.getElementById('hub-code-status').textContent,/HUB_V2_MIGRATION_REQUIRED/)
+    assert.doesNotMatch(doc.getElementById('code').textContent,/dsbot-hub:1:/)
+  }
+  window.showCode({code:'dsbot-hub:2:synthetic-test-code'})
+  assert.equal(doc.getElementById('copy-code').disabled,false)
+  assert.equal(doc.getElementById('code').textContent,'dsbot-hub:2:synthetic-test-code')
+})

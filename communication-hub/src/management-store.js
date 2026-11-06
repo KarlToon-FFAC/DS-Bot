@@ -7,11 +7,12 @@ const digest = value => createHash('sha256').update(value).digest('hex')
 const day = 86400000
 export const enrollmentTranscript = challenge => JSON.stringify(['dsbot-enrollment/1', challenge.hubId, challenge.purpose,
   challenge.challengeId, challenge.nonce, challenge.requestId ?? '', challenge.instanceId ?? '', challenge.expiresAt])
-export function hubCode(hubId, url) {
+export function hubCode(hubId, url, trust) {
   const parsed = new URL(url)
-  requireThat(parsed.protocol === 'wss:' || parsed.protocol === 'ws:' && ['127.0.0.1', '[::1]'].includes(parsed.hostname), 'TLS_REQUIRED')
+  requireThat(parsed.protocol === 'wss:', 'TLS_REQUIRED')
   requireThat(!parsed.username && !parsed.password && !parsed.search && !parsed.hash && parsed.pathname === '/communication', 'INVALID_CONFIG')
-  return `dsbot-hub:1:${Buffer.from(JSON.stringify({ hubId, url: parsed.href })).toString('base64url')}`
+  requireThat(trust, 'HUB_V2_MIGRATION_REQUIRED')
+  return signedHubCode(hubId, url, trust)
 }
 
 // All durable enrollment and consent state shares the Hub transaction boundary.
@@ -36,7 +37,8 @@ export class HubManagement {
     this.hubId = this.db.prepare('SELECT value FROM hub_management WHERE key=?').get('hubId').value
   }
   info() { return { hubId: this.hubId, ...(this.url ? { url: this.url, code: this.pairingTrust
-    ? signedHubCode(this.hubId, this.url, { ...this.pairingTrust, now: this.now() }) : hubCode(this.hubId, this.url) } : {}) } }
+    ? hubCode(this.hubId, this.url, { ...this.pairingTrust, now: this.now() }) : undefined,
+    ...(!this.pairingTrust ? { codeError: 'HUB_V2_MIGRATION_REQUIRED' } : {}) } : {}) } }
   rate(key, limit = 20, windowMs = 60000) {
     const window = Math.floor(this.now() / windowMs) * windowMs, id = digest(key)
     this.db.prepare('DELETE FROM hub_rate_limits WHERE window<?').run(this.now() - 2 * day)

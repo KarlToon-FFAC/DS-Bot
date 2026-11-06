@@ -37,6 +37,10 @@ export function benchEnvironment(environment,home,options,{mock=false}={}){
   const allowed=new Set(['PATH','HOME','USER','LOGNAME','LANG','LC_ALL','TMPDIR','TEMP','TMP','DISPLAY','XDG_RUNTIME_DIR','DSBOT_COMMUNICATION_CONFIG','DSBOT_COMMUNICATION_ONBOARDING_FIXTURE','DSBOT_COMMUNICATION_CREDENTIAL','DSBOT_OPENAI_GUARD_URL','DSBOT_OPENAI_LOCAL','DSBOT_WEB_OPEN','DSBOT_COMMUNICATION_TEST_LIFETIME_MS'])
   const env=Object.fromEntries(Object.entries(environment).filter(([key])=>allowed.has(key)||/^MOCK_[A-Z_]+$/.test(key)))
   Object.assign(env,{DSH_HOME:home,MOCK_PORT:String(options.mockPort),MOCK_LOG:join(home,'mock.jsonl'),MOCK_DELAY_MS:'300',DEEPSEEK_BASE_URL:`http://127.0.0.1:${options.mockPort}/v1`,DEEPSEEK_API_KEY:'mock-key',DSH_TELEMETRY_DISABLED:'1',DSBOT_COMMUNICATION_PROBE:'1',DSBOT_COMMUNICATION_TEST_LOOPBACK:'1',DSBOT_WEB_PORT:String(options.webPort),NO_PROXY:'localhost,127.0.0.1,::1',no_proxy:'localhost,127.0.0.1,::1',DSBOT_COMMUNICATION_OWNER_PID:String(process.pid)})
+  if(!mock && environment.DSBOT_COMMUNICATION_TEST_CA_FILE){
+    env.DSBOT_COMMUNICATION_TEST_CA_FILE=environment.DSBOT_COMMUNICATION_TEST_CA_FILE
+    env.NODE_EXTRA_CA_CERTS=environment.DSBOT_COMMUNICATION_TEST_CA_FILE
+  }
   if(mock){delete env.DSBOT_COMMUNICATION_CREDENTIAL;delete env.DSBOT_COMMUNICATION_CONFIG;delete env.DSBOT_OPENAI_LOCAL;delete env.DSBOT_OPENAI_GUARD_URL}
   return env
 }

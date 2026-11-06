@@ -45,3 +45,13 @@ test('concurrent shutdown treats ESRCH as already stopped but preserves other er
   assert.doesNotThrow(()=>signalOwnedProcess(123,'SIGTERM',missing))
   assert.throws(()=>signalOwnedProcess(123,'SIGTERM',()=>{throw Object.assign(new Error('denied'),{code:'EPERM'})}),{code:'EPERM'})
 })
+
+test('only an explicit test Hub CA reaches the owned host, never the Mock model', () => {
+ const input={NODE_EXTRA_CA_CERTS:'/ambient/unrelated-ca',DSBOT_COMMUNICATION_TEST_CA_FILE:'/synthetic/test-ca.pem'}
+ assert.equal(benchEnvironment({},'/synthetic/test',options).NODE_EXTRA_CA_CERTS,undefined)
+ assert.equal(benchEnvironment({NODE_EXTRA_CA_CERTS:input.NODE_EXTRA_CA_CERTS},'/synthetic/test',options).NODE_EXTRA_CA_CERTS,undefined)
+ const supervisor=benchEnvironment(input,'/synthetic/test',options)
+ assert.equal(supervisor.NODE_EXTRA_CA_CERTS,input.DSBOT_COMMUNICATION_TEST_CA_FILE)
+ assert.equal(benchEnvironment(supervisor,'/synthetic/test',options).NODE_EXTRA_CA_CERTS,input.DSBOT_COMMUNICATION_TEST_CA_FILE)
+ assert.equal(benchEnvironment(input,'/synthetic/test',options,{mock:true}).NODE_EXTRA_CA_CERTS,undefined)
+})

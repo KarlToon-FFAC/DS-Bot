@@ -62,7 +62,7 @@ export function createManagementHttp(management, { password, origin, onRevoke = 
   }
   const handler = async (req, res) => {
     const path = (req.url ?? '').split('?')[0]
-    if (path === '/hub-info' && req.method === 'GET') { send(res, 200, management.info()); return true }
+    if (path === '/hub-info' && req.method === 'GET') { const info=management.info(); send(res, info.codeError ? 503 : 200, info.codeError ? {...info,ok:false,error:{code:info.codeError}} : info); return true }
     if (!path.startsWith('/admin')) return false
     if (!verifier) { send(res, 404, { error: 'MANAGEMENT_DISABLED' }); return true }
     try {

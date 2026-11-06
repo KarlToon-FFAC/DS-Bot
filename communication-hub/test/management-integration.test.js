@@ -32,8 +32,10 @@ test('actual HTTP approval, signed socket login, Human assignment and scoped con
   const hub = await startHub({ databasePath: ':memory:', peers: [], port: 0, management: { enabled: true, password: 'mock-administrator-password-for-local-test' } })
   t.after(() => hub.close())
   const origin = `http://127.0.0.1:${hub.port}`
-  const info = await (await fetch(origin + '/hub-info')).json()
-  assert.ok(info.code.startsWith('dsbot-hub:1:'))
+  const infoResponse = await fetch(origin + '/hub-info'), info = await infoResponse.json()
+  assert.equal(infoResponse.status,503); assert.equal(info.ok,false)
+  assert.equal(info.error.code,'HUB_V2_MIGRATION_REQUIRED')
+  assert.equal(info.codeError, 'HUB_V2_MIGRATION_REQUIRED'); assert.equal(info.code, undefined)
   const loginResponse = await fetch(origin + '/admin/api/login', { method: 'POST', headers: { origin, 'content-type': 'application/json' }, body: JSON.stringify({ password: 'mock-administrator-password-for-local-test' }) })
   const { csrf } = await loginResponse.json(), cookie = loginResponse.headers.getSetCookie()[0].split(';')[0]
   const admin = async (action, input) => {

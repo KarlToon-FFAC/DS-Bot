@@ -293,7 +293,7 @@ for (const hiddenValue of [JSON.stringify(['a:group', 'a:dm', 'hub-one:a:group',
 }
 
 test('uncertain enrollment restores its saved request, exposes safe diagnostics and never automatically resubmits', async () => {
-  const hub = { hubId: 'onboarding-test', url: 'wss://hub.example.test/communication' }, storage = { defaultProvider: 'test', encryptedByDefault: false }
+  const hub = {version:2,trustFingerprint:'a'.repeat(64), hubId: 'onboarding-test', url: 'wss://hub.example.test/communication' }, storage = { defaultProvider: 'test', encryptedByDefault: false }
   let saved = null, absent = false
   await pane({ enabled: false, handle: async body => {
     if (body.endpoint === 'onboarding-storage') return saved ? { configured: true, storage, ...saved } : { configured: false, storage, enrollments: [] }
@@ -321,7 +321,7 @@ test('uncertain enrollment restores its saved request, exposes safe diagnostics 
 })
 
 test('an unreadable local request after an ambiguous join keeps submission blocked until local status is recovered', async () => {
-  const storage = { defaultProvider: 'test' }, hub = { hubId: 'unreadable-test', url: 'wss://hub.example.test/communication' }
+  const storage = { defaultProvider: 'test' }, hub = {version:2,trustFingerprint:'a'.repeat(64), hubId: 'unreadable-test', url: 'wss://hub.example.test/communication' }
   let reads = 0
   await pane({ enabled: false, handle: async body => {
     if (body.endpoint === 'onboarding-storage') { reads++; if (reads === 2) throw Error('DO_NOT_DISPLAY_LOCAL_FAILURE'); return { configured: false, storage, enrollments: [] } }

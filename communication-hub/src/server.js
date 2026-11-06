@@ -40,6 +40,7 @@ export async function startHub({ databasePath, databaseLock, peers, host='127.0.
   const store=new HubStore(databasePath,{limits,beforeCommit,databaseLock})
   try {
   const pairingTrust=managementOptions?.pairingCa ? { caPem:String(managementOptions.pairingCa), certificatePem:String(tls?.cert??''), privateKey:tls?.key } : undefined
+  requireThat(!managementOptions?.enabled || !tls || pairingTrust, 'HUB_V2_MIGRATION_REQUIRED')
   const management=new HubManagement(store,{url:managementOptions?.url??managementOptions?.publicUrl,pairingTrust})
   const configuredPeers=new Set(allowed.keys())
   management.isConfiguredPeer=id=>configuredPeers.has(id)

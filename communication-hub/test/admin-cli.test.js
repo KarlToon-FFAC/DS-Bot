@@ -18,7 +18,7 @@ test('operator CLI covers Hub state/code, enrollment decisions, names, revoke/re
  await assert.rejects(run('rename',{instanceId:instance.instanceId,label:'stale',expectedNameVersion:instance.nameVersion+1}),{code:'INSTANCE_NAME_VERSION_CONFLICT'})
  await run('rename',{instanceId:instance.instanceId,label:'Renamed CLI device',expectedNameVersion:instance.nameVersion})
  assert.equal((await run('state')).instances.find(item=>item.instanceId===instance.instanceId).label,'Renamed CLI device')
- const code=await run('hub-code');assert.ok(code.code.startsWith('dsbot-hub:1:'));assert.equal(code.hubId,hub.management.hubId)
+ await assert.rejects(run('hub-code'), {code:'HUB_V2_MIGRATION_REQUIRED'})
  await run('revoke',{instanceId:instance.instanceId})
  const revoked=(await run('state')).instances.find(item=>item.instanceId===instance.instanceId);assert.equal(Boolean(revoked.trusted),false)
  await run('repair',{instanceId:instance.instanceId,expectedRevision:revoked.revision})
@@ -43,4 +43,11 @@ test('CLI keeps administrator credentials out of arguments/output, consumes priv
  for(const input of [{password},{instanceId:'x',expectedNameVersion:1,label:'x',password}])assert.throws(()=>prepare('rename',input),{code:'INVALID_REQUEST'})
  const rejected=await main(['state','--password',password],{},Readable.from([]),{write(){}},{write:value=>{assert.equal(value.includes(password),false)}})
  assert.equal(rejected,2)
+})
+
+
+test('operator CLI refuses v1 codes returned by an older Hub backend',async t=>{
+ const server=createServer((_req,res)=>{res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify({ok:true,value:{code:'dsbot-hub:1:synthetic-test-code',hubId:'test-old-backend'}}))})
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));t.after(()=>new Promise(resolve=>server.close(resolve)))
+ await assert.rejects(execute(prepare('hub-code'),{url:`http://127.0.0.1:${server.address().port}`,password:'synthetic-test-administrator-password'}),{code:'HUB_V2_MIGRATION_REQUIRED'})
 })

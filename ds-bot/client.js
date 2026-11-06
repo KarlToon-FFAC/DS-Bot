@@ -42,6 +42,7 @@ module.exports = __toCommonJS(index_exports);
 // src/client/i18n.js
 var NAMESPACE = "ds-bot";
 var ZH = {
+  "This Hub has not migrated to v2 pairing codes. Configure its public CA and restart the Hub, then copy a new v2 code. Resetting data does not perform this migration.": "此 Hub 尚未迁移到 v2 配对码。请配置公开 CA 并重启 Hub，然后重新复制 v2 码。重置数据不会完成此迁移。",
   "Remote profile": "远程展示资料",
   "Saved on this device. Published Bots sync this profile to their authorized Remote audience. Keep private instructions and secrets out.": "资料保存在本机，已发布的 Bot 会同步给获授权的远程联系人。请勿填写内部指令和秘密。",
   "Headline": "职责或专业称号",
@@ -176,7 +177,6 @@ var ZH = {
   "This device already has a Hub identity. Explicitly update this Hub CA trust using the reviewed new code, then check the saved request.": "本设备已有 Hub 身份。请核对新码并明确更新此 Hub 的 CA 信任，再检查已有申请。",
   "Accept this code only from a trusted channel. Its own certificate cannot authenticate an untrusted source.": "请只接受可信渠道提供的 Hub 码，码内证书不能证明不可信来源的身份。",
   "Hub CA fingerprint": "Hub CA 指纹",
-  "Legacy code: ask the Hub owner for a v2 code to pair a private CA without environment settings.": "此为旧版 Hub 码。请向 Hub 管理者索取新版码，以免手动配置私有 CA。",
   "Update this Hub CA trust": "更新此 Hub 的 CA 信任",
   "This DSH runtime lacks the required isolated communication preset API. Check the supported DSH version.": "此 DSH 运行时缺少远程通信所需的隔离预设 API，请核对受支持的 DSH 版本。",
   "An isolated communication preset is already registered. Check for duplicate DS Bot plugin instances; do not remove isolation.": "远程通信隔离预设已被注册，请检查是否重复加载 DS Bot 插件，勿移除隔离限制。",
@@ -21315,6 +21315,7 @@ function communicationLogEvents(events) {
 
 // src/shared/communication-diagnostics.js
 var communicationDescriptions = {
+  HUB_V2_MIGRATION_REQUIRED: "This Hub has not migrated to v2 pairing codes. Configure its public CA and restart the Hub, then copy a new v2 code. Resetting data does not perform this migration.",
   COMMUNICATION_RESET_INCOMPLETE: "Complete federation reset was interrupted. Stop the Host and rerun the same reset command before using Remote communication.",
   COMMUNICATION_BROWSER_RESET_REQUIRED: "Federation data was reset. Refresh this tab to clear its old communication drafts and pending actions before continuing.",
   PUBLIC_PROFILE_SECRET_REFUSED: "The public profile appears to contain private credentials. Remove them before saving.",
@@ -22445,6 +22446,7 @@ function AddDevice({ request, displayName = "Human", revision }) {
     (0, import_react57.createElement)("button", { type: "button", disabled: busy || !code.trim(), onClick: () => {
       void run2(async (token) => {
         const value = await request({ endpoint: "decode-hub-code", hubCode: code });
+        if (value.version !== 2 || !value.trustFingerprint) throw Object.assign(new Error("HUB_V2_MIGRATION_REQUIRED"), { code: "HUB_V2_MIGRATION_REQUIRED" });
         if (token === generation.current) setHub(value);
       });
     } }, t("Review Hub")),
@@ -22455,7 +22457,7 @@ function AddDevice({ request, displayName = "Human", revision }) {
       (0, import_react57.createElement)("p", null, t("Hub address"), ": ", (0, import_react57.createElement)("code", null, hub.url)),
       (0, import_react57.createElement)("p", null, "Hub ID: ", (0, import_react57.createElement)("code", null, hub.hubId)),
       (0, import_react57.createElement)("p", { className: "bt-comm-reference" }, t("Accept this code only from a trusted channel. Its own certificate cannot authenticate an untrusted source.")),
-      hub.trustFingerprint ? (0, import_react57.createElement)("p", null, t("Hub CA fingerprint"), ": ", (0, import_react57.createElement)("code", null, hub.trustFingerprint)) : (0, import_react57.createElement)("p", null, t("Legacy code: ask the Hub owner for a v2 code to pair a private CA without environment settings.")),
+      (0, import_react57.createElement)("p", null, t("Hub CA fingerprint"), ": ", (0, import_react57.createElement)("code", null, hub.trustFingerprint)),
       (0, import_react57.createElement)("label", { className: "bt-comm-field" }, t("Device display name"), (0, import_react57.createElement)("input", { value: name, maxLength: 100, "aria-label": t("Device display name"), onChange: (event) => setName(event.target.value) })),
       differentHub ? (0, import_react57.createElement)("p", { className: "bt-comm-reference" }, t("Switching pauses the current Hub and retains its data. A new Hub starts with a separate identity and no published Bots.")) : null,
       differentHub && selectedHub?.legacy ? (0, import_react57.createElement)("p", { role: "status" }, t("Legacy shared-secret pairing cannot be safely assigned to another Hub. Keep this data and enroll through a separate profile first.")) : null,

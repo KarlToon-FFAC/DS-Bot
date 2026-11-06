@@ -46,6 +46,7 @@ export async function execute(prepared,{url,password,caFile,timeout=15000}={}){
   req.end(data)
  })
  if(!result.ok)fail(/^[A-Z][A-Z0-9_]{0,100}$/.test(result.error?.code??'')?result.error.code:'ADMIN_REJECTED')
+ if(prepared.operation==='hub-code' && (result.value?.codeError || typeof result.value?.code!=='string' || !result.value.code.startsWith('dsbot-hub:2:')))fail('HUB_V2_MIGRATION_REQUIRED')
  return prepared.operation==='hub-code'?{code:result.value.code,hubId:result.value.hubId,url:result.value.url}:result.value??{revoked:true}
 }
 export async function main(argv=process.argv.slice(2),env=process.env,stdin=process.stdin,stdout=process.stdout,stderr=process.stderr){
