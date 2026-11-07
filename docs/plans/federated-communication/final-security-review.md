@@ -1,5 +1,9 @@
 # Final local security review
 
+The communication-only tool/empty-workspace decision in this historical review
+was superseded by the user-selected [native work scope](native-work-tools.md)
+on 2026-11-07. Its permission and confidentiality limits are documented there.
+
 2026-11-03. Checkout: `D:\git\DS-Bot-federated`, implementation branch
 `chore/federated-communication`. The requested `docs/federated-communication`
 baseline remains `6ede702b7d698a8d86261ecb6a2a5f1efc8e1e87`. All implementation

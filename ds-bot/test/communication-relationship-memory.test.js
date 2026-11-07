@@ -143,7 +143,7 @@ test('contact profile seeding uses fresh selected-Bot contacts, not the instance
 test('system-prompt assembly refreshes the executing Bot roster instead of another local member cache', async () => {
   const f = fixture(), hooks = new Map()
   try {
-    Object.assign(f.runtime, { tools: [], scoped: new WeakSet(), disposers: [], owners: new Map([['session', f.binding]]), isolateWorkspace: async () => {} })
+    Object.assign(f.runtime, { tools: [], scoped: new WeakSet(), disposers: [], owners: new Map([['session', f.binding]]), syncWorkContext: async () => {} })
     const agent = { id: 'session', ctx: { tools: { register: () => () => {} }, on: (name, fn) => { hooks.set(name, fn); return () => {} } } }
     f.runtime.relationshipContexts.clear()
     f.runtime.scope(agent)

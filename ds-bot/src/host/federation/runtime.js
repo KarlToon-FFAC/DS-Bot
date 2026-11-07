@@ -1,6 +1,5 @@
 import { botDmRecords, botDmContext } from './bot-dm-records.js'
 import { join } from 'node:path'
-import { mkdir } from 'node:fs/promises'
 import { createHash, randomUUID } from 'node:crypto'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { normalizeAttachments, attachmentMetadata, ATTACHMENT_CAPABILITY } from '../../shared/communication-attachments.js'
@@ -15,6 +14,7 @@ import { startedSources } from './work-events.js'
 import { conversationSummary, safeManagementUrl } from './conversation-summary.js'
 import { splitRef } from '../text.js'
 import { communicationPrompt } from './prompt.js'
+import { botWorkDirectory, syncWorkTools, syncWorkPermission, cancelRevokedWork } from './work-tools.js'
 import { RelationshipMemory, relationshipMemoryContext } from './relationship-memory.js'
 import { OUTSIDE_CONVERSATION_TOOLS } from './tool-scope.js'
 import { LOCAL_MANAGEMENT_TOOLS, localManagementAuthority } from './local-management.js'
@@ -82,6 +82,7 @@ export class CommunicationRuntime {
         this.transportError = null
       },
       onChange: async () => {
+        cancelRevokedWork(this)
         const generation = this.transport.generation, socket = this.transport.socket
         const contacts = await this.transport.request('contacts.list')
         if (JSON.stringify(contacts) !== JSON.stringify(this.contacts)) this.managementRevision += 1
@@ -231,7 +232,7 @@ export class CommunicationRuntime {
     const member = this.queue.memberships().find(item => item.conversationId === binding.conversationId
       && item.principalId === binding.recipientPrincipalId && item.membershipEpoch === binding.membershipEpoch)
     return communicationPrompt(bot, binding, member, { ...(this.relationshipContexts?.get(binding.id) ?? this.conversations.get(binding.conversationId)),
-      localUserPrincipalId: this.human.principalId, localMemory: this.localMemoryFor(binding), relationshipMemory: this.relationshipMemoryFor(binding) })
+      localUserPrincipalId: this.human.principalId, workToolNames: this.workToolNames?.get(binding.id) ?? [], localMemory: this.localMemoryFor(binding), relationshipMemory: this.relationshipMemoryFor(binding) })
   }
   async relationshipContext(principalId, input) {
     if (!this.transport.connected) fail('COMMUNICATION_AUTHORIZATION_UNKNOWN')
@@ -333,7 +334,7 @@ export class CommunicationRuntime {
     const communicationNames = new Set(tools.map(tool => tool.name))
     for (const tool of tools) this.disposers.push(agent.ctx.tools.register(tool))
     this.disposers.push(agent.ctx.on('system-prompt/assemble', async (_assembly, context, next) => {
-      await this.isolateWorkspace(agent)
+      await this.syncWorkContext(agent)
       let freshPrompt
       if (this.relationships) {
         const binding = this.owners.get(agent.id)
@@ -357,27 +358,34 @@ export class CommunicationRuntime {
         freshPrompt = this.promptFor(binding)
       }
       const assembled = await next()
-      return { ...assembled, tools: assembled.tools.filter(tool => communicationNames.has(tool.name)),
+      const allowed = name => communicationNames.has(name) || this.workToolScopes?.get(agent)?.get(name)?.active === true
+      return { ...assembled, tools: assembled.tools.filter(tool => allowed(tool.name)),
         sections: assembled.sections.filter(section => ['deployment:persona-prefix', 'ds-bot-communication'].includes(section.name)
-          || section.name.startsWith('tool:') && communicationNames.has(section.name.slice(5)))
+          || section.name.startsWith('tool:') && allowed(section.name.slice(5)))
           // Section functions ran before this async waterfall: replace their old
           // text only after the exact actor's fresh member read has completed.
           .map(section => freshPrompt !== undefined && section.name === 'ds-bot-communication' ? { ...section, text: freshPrompt } : section) }
     }))
     this.disposers.push(agent.ctx.on('tools/execute', async (exec, next) => {
-      if (!communicationNames.has(exec.name)) fail('COMMUNICATION_TOOL_NOT_ALLOWED')
+      if (!communicationNames.has(exec.name) && this.workToolScopes?.get(agent)?.get(exec.name)?.active !== true) fail('COMMUNICATION_TOOL_NOT_ALLOWED')
       return next()
     }))
     this.scoped.add(agent)
   }
-  async isolateWorkspace(agent) {
+  async syncWorkContext(agent) {
     const binding = this.owners.get(agent.id)
-    if (!binding) fail('COMMUNICATION_WORKSPACE_UNAVAILABLE')
-    const cwd = join(this.rt.home, 'communication-workspaces', binding.id)
-    await mkdir(cwd, { recursive: true })
+    const bot = binding && this.rt.botOf(binding.localBotRef)
+    if (!bot) fail('COMMUNICATION_WORKSPACE_UNAVAILABLE')
+    const cwd = await botWorkDirectory(this.rt, bot)
+    const initial = agent.session.header?.cwd
+    if (initial && initial !== cwd) fail('COMMUNICATION_WORKSPACE_CHANGED')
     const folders = this.ctx.get?.('workingDirectory')
     if (typeof folders?.get !== 'function' || typeof folders?.set !== 'function') fail('COMMUNICATION_WORKSPACE_UNAVAILABLE')
     if (folders.get(agent.session) !== cwd) await folders.set(agent, cwd, AbortSignal.timeout(15000))
+    syncWorkPermission(this, agent, bot)
+    const names = await syncWorkTools(this, agent, bot)
+    this.workToolNames ??= new Map()
+    this.workToolNames.set(binding.id, names)
     return cwd
   }
   async operation(principalId, type, payload, id = randomUUID()) {
@@ -615,7 +623,7 @@ export class CommunicationRuntime {
       managementRevision: this.managementRevision ?? 0, transport: this.transport.diagnostics?.() ?? null,
       managementUrl, managementAvailable: managementUrl !== null,
       lastConnectedAt: this.lastConnectedAt ?? null, error: this.transportError ?? this.lastError ?? null, avatarError: this.avatarError ?? null, contacts: this.contacts,
-      limits: this.queue.limits,
+      limits: this.queue.limits, workApprovals: CommunicationRuntime.prototype.workApprovals.call(this),
       localBots: [...this.bots.values()].map(bot => ({ principalId: bot.principalId, displayName: this.rt.botOf(bot.localRef)?.name ?? bot.displayName })),
       conversations: memberships.map(member => ({ ...member, info: this.conversations.get(member.conversationId) ?? null,
         lastMessage: conversationSummary(this.queue.lastMessage(member.conversationId, member.principalId, member.membershipEpoch),
@@ -630,6 +638,33 @@ export class CommunicationRuntime {
       }),
       exportFailures: this.queue.exportFailures().filter(item => memberships.some(member => member.conversationId === item.conversationId)) }
   }
+  workApprovals() {
+    return (this.rt.approvalsView?.() ?? []).flatMap(entry => {
+      const binding = this.owners.get(entry.sessionId)
+      if (!binding) return []
+      const info = this.conversations?.get(binding.conversationId)
+      let author
+      try { author = this.queue.reference(binding.conversationId, binding.recipientPrincipalId, binding.membershipEpoch, entry.detail?.sourceMessageId).message.author } catch {}
+      const person = info?.members.find(item => item.principalId === author?.principalId)
+      return [{ ...entry, conversationId: binding.conversationId, membershipEpoch: binding.membershipEpoch,
+        conversationTitle: info?.title, sourceAuthorPrincipalId: author?.principalId, sourceAuthorName: person?.displayName ?? author?.principalId,
+        botName: this.rt.botOf(binding.localBotRef)?.name ?? binding.localBotRef }]
+    })
+  }
+  async answerWorkApproval(input) {
+    if (this.rt.readOnly?.() !== undefined) fail('COMMUNICATION_READ_ONLY')
+    if (input.expectedScope !== conversationPreferencesScope(this)) fail('HUB_SELECTION_CHANGED')
+    const entry = this.workApprovals().find(item => item.id === input.id && item.answerable)
+    if (!entry || !['allow', 'reject'].includes(input.choice)) fail('COMMUNICATION_APPROVAL_UNAVAILABLE')
+    const binding = this.owners.get(entry.sessionId)
+    if (input.choice === 'allow') {
+      await this.authorize(binding)
+      this.member(binding.recipientPrincipalId, binding.conversationId, binding.membershipEpoch)
+      if (!this.workApprovals().some(item => item.id === entry.id && item.answerable)) fail('COMMUNICATION_APPROVAL_UNAVAILABLE')
+    }
+    this.rt.answerApproval(entry.id, input.choice)
+    return { answered: true }
+  }
   conversationPreferencesScope() { return conversationPreferencesScope(this) }
   setConversationArchived(input) {
     if (this.rt.readOnly?.() !== undefined) fail('COMMUNICATION_READ_ONLY')
@@ -643,18 +678,17 @@ export class CommunicationRuntime {
   async ensureSession(binding, bot, { fresh = false } = {}) {
     const ref = await this.rt.desiredModel(bot)
     if (!ref) fail('MODEL_UNAVAILABLE')
+    const cwd = await botWorkDirectory(this.rt, bot)
     if (binding.sessionIds.length && !fresh) {
       const resolved = await this.ctx.sessionController.resolveAgent(binding.sessionIds.at(-1))
       if ('error' in resolved) fail('SESSION_UNAVAILABLE')
-      if (!hasCommunicationPreset(this.ctx.get('agentPresets'), resolved.agent)) {
+      if (!hasCommunicationPreset(this.ctx.get('agentPresets'), resolved.agent) || resolved.agent.session.header?.cwd !== cwd) {
         const { events } = await this.ctx.sessionController.inspect(resolved.agent.id, AbortSignal.timeout(15000))
         if (!legacySessionSettled(this.queue, binding, resolved.agent, events)) fail('COMMUNICATION_SESSION_MIGRATION_REQUIRED')
         fresh = true
       }
     }
     if (fresh || !binding.sessionIds.length) {
-      const cwd = join(this.rt.home, 'communication-workspaces', binding.id)
-      await mkdir(cwd, { recursive: true })
       const { sessionId } = await this.ctx.sessionController.create({ cwd, agentPreset: COMMUNICATION_PRESET })
       this.queue.addBindingSession(binding.id, sessionId)
       binding.sessionIds.push(sessionId)
@@ -665,7 +699,7 @@ export class CommunicationRuntime {
     if ('error' in resolved) fail('SESSION_UNAVAILABLE')
     if (!hasCommunicationPreset(this.ctx.get('agentPresets'), resolved.agent)) fail('COMMUNICATION_PRESET_UNAVAILABLE')
     this.scope(resolved.agent)
-    await this.isolateWorkspace(resolved.agent)
+    await this.syncWorkContext(resolved.agent)
     const effort = await this.rt.desiredEffort(bot, ref)
     await this.ctx.sessionController.selectModel({ sessionId, ...splitRef(ref), ...(effort === undefined ? {} : { reasoningEffort: effort }) })
     return resolved.agent
@@ -798,7 +832,7 @@ export class CommunicationRuntime {
         if ('error' in resolved) fail('SESSION_UNAVAILABLE')
         if (!hasCommunicationPreset(this.ctx.get('agentPresets'), resolved.agent)) fail('COMMUNICATION_SESSION_MIGRATION_REQUIRED')
         this.scope(resolved.agent)
-        await this.isolateWorkspace(resolved.agent)
+        await this.syncWorkContext(resolved.agent)
         // Fresh exact-scope authorization above precedes releasing only this
         // attempt. A cancelled signal or changed journal invalidates the proof.
         const retryAttempt = retry?.sessionId === sessionId && retry.source.deliveryId === source.deliveryId ? retry : null
@@ -911,7 +945,7 @@ export class CommunicationRuntime {
       const agent=resolved.agent
       if (!hasCommunicationPreset(this.ctx.get('agentPresets'), agent)) fail('COMMUNICATION_SESSION_MIGRATION_REQUIRED')
       this.scope(agent)
-      await this.isolateWorkspace(agent)
+      await this.syncWorkContext(agent)
       if(delivery.state!=='pending'){
         const recovery=await recoverBinding(this.ctx,binding,source,AbortSignal.timeout(15000))
         if(recovery.input.status!=='not_admitted')continue
@@ -957,13 +991,17 @@ export class CommunicationRuntime {
   }
   async closeOwned() {
     this.closed = true
+    const work = [...(this.workControllers?.values() ?? [])]
+    for (const {controller} of work) controller.abort()
     const opening = this.transport.opening, pumping = this.transport.pumping
     this.transport.stop()
     await opening?.catch(() => {})
     await pumping?.catch(() => {})
     await this.processing.catch(() => {})
     await this.workEvents?.catch(() => {})
+    await Promise.allSettled(work.map(entry => entry.done))
     this.transport.credential = undefined
+    for (const sessionId of this.owners.keys()) this.rt.cancelApprovals?.(sessionId)
     for (const dispose of this.disposers.reverse()) if (typeof dispose === 'function') dispose()
     this.queue.close()
   }

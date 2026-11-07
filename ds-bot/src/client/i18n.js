@@ -5,6 +5,16 @@
 export const NAMESPACE = 'ds-bot'
 
 const ZH = {
+  'Work approval request': '待授权操作',
+  'Requested by': '请求来源',
+  'Review local work approvals': '查看本地工作授权',
+  'Local work approvals': '本地工作授权',
+  'These requests execute on this device using your Bot’s permissions. Only you can approve; remote participants cannot.': '这些操作会使用你的 Bot 权限在本机执行。只有你能批准，远程参与者无法批准。',
+  'No local work approvals are pending.': '没有待处理的本地工作授权。',
+  'The Bot working directory changed. Let its current task settle, then retry in a new communication Session.': 'Bot 工作目录已变更。请等待当前任务结束，再在新的通信会话中重试。',
+  'Run this command in the foreground. Background jobs are unavailable in communication Sessions.': '请在前台运行此命令。通信会话暂不支持后台任务。',
+  'This local work approval is no longer available.': '此本地工作授权请求已失效。',
+
   'Edit remote profile': '编辑远程资料',
   'View participant profile': '查看成员资料',
   'Member': '成员',

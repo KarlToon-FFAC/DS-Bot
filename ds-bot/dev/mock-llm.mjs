@@ -131,6 +131,34 @@ function decide(body) {
       > blocks.findLastIndex(block => block.type === 'text' && block.text.includes('[Communication delivery]'))
     const current = textOf(last?.content)
     const relationshipInput = textOf(messages.findLast(message => message.role === 'user' && textOf(message.content).includes('[Communication delivery]'))?.content)
+    const workApproval = /^COMM-WORK-APPROVAL ([a-zA-Z0-9-]+)$/m.exec(relationshipInput.split('Current message:\n').at(-1))
+    if (workApproval) {
+      const tag = workApproval[1], start = messages.findLastIndex(message => message.role === 'user' && textOf(message.content).includes('[Communication delivery]'))
+      const turn = messages.slice(start + 1), calls = turn.flatMap(message => Array.isArray(message.content) ? message.content.filter(block => block.type === 'tool_use') : [])
+      const args = { file_path: `native-approval-${tag}.txt`, content: `approved:${tag}` }
+      if (!calls.length) return [tool('write', args)]
+      if (calls.length === 1) return [tool('write', { ...args, sandbox_permissions: 'workspace-write', justification: 'Allow this one test file in the owned fixture workspace.' })]
+      return [text(`Remote approval ${tag} ${blocks.some(block => block.type === 'tool_result' && block.is_error) ? 'rejected' : 'accepted'}`)]
+    }
+    const work = /^COMM-WORK ([a-zA-Z0-9-]+)$/m.exec(relationshipInput.split('Current message:\n').at(-1))
+    if (work) {
+      const tag = work[1], file = `native-work-${tag}.txt`, shellFile = `native-shell-${tag}.txt`
+      const start = messages.findLastIndex(message => message.role === 'user' && textOf(message.content).includes('[Communication delivery]'))
+      const turn = messages.slice(start + 1), used = turn.flatMap(message => Array.isArray(message.content) ? message.content.filter(block => block.type === 'tool_use') : [])
+      if (turn.some(message => Array.isArray(message.content) && message.content.some(block => block.type === 'tool_result' && block.is_error))) return [text(`Remote work failed ${tag}`)]
+      const shell = tools.has('pwsh') ? 'pwsh' : 'bash'
+      const steps = [
+        ['write', { file_path: file, content: `before:${tag}` }],
+        ['read', { file_path: file }],
+        ['edit', { file_path: file, old_string: `before:${tag}`, new_string: `after:${tag}` }],
+        ['grep', { pattern: `after:${tag}`, path: '.', include: file }],
+        ['glob', { pattern: file, path: '.' }],
+        [shell, { description: 'Verify remote native Shell work', command: shell === 'pwsh' ? `Set-Content -LiteralPath '${shellFile}' -Value 'shell:${tag}'` : `printf '%s' 'shell:${tag}' > '${shellFile}'` }],
+      ]
+      const next = steps[used.length]
+      if (next) return tools.has(next[0]) ? [tool(next[0], next[1])] : [text(`Remote work missing ${next[0]} ${tag}`)]
+      return [text(`Remote work completed ${tag}`)]
+    }
     const relationship = /^COMM-RELATIONSHIP (SAVE|READ|PROMPT) (\S+) (.+)$/m.exec(relationshipInput.split('Current message:\n').at(-1))
     if (relationship) {
       const [, action, tag, value] = relationship
@@ -171,6 +199,8 @@ function decide(body) {
     if (!communicationResults && restate) return [text(`${restate[1] === 'quote' ? '> ' : ''}Summary ${restate[2]} ${restate[1] === 'all' ? '@all' : '@CollabB'}`)]
     const createGroup = /^COMM-CREATE-GROUP (.+)$/.exec(command)
     if (!communicationResults && createGroup && tools.has('create_communication_group')) return [tool('create_communication_group', {title:createGroup[1]})]
+    const workSend = /^COMM-WORK-SEND (\S+) ([a-zA-Z0-9-]+)$/.exec(command)
+    if (!communicationResults && workSend) return [tool('send_contact_message', { contactPrincipalId: workSend[1], text: `COMM-WORK ${workSend[2]}` })]
     const send = /^COMM-SEND (\S+) ([^\n]+)$/.exec(command)
     if (!communicationResults && send) return [tool('send_contact_message', { contactPrincipalId: send[1], text: `COMM-ECHO ${send[2]}` })]
     const post = /^COMM-POST (\S+) (\S+) (.+)$/.exec(command)

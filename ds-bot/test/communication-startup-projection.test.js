@@ -65,7 +65,7 @@ function fixture(t, reason = 'interrupted', guarded = false) {
     if (type === 'conversation.authorize') return { authorized: true }
     assert.fail(`Unexpected request ${type}`)
   }
-  if (!guarded) runtime.scope = () => {}; runtime.isolateWorkspace = async () => {}
+  if (!guarded) runtime.scope = () => {}; runtime.syncWorkContext = async () => {}
   runtime.process = async () => { await runtime.recoverInterrupted(binding); await prompt }
   return { runtime, membership, binding, requests, events, control, agent, counts: () => ({ steers, modelSteps }) }
 }

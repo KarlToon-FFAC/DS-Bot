@@ -15,6 +15,7 @@ import { CommunicationAvatar, HumanProfile, syncAvatarDirectory } from './commun
 import { CommunicationMessage, BotWorkStarted } from './communication-message.js'
 import { selectedAttachments } from './communication-attachments.js'
 import { ConversationRow, ConversationAvatar } from './communication-list.js'
+import { CommunicationWorkApprovals } from './communication-work-approvals.js'
 import { CommunicationActivity } from './communication-activity.js'
 import { CommunicationThread, ThreadReplyComposer } from './communication-thread.js'
 import { CommunicationMemory } from './communication-memory.js'
@@ -506,6 +507,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
           btn('Collapse sidebar',()=>{setNewMenuOpen(false);collapseSidebar(true)},{className:'bt-comm-settings-icon bt-comm-collapse','aria-label':t('Collapse sidebar'),'aria-controls':'bt-comm-nav','aria-expanded':true,title:t('Collapse sidebar'),children:h(SidebarIcon)}))),
       btn('Back to local chats', close, { className: 'bt-comm-back' }),
       member ? btn('Back to conversation', () => setBrowse(false), { className: 'bt-comm-mobile' }) : null,
+      state ? h(CommunicationWorkApprovals, {key:scope,state,request,refresh}) : null,
       h('section', { className: 'bt-comm-connection', 'aria-label': t('Connection status') },
         h('p', { className: 'bt-comm-connection-label', role: 'status', 'data-connected': Boolean(state?.connected && !pollError) }, h('span', { className: 'bt-comm-dot', 'aria-hidden': true }), t(connectionLabel)),
         state ? h('p', { className: 'bt-comm-reference bt-comm-connection-details' }, `${state.instanceId} · ${t('Remote contacts')}: ${remoteCount}`) : null,

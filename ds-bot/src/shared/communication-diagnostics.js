@@ -1,4 +1,7 @@
 export const communicationDescriptions = {
+  COMMUNICATION_WORKSPACE_CHANGED: 'The Bot working directory changed. Let its current task settle, then retry in a new communication Session.',
+  COMMUNICATION_BACKGROUND_UNAVAILABLE: 'Run this command in the foreground. Background jobs are unavailable in communication Sessions.',
+  COMMUNICATION_APPROVAL_UNAVAILABLE: 'This local work approval is no longer available.',
   PROACTIVE_ROOT_CAPABILITY_REQUIRED: 'Update and restart the Hub to support independent proactive Bot tasks. The message was not sent.',
   HUB_V2_MIGRATION_REQUIRED: 'This Hub has not migrated to v2 pairing codes. Configure its public CA and restart the Hub, then copy a new v2 code. Resetting data does not perform this migration.',
   COMMUNICATION_RESET_INCOMPLETE: 'Complete federation reset was interrupted. Stop the Host and rerun the same reset command before using Remote communication.',

@@ -127,7 +127,7 @@ test('migrated legacy instructions never re-enter a new isolated segment interru
     sessionController: { resolveAgent: async id => ({ agent: id === 'old' ? old : safe }), inspect: async id => { inspections.push(id); return { events: id === 'old' ? oldEvents : safeEvents } } } },
     queue: { member: () => {}, completedToolReply: () => null, db: { prepare: sql => ({ get: () => sql.includes('FROM exports') ? { found: 1 } : { body: JSON.stringify(delivery), revoked: 0 } }) } },
     transport: { connected: true, generation: 1, socket: {} },
-    authorize: async () => {}, scope: () => {}, isolateWorkspace: async () => {}, resumedTurns: new Set() }
+    authorize: async () => {}, scope: () => {}, syncWorkContext: async () => {}, resumedTurns: new Set() }
   await CommunicationRuntime.prototype.recoverInterrupted.call(runtime, { ...binding, sessionIds: ['old','safe'] })
   assert.equal(resumed, 1)
   assert.equal(inspections.filter(id => id === 'old').length, 1, 'legacy is inspected for settlement once but excluded from recovery helper rescans')
@@ -148,7 +148,7 @@ test('local memory defaults on for the bound Bot and disabling never reads stora
 test('memory text cannot register local tools or bypass the execution allowlist', async () => {
   const hooks = new Map(), registered = []
   const agent = { ctx: { tools: { register: tool => { registered.push(tool.name); return () => {} } }, on: (name, fn) => { hooks.set(name, fn); return () => {} } } }
-  const runtime = { scoped: new Set(), disposers: [], tools: [{ name: 'read_communication_history' }], isolateWorkspace: async () => {} }
+  const runtime = { scoped: new Set(), disposers: [], tools: [{ name: 'read_communication_history' }], syncWorkContext: async () => {} }
   CommunicationRuntime.prototype.scope.call(runtime, agent)
   const assembled = await hooks.get('system-prompt/assemble')({}, {}, async () => ({
     tools: [{ name: 'read_communication_history' }, { name: 'read_file' }],

@@ -14,6 +14,7 @@ const requests = {
   'bot-dm-history':{conversationId:'private',localBotId:'worker',membershipEpoch:'epoch',limit:10},
   'bot-dm-reference':{conversationId:'private',localBotId:'worker',membershipEpoch:'epoch',messageId:'one'},
   'participant-profile':{conversationId:'group',membershipEpoch:'epoch',targetPrincipalId:'bot:b:expert'},
+  'answer-work-approval': {id:'approval-test',choice:'reject',expectedScope:'local-scope'},
   state: {}, diagnose: {}, contacts: {}, conversations: {}, invites: {}, outbox: {}, members: { conversationId: 'group' },
   history: { conversationId: 'group', after: 1, before: 20, limit: 10, latest: false, membershipEpoch: 'epoch' },
   thread: { conversationId: 'group', messageId: 'message', after: 1, limit: 20, watermark: 10, membershipEpoch: 'epoch' },

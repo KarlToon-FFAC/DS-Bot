@@ -15,7 +15,8 @@ export function install(rt) {
   ctx.on('approval/request', (request, next) => {
     const sessionId = request.agent?.session?.id ?? request.agent?.id
     const owner = sessionId === undefined ? undefined : rt.groupOwners.get(sessionId)
-    const botId = owner?.botId ?? (sessionId === undefined ? undefined : rt.chatOwners.get(sessionId))
+    const communication = rt.communication?.owners?.get(sessionId)
+    const botId = communication?.localBotRef ?? owner?.botId ?? (sessionId === undefined ? undefined : rt.chatOwners.get(sessionId))
     if (botId === undefined) return next()
     const id = randomUUID()
     const entry = {
@@ -23,9 +24,10 @@ export function install(rt) {
       sessionId,
       botId,
       ...(owner ? { roomId: owner.roomId } : {}),
+      ...(communication ? { conversationId: communication.conversationId } : {}),
       tool: String(request.toolName ?? ''),
       reason: String(request.reason ?? '').slice(0, 500),
-      detail: rt.callDetail?.(sessionId, request.callId) ?? {},
+      detail: communication ? rt.communication.workCalls?.get(`${sessionId}:${request.callId}`) ?? {} : rt.callDetail?.(sessionId, request.callId) ?? {},
       at: Date.now(),
     }
     pending.set(id, entry)
@@ -34,7 +36,7 @@ export function install(rt) {
       pending.delete(id)
       rt.noteApproval?.(sessionId, undefined)
     }
-    if (owner === undefined) return Promise.resolve(next()).finally(settled)
+    if (owner === undefined && !communication) return Promise.resolve(next()).finally(settled)
     rt.yieldRoomTurn?.(sessionId)
     return new Promise((resolve) => {
       entry.answer = (outcome) => {

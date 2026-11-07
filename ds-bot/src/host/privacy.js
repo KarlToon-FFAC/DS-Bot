@@ -40,7 +40,7 @@ export function install(rt) {
   // The Bot a call speaks for. A subagent speaks for the Bot at the root of its
   // parent chain, however many subagents sit between them.
   const callerOf = async (exec) => {
-    const own = rt.selfOf(exec.agent?.id) ?? rt.selfOf(exec.agent?.session?.id)
+    const own = rt.selfOf(exec.agent?.id) ?? rt.selfOf(exec.agent?.session?.id) ?? rt.communication?.owners?.get(exec.agent?.id)?.localBotRef
     if (own !== undefined) return own
     let parent = exec.agent?.session?.header?.parentSession
     const seen = new Set()

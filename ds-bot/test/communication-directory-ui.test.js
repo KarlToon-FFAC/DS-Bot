@@ -8,7 +8,7 @@ import { build } from 'esbuild'
 
 const harness = createRequire(join(process.env.DSH_HARNESS, 'package.json'))
 const { JSDOM } = harness('jsdom'), React = harness('react'), { act } = React
-const { outputFiles } = await build({ stdin: { contents: "export * from './communication-group.js'; export * from './communication-live.js'; export * from './communication-contacts.js'; export * from './communication-profile.js'; export * from './communication-onboarding.js'; export * from './communication-list.js'; export { BotMark } from './mark.js'", resolveDir: fileURLToPath(new URL('../src/client/', import.meta.url)), loader: 'js' },
+const { outputFiles } = await build({ stdin: { contents: "export * from './communication-work-approvals.js'; export * from './communication-group.js'; export * from './communication-live.js'; export * from './communication-contacts.js'; export * from './communication-profile.js'; export * from './communication-onboarding.js'; export * from './communication-list.js'; export { BotMark } from './mark.js'", resolveDir: fileURLToPath(new URL('../src/client/', import.meta.url)), loader: 'js' },
   bundle: true, platform: 'browser', format: 'cjs', external: ['react', 'react-dom', '@deepseek-ai/dsh-client-ui-primitives'], write: false })
 
 async function ui(check) {
@@ -552,5 +552,32 @@ test('invitation aggregation never combines different groups or unverified or di
     const base={conversationId:'group',title:'Same title',inviterPrincipalId:'human:remote:one'}
     const groups=api.invitationGroups([{...base,inviteId:'one',principalId:'bot:a:one'},{...base,inviteId:'two',principalId:'bot:a:two'},{...base,inviteId:'three',inviterPrincipalId:'human:remote:two'},{...base,inviteId:'four',conversationId:'other'},{inviteId:'legacy-one',conversationId:'group'},{inviteId:'legacy-two',conversationId:'group'}])
     assert.equal(groups.length,5);assert.equal(groups[0].targets.length,2)
+  })
+})
+
+
+test('local work approvals use an independent dialog and submit one scoped Human decision with visible command and failure', async () => {
+  await ui(async ({ exports: api, doc, dom, render, click }) => {
+    let finish, fail = true, refreshes = 0
+    const calls = [], state = { conversationPreferencesScope: 'own-hub', workApprovals: [{ id: 'ask', botName: 'Worker', tool: 'bash', conversationId: 'remote-task', detail: { code: 'test command', text: 'Fixture operation' }, reason: 'Permission needed', answerable: true }] }
+    const request = body => { calls.push(body); return new Promise((resolve, reject) => { finish = () => fail ? reject(Object.assign(Error('private error'), { code: 'HUB_SELECTION_CHANGED' })) : resolve({ answered: true }) }) }
+    const node = () => React.createElement(api.CommunicationWorkApprovals, { state, request, refresh: async () => { refreshes++ } })
+    await render(node()); assert.equal(calls.length, 0)
+    await click('Review local work approvals')
+    const dialog = doc.querySelector('dialog[aria-label="Local work approvals"]')
+    assert.equal(dialog.parentElement, doc.body)
+    assert.match(dialog.textContent, /Worker.*bash.*remote-task.*Fixture operation.*test command.*Permission needed/s)
+    await act(async () => { [...dialog.querySelectorAll('button')].find(button => button.textContent === 'Allow once').click(); [...dialog.querySelectorAll('button')].find(button => button.textContent === 'Allow once').click() })
+    assert.equal(calls.length, 1); assert.deepEqual(JSON.parse(JSON.stringify(calls[0])), { endpoint: 'answer-work-approval', id: 'ask', choice: 'allow', expectedScope: 'own-hub' })
+    await act(async () => finish()); assert.ok(dialog.querySelector('[role="alert"]')); assert.doesNotMatch(dialog.textContent, /private error/)
+    fail = false; await click('Reject'); await act(async () => finish())
+    assert.equal(refreshes, 1); assert.equal(calls.at(-1).choice, 'reject')
+    assert.ok(dialog.querySelector('.bt-comm-operation-footer button'))
+    state.workApprovals = ['second', 'third'].map(id => ({ ...state.workApprovals[0], id }))
+    await render(node())
+    await act(async () => { const select = doc.querySelector('[aria-label="Work approval request"]'); select.value = 'third'; select.dispatchEvent(new dom.window.Event('change', { bubbles: true })) })
+    await click('Reject'); assert.equal(calls.at(-1).id, 'third'); await act(async () => finish())
+    state.workApprovals = []; await render(node())
+    assert.match(dialog.textContent, /No local work approvals are pending/)
   })
 })

@@ -265,7 +265,7 @@ test('publication rechecks approval boundaries inside the asynchronous ConfigEdi
 
 test('remote tool assembly and execution reject all local management tools even if accidentally supplied', async () => {
   const hooks = new Map(), registered = [], runtime = { tools: [...LOCAL_MANAGEMENT_TOOLS].map(name => ({ name })).concat({ name: 'read_communication_history' }),
-    scoped: new WeakSet(), disposers: [], isolateWorkspace: async () => {} }
+    scoped: new WeakSet(), disposers: [], syncWorkContext: async () => {} }
   CommunicationRuntime.prototype.scope.call(runtime, { ctx: { tools: { register: tool => { registered.push(tool.name); return () => {} } },
     on: (name, fn) => { hooks.set(name, fn); return () => {} } } })
   assert.deepEqual(registered, ['read_communication_history'])

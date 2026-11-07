@@ -44,6 +44,7 @@ const schemas = {
   'hub-join-status': { hubId: text }, 'cancel-hub-join': { hubId: text },
   'bot-dm-history': {conversationId:text,localBotId:text,membershipEpoch:text,after:integer,before:integer,limit:integer,latest:'boolean'},
   'bot-dm-reference': {conversationId:text,localBotId:text,membershipEpoch:text,messageId:text},
+  'answer-work-approval': {id:text,choice:['allow','reject'],expectedScope:text},
   'set-conversation-archived': {conversationId:text,membershipEpoch:text,localBotId:text,archived:'boolean',expectedScope:text},
   'participant-profile': {conversationId:text,membershipEpoch:text,targetPrincipalId:text,localBotId:text},
   'user-code': {}, 'rotate-user-code': { operationId: text },
@@ -62,6 +63,7 @@ const schemas = {
 const required = {
   'bot-dm-history':['conversationId','localBotId','membershipEpoch'],
   'bot-dm-reference':['conversationId','localBotId','membershipEpoch','messageId'],
+  'answer-work-approval':['id','choice','expectedScope'],
   'set-conversation-archived':['conversationId','membershipEpoch','archived','expectedScope'],
   'participant-profile':['conversationId','membershipEpoch','targetPrincipalId'],
   thread: ['conversationId', 'messageId'],
