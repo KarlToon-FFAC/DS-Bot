@@ -581,3 +581,28 @@ test('local work approvals use an independent dialog and submit one scoped Human
     assert.match(dialog.textContent, /No local work approvals are pending/)
   })
 })
+
+
+test('legacy empty contact scopes are visible and only the local side is repaired after a standalone confirmation', async () => {
+  await ui(async ({ exports: api, doc, render, click }) => {
+    const contact = { principalId: 'human:b:owner', homeInstanceId: 'b', kind: 'human', displayName: 'Buddy' }
+    let relation = { otherHumanPrincipalId: contact.principalId, active: true, version: 7, botSharing: 'none', otherBotSharing: 'none', botPrincipalIds: [] }
+    const changes = [], request = async body => body.endpoint === 'contact-relations' ? [relation] : body.endpoint === 'contact-requests' ? [{ requestId: 'unreachable', direction: 'outgoing', status: 'unavailable' }] : {}
+    await render(React.createElement(api.ContactManager, { contacts: [contact], request, operation: async (endpoint, body) => { changes.push({ endpoint, ...body }); relation = { ...relation, botSharing: 'published', version: 8 }; return { updated: true } } }))
+    const card = doc.querySelector('[data-contact-id="human:b:owner"]')
+    assert.match(card.textContent, /Your contact scope shares no Bots/)
+    assert.match(card.textContent, /This contact shares no Bots/)
+    assert.equal(card.querySelectorAll(':scope > [role="status"]').length, 2)
+    assert.match(doc.body.textContent, /Contact request unavailable/)
+    assert.equal([...doc.querySelectorAll('button')].some(button => button.textContent === 'Cancel request'), false)
+    await click('Use published Bots for this contact')
+    const dialog = doc.querySelector('dialog[aria-label="Repair contact Bot sharing"]')
+    assert.equal(dialog.parentElement, doc.body); assert.match(dialog.textContent, /Their sharing scope will not change/)
+    assert.equal(changes.length, 0)
+    await click('Cancel'); assert.equal(changes.length, 0)
+    await click('Use published Bots for this contact'); await click('Use published Bots')
+    assert.deepEqual(changes, [{ endpoint: 'use-published-contact-bots', otherHumanPrincipalId: contact.principalId, expectedVersion: 7 }])
+    assert.doesNotMatch(card.textContent, /Your contact scope shares no Bots/)
+    assert.match(card.textContent, /This contact shares no Bots/)
+  })
+})

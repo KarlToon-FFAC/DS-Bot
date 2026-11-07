@@ -9,7 +9,7 @@ import { HubStore } from '../src/store.js'
 import { HubManagement, enrollmentTranscript, hubCode } from '../src/management-store.js'
 import { createManagementHttp } from '../src/management-http.js'
 import { adminCommand } from '../src/admin-cli.mjs'
-import { CAPABILITIES } from '../src/protocol.js'
+import { CAPABILITIES, hash } from '../src/protocol.js'
 
 const keys = () => { const pair = generateKeyPairSync('ed25519'); return { privateKey: pair.privateKey, publicKey: pair.publicKey.export({ type: 'spki', format: 'pem' }).toString() } }
 const proof = (key, challenge, extra = {}) => ({ challengeId: challenge.challengeId, signature: sign(null, Buffer.from(enrollmentTranscript(challenge)), key.privateKey).toString('base64url'), ...extra })
@@ -174,25 +174,25 @@ test('contact confirmation hides directory/IP, rejects forgery, scopes Bots expl
   assert.doesNotThrow(() => m.assertDm(group.conversationId))
 })
 
-test('invalid codes have indistinguishable outgoing requests, expiry and rotated-code tombstones; bots cannot manage consent', t => {
+test('invalid codes fail explicitly without exposing target identity; genuine requests still expire and Bot consent is forbidden', t => {
   let now = 100000
   const { store, m } = fixture(t, { now: () => now }), a = enroll(m, 'A'), b = enroll(m, 'B')
   const code = m.code(b.auth, { principalId: b.principalId }).userCode
   const request = userCode => m.requestContact(a.auth, { principalId: a.principalId, operationId: randomUUID(), userCode })
-  const valid = request(code), invalid = request('FFFF-FFFF-FFFF-FFFF-FFFF-FFFF')
+  const valid = request(code)
+  assert.throws(() => request('FFFF-FFFF-FFFF-FFFF-FFFF-FFFF'), { code: 'CONTACT_CODE_UNAVAILABLE' })
   const outgoing = m.contactRequests(a.auth, { principalId: a.principalId })
   assert.ok(outgoing.every(row => row.direction === 'outgoing' && row.status === 'pending' && !Object.hasOwn(row, 'targetPrincipalId')))
   m.rotateCode(b.auth, { principalId: b.principalId, operationId: randomUUID() })
   assert.notEqual(m.code(b.auth, { principalId: b.principalId }).userCode, code)
   assert.ok(m.db.prepare('SELECT 1 FROM hub_code_tombstones').get())
-  request(code)
+  assert.throws(() => request(code), { code: 'CONTACT_CODE_UNAVAILABLE' })
   assert.equal(m.contactRequests(b.auth, { principalId: b.principalId }).length, 1)
   const bot = store.register(a.auth, { localId: 'bot', kind: 'bot', displayName: 'Bot' }).principalId
   assert.throws(() => m.requestContact(a.auth, { principalId: bot, operationId: randomUUID(), userCode: code }), { code: 'HUMAN_REQUIRED' })
   now += 86400001
   assert.ok(m.contactRequests(a.auth, { principalId: a.principalId }).every(row => row.status === 'expired'))
   assert.throws(() => m.respondContact(b.auth, { principalId: b.principalId, operationId: randomUUID(), requestId: valid.requestId, expectedVersion: 1 }, 'accept'), { code: 'CONTACT_VERSION_CONFLICT' })
-  assert.ok(invalid.requestId)
 })
 
 test('concurrent contact requests and exact retry cannot overwrite a newer scope', t => {
@@ -228,19 +228,19 @@ test('accepting one duplicate settles same-direction and crossed requests withou
   assert.throws(() => m.respondContact(a.auth, { principalId: a.principalId, operationId: randomUUID(), requestId: crossed.requestId, expectedVersion: 1 }, 'accept'), { code: 'CONTACT_VERSION_CONFLICT' })
 })
 
-test('sender cancellation is terminal for valid, unknown and privately rejected requests, including a stale pre-rejection view', t => {
+test('sender cancellation is terminal for valid and privately rejected requests, including a stale pre-rejection view', t => {
   let now = 100000
   const { m } = fixture(t, { now: () => now }), a = enroll(m, 'A'), b = enroll(m, 'B')
   const request = userCode => m.requestContact(a.auth, { principalId: a.principalId, operationId: randomUUID(), userCode })
   const code = m.code(b.auth, { principalId: b.principalId }).userCode
-  const pending = request(code), rejected = request(code), unknown = request('FFFF-FFFF-FFFF-FFFF-FFFF-FFFF')
+  const pending = request(code), rejected = request(code), unanswered = request(code)
   const before = m.contactRequests(a.auth, { principalId: a.principalId }).find(row => row.requestId === rejected.requestId)
   m.respondContact(b.auth, { principalId: b.principalId, operationId: randomUUID(), requestId: rejected.requestId, expectedVersion: 1 }, 'reject')
   const outgoing = m.contactRequests(a.auth, { principalId: a.principalId })
   const publicState = row => { const { requestId, ...state } = row; return state }
-  assert.deepEqual(publicState(outgoing.find(row => row.requestId === rejected.requestId)), publicState(outgoing.find(row => row.requestId === unknown.requestId)))
+  assert.deepEqual(publicState(outgoing.find(row => row.requestId === rejected.requestId)), publicState(outgoing.find(row => row.requestId === unanswered.requestId)))
   assert.deepEqual(outgoing.find(row => row.requestId === rejected.requestId), before)
-  for (const item of [pending, rejected, unknown]) {
+  for (const item of [pending, rejected, unanswered]) {
     const input = { principalId: a.principalId, operationId: randomUUID(), requestId: item.requestId, expectedVersion: 1 }
     const result = m.respondContact(a.auth, input, 'cancel')
     assert.equal(result.status, 'cancelled'); assert.deepEqual(m.respondContact(a.auth, input, 'cancel'), result)
@@ -283,7 +283,7 @@ test('sender request quota cannot reveal a private rejection and explicit cancel
   let now = 100000
   const { m } = fixture(t, { now: () => now }), a = enroll(m, 'A'), b = enroll(m, 'B')
   const code = m.code(b.auth, { principalId: b.principalId }).userCode
-  const request = (userCode = 'FFFF-FFFF-FFFF-FFFF-FFFF-FFFF') => m.requestContact(a.auth, { principalId: a.principalId, operationId: randomUUID(), userCode })
+  const request = (userCode = code) => m.requestContact(a.auth, { principalId: a.principalId, operationId: randomUUID(), userCode })
   for (let i = 0; i < 19; i++) { if (i === 10) now += 60001; request() }
   const valid = request(code)
   now += 60001
@@ -544,4 +544,81 @@ test('legacy completed self-departures disappear after restart, while administra
  const status={};assert.equal(m.prove(status,proof(a.key,m.challenge(status,{purpose:'leave-status',instanceId:a.auth.instanceId}))).left,true)
  store.close();store=new HubStore(path);m=new HubManagement(store)
  assert.equal(store.db.prepare('SELECT count(*) n FROM hub_instance_departures').get().n,1)
+})
+
+
+test('invalid or rotated contact codes fail before creating unreachable pending requests', t => {
+  const { m } = fixture(t), a = enroll(m, 'Sender'), b = enroll(m, 'Recipient')
+  const code = m.code(b.auth, { principalId: b.principalId }).userCode
+  m.rotateCode(b.auth, { principalId: b.principalId, operationId: randomUUID() })
+  for (const userCode of [code, 'FFFF-FFFF-FFFF-FFFF-FFFF-FFFF']) {
+    assert.throws(() => m.requestContact(a.auth, { principalId: a.principalId, operationId: randomUUID(), userCode, sharePublishedBots: true }), { code: 'CONTACT_CODE_UNAVAILABLE' })
+  }
+  const current = m.code(b.auth, { principalId: b.principalId }).userCode
+  for (let n = 0; n < 30; n++) m.rate(`contact-target:${b.principalId}`, 30, 86400000)
+  assert.throws(() => m.requestContact(a.auth, { principalId: a.principalId, operationId: randomUUID(), userCode: current, sharePublishedBots: true }), { code: 'RATE_LIMITED' })
+  assert.equal(m.db.prepare('SELECT count(*) n FROM hub_contact_requests').get().n, 0)
+  assert.deepEqual(m.contactRequests(b.auth, { principalId: b.principalId }), [])
+})
+
+
+test('invalid-code failures consume rate limits without inserting contact requests or successful receipts', t => {
+  const { m } = fixture(t), a = enroll(m)
+  for (let n = 0; n < 10; n++) assert.throws(() => m.requestContact(a.auth, { principalId: a.principalId, operationId: randomUUID(), userCode: 'FFFF-FFFF-FFFF-FFFF-FFFF-FFFF' }), { code: 'CONTACT_CODE_UNAVAILABLE' })
+  assert.throws(() => m.requestContact(a.auth, { principalId: a.principalId, operationId: randomUUID(), userCode: 'FFFF-FFFF-FFFF-FFFF-FFFF-FFFF' }), { code: 'RATE_LIMITED' })
+  assert.equal(m.db.prepare('SELECT count(*) n FROM hub_contact_requests').get().n, 0)
+  assert.equal(m.db.prepare('SELECT count(*) n FROM hub_management_operations').get().n, 0)
+})
+
+test('legacy target-null requests become unavailable and their old pending receipts cannot replay false success', t => {
+  const { store, m } = fixture(t, { now: () => 100000 }), a = enroll(m)
+  const input = { principalId: a.principalId, operationId: 'legacy-unreachable', userCode: 'FFFF-FFFF-FFFF-FFFF-FFFF-FFFF' }
+  m.db.prepare("INSERT INTO hub_contact_requests(id,sender,target,scope,status,expires_at) VALUES (?,?,NULL,'[]','pending',200000)").run(input.operationId, input.principalId)
+  m.db.prepare('INSERT INTO hub_management_operations VALUES (?,?,?,?)').run(input.operationId, input.principalId, hash(input), JSON.stringify({ requestId: input.operationId, status: 'pending' }))
+  const upgraded = new HubManagement(store, { now: () => 100000 })
+  const [row] = upgraded.contactRequests(a.auth, { principalId: a.principalId })
+  assert.equal(row.status, 'unavailable'); assert.equal(row.errorCode, 'CONTACT_CODE_UNAVAILABLE')
+  assert.throws(() => upgraded.requestContact(a.auth, input), { code: 'CONTACT_CODE_UNAVAILABLE' })
+  assert.equal(m.db.prepare("SELECT count(*) n FROM hub_contact_requests WHERE status='pending'").get().n, 0)
+})
+
+test('genuine request retries survive code rotation while new requests need the current code', t => {
+  const { m } = fixture(t), a = enroll(m), b = enroll(m)
+  const code = m.code(b.auth, { principalId: b.principalId }).userCode
+  const input = { principalId: a.principalId, operationId: randomUUID(), userCode: code, sharePublishedBots: true }
+  const accepted = m.requestContact(a.auth, input)
+  m.rotateCode(b.auth, { principalId: b.principalId, operationId: randomUUID() })
+  assert.deepEqual(m.requestContact(a.auth, input), accepted)
+  assert.throws(() => m.requestContact(a.auth, { ...input, operationId: randomUUID() }), { code: 'CONTACT_CODE_UNAVAILABLE' })
+  const current = m.code(b.auth, { principalId: b.principalId }).userCode
+  m.requestContact(a.auth, { ...input, operationId: randomUUID(), userCode: current })
+  m.requestContact(a.auth, { ...input, operationId: randomUUID(), userCode: current })
+  assert.equal(m.contactRequests(b.auth, { principalId: b.principalId }).length, 3)
+})
+
+test('legacy empty scopes are visible and can be repaired only by their owner without widening the other side', t => {
+  const { store, m } = fixture(t), a = enroll(m), b = enroll(m)
+  const botA = store.register(a.auth, { localId: 'shared', kind: 'bot', displayName: 'Shared A' }).principalId
+  const hiddenA = store.register(a.auth, { localId: 'unshared', kind: 'bot', displayName: 'Unshared A' }).principalId
+  const botB = store.register(b.auth, { localId: 'expert', kind: 'bot', displayName: 'Expert B' }).principalId
+  consent(m, a, b, [botA], [])
+  const before = m.relations(b.auth, { principalId: b.principalId })[0]
+  assert.equal(before.botSharing, 'none'); assert.equal(before.otherBotSharing, 'selected')
+  assert.equal(m.canContact(botA, botB), false)
+  const dm = store.createDm(a.auth, { principalId: a.principalId, otherPrincipalId: b.principalId, operationId: randomUUID() }).conversationId
+  const oldEpoch = store.member(a.auth, dm, a.principalId).epoch
+  const input = { principalId: b.principalId, otherHumanPrincipalId: a.principalId, expectedVersion: before.version, operationId: randomUUID() }
+  assert.throws(() => m.usePublishedBots(a.auth, input), { code: 'AUTHOR_MISMATCH' })
+  store.beforeCommit = () => { throw Error('Synthetic repair rollback') }
+  assert.throws(() => m.usePublishedBots(b.auth, input), /Synthetic repair rollback/)
+  assert.equal(m.canContact(botA, botB), false); assert.equal(store.member(a.auth, dm, a.principalId).epoch, oldEpoch)
+  store.beforeCommit = undefined
+  const result = m.usePublishedBots(b.auth, input)
+  assert.deepEqual(m.usePublishedBots(b.auth, input), result)
+  assert.equal(m.canContact(botA, botB), true); assert.equal(m.canContact(hiddenA, botB), false)
+  assert.notEqual(store.member(a.auth, dm, a.principalId).epoch, oldEpoch)
+  assert.equal(m.relations(b.auth, { principalId: b.principalId })[0].botSharing, 'published')
+  assert.equal(m.relations(a.auth, { principalId: a.principalId })[0].botSharing, 'selected')
+  assert.throws(() => m.usePublishedBots(b.auth, { ...input, operationId: randomUUID() }), { code: 'CONTACT_VERSION_CONFLICT' })
+  assert.throws(() => m.usePublishedBots(b.auth, { ...input, principalId: botB, operationId: randomUUID() }), { code: 'HUMAN_REQUIRED' })
 })

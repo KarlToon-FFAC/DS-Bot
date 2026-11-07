@@ -14,7 +14,7 @@ const digest = value => createHash('sha256').update(value).digest()
 const invalidatingRoutes = new Set(['principal.register', 'principal.rename', 'principal.publication', 'principal.public-profile', 'principal.avatar.chunk',
   'dm.open', 'group.create', 'group.invite', 'group.accept', 'group.remove', 'group.routing', 'group.dissolve',
   'group.policy', 'group.transfer', 'group.configure', 'group.settings', 'message.publish',
-  'principal.profile', 'contact.code.rotate', 'contact.request', 'contact.accept', 'contact.reject', 'contact.cancel', 'contact.revoke'])
+  'principal.profile', 'contact.code.rotate', 'contact.request', 'contact.accept', 'contact.reject', 'contact.cancel', 'contact.revoke', 'contact.use-published-bots'])
 const routes = {
   'principal.register':'register', 'contacts.list':'contacts', 'dm.open':'createDm', 'group.create':'createGroup',
   'group.invite':'invite', 'group.accept':'accept', 'group.remove':'remove', 'group.routing':'routing', 'group.dissolve':'dissolve',
@@ -155,7 +155,7 @@ export async function startHub({ databasePath, databaseLock, peers, host='127.0.
           requireThat(allowed.has(auth.instanceId)||management.peer(auth.instanceId),'UNAUTHENTICATED')
           store.check(auth)
           const contactRoutes={'contact.code':'code','contact.code.rotate':'rotateCode','contact.request':'requestContact','contact.requests':'contactRequests','contact.relations':'relations',
-            'contact.accept':'accept','contact.reject':'reject','contact.cancel':'cancel','contact.revoke':'revokeContact'}
+            'contact.accept':'accept','contact.reject':'reject','contact.cancel':'cancel','contact.revoke':'revokeContact','contact.use-published-bots':'usePublishedBots'}
           const contact=contactRoutes[frame.type]
           if(contact){
             value=['accept','reject','cancel'].includes(contact)?management.respondContact(auth,frame.payload,contact):management[contact](auth,frame.payload)

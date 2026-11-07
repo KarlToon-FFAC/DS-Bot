@@ -32,7 +32,7 @@ export function contactMatches(person, query, { label } = {}) {
     ...profileValues(person.publicProfile)].some(value => normalized(value).includes(needle))
 }
 
-export function ContactDirectory({ contacts, relations, humanPrincipalId, instanceId, request, busy, onMessage, onRemove, connectionKnown }) {
+export function ContactDirectory({ contacts, relations, humanPrincipalId, instanceId, request, busy, onMessage, onRemove, onUsePublished, connectionKnown }) {
   const [query, setQuery] = useState(''), [view, setView] = useState('all')
   const labels = contactLabels(contacts), { people, otherBots } = contactDirectory(contacts, relations, humanPrincipalId, instanceId)
   const needle = query.trim(), matches = person => contactMatches(person, query, { label: labels.get(person.principalId) })
@@ -65,6 +65,8 @@ export function ContactDirectory({ contacts, relations, humanPrincipalId, instan
       return h('article', { key: person.principalId, className: 'bt-comm-contact-card', 'data-contact-id': person.principalId },
         h('div', { className: 'bt-comm-contact-card-head' }, identity(person, available), available ? message(person) : null),
         !available ? h('p', { className: 'bt-comm-reference', role: 'status' }, t('Contact details are not available in the current directory.')) : null,
+        relation?.botSharing === 'none' ? h('p', { className: 'bt-comm-error', role: 'status' }, t('Your contact scope shares no Bots. Group invitations and Bot DMs may be blocked.'), onUsePublished ? h('button', {type:'button',disabled:busy,onClick:()=>onUsePublished(relation)},t('Use published Bots for this contact')) : null) : null,
+        relation?.otherBotSharing === 'none' ? h('p', {className:'bt-comm-reference',role:'status'},t('This contact shares no Bots in this relationship. Ask them to enable published Bots.')) : null,
         h('details', { className: 'bt-comm-directory-about', open: Boolean(needle) }, h('summary', null, t('Profile and Bots'), h('span', { className: 'bt-comm-count' }, visibleBots.length)),
           profile(person), h('h4', null, t('Their Bots')),
           visibleBots.length ? h('ul', { className: 'bt-comm-contact-bots' }, visibleBots.map(botRow)) : h('p', { className: 'bt-comm-reference' }, t('No Bots shared with you'))),
@@ -72,7 +74,7 @@ export function ContactDirectory({ contacts, relations, humanPrincipalId, instan
           person.homeInstanceId ? h('p', { className: 'bt-comm-reference' }, person.instanceLabel ?? person.homeInstanceId, ' · ', t(person.ipAddress || 'Address unavailable')) : null,
           h('dl', null, h('dt', null, t('Human identity')), h('dd', null, h('code', null, person.principalId)),
             person.homeInstanceId ? h(Fragment, null, h('dt', null, t('Device identity')), h('dd', null, h('code', null, person.homeInstanceId))) : null,
-            relation ? h(Fragment, null, h('dt', null, t('Bots you share with this contact')), h('dd', null, (relation.botPrincipalIds ?? []).map(id => labels.get(id) ?? id).join(', ') || t('None'))) : null),
+            relation ? h(Fragment, null, relation.botSharing ? h(Fragment,null,h('dt',null,t('Sharing policy')),h('dd',null,t(relation.botSharing==='published'?'Currently and later published Bots':relation.botSharing==='selected'?'Selected Bots':'None'))) : null, h('dt', null, t('Bots you share with this contact')), h('dd', null, (relation.botPrincipalIds ?? []).map(id => labels.get(id) ?? id).join(', ') || t('None'))) : null),
           ownedBots.length ? h('ul', { className: 'bt-comm-bot-identities' }, ownedBots.map(bot => h('li', { key: bot.principalId }, labels.get(bot.principalId) ?? bot.displayName, ': ', h('code', null, bot.principalId)))) : null,
           relation && onRemove ? h('button', { type: 'button', className: 'bt-comm-danger', disabled: busy, onClick: () => onRemove(relation) }, t('Remove contact')) : null))
     }) : null,

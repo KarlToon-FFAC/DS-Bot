@@ -1,5 +1,9 @@
 # Hub administration, enrollment and consent
 
+Current CLI/Agent scope defaults, invalid-code errors and explicit legacy scope
+repair are described in [contact-consent-repair.md](contact-consent-repair.md).
+They supersede the older empty-default and opaque-invalid-code choices below.
+
 Implementation baseline: `37738c6`. This design uses public DSH APIs and additive Hub tables. The management UI is served by the Hub itself. It introduces no discovery service, real account requirement or implicit network deployment.
 
 ## Public Hub identity

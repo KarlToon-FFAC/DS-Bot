@@ -10,6 +10,7 @@ import { prepare, execute, main, help } from '../bin/dsbot-remote.mjs'
 import { install, remotePackagePaths } from '../src/host/prompt.js'
 
 const requests = {
+  'use-published-contact-bots': {otherHumanPrincipalId:'human:b:owner',expectedVersion:1},
   'set-conversation-archived':{conversationId:'private',membershipEpoch:'epoch',archived:true,expectedScope:'synthetic-local-scope'},
   'bot-dm-history':{conversationId:'private',localBotId:'worker',membershipEpoch:'epoch',limit:10},
   'bot-dm-reference':{conversationId:'private',localBotId:'worker',membershipEpoch:'epoch',messageId:'one'},
@@ -316,7 +317,7 @@ test('new-machine pairing guide is offline, unauthenticated, non-secret and incl
     assert.ok(guide.clientCommunication.url.startsWith('wss://'))
     assert.ok(guide.steps.some(step => step.includes('four exact distinct principals')))
     assert.ok(guide.codeJoin.some(step => step.includes('confirmedHubId,confirmedUrl')))
-    assert.ok(guide.codeJoin.some(step => step.includes('Generic acknowledgments')))
+    assert.ok(guide.codeJoin.some(step => step.includes('Invalid or rotated codes fail')))
     assert.doesNotMatch(JSON.stringify(guide), /no self-service pairing API exists/)
     assert.equal(error.value, '')
   }

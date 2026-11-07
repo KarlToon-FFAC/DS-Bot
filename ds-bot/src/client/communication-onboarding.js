@@ -10,7 +10,7 @@ import { communicationFailure, knownCommunicationFailure } from './communication
 import { useLiveRefresh } from './communication-live.js'
 
 const statuses = new Set(['prepared', 'pending', 'approved', 'rejected', 'cancelled', 'expired', 'accepted'])
-const statusLabel = value => t(statuses.has(value) ? value : 'Status unavailable')
+const statusLabel = value => t(value === 'unavailable' ? 'Contact request unavailable' : statuses.has(value) ? value : 'Status unavailable')
 const failureLabel = error => t(communicationFailure(error ?? {}))
 const enrollmentErrors = {
   HUB_TLS_UNTRUSTED: 'The Hub certificate authority is not trusted. Obtain a fresh signed Hub code through a trusted channel and explicitly update this Hub CA trust. Keep TLS verification enabled.',
@@ -253,7 +253,7 @@ export function OwnRemoteProfile({ request, operation, revision, bots = [] }) {
 
 export function ContactManager({ request, operation, contacts, humanPrincipalId, instanceId, onMessage, messageBusy, revision, connectionKnown }) {
   const [data, setData] = useState(null), [userCode, setUserCode] = useState('')
-  const [busy, setBusy] = useState(false), [error, setError] = useState(''), [confirm, setConfirm] = useState('')
+  const [busy, setBusy] = useState(false), [error, setError] = useState(''), [confirm, setConfirm] = useState(''), [repair, setRepair] = useState(null)
   const generation = useRef(0), loadOrder = useRef(0), working = useRef(false)
   const [liveError, setLiveError] = useState('')
   const load = async () => {
@@ -288,7 +288,8 @@ export function ContactManager({ request, operation, contacts, humanPrincipalId,
   return h('div', { className: 'bt-comm-contact-manager' },
     liveError ? h('p', { className: 'bt-comm-reference', role: 'status' }, t('Status may be out of date.'), ' ', liveError) : null,
     error ? h('p', { className: 'bt-comm-error', role: 'alert' }, error) : null,
-    h(ContactDirectory, { contacts, relations: data?.relations ?? [], humanPrincipalId, instanceId, request, connectionKnown: liveError ? false : connectionKnown, busy: busy || messageBusy, onMessage, onRemove: item => setConfirm(item) }),
+    h(ContactDirectory, { contacts, relations: data?.relations ?? [], humanPrincipalId, instanceId, request, connectionKnown: liveError ? false : connectionKnown, busy: busy || messageBusy, onMessage, onRemove: item => setConfirm(item), onUsePublished: item => {setError('');setRepair(item)} }),
+    h(CommunicationActionDialog,{open:Boolean(repair),title:'Repair contact Bot sharing',confirmLabel:'Use published Bots',onClose:()=>setRepair(null),error,onConfirm:()=>run(()=>operation('use-published-contact-bots',{otherHumanPrincipalId:repair.otherHumanPrincipalId,expectedVersion:repair.version}))},h('p',null,contacts.find(person=>person.principalId===repair?.otherHumanPrincipalId)?.displayName ?? repair?.otherHumanPrincipalId),h('p',null,t('Share your currently and later published Bots with this contact. Their sharing scope will not change.'))),
     h(CommunicationActionDialog,{open:Boolean(confirm),title:'Remove contact',confirmLabel:'Confirm contact removal',onClose:()=>setConfirm(''),danger:true,error,onConfirm:()=>run(()=>operation('revoke-contact',{otherHumanPrincipalId:confirm.otherHumanPrincipalId,expectedVersion:confirm.version}))},h('p',null,contacts.find(person=>person.principalId===confirm?.otherHumanPrincipalId)?.displayName ?? confirm?.otherHumanPrincipalId),h('p',null,t('This revokes the contact relationship and access to shared private conversations.'))),
     h('details', { className: 'bt-comm-contact-section' }, h('summary', null, t('Add a contact')),
     h('label', { className: 'bt-comm-field' }, t('Other user code'), h('input', { value: userCode, maxLength: 64, 'aria-label': t('Other user code'), onChange: event => setUserCode(event.target.value) })),

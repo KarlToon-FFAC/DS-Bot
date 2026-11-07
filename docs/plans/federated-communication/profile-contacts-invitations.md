@@ -1,5 +1,9 @@
 # Personal profile, contacts and group invitations
 
+Current CLI/Agent scope defaults, invalid-code errors and explicit legacy scope
+repair are described in [contact-consent-repair.md](contact-consent-repair.md).
+They supersede the older empty-default and opaque-invalid-code choices below.
+
 The user's eight requested changes are implemented together:
 
 1. Personal settings groups the Human profile, user code, publication selection and

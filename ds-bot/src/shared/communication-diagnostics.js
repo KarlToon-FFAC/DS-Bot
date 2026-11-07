@@ -1,4 +1,6 @@
 export const communicationDescriptions = {
+  CONTACT_CODE_UNAVAILABLE: 'This user code cannot receive a contact request. Ask the contact for their current code.',
+  CONTACT_CONSENT_UPGRADE_REQUIRED: 'Update and restart the Hub to validate user codes and repair contact Bot sharing.',
   COMMUNICATION_WORKSPACE_CHANGED: 'The Bot working directory changed. Let its current task settle, then retry in a new communication Session.',
   COMMUNICATION_BACKGROUND_UNAVAILABLE: 'Run this command in the foreground. Background jobs are unavailable in communication Sessions.',
   COMMUNICATION_APPROVAL_UNAVAILABLE: 'This local work approval is no longer available.',

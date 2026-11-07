@@ -5,6 +5,19 @@
 export const NAMESPACE = 'ds-bot'
 
 const ZH = {
+  'This user code cannot receive a contact request. Ask the contact for their current code.': '此用户码无法接收联系人申请，请向对方索取当前有效的用户码。',
+  'Update and restart the Hub to validate user codes and repair contact Bot sharing.': '请更新并重启 Hub，以验证用户码并修复联系人 Bot 共享范围。',
+  'Contact request unavailable': '联系人申请不可送达',
+  'Your contact scope shares no Bots. Group invitations and Bot DMs may be blocked.': '你在此联系人关系中未共享任何 Bot，群邀请和 Bot 私聊可能因此被拦截。',
+  'This contact shares no Bots in this relationship. Ask them to enable published Bots.': '对方在此联系人关系中未共享任何 Bot，请对方启用已发布 Bot。',
+  'Use published Bots for this contact': '为此联系人启用已发布 Bot',
+  'Repair contact Bot sharing': '修复联系人 Bot 共享',
+  'Use published Bots': '启用已发布 Bot',
+  'Share your currently and later published Bots with this contact. Their sharing scope will not change.': '向此联系人共享你当前及以后发布的 Bot，不会改变对方的共享范围。',
+  'Sharing policy': '共享范围规则',
+  'Currently and later published Bots': '当前及以后发布的 Bot',
+  'Selected Bots': '指定的 Bot',
+
   'Work approval request': '待授权操作',
   'Requested by': '请求来源',
   'Review local work approvals': '查看本地工作授权',

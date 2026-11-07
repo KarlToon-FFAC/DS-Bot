@@ -67,23 +67,25 @@ export function localManagementTools(rt, { ensure, enrollment }) {
   return [
     defineTool({ name: 'manage_communication_contacts',
       description: 'In your own local chat, help the authenticated local user manage their Remote contacts, even if you are unpublished. Only perform the action and Bot scope the user requested; mutations require a native approval for that exact change. Contact consent acts for the local owner, never as your Bot or a remote participant. Use exact IDs and latest versions. Preserve operationId when retrying an uncertain change. This does not send messages or change Hub access.',
-      parameters: { action: { type: 'string', required: true, enum: ['list', 'requests', 'relations', 'user-code', 'rotate-user-code', 'request', 'accept', 'reject', 'cancel', 'revoke'] },
+      parameters: { action: { type: 'string', required: true, enum: ['list', 'requests', 'relations', 'user-code', 'rotate-user-code', 'request', 'accept', 'reject', 'cancel', 'revoke', 'use-published-bots'] },
         operationId: { type: 'string', description: 'Stable unique ID for one contact change; retain it after uncertainty' },
         userCode: { type: 'string' }, requestId: { type: 'string' }, expectedVersion: { type: 'integer' },
-        otherHumanPrincipalId: { type: 'string' }, localBotIds: { type: 'array', items: { type: 'string' }, description: 'Exact published local Bot IDs the user explicitly chose to share; defaults to none' } }, output,
+        otherHumanPrincipalId: { type: 'string' }, localBotIds: { type: 'array', items: { type: 'string' }, description: 'Optional nonempty exact published local Bot IDs for a narrower scope. Omitted or empty uses all currently and later published Bots; publication is managed separately' } }, output,
       execute: execute(async ({ action, ...input }, authority, exec) => {
         const actions = { requests: 'contact-requests', relations: 'contact-relations', 'user-code': 'user-code', 'rotate-user-code': 'rotate-user-code',
-          request: 'contact-request', accept: 'contact-accept', reject: 'contact-reject', cancel: 'contact-cancel', revoke: 'contact-revoke' }
+          request: 'contact-request', accept: 'contact-accept', reject: 'contact-reject', cancel: 'contact-cancel', revoke: 'contact-revoke', 'use-published-bots': 'contact-use-published-bots' }
         if (action !== 'list' && !Object.hasOwn(actions, action)) fail('UNKNOWN_OPERATION')
         if (Object.keys(input).some(key => !['operationId', 'userCode', 'requestId', 'expectedVersion', 'otherHumanPrincipalId', 'localBotIds'].includes(key))) fail('INVALID_REQUEST')
+        if (action === 'use-published-bots' && input.localBotIds !== undefined) fail('INVALID_REQUEST')
         const comm = await ensure()
         if (rt.communication !== comm) fail('COMMUNICATION_PAIRING_CONFLICT')
         const guard = managementGuard(rt, exec)
         if (action === 'list') return { scope: 'local-user', contacts: await comm.transport.request('contacts.list', { principalId: comm.human.principalId }) }
-        if (['request', 'accept'].includes(action)) input.localBotIds ??= []
-        if (['request', 'accept', 'reject', 'cancel', 'revoke', 'rotate-user-code'].includes(action)) {
+        if (['request', 'use-published-bots'].includes(action) && !comm.transport.welcome?.capabilities?.includes('contact-consent-v2')) fail('CONTACT_CONSENT_UPGRADE_REQUIRED')
+        if (['request', 'accept', 'reject', 'cancel', 'revoke', 'rotate-user-code', 'use-published-bots'].includes(action)) {
           input.operationId ??= `contact-${createHash('sha256').update(authority.sourceKey).digest('hex')}`
-          await approveManagement(rt, exec, { action, hub: comm.settings.url, ...input })
+          await approveManagement(rt, exec, { action, hub: comm.settings.url, ...input,
+            ...(['request', 'accept', 'use-published-bots'].includes(action) && !input.localBotIds?.length ? { botSharing: 'All currently and later published Bots; change publication separately in your profile.' } : {}) })
           guard()
         }
         try { return await (await enrollment()).handle(actions[action], input, { human: true, beforeDispatch: guard }) }

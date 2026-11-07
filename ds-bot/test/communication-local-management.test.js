@@ -24,7 +24,7 @@ function fixture() {
   const calls = [], approvals = [], edits = []
   const comm = { settings: { url: 'wss://isolated.example.test/communication' }, human: { principalId: 'human:a:local-user' },
     bots: new Map([['shared', { principalId: 'bot:a:shared' }]]), owners: new Map(), closed: false,
-    transport: { connected: true, request: async (type, payload) => { calls.push({ type, payload }); return { type, payload } } } }
+    transport: { connected: true, welcome: { capabilities: ['published-contact-scope', 'contact-consent-v2'] }, request: async (type, payload) => { calls.push({ type, payload }); return { type, payload } } } }
   const rt = { config: { communication: { enabled: true, url: comm.settings.url, instanceId: 'a', publishedBotIds: ['shared'] } },
     state: { bots }, communication: comm, chatOwners: new Map([['own-chat', 'worker']]), groupOwners: new Map(),
     botOf: id => bots[id], load: async () => {}, refresh: async () => {}, readOnly: () => undefined,
@@ -151,7 +151,8 @@ test('approved contact operations use exact owner, published Bot scope, version 
     assert.match(f.approvals.at(-1).reason, new RegExp(`stable-${action}`))
   }
   const unscoped = await f.call('manage_communication_contacts', { action: 'request', userCode: 'SYNTHETIC-CODE' })
-  assert.deepEqual(unscoped.payload.botPrincipalIds, [])
+  assert.equal(unscoped.payload.sharePublishedBots, true)
+  assert.match(f.approvals.at(-1).reason, /currently and later published Bots/)
   assert.match(unscoped.payload.operationId, /^contact-[a-f0-9]{64}$/)
   const count = f.calls.length
   const invalid = await f.call('manage_communication_contacts', { action: 'request', userCode: 'SYNTHETIC-CODE', localBotIds: ['worker'] })
@@ -326,4 +327,20 @@ test('approved contact tools reuse real Hub validation and cannot accept for ano
     assert.deepEqual(management.relations(a, { principalId: f.comm.human.principalId })[0].botPrincipalIds, ['bot:a:shared'])
     assert.equal(f.rt.config.communication.publishedBotIds.includes('worker'), false)
   } finally { store.close() }
+})
+
+
+test('Agent empty contact scopes follow publication and legacy sharing repair requires exact local approval and a current Hub', async () => {
+  const f = fixture()
+  const accepted = await f.call('manage_communication_contacts', { action: 'accept', requestId: 'request', expectedVersion: 3, localBotIds: [] })
+  assert.equal(accepted.payload.sharePublishedBots, true)
+  assert.match(f.approvals.at(-1).reason, /currently and later published Bots/)
+  const repaired = await f.call('manage_communication_contacts', { action: 'use-published-bots', otherHumanPrincipalId: 'human:b:local-user', expectedVersion: 4 })
+  assert.equal(repaired.type, 'contact.use-published-bots'); assert.equal(repaired.payload.expectedVersion, 4)
+  assert.equal(repaired.payload.principalId, f.comm.human.principalId)
+  const before = f.approvals.length, dispatched = f.calls.length
+  f.comm.transport.welcome.capabilities = ['published-contact-scope']
+  const unsupported = await f.call('manage_communication_contacts', { action: 'request', userCode: 'SYNTHETIC-CODE' })
+  assert.equal(unsupported.error.code, 'CONTACT_CONSENT_UPGRADE_REQUIRED')
+  assert.equal(f.approvals.length, before); assert.equal(f.calls.length, dispatched)
 })

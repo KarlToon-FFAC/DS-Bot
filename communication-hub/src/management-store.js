@@ -43,6 +43,7 @@ export class HubManagement {
       this.db.prepare('INSERT OR IGNORE INTO hub_instance_departures VALUES (?,?)').run(id,this.now())
       this.detachContacts(id)
     }})
+    this.cleanup()
   }
   info() { return { hubId: this.hubId, ...(this.url ? { url: this.url, code: this.pairingTrust
     ? hubCode(this.hubId, this.url, { ...this.pairingTrust, now: this.now() }) : undefined,
@@ -54,6 +55,7 @@ export class HubManagement {
     requireThat(this.db.prepare('SELECT count FROM hub_rate_limits WHERE key=?').get(id).count <= limit, 'RATE_LIMITED')
   }
   cleanup() {
+    this.db.prepare("UPDATE hub_contact_requests SET status='unavailable',version=version+1 WHERE target IS NULL AND status IN ('pending','rejected')").run()
     this.db.prepare("UPDATE hub_join_requests SET status='expired',version=version+1 WHERE status='pending' AND expires_at<=?").run(this.now())
     this.db.prepare("UPDATE hub_contact_requests SET status='expired',version=version+1 WHERE status='pending' AND expires_at<=?").run(this.now())
     for (const [id, challenge] of this.challenges) if (challenge.expiresAt <= this.now()) this.challenges.delete(id)
@@ -252,22 +254,26 @@ export class HubManagement {
   }
   requestContact(auth, input) {
     requireThat(typeof input.userCode === 'string' && input.userCode.length <= 64, 'INVALID_REQUEST')
-    return this.op(auth, input, () => {
+    identifier(input.operationId); this.human(auth, input.principalId)
+    this.cleanup()
+    // Rejected attempts must consume limits even though their transaction rolls back.
+    // Exact retries are checked by op() and do not spend another request allowance.
+    if (!this.db.prepare('SELECT 1 FROM hub_management_operations WHERE id=?').get(input.operationId)) {
       this.rate('contact:global', 100); this.rate(`contact:${auth.instanceId}`, 10)
+    }
+    const result = this.op(auth, input, () => {
       const scope = this.scope(auth, input.botPrincipalIds, input.sharePublishedBots === true)
-      this.cleanup()
-      // A private rejection must not reveal itself by freeing a sender-visible slot.
       requireThat(this.db.prepare("SELECT count(*) n FROM hub_contact_requests WHERE sender=? AND (status='pending' OR (status='rejected' AND expires_at>?))").get(input.principalId, this.now()).n < 20, 'CONTACT_LIMIT')
       const code = input.userCode.toUpperCase().replace(/[^A-F0-9]/g, '').match(/.{1,4}/g)?.join('-') ?? ''
-      const found = this.db.prepare('SELECT c.principal_id FROM hub_user_codes c JOIN principals p ON p.id=c.principal_id JOIN instances i ON i.id=p.instance_id WHERE c.code_hash=? AND i.trusted=1').get(digest(code))?.principal_id
-      let target = found && found !== input.principalId && !found.startsWith(`human:${auth.instanceId}:`) ? found : null
-      if (target) {
-        try { this.rate(`contact-target:${target}`, 30, day) }
-        catch (error) { if (error.code !== 'RATE_LIMITED') throw error; target = null }
-      }
+      const target = this.db.prepare('SELECT c.principal_id FROM hub_user_codes c JOIN principals p ON p.id=c.principal_id JOIN instances i ON i.id=p.instance_id WHERE c.code_hash=? AND i.trusted=1').get(digest(code))?.principal_id
+      requireThat(target && target !== input.principalId && !target.startsWith(`human:${auth.instanceId}:`), 'CONTACT_CODE_UNAVAILABLE')
+      this.rate(`contact-target:${target}`, 30, day)
       this.db.prepare('INSERT INTO hub_contact_requests(id,sender,target,scope,status,expires_at) VALUES (?,?,?,?,?,?)').run(input.operationId, input.principalId, target, scope, 'pending', this.now() + day)
       return { requestId: input.operationId, status: 'pending' }
     })
+    // Old Hub receipts may claim success for a request that never had a recipient.
+    requireThat(this.db.prepare('SELECT target FROM hub_contact_requests WHERE id=? AND sender=?').get(result.requestId, input.principalId)?.target, 'CONTACT_CODE_UNAVAILABLE')
+    return result
   }
   contactRequestState(row, principalId) {
     if (row.sender !== principalId) return { status: row.status, version: row.version }
@@ -281,6 +287,7 @@ export class HubManagement {
     return this.db.prepare('SELECT * FROM hub_contact_requests WHERE sender=? OR target=? ORDER BY rowid DESC LIMIT 100').all(input.principalId, input.principalId).map(row => ({
       requestId: row.id, direction: row.target === input.principalId ? 'incoming' : 'outgoing',
       ...this.contactRequestState(row, input.principalId), expiresAt: row.expires_at,
+      ...(row.status === 'unavailable' ? { errorCode: 'CONTACT_CODE_UNAVAILABLE' } : {}),
       ...(row.target === input.principalId ? { senderPrincipalId: row.sender, senderName: this.db.prepare('SELECT name FROM principals WHERE id=?').get(row.sender).name } : {}),
     }))
   }
@@ -309,6 +316,19 @@ export class HubManagement {
       }
       this.db.prepare('UPDATE hub_contact_requests SET status=?,version=version+1 WHERE id=?').run(action === 'accept' ? 'accepted' : action === 'reject' ? 'rejected' : 'cancelled', row.id)
       return { requestId: row.id, status: action === 'accept' ? 'accepted' : action === 'reject' ? 'rejected' : 'cancelled' }
+    })
+  }
+  usePublishedBots(auth, input) {
+    return this.op(auth, { ...input, action: 'use-published-bots' }, () => {
+      const pair = [input.principalId, identifier(input.otherHumanPrincipalId)].sort()
+      const row = this.db.prepare('SELECT * FROM hub_contacts WHERE pair=?').get(JSON.stringify(pair))
+      requireThat(row?.active && row.version === input.expectedVersion, 'CONTACT_VERSION_CONFLICT')
+      const column = row.left_id === input.principalId ? 'left_scope' : 'right_scope'
+      if (JSON.parse(row[column]).includes('*')) return { updated: false, version: row.version, contactEpoch: row.epoch }
+      this.fenceDms({ ...row, [column]: '["*"]' }, 'contact.sharingChanged')
+      const epoch = randomUUID()
+      this.db.prepare(`UPDATE hub_contacts SET ${column}=?,epoch=?,version=version+1 WHERE pair=?`).run('["*"]', epoch, row.pair)
+      return { updated: true, version: row.version + 1, contactEpoch: epoch }
     })
   }
   revokeContact(auth, input) {
@@ -382,6 +402,7 @@ export class HubManagement {
   }
   relations(auth, input) {
     this.human(auth, input.principalId)
-    return this.db.prepare('SELECT * FROM hub_contacts WHERE left_id=? OR right_id=?').all(input.principalId, input.principalId).map(row => ({ otherHumanPrincipalId: row.left_id === input.principalId ? row.right_id : row.left_id, active: Boolean(row.active), version: row.version, contactEpoch: row.epoch, botPrincipalIds: this.scopedBots(input.principalId, row.left_id === input.principalId ? row.left_scope : row.right_scope, true) }))
+    const sharing = value => { const ids = JSON.parse(value); return ids.includes('*') ? 'published' : ids.length ? 'selected' : 'none' }
+    return this.db.prepare('SELECT * FROM hub_contacts WHERE left_id=? OR right_id=?').all(input.principalId, input.principalId).map(row => ({ otherHumanPrincipalId: row.left_id === input.principalId ? row.right_id : row.left_id, active: Boolean(row.active), version: row.version, contactEpoch: row.epoch, botSharing: sharing(row.left_id === input.principalId ? row.left_scope : row.right_scope), otherBotSharing: sharing(row.left_id === input.principalId ? row.right_scope : row.left_scope), botPrincipalIds: this.scopedBots(input.principalId, row.left_id === input.principalId ? row.left_scope : row.right_scope, true) }))
   }
 }

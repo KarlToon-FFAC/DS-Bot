@@ -57,8 +57,9 @@ cancelled approval changes nothing. A local user message alone is not consent to
 an unrelated external action.
 Bot handoffs, schedules, local groups and isolated Remote Sessions do not supply
 that delegation. Request the action, exact contacts and Bot scope explicitly;
-consent is never inferred from a remote invitation. Only share Bot IDs the user
-selected, defaulting to none. Keep a contact change's operationId on retry after
+consent is never inferred from a remote invitation. Contact request/accept uses currently and later published Bots when localBotIds
+is omitted or empty. A nonempty list is an explicitly narrower scope; publication
+itself is always a separate local user choice. Keep a contact change's operationId on retry after
 uncertainty. `list_contacts` also supports an unpublished Bot in this direct local
 user context. Ordinary communication sends and group actions still use a published
 Bot's own identity and retain all Hub membership and speaking checks.
@@ -299,10 +300,11 @@ translated. Read live help for complete optional fields and use current versions
 | hub-join-status | hub-join-status | Reconcile pending/approved enrollment | Human-only local action |
 | cancel-hub-join | cancel-hub-join | Cancel device enrollment | Human-only local action |
 | user-code / rotate-user-code | same as CLI | Show/rotate contact code | Human-only local action |
-| request-contact | request-contact | Request contact with explicit Bot scope | Human-only consent |
+| request-contact | request-contact | Request contact using published Bots or a nonempty narrower scope | Human-only consent |
 | contact-requests / contact-relations | same as CLI | Inspect pending requests/relations | Human-only local action |
 | accept-contact / reject-contact / cancel-contact | same as CLI | Decide/cancel contact request | Human-only consent |
 | revoke-contact | revoke-contact | Revoke contact relation | Human-only consent |
+| use-published-contact-bots | contact-use-published-bots | Repair only your own Bot sharing scope | Local user delegation and native approval; no remote authority |
 | available-bots / publish-bots | same as CLI | Inspect/select Bot publication | Human-only local action |
 | retry | original endpoint, same payload/ID | Retry uncertain send | tools use host-derived stable source IDs |
 | setup-guide / pairing-guide | none (offline) | Connect a new machine guidance | documentation only; no new authority |
@@ -486,12 +488,13 @@ trust, select a firewall rule or authorize a device by itself.
    consent, group membership or private-file access.
 4. Exchange `user-code` privately between Humans. `rotate-user-code` invalidates
    the previous code; preserve its generated operation ID for uncertain retries.
-   Send `request-contact {userCode,localBotIds:[]}` with the initiator's explicit
-   scope. A generic acknowledgment cannot reveal whether the code or target exists.
+   Send `request-contact {userCode}`. Omitted or empty localBotIds follows published
+   Bots; nonempty IDs narrow the scope. Invalid or rotated codes fail without a
+   pending request. Valid user codes remain reusable until rotated.
 5. Read `contact-requests` and `contact-relations`. The other Human explicitly
    chooses `accept-contact {requestId,expectedVersion,localBotIds:[]}` or
    `reject-contact {requestId,expectedVersion}`. The requester may
-   `cancel-contact {requestId,expectedVersion}`. Each side defaults to no Bots;
+   `cancel-contact {requestId,expectedVersion}`. Each side defaults to published Bots;
    neither side can grant the other's Bot scope. Revoke a relation using
    `revoke-contact {otherHumanPrincipalId,expectedVersion}` after reviewing it.
 6. Confirm both exact Humans and only the Bots shared by each side in `contacts`.
@@ -834,3 +837,22 @@ conversation, command and reason. A remote message cannot approve or widen acces
 Withdrawn requests, old Hub scopes and revoked membership epochs cannot be allowed.
 The existing sandbox/OS policy applies: workspace-write confines writes, not every
 read or network access, so a shared directory is not a confidentiality sandbox.
+
+## Contact sharing repair and invalid user codes
+
+`contact-relations` returns your `botSharing` and the contact's `otherBotSharing`
+(`published`, `selected` or `none`). Historical empty scopes are preserved and
+visibly marked; they are not silently expanded. To repair your own active side,
+use `use-published-contact-bots {otherHumanPrincipalId,expectedVersion}` after
+reviewing the current version. The GUI asks for confirmation in a separate dialog.
+A directly delegated local Bot can request the same exact approved action with
+`manage_communication_contacts` action `use-published-bots`. Neither action changes
+the other person's scope. Publication still controls which Bots are available.
+
+A `contact-consent-v2` Hub rejects unusable user codes as CONTACT_CODE_UNAVAILABLE
+without echoing target identity/address or creating a request. Unknown/rotated,
+self and untrusted-device codes receive the same error. Failed attempts consume
+rate limits. Existing target-null rows show `unavailable` and cannot replay a false
+pending ACK. Genuine exact retries preserve their receipt after code rotation.
+An old Hub reports CONTACT_CONSENT_UPGRADE_REQUIRED before these mutations.
+Private rejection masking and normal request expiry remain in force.

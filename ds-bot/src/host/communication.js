@@ -217,7 +217,7 @@ export function install(rt) {
           'disconnect-hub':'disconnect-hub','switch-hub':'switch-hub','resume-hub':'resume-hub',
           'leave-hub':'leave-hub','hub-leave-status':'hub-leave-status','forget-hub':'forget-hub',
           'user-code': 'user-code', 'rotate-user-code': 'rotate-user-code', 'request-contact': 'contact-request', 'contact-requests': 'contact-requests',
-          'contact-relations': 'contact-relations', 'accept-contact': 'contact-accept', 'reject-contact': 'contact-reject', 'cancel-contact': 'contact-cancel', 'revoke-contact': 'contact-revoke' }
+          'contact-relations': 'contact-relations', 'use-published-contact-bots': 'contact-use-published-bots', 'accept-contact': 'contact-accept', 'reject-contact': 'contact-reject', 'cancel-contact': 'contact-cancel', 'revoke-contact': 'contact-revoke' }
         if (Object.hasOwn(enrollmentActions, body.endpoint)) {
           const action = enrollmentActions[body.endpoint]
           if (action === 'available-bots') await rt.load()

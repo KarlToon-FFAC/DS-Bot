@@ -42,6 +42,18 @@ module.exports = __toCommonJS(index_exports);
 // src/client/i18n.js
 var NAMESPACE = "ds-bot";
 var ZH = {
+  "This user code cannot receive a contact request. Ask the contact for their current code.": "此用户码无法接收联系人申请，请向对方索取当前有效的用户码。",
+  "Update and restart the Hub to validate user codes and repair contact Bot sharing.": "请更新并重启 Hub，以验证用户码并修复联系人 Bot 共享范围。",
+  "Contact request unavailable": "联系人申请不可送达",
+  "Your contact scope shares no Bots. Group invitations and Bot DMs may be blocked.": "你在此联系人关系中未共享任何 Bot，群邀请和 Bot 私聊可能因此被拦截。",
+  "This contact shares no Bots in this relationship. Ask them to enable published Bots.": "对方在此联系人关系中未共享任何 Bot，请对方启用已发布 Bot。",
+  "Use published Bots for this contact": "为此联系人启用已发布 Bot",
+  "Repair contact Bot sharing": "修复联系人 Bot 共享",
+  "Use published Bots": "启用已发布 Bot",
+  "Share your currently and later published Bots with this contact. Their sharing scope will not change.": "向此联系人共享你当前及以后发布的 Bot，不会改变对方的共享范围。",
+  "Sharing policy": "共享范围规则",
+  "Currently and later published Bots": "当前及以后发布的 Bot",
+  "Selected Bots": "指定的 Bot",
   "Work approval request": "待授权操作",
   "Requested by": "请求来源",
   "Review local work approvals": "查看本地工作授权",
@@ -12187,6 +12199,8 @@ ${shown}`, { axis: "y", ...QUICK_EDGES });
 
 // src/shared/communication-diagnostics.js
 var communicationDescriptions = {
+  CONTACT_CODE_UNAVAILABLE: "This user code cannot receive a contact request. Ask the contact for their current code.",
+  CONTACT_CONSENT_UPGRADE_REQUIRED: "Update and restart the Hub to validate user codes and repair contact Bot sharing.",
   COMMUNICATION_WORKSPACE_CHANGED: "The Bot working directory changed. Let its current task settle, then retry in a new communication Session.",
   COMMUNICATION_BACKGROUND_UNAVAILABLE: "Run this command in the foreground. Background jobs are unavailable in communication Sessions.",
   COMMUNICATION_APPROVAL_UNAVAILABLE: "This local work approval is no longer available.",
@@ -22216,7 +22230,7 @@ function contactMatches(person, query, { label } = {}) {
     ...profileValues2(person.publicProfile)
   ].some((value) => normalized(value).includes(needle));
 }
-function ContactDirectory({ contacts, relations, humanPrincipalId, instanceId, request, busy, onMessage, onRemove, connectionKnown }) {
+function ContactDirectory({ contacts, relations, humanPrincipalId, instanceId, request, busy, onMessage, onRemove, onUsePublished, connectionKnown }) {
   const [query, setQuery] = (0, import_react57.useState)(""), [view, setView] = (0, import_react57.useState)("all");
   const labels = contactLabels(contacts), { people, otherBots } = contactDirectory(contacts, relations, humanPrincipalId, instanceId);
   const needle = query.trim(), matches = (person) => contactMatches(person, query, { label: labels.get(person.principalId) });
@@ -22275,6 +22289,8 @@ function ContactDirectory({ contacts, relations, humanPrincipalId, instanceId, r
         { key: person.principalId, className: "bt-comm-contact-card", "data-contact-id": person.principalId },
         (0, import_react57.createElement)("div", { className: "bt-comm-contact-card-head" }, identity(person, available), available ? message(person) : null),
         !available ? (0, import_react57.createElement)("p", { className: "bt-comm-reference", role: "status" }, t("Contact details are not available in the current directory.")) : null,
+        relation?.botSharing === "none" ? (0, import_react57.createElement)("p", { className: "bt-comm-error", role: "status" }, t("Your contact scope shares no Bots. Group invitations and Bot DMs may be blocked."), onUsePublished ? (0, import_react57.createElement)("button", { type: "button", disabled: busy, onClick: () => onUsePublished(relation) }, t("Use published Bots for this contact")) : null) : null,
+        relation?.otherBotSharing === "none" ? (0, import_react57.createElement)("p", { className: "bt-comm-reference", role: "status" }, t("This contact shares no Bots in this relationship. Ask them to enable published Bots.")) : null,
         (0, import_react57.createElement)(
           "details",
           { className: "bt-comm-directory-about", open: Boolean(needle) },
@@ -22294,7 +22310,7 @@ function ContactDirectory({ contacts, relations, humanPrincipalId, instanceId, r
             (0, import_react57.createElement)("dt", null, t("Human identity")),
             (0, import_react57.createElement)("dd", null, (0, import_react57.createElement)("code", null, person.principalId)),
             person.homeInstanceId ? (0, import_react57.createElement)(import_react57.Fragment, null, (0, import_react57.createElement)("dt", null, t("Device identity")), (0, import_react57.createElement)("dd", null, (0, import_react57.createElement)("code", null, person.homeInstanceId))) : null,
-            relation ? (0, import_react57.createElement)(import_react57.Fragment, null, (0, import_react57.createElement)("dt", null, t("Bots you share with this contact")), (0, import_react57.createElement)("dd", null, (relation.botPrincipalIds ?? []).map((id) => labels.get(id) ?? id).join(", ") || t("None"))) : null
+            relation ? (0, import_react57.createElement)(import_react57.Fragment, null, relation.botSharing ? (0, import_react57.createElement)(import_react57.Fragment, null, (0, import_react57.createElement)("dt", null, t("Sharing policy")), (0, import_react57.createElement)("dd", null, t(relation.botSharing === "published" ? "Currently and later published Bots" : relation.botSharing === "selected" ? "Selected Bots" : "None"))) : null, (0, import_react57.createElement)("dt", null, t("Bots you share with this contact")), (0, import_react57.createElement)("dd", null, (relation.botPrincipalIds ?? []).map((id) => labels.get(id) ?? id).join(", ") || t("None"))) : null
           ),
           ownedBots.length ? (0, import_react57.createElement)("ul", { className: "bt-comm-bot-identities" }, ownedBots.map((bot) => (0, import_react57.createElement)("li", { key: bot.principalId }, labels.get(bot.principalId) ?? bot.displayName, ": ", (0, import_react57.createElement)("code", null, bot.principalId)))) : null,
           relation && onRemove ? (0, import_react57.createElement)("button", { type: "button", className: "bt-comm-danger", disabled: busy, onClick: () => onRemove(relation) }, t("Remove contact")) : null
@@ -22528,7 +22544,7 @@ function useLiveRefresh(work, onError, request, revision, intervalMs = 5e3) {
 // src/client/communication-onboarding.js
 var import_react60 = require("react");
 var statuses = /* @__PURE__ */ new Set(["prepared", "pending", "approved", "rejected", "cancelled", "expired", "accepted"]);
-var statusLabel = (value) => t(statuses.has(value) ? value : "Status unavailable");
+var statusLabel = (value) => t(value === "unavailable" ? "Contact request unavailable" : statuses.has(value) ? value : "Status unavailable");
 var failureLabel2 = (error) => t(communicationFailure(error ?? {}));
 var enrollmentErrors = {
   HUB_TLS_UNTRUSTED: "The Hub certificate authority is not trusted. Obtain a fresh signed Hub code through a trusted channel and explicitly update this Hub CA trust. Keep TLS verification enabled.",
@@ -22955,7 +22971,7 @@ function OwnRemoteProfile({ request, operation, revision, bots = [] }) {
 }
 function ContactManager({ request, operation, contacts, humanPrincipalId, instanceId, onMessage, messageBusy, revision, connectionKnown }) {
   const [data, setData] = (0, import_react60.useState)(null), [userCode, setUserCode] = (0, import_react60.useState)("");
-  const [busy, setBusy] = (0, import_react60.useState)(false), [error, setError] = (0, import_react60.useState)(""), [confirm, setConfirm] = (0, import_react60.useState)("");
+  const [busy, setBusy] = (0, import_react60.useState)(false), [error, setError] = (0, import_react60.useState)(""), [confirm, setConfirm] = (0, import_react60.useState)(""), [repair, setRepair] = (0, import_react60.useState)(null);
   const generation = (0, import_react60.useRef)(0), loadOrder = (0, import_react60.useRef)(0), working = (0, import_react60.useRef)(false);
   const [liveError, setLiveError] = (0, import_react60.useState)("");
   const load = async () => {
@@ -23011,7 +23027,11 @@ function ContactManager({ request, operation, contacts, humanPrincipalId, instan
     { className: "bt-comm-contact-manager" },
     liveError ? (0, import_react60.createElement)("p", { className: "bt-comm-reference", role: "status" }, t("Status may be out of date."), " ", liveError) : null,
     error ? (0, import_react60.createElement)("p", { className: "bt-comm-error", role: "alert" }, error) : null,
-    (0, import_react60.createElement)(ContactDirectory, { contacts, relations: data?.relations ?? [], humanPrincipalId, instanceId, request, connectionKnown: liveError ? false : connectionKnown, busy: busy || messageBusy, onMessage, onRemove: (item) => setConfirm(item) }),
+    (0, import_react60.createElement)(ContactDirectory, { contacts, relations: data?.relations ?? [], humanPrincipalId, instanceId, request, connectionKnown: liveError ? false : connectionKnown, busy: busy || messageBusy, onMessage, onRemove: (item) => setConfirm(item), onUsePublished: (item) => {
+      setError("");
+      setRepair(item);
+    } }),
+    (0, import_react60.createElement)(CommunicationActionDialog, { open: Boolean(repair), title: "Repair contact Bot sharing", confirmLabel: "Use published Bots", onClose: () => setRepair(null), error, onConfirm: () => run2(() => operation("use-published-contact-bots", { otherHumanPrincipalId: repair.otherHumanPrincipalId, expectedVersion: repair.version })) }, (0, import_react60.createElement)("p", null, contacts.find((person) => person.principalId === repair?.otherHumanPrincipalId)?.displayName ?? repair?.otherHumanPrincipalId), (0, import_react60.createElement)("p", null, t("Share your currently and later published Bots with this contact. Their sharing scope will not change."))),
     (0, import_react60.createElement)(CommunicationActionDialog, { open: Boolean(confirm), title: "Remove contact", confirmLabel: "Confirm contact removal", onClose: () => setConfirm(""), danger: true, error, onConfirm: () => run2(() => operation("revoke-contact", { otherHumanPrincipalId: confirm.otherHumanPrincipalId, expectedVersion: confirm.version })) }, (0, import_react60.createElement)("p", null, contacts.find((person) => person.principalId === confirm?.otherHumanPrincipalId)?.displayName ?? confirm?.otherHumanPrincipalId), (0, import_react60.createElement)("p", null, t("This revokes the contact relationship and access to shared private conversations."))),
     (0, import_react60.createElement)(
       "details",

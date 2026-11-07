@@ -663,20 +663,25 @@ export class CommunicationOnboarding {
     if (!comm?.transport?.connected || !comm.human?.principalId) fail('COMMUNICATION_UNAVAILABLE')
     const principalId = comm.human.principalId
     const botPrincipalIds = () => {
-      if (!Array.isArray(input.localBotIds ?? []) || (input.localBotIds ?? []).length > 100) fail('INVALID_BOT_SCOPE')
-      return [...new Set((input.localBotIds ?? []).map(id => {
+      const ids = input.localBotIds === undefined ? [] : input.localBotIds
+      if (!Array.isArray(ids) || ids.length > 100) fail('INVALID_BOT_SCOPE')
+      return [...new Set(ids.map(id => {
         const bot = comm.bots.get(id)
         if (!bot || !this.rt.botOf(id)) fail('INVALID_BOT_SCOPE')
         return bot.principalId
       }))]
     }
-    const mutations = new Set(['contact-request', 'contact-accept', 'contact-reject', 'contact-cancel', 'contact-revoke', 'rotate-user-code'])
+    const mutations = new Set(['contact-request', 'contact-accept', 'contact-reject', 'contact-cancel', 'contact-revoke', 'contact-use-published-bots', 'rotate-user-code'])
     const operationId = mutations.has(action) ? operation(input.operationId) : undefined
     const contactScope = () => {
-      if (input.localBotIds !== undefined) return { botPrincipalIds: botPrincipalIds() }
+      if (input.localBotIds !== undefined) {
+        const ids = botPrincipalIds()
+        if (ids.length) return { botPrincipalIds: ids }
+      }
       if (!comm.transport.welcome?.capabilities?.includes('published-contact-scope')) fail('UNSUPPORTED_CAPABILITY')
       return { sharePublishedBots: true }
     }
+    if (['contact-request', 'contact-use-published-bots'].includes(action) && !comm.transport.welcome?.capabilities?.includes('contact-consent-v2')) fail('CONTACT_CONSENT_UPGRADE_REQUIRED')
     let type, payload = { principalId }
     switch (action) {
       case 'user-code': type = 'contact.code'; break
@@ -690,9 +695,9 @@ export class CommunicationOnboarding {
         if (!identifier(input.requestId)) fail('INVALID_REQUEST')
         type = `contact.${action.slice(8)}`; payload = { ...payload, operationId, requestId: input.requestId, expectedVersion: version(input.expectedVersion),
           ...(action === 'contact-accept' ? contactScope() : {}) }; break
-      case 'contact-revoke':
+      case 'contact-revoke': case 'contact-use-published-bots':
         if (typeof input.otherHumanPrincipalId !== 'string' || !/^human:[A-Za-z0-9_-]+:[A-Za-z0-9_-]+$/.test(input.otherHumanPrincipalId)) fail('INVALID_REQUEST')
-        type = 'contact.revoke'; payload = { ...payload, operationId, otherHumanPrincipalId: input.otherHumanPrincipalId, expectedVersion: version(input.expectedVersion) }; break
+        type = action === 'contact-revoke' ? 'contact.revoke' : 'contact.use-published-bots'; payload = { ...payload, operationId, otherHumanPrincipalId: input.otherHumanPrincipalId, expectedVersion: version(input.expectedVersion) }; break
       default: fail('UNKNOWN_OPERATION')
     }
     return comm.transport.request(type, payload)
