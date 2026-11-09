@@ -1,3 +1,4 @@
+import {searchHistory} from './history-search.js'
 import { botDmRecords, botDmContext } from './bot-dm-records.js'
 import { join } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
@@ -649,7 +650,20 @@ export class CommunicationRuntime {
     const events = this.queue.view(input.conversationId, principalId, member.membershipEpoch, { after: input.after ?? 0,
       before: input.before, limit: input.limit ?? 50, latest: input.latest ?? true })
     return { conversationId: input.conversationId, membershipEpoch: member.membershipEpoch, joinSeq: member.joinSeq,
-      watermark: this.queue.cursor(input.conversationId, principalId, member.membershipEpoch), events }
+      watermark: this.queue.cursor(input.conversationId, principalId, member.membershipEpoch), events,
+      ...this.queue.historyEdges(input.conversationId,principalId,member.membershipEpoch,events) }
+  }
+  searchHistory(input) {
+    if (!this.everReconciled && !CommunicationRuntime.prototype.hasAuthorizedProjection.call(this)) fail('AUTHORIZATION_PENDING')
+    let contexts = [...this.queue.memberships().filter(member=>member.principalId===this.human.principalId),...botDmRecords(this)]
+    if (input.conversationId !== undefined) {
+      if (typeof input.conversationId !== 'string') fail('INVALID_REQUEST')
+      contexts = contexts.filter(member=>member.conversationId===input.conversationId)
+      if (!contexts.length) fail('NOT_A_MEMBER')
+      if (input.membershipEpoch !== undefined && contexts[0].membershipEpoch !== input.membershipEpoch) fail('MEMBERSHIP_REVOKED')
+    }
+    for (const context of contexts) this.member(context.principalId,context.conversationId,context.membershipEpoch)
+    return searchHistory(this.queue,contexts,input)
   }
   thread(principalId, input) {
     const member = this.member(principalId, input.conversationId, input.membershipEpoch)
@@ -682,7 +696,7 @@ export class CommunicationRuntime {
       lastConnectedAt: this.lastConnectedAt ?? null, error: this.transportError ?? this.lastError ?? null, avatarError: this.avatarError ?? null, contacts: this.contacts,
       limits: this.queue.limits, workApprovals: CommunicationRuntime.prototype.workApprovals.call(this),
       localBots: [...this.bots.values()].map(bot => ({ principalId: bot.principalId, displayName: this.rt.botOf(bot.localRef)?.name ?? bot.displayName })),
-      conversations: memberships.map(member => ({ ...member, info: this.conversations.get(member.conversationId) ?? null,
+      conversations: memberships.map(member => ({ ...member, cachedWatermark:this.queue.cursor(member.conversationId,member.principalId,member.membershipEpoch),info: this.conversations.get(member.conversationId) ?? null,
         lastMessage: conversationSummary(this.queue.lastMessage(member.conversationId, member.principalId, member.membershipEpoch),
           [...this.contacts, ...(this.conversations.get(member.conversationId)?.members ?? [])]),
         unread: this.queue.unread(member.conversationId, member.principalId, member.membershipEpoch) })),

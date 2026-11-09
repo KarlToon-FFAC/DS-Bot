@@ -289,6 +289,12 @@ export class CommunicationQueue {
     const events = this.db.prepare(`SELECT body FROM events WHERE conversation_id=? AND principal_id=? AND epoch=? AND seq>? AND seq<=? ORDER BY seq ${latest ? 'DESC' : 'ASC'} LIMIT ?`).all(conversationId, principalId, epoch, after, upper, limit).map(row => JSON.parse(row.body))
     return latest ? events.reverse() : events
   }
+  historyEdges(conversationId,principalId,epoch,events) {
+    const member=this.member(conversationId,principalId,epoch),cursor=this.cursor(conversationId,principalId,epoch)
+    const exists=(operator,seq)=>Boolean(this.db.prepare(`SELECT 1 FROM events WHERE conversation_id=? AND principal_id=? AND epoch=? AND seq>=? AND seq<=? AND seq${operator}? LIMIT 1`).get(conversationId,principalId,epoch,member.join_seq,cursor,seq))
+    const first=events[0]?.conversationSeq,last=events.at(-1)?.conversationSeq
+    return {hasEarlier:first!==undefined&&exists('<',first),hasLater:last!==undefined&&exists('>',last),nextBefore:first===undefined?null:first-1,nextAfter:last??null}
+  }
   lastMessage(conversationId, principalId, epoch) {
     const member = this.member(conversationId, principalId, epoch)
     const row = this.db.prepare("SELECT body FROM events WHERE conversation_id=? AND principal_id=? AND epoch=? AND seq>=? AND seq<=? AND json_extract(body,'$.type')='message' ORDER BY seq DESC LIMIT 1")

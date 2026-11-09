@@ -386,6 +386,13 @@ export const communicationCSS = `
 @media(prefers-reduced-motion:reduce){.bt-comm-operation-dialog,.bt-comm-dialog-layer[data-closing=true] .bt-comm-operation-dialog{animation:none}}
 
 .bt-comm-frame .bt-comm-avatar-button{padding:0;border:0;background:transparent;flex:none;min-width:28px;min-height:28px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;vertical-align:middle}.bt-comm-avatar-button .bt-comm-avatar{margin:0}
+.bt-comm-history-result{display:flex;flex-direction:column;gap:8px;width:100%;text-align:left;margin:8px 0}
+.bt-comm-history-result-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;color:var(--bt-ink-2);font-size:12px;min-width:0}
+.bt-comm-history-result-meta strong{color:var(--bt-ink);overflow-wrap:anywhere}
+.bt-comm-history-excerpt{white-space:pre-wrap;overflow-wrap:anywhere;line-height:22px}
+.bt-comm-history-excerpt mark{background:color-mix(in srgb,var(--bt-accent) 18%,var(--bt-card));color:inherit;border-radius:4px}
+.bt-comm-history-pages{display:flex;justify-content:space-between;gap:8px;margin-top:12px}
+.bt-comm-history-status{position:sticky;top:0;height:0;margin:0;z-index:1;pointer-events:none;text-align:center;color:var(--bt-ink-2);font-size:12px}
 .bt-comm-resize{position:absolute;top:0;bottom:0;width:12px;cursor:col-resize;touch-action:none;z-index:5;outline-offset:-3px}
 .bt-comm-resize::after{content:'';position:absolute;top:0;bottom:0;width:2px;background:transparent}
 .bt-comm-resize:hover::after,.bt-comm-resize:focus-visible::after{background:var(--bt-accent)}

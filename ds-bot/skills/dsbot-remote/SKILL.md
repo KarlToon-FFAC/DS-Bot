@@ -920,3 +920,17 @@ Local Bots/files/history and Human contacts/enrollment remain. Offline withdrawa
 is explicitly pending and retries without pumping messages or executing work.
 Turning on again does not republish Bots. Honor configuration reload and pending
 withdrawal gates before communication; publish new identities explicitly afterward.
+
+
+## Search synchronized chat history
+
+Authenticated local owners may use `search-history` with `{query,limit?,cursor?}`
+to search currently accessible Human conversations and owned Bot DM records.
+Set `conversationId` and optionally `membershipEpoch` to narrow the search.
+The query is a literal substring, up to 200 characters; pages contain at most 50
+short message excerpts, with `hasMore` and `nextCursor`. Reuse the same query and
+scope for that cursor. `HISTORY_SEARCH_CHANGED` requires a fresh search after
+membership/ownership changes. Archived private chats remain searchable. No other
+Bot's cache, pre-join history or data beyond the contiguous sync cursor is read.
+Search never sends messages or receipts. Results cover locally synchronized
+canonical history only; an empty result does not prove absence on the Hub.

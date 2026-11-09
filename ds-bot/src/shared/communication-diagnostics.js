@@ -83,6 +83,7 @@ export const communicationDescriptions = {
   UNAUTHENTICATED: 'The Hub rejected this device. Ask the Hub owner to check its pairing.',
   PEER_REVOKED: 'This device was unpaired. Ask the Hub owner to pair it again.',
   AUTHORIZATION_PENDING: 'Membership is still syncing. Wait briefly, then retry the same request.',
+  HISTORY_SEARCH_CHANGED: 'Search scope changed. Search again using current conversations and memberships.',
   HISTORY_GAP: 'Some history is missing. Wait for synchronization before sending.',
   STALE_CONNECTION: 'Another connection replaced this one. Close the duplicate instance and restart this one.',
   PROTOCOL_VERSION_UNSUPPORTED: 'The client and Hub use incompatible communication protocols. Update the component that lacks the required protocol; conversation data does not need a reset.',

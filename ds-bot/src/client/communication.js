@@ -1,3 +1,5 @@
+import {CommunicationHistorySearch} from './communication-history-search.js'
+import {useCommunicationHistory} from './communication-history.js'
 import {CommunicationResizeHandle,useCommunicationWidths} from './communication-resize.js'
 import { remoteHubVisible } from '../shared/remote-hub.js'
 import { communicationCompatibility, incompatibleCommunication, displayCommunicationVersion, communicationReleaseRelation } from '../shared/communication-version.js'
@@ -201,7 +203,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
   const [attaching,setAttaching]=useState(false),attachmentFlight=useRef(false)
   const [selected, setSelected] = useState(() => read(SELECTED, null))
   const [drafts, setDrafts] = useState(() => read(DRAFTS, {})), [attempts, setAttempts] = useState(() => read(ATTEMPTS, {}))
-  const [page, setPage] = useState(null), [older, setOlder] = useState(null), [reply, setReply] = useState(null)
+  const [reply, setReply] = useState(null)
   const [referenced, setReferenced] = useState(null), [jumpRevision, setJumpRevision] = useState(0)
   const pendingJump = useRef(null), referenceOrder = useRef(0), contextKey = useRef('')
   const [title, setTitle] = useState(''), [invitees, setInvitees] = useState([]), [invitationKey, setInvitationKey] = useState(null)
@@ -213,6 +215,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
   const panelShown = useRef({ name: '', visible, version: 0 })
   if (panelShown.current.name !== activePanel || panelShown.current.visible !== visible) panelShown.current = { name: activePanel, visible, version: panelShown.current.version + 1 }
   const [sidebarHidden, setSidebarHidden] = useState(() => read(SIDEBAR_HIDDEN, false)), [newMenuOpen, setNewMenuOpen] = useState(false)
+  const [historySearchScope,setHistorySearchScope]=useState(''), searchJump=useRef(null)
   const [searchQuery, setSearchQuery] = useState(''), [searchCursor, setSearchCursor] = useState(0)
   const newMenu = useRef(null), newTrigger = useRef(null)
   const newMenuShown = useRef(newMenuOpen), previousSidebar = useRef(sidebarHidden)
@@ -220,7 +223,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
   const [threadMessageId, setThreadMessageId] = useState(null)
   const [threadReplyTarget,setThreadReplyTarget]=useState(null),[threadPosition,setThreadPosition]=useState({left:8,top:8})
   const threadAnchor=useRef(null),viewportTick=useViewport()
-  const input = useRef(null), frame = useRef(null), log = useRef(null), autoScroll = useRef(true), pageOrder = useRef(0), operationIds = useRef(new Map(readOperationIds()))
+  const input = useRef(null), frame = useRef(null), log = useRef(null), autoScroll = useRef(true), operationIds = useRef(new Map(readOperationIds()))
   useMentionDismiss(input, Boolean(completion), () => setCompletion(null))
   const labels = contactLabels(state?.contacts ?? [], state?.instanceId, t)
   const scope = communicationScope(state)
@@ -232,6 +235,8 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
   const archivedConversations = allConversations.filter(item => item.kind === 'dm' && archivedIds.has(item.conversationId))
   const member = allConversations.find(item => item.conversationId === selected)
   const conversationRequest = useMemo(() => body => request(member?.archive && ['history','reference','read'].includes(body.endpoint) ? { ...body, endpoint: `bot-dm-${body.endpoint}`, localBotId: member.viewerBotId, membershipEpoch: member.membershipEpoch } : body), [request, member?.archive, member?.viewerBotId, member?.membershipEpoch])
+  const history=useCommunicationHistory({scope,member,visible,request:conversationRequest,log,autoScroll,onError:failure=>setSyncError({conversationId:selected,message:friendly(failure)}),onLoaded:()=>setSyncError(null)})
+  const page=history.page,older=page?.hasLater?true:null
   for (const person of allConversations.flatMap(item => [...(item.info?.members ?? []), ...(item.info?.formerMembers ?? [])])) {
     if (!labels.has(person.principalId)) labels.set(person.principalId, person.displayName)
     if (person.retired) labels.set(person.principalId, `${person.displayName} · ${t('Bot no longer exists')}`)
@@ -327,7 +332,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
     if (!shown || !activePanel) return
     const returning = panelReturn.current
     panelReturn.current = ''
-    const target=(returning ? chooser.current?.querySelector(`[data-open-panel="${returning}"]`) : null) ?? (activePanel==='thread'?(chooser.current?.querySelector('textarea')??chooser.current?.querySelector('button')):chooser.current?.querySelector(['group','search'].includes(activePanel)?'input':'button'))
+    const target=(returning ? chooser.current?.querySelector(`[data-open-panel="${returning}"]`) : null) ?? (activePanel==='thread'?(chooser.current?.querySelector('textarea')??chooser.current?.querySelector('button')):chooser.current?.querySelector(['group','search','history-search'].includes(activePanel)?'input':'button'))
     target?.focus()
   }, [shown, activePanel])
   useEffect(() => {
@@ -342,7 +347,15 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
     previousSidebar.current = sidebarHidden
     frame.current?.querySelector(sidebarHidden ? '.bt-comm-expand' : '.bt-comm-collapse')?.focus()
   }, [shown, sidebarHidden])
-  useEffect(() => { save(SELECTED, selected); setOlder(null); setReply(null); setReferenced(null); pendingJump.current = null; referenceOrder.current += 1; setCompletion(null); autoScroll.current = true; input.current?.focus() }, [scope, selected])
+  useEffect(() => { save(SELECTED, selected); setReply(null); setReferenced(null); pendingJump.current = null; referenceOrder.current += 1; setCompletion(null); autoScroll.current = true; input.current?.focus() }, [scope, selected])
+  useEffect(()=>{
+    const jump=searchJump.current
+    if(!jump||!member||jump.scope!==scope||jump.conversationId!==selected)return
+    searchJump.current=null
+    if(jump.membershipEpoch!==member.membershipEpoch){setError('Earlier message unavailable');return}
+    autoScroll.current=false;pendingJump.current={messageId:jump.messageId,context:contextKey.current};setReferenced(jump.messageId)
+    void history.jumpTo(jump.conversationSeq)
+  },[scope,selected,member?.membershipEpoch])
   useEffect(() => {
     if (!shown) return undefined
     const clear = () => { pendingJump.current = null; referenceOrder.current += 1; setReferenced(null) }
@@ -358,15 +371,6 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
     } else if (!jump && log.current && older === null && autoScroll.current) log.current.scrollTop = log.current.scrollHeight
   }, [page, older, referenced, jumpRevision, state?.outbox])
   useEffect(() => {
-    if (!shown || !member) { setPage(null); return undefined }
-    let active = true
-    const order = ++pageOrder.current
-    void conversationRequest({ endpoint: 'history', conversationId: selected, limit: 50, ...(older === null ? {} : { before: older }) }).then(value => {
-      if (active && pageOrder.current === order) { setPage({ ...value, scope }); setSyncError(null) }
-    }).catch(failure => { if (active) { setPage(null); setSyncError({ conversationId: selected, message: friendly(failure) }) } })
-    return () => { active = false }
-  }, [scope, shown, selected, member?.membershipEpoch, older, older === null ? member?.watermark : null, conversationRequest])
-  useEffect(() => {
     if (!visible || activePanel || older !== null || page?.scope !== scope || page?.conversationId !== selected || page.membershipEpoch && page.membershipEpoch !== member?.membershipEpoch || !page.events.length) return undefined
     let active = true, marked = false, pending = false, focusFrame
     const mark = () => {
@@ -376,7 +380,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
         void conversationRequest({ endpoint: 'read', conversationId: selected, membershipEpoch:member.membershipEpoch,seq: page.events.at(-1).conversationSeq }).then(() => { marked = true; if (active) return refresh().catch(() => {}) }).catch(failure => {
         if (!active) return
         setSyncError({ conversationId: selected, message: friendly(failure) })
-        if (['FORBIDDEN', 'NOT_A_MEMBER', 'MEMBERSHIP_REVOKED'].includes(failure.code)) setPage(null)
+        if (['FORBIDDEN', 'NOT_A_MEMBER', 'MEMBERSHIP_REVOKED'].includes(failure.code)) history.clear()
       }).finally(() => { pending = false })
       }
     }
@@ -441,7 +445,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
       autoScroll.current = false
       pendingJump.current = { messageId, context }
       setReferenced(messageId); setJumpRevision(value => value + 1)
-      if (!page?.events.some(item => item.message?.messageId === messageId)) setOlder(event.conversationSeq + 24)
+      if (!page?.events.some(item => item.message?.messageId === messageId)) void history.jumpTo(event.conversationSeq)
     } catch {
       if (context === contextKey.current && order === referenceOrder.current) setError('Earlier message unavailable')
     }
@@ -570,10 +574,10 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
       h(CommunicationResizeHandle,{side:'left',width:columnWidths.left,onChange:changeColumnWidth}),
       h('div', { className: 'bt-comm-nav-footer' }, btn('Back to local chats', close, { className: 'bt-comm-back' }))),
     activePanel ? h('div', { className: `bt-comm-modal-backdrop${activePanel==='thread'?' bt-comm-thread-backdrop':''}`, onMouseDown: event => { if (event.target === event.currentTarget) { setActivePanel(''); chooserTrigger.current?.focus() } } },
-      h('section', { ref: chooser, className: `bt-comm-modal${activePanel==='thread'?' bt-comm-thread-popover':''}${activePanel==='manage-contacts'?' bt-comm-contacts-modal':''}`,style:activePanel==='thread'?threadPosition:undefined, role: 'dialog', 'aria-modal': true, 'aria-label': t(activePanel === 'archives' ? 'Archived private chats' : activePanel === 'invitation' ? 'Invitation details' : activePanel === 'search' ? 'Search' : activePanel === 'settings' ? 'Personal settings' : activePanel === 'thread' ? 'Message replies' : activePanel === 'activity' ? 'Activity details' : activePanel === 'participant' ? 'Participant information' : activePanel === 'manage-contacts' ? 'Manage contacts' : activePanel === 'profile' ? 'Human profile' : activePanel === 'pairing' ? 'Add a device' : activePanel === 'group' ? 'New group' : 'New message') },
+      h('section', { ref: chooser, className: `bt-comm-modal${activePanel==='thread'?' bt-comm-thread-popover':''}${activePanel==='manage-contacts'?' bt-comm-contacts-modal':''}`,style:activePanel==='thread'?threadPosition:undefined, role: 'dialog', 'aria-modal': true, 'aria-label': t(activePanel === 'archives' ? 'Archived private chats' : activePanel === 'invitation' ? 'Invitation details' : activePanel === 'history-search' ? 'Search chat history' : activePanel === 'search' ? 'Search' : activePanel === 'settings' ? 'Personal settings' : activePanel === 'thread' ? 'Message replies' : activePanel === 'activity' ? 'Activity details' : activePanel === 'participant' ? 'Participant information' : activePanel === 'manage-contacts' ? 'Manage contacts' : activePanel === 'profile' ? 'Human profile' : activePanel === 'pairing' ? 'Add a device' : activePanel === 'group' ? 'New group' : 'New message') },
         activePanel==='thread'?h('button',{type:'button',onClick:()=>{setActivePanel('');chooserTrigger.current?.focus()},className:'bt-comm-thread-close','aria-label':t('Close replies'),title:t('Close replies')},h(CloseIcon)):null,
         h('div', { className: activePanel === 'thread' ? 'bt-comm-thread-heading' : 'bt-comm-modal-head' },
-          h('h2', null, t(activePanel === 'archives' ? 'Archived private chats' : activePanel === 'invitation' ? 'Invitation details' : activePanel === 'search' ? 'Search' : activePanel === 'settings' ? 'Personal settings' : activePanel === 'thread' ? 'Message replies' : activePanel === 'activity' ? 'Activity details' : activePanel === 'participant' ? 'Participant information' : activePanel === 'manage-contacts' ? 'Manage contacts' : activePanel === 'profile' ? 'Human profile' : activePanel === 'pairing' ? 'Add a device' : activePanel === 'group' ? 'New group' : 'New message')),
+          h('h2', null, t(activePanel === 'archives' ? 'Archived private chats' : activePanel === 'invitation' ? 'Invitation details' : activePanel === 'history-search' ? 'Search chat history' : activePanel === 'search' ? 'Search' : activePanel === 'settings' ? 'Personal settings' : activePanel === 'thread' ? 'Message replies' : activePanel === 'activity' ? 'Activity details' : activePanel === 'participant' ? 'Participant information' : activePanel === 'manage-contacts' ? 'Manage contacts' : activePanel === 'profile' ? 'Human profile' : activePanel === 'pairing' ? 'Add a device' : activePanel === 'group' ? 'New group' : 'New message')),
           activePanel !== 'thread' ? h('div', { className: 'bt-comm-modal-actions' },
             panelBack ? h('button', { type: 'button', 'aria-label': t('Back to settings'), onClick: () => { panelReturn.current = activePanel; setActivePanel(panelBack); setPanelBack('') } }, h(ChevronLeftIcon), t('Back')) : null,
             h('button', { type: 'button', 'aria-label': t('Close dialog'), onClick: () => { setActivePanel(''); setPanelBack(''); chooserTrigger.current?.focus() } }, h(CloseIcon), t('Close'))) : null),
@@ -586,7 +590,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
             if(event.key==='Enter'&&searchResults.length){event.preventDefault();searchResults[searchIndex].run()}
           }})),h('p',{className:'bt-comm-reference'},t('Search current conversations, contacts and recent message summaries.')),
           h('div',{id:'bt-comm-search-results',role:'listbox','aria-label':t('Results')},searchResults.map((item,index)=>btn(item.title,item.run,{key:item.id,id:`bt-comm-search-${index}`,role:'option','aria-selected':index===searchIndex,children:h(Fragment,null,item.avatar,h('span',null,h('strong',null,item.title),h('small',null,item.preview)))}))),
-          !searchResults.length?h('p',{role:'status'},t('No matching conversations or contacts.')):null) : activePanel === 'settings' ? h('div', { className: 'bt-comm-personal-settings' },
+          !searchResults.length?h('p',{role:'status'},t('No matching conversations or contacts.')):null,btn('Search chat history',event=>{setHistorySearchScope('');showPanel('history-search',event.currentTarget)})) : activePanel === 'history-search' ? h(CommunicationHistorySearch,{request,initialConversationId:historySearchScope,conversations:allConversations.map(item=>({...item,searchTitle:conversationTitle(item,state?.humanPrincipalId,labels)})),onSelect:item=>{setActivePanel('');searchJump.current={...item,scope};if(selected===item.conversationId){searchJump.current=null;autoScroll.current=false;pendingJump.current={messageId:item.messageId,context:contextKey.current};setReferenced(item.messageId);void history.jumpTo(item.conversationSeq)}else choose(item.conversationId)}}) : activePanel === 'settings' ? h('div', { className: 'bt-comm-personal-settings' },
           state ? h(Fragment, null, h('details', {className:'bt-comm-contact-section bt-comm-profile-section'}, h('summary', null, t('Your profile')), h(HumanProfile, { key: `${scope}:${state.humanPrincipalId}`, human: contacts.find(person => person.principalId === state.humanPrincipalId) ?? { principalId: state.humanPrincipalId, displayName: t('You'), kind: 'human' }, request, operation })),
             h('details', {className:'bt-comm-contact-section bt-comm-profile-section'}, h('summary', null, t('Device identity')), h('p', null, state.instanceId), h('code', null, state.humanPrincipalId))) : null,
           h(OwnRemoteProfile, { key: `own:${scope}`, request, operation, bots: team.bots, revision: `${state?.managementRevision}:${team.revision}` }),
@@ -618,6 +622,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
           else inspect(currentMembers.filter(person => person.principalId !== state.humanPrincipalId).map(person => person.principalId))
         }, { className: 'bt-pill bt-comm-title-pill', children: h(Fragment, null, h(ConversationAvatar, { conversation: member, humanId: state.humanPrincipalId, request, size: 24 }), h('h2', { className: 'bt-pill-name' }, conversationTitle(member, state.humanPrincipalId, labels)), h('span', { 'aria-hidden': true }, '›')) }) : h('h2', null, t('Remote communication'))),
         member?.kind === 'dm' ? btn(archivedIds.has(member.conversationId) ? 'Restore private chat' : 'Archive private chat', () => {void act(()=>archiveConversation(member,!archivedIds.has(member.conversationId)))}, {className:'bt-comm-icon-button','aria-label':t(archivedIds.has(member.conversationId) ? 'Restore private chat' : 'Archive private chat'),title:t(archivedIds.has(member.conversationId) ? 'Restore private chat' : 'Archive private chat'),children:h(ArchiveIcon)}) : null,
+        member ? btn('Search chat history',event=>{setHistorySearchScope(member.conversationId);showPanel('history-search',event.currentTarget)},{className:'bt-comm-icon-button','aria-label':t('Search chat history'),title:t('Search chat history'),children:h(SearchIcon)}) : null,
         btn('Activity details', event => showPanel('activity', event.currentTarget), { className: 'bt-comm-icon-button', 'aria-label': t('Activity details'), title: t('Activity details'), children: h(InfoIcon) }),
         member?.kind === 'group' ? h('span', { className: 'bt-sr' }, `${currentMembers.length} ${t('Members')} · ${t(roleLabel(member.role))} · ${t(member.speakingMode === 'readOnly' ? 'Read only' : 'Can speak')}`) : null),
       !member ? h('section', { className: 'bt-comm-empty' },
@@ -631,9 +636,12 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
         pendingSettings: id => [...operationIds.current.keys()].map(item => JSON.parse(item)).find(([instanceId, endpoint, values]) => instanceId === scope && endpoint === 'save-settings' && values.conversationId === id)?.[2] ?? null }) : null,
       h('div', { ref: log, className: 'bt-comm-log', role: 'log', 'aria-label': t('Communication messages'), onScroll: event => {
         const element = event.currentTarget; autoScroll.current = !referenced && !pendingJump.current && element.scrollHeight - element.scrollTop - element.clientHeight < 80
+        if(element.scrollTop<80)void history.loadEarlier()
+        else if(element.scrollHeight-element.scrollTop-element.clientHeight<80)void history.loadLater()
       } },
-        member && events.length > 0 && events[0].conversationSeq > member.joinSeq ? btn('Load earlier messages', () => setOlder(events[0].conversationSeq - 1)) : null,
-        older !== null ? btn('Show latest messages', () => setOlder(null)) : null,
+        page?.hasEarlier ? btn('Load earlier messages', () => {void history.loadEarlier()}, {disabled:history.loading}) : null,
+        page?.hasLater ? btn('Show latest messages', () => {pendingJump.current=null;setReferenced(null);void history.showLatest()}) : null,
+        history.loading ? h('p',{className:'bt-comm-history-status',role:'status'},t('Loading messages…')) : history.failure ? btn('Retry loading messages',()=>{void history.retry()}) : null,
         communicationLogEvents(events).map(event => event.type === 'bot.work.started' ? h(BotWorkStarted, { key: event.eventId, event, members: knownMembers, request, onInspect: inspect }) : h('article', { key: event.message.messageId, 'data-message-id': event.message.messageId, 'data-self': event.message.author.principalId === state.humanPrincipalId, 'data-referenced': event.message.messageId === referenced },
           messageAvatar(event.message.author.principalId, contacts.find(person => person.principalId === event.message.author.principalId)?.displayName ?? event.message.author.displayName), h('strong', { title: event.message.author.principalId }, labels.get(event.message.author.principalId) ?? event.message.author.displayName ?? (event.message.author.principalId === state.humanPrincipalId ? t('You') : event.message.author.principalId), identityIcons(contacts.find(person => person.principalId === event.message.author.principalId) ?? event.message.author)),
           h('div', { className: 'bt-comm-message-bubble' }, event.message.replyToMessageId ? h(ReferenceQuote, { key: `${scope}:${selected}:${member.membershipEpoch}:${event.message.replyToMessageId}`, conversationId: selected,

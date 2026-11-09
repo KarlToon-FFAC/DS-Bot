@@ -1673,3 +1673,31 @@ test('new messages behind personal settings stay unread until the current conver
   assert.ok(calls.some(call=>call.endpoint==='read'&&call.seq===2&&call.membershipEpoch==='epoch'))
  })
 })
+
+test('progressive history follows the contiguous cached watermark without spinning on an ahead-of-cache Hub watermark',async()=>{
+ let cached=1
+ const event=i=>({type:'message',conversationSeq:i,serverAcceptedAt:'2026-11-09T00:00:00Z',message:{messageId:'cached-'+i,author:membership.info.members[0],content:{text:'Cached message '+i},mentions:[]}})
+ await pane({getState:()=>({...state(),conversations:[{...membership,watermark:100,cachedWatermark:cached}]}),history:body=>({conversationId:'group',membershipEpoch:'epoch',watermark:cached,events:Array.from({length:cached},(_,i)=>event(i+1)).filter(row=>row.conversationSeq>(body.after??0)),hasEarlier:false,hasLater:false})},async({doc,click,calls,autoRefresh})=>{
+  await click('Shared group');await autoRefresh()
+  assert.equal(calls.filter(item=>item.endpoint==='history').length,1)
+  cached=2;await autoRefresh()
+  assert.ok(doc.querySelector('[data-message-id="cached-2"]'))
+  assert.equal(calls.filter(item=>item.endpoint==='history'&&item.after===1).length,1)
+ })
+})
+
+test('late history-search results cannot overwrite a newer query or render received markup',async()=>{
+ let resolveOld
+ await pane({snapshot:{...state(),conversations:[membership]},handle:async body=>body.endpoint==='search-history'?(body.query==='old'?new Promise(resolve=>{resolveOld=resolve}):{results:[{conversationId:'group',membershipEpoch:'epoch',messageId:'new-hit',conversationSeq:1,author:membership.info.members[0],excerpt:'new target <img src=x onerror=alert(1)>'}],hasMore:false}):{}},async({doc,click,edit,calls})=>{
+  await click('Shared group');await click('Search chat history')
+  const input=doc.querySelector('[aria-label="Search chat history"] input')??doc.querySelector('input[aria-label="Search chat history"]')
+  await edit(input,'old');await act(async()=>{await new Promise(resolve=>setTimeout(resolve,300))})
+  assert.ok(resolveOld)
+  await edit(input,'new');await act(async()=>{await new Promise(resolve=>setTimeout(resolve,300))})
+  assert.match(doc.querySelector('.bt-comm-history-results').textContent,/new target/)
+  await act(async()=>resolveOld({results:[{conversationId:'group',membershipEpoch:'epoch',messageId:'old-hit',conversationSeq:1,author:membership.info.members[0],excerpt:'STALE OLD RESULT'}],hasMore:false}))
+  assert.doesNotMatch(doc.querySelector('.bt-comm-history-results').textContent,/STALE OLD RESULT/)
+  assert.equal(doc.querySelector('.bt-comm-history-results img'),null)
+  assert.equal(calls.some(item=>['send','publish-bots'].includes(item.endpoint)),false)
+ })
+})
