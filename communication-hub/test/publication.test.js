@@ -30,37 +30,41 @@ function fixture(t, disk = false) {
   return f
 }
 
-test('explicit publication sync hides only owned Bots, retains Human and group identities, and never revives cancelled AI deliveries', t => {
+test('withdrawal permanently retires group identity, preserves bounded history and requires explicit new membership', t => {
   const f = fixture(t)
-  assert.ok(HUB_CAPABILITIES.includes('principal-publication'))
-  assert.ok(!CAPABILITIES.includes('principal-publication'))
+  assert.ok(HUB_CAPABILITIES.includes('bot-publication-generations'))
   const botInput = f.input(f.B), botAck = f.store.publish(f.b, botInput)
-  const initial = f.input(f.H, [f.B]), message = f.store.publish(f.a, initial)
-  const old = f.store.pending(f.b).find(row => row.messageId === message.messageId && row.recipientPrincipalId === f.B)
-  assert.equal(old.ai, true)
+  const initial = f.store.publish(f.a, f.input(f.H, [f.B]))
+  const old = f.store.pending(f.b).find(row => row.messageId === initial.messageId && row.recipientPrincipalId === f.B)
   const membership = f.member(f.B)
   assert.deepEqual(f.store.syncPublication(f.b, { principalIds: [] }), { principalIds: [] })
   assert.ok(!f.store.contacts(f.a).some(row => row.principalId === f.B))
   for (const id of [f.H, f.R, f.A]) assert.ok(f.store.contacts(f.a).some(row => row.principalId === id))
-  assert.deepEqual(f.member(f.B), membership)
   const info = f.store.members(f.a, f.scope())
-  assert.equal(info.members.find(row => row.principalId === f.B).published, false)
-  assert.equal(info.members.find(row => row.principalId === f.A).published, true)
+  assert.ok(!info.members.some(row => row.principalId === f.B))
+  assert.equal(info.formerMembers.find(row => row.principalId === f.B).retired, true)
+  assert.equal(f.store.readPublicProfile(f.a,{principalId:f.H,conversationId:f.group,membershipEpoch:f.member(f.H).membershipEpoch,targetPrincipalId:f.B}).principalId,f.B)
   assert.equal(f.store.pending(f.b).filter(row => row.ai).length, 0)
   assert.throws(() => f.store.publish(f.b, f.input(f.B)), { code: 'BOT_NOT_PUBLISHED' })
   assert.deepEqual(f.store.publish(f.b, botInput), botAck)
   assert.throws(() => f.store.invite(f.a, f.op({ ...f.scope(), inviteePrincipalId: f.B })), { code: 'BOT_NOT_PUBLISHED' })
-  const during = f.store.publish(f.a, f.input(f.H, [f.B]))
-  assert.equal(f.store.db.prepare('SELECT ai FROM deliveries WHERE message_id=? AND recipient_id=?').get(during.messageId, f.B).ai, 0)
-  f.store.syncPublication(f.b, { principalIds: [f.B] })
+  assert.throws(() => f.store.publish(f.a, f.input(f.H, [f.B])), { code: 'BOT_RETIRED' })
+  assert.throws(() => f.store.syncPublication(f.b, { principalIds: [f.B] }), { code: 'BOT_RETIRED' })
+  assert.throws(() => f.store.register(f.b, { localId: 'B', kind: 'bot', displayName: 'B' }), { code: 'BOT_RETIRED' })
   assert.equal(f.store.db.prepare('SELECT revoked FROM deliveries WHERE id=?').get(old.deliveryId).revoked, 1)
-  assert.equal(f.store.db.prepare('SELECT ai FROM deliveries WHERE message_id=? AND recipient_id=?').get(during.messageId, f.B).ai, 0)
-  const after = f.store.publish(f.a, f.input(f.H, [f.B]))
-  assert.equal(f.store.pending(f.b).find(row => row.messageId === after.messageId && row.recipientPrincipalId === f.B).ai, true)
-  assert.equal(f.store.sync(f.b, { conversationId: f.group, principalId: f.B, membershipEpoch: membership.membershipEpoch, after: membership.joinSeq - 1 }).events.filter(event => event.type === 'message').length, 4)
+  const archived = f.store.sync(f.b, { conversationId: f.group, principalId: f.B, membershipEpoch: membership.membershipEpoch, after: membership.joinSeq - 1 })
+  f.store.publish(f.a, f.input(f.H))
+  assert.equal(f.store.sync(f.b, { conversationId: f.group, principalId: f.B, membershipEpoch: membership.membershipEpoch, after: archived.watermark }).events.length, 0)
+  const fresh=f.store.register(f.b,{localId:'B-new',kind:'bot',displayName:'B'}).principalId
+  f.store.syncPublication(f.b,{principalIds:[fresh]})
+  assert.ok(!f.store.members(f.a,f.scope()).members.some(row=>row.principalId===fresh))
+  assert.throws(()=>f.store.authorize(f.b,{principalId:f.B,conversationId:f.group,membershipEpoch:membership.membershipEpoch}),{code:'BOT_RETIRED'})
+  const invite=f.store.invite(f.a,f.op({...f.scope(),inviteePrincipalId:fresh}))
+  assert.ok(invite.inviteId)
+  assert.equal(f.store.members(f.a,f.scope()).members.find(row=>row.principalId===fresh).role,'member')
 })
 
-test('publication cancellation removes the default reply assignment once and cannot be reselected until explicitly republished', t => {
+test('publication cancellation removes the default reply assignment once and cannot re-enable the retired identity', t => {
   const f = fixture(t)
   f.store.routing(f.a, f.op({ ...f.scope(), mode: 'admin', adminBotPrincipalId: f.B }))
   const version = f.member(f.H).membershipVersion
@@ -73,9 +77,8 @@ test('publication cancellation removes the default reply assignment once and can
   assert.throws(() => f.store.routing(f.a, f.op({ ...f.scope(), mode: 'admin', adminBotPrincipalId: f.B })), { code: 'INVALID_ADMIN' })
   assert.throws(() => f.store.settings(f.a, f.op({ ...f.scope(), title: 'Must not change', routing: { mode: 'admin', adminBotPrincipalId: f.B } })), { code: 'INVALID_ADMIN' })
   assert.equal(f.store.members(f.a, f.scope()).title, 'Retained group')
-  f.store.syncPublication(f.b, { principalIds: [f.B] })
+  assert.throws(() => f.store.syncPublication(f.b, { principalIds: [f.B] }), {code:'BOT_RETIRED'})
   assert.equal(f.store.members(f.a, f.scope()).adminBotPrincipalId, null)
-  f.store.routing(f.a, f.op({ ...f.scope(), mode: 'admin', adminBotPrincipalId: f.B }))
 })
 
 test('complete publication lists require registered Bot ownership, reject stale auth and roll back every change on failure', t => {
@@ -89,6 +92,7 @@ test('complete publication lists require registered Bot ownership, reject stale 
   assert.throws(() => f.store.syncPublication(f.a, { principalIds: [] }), /synthetic publication failure/)
   assert.equal(f.store.isPublished(f.A), true)
   assert.equal(f.store.isPublished(f.B), true)
+  assert.equal(f.store.retirementOf(f.A),null)
 })
 
 test('legacy publication defaults and explicit unpublished state survive restart; offline instances do not auto-unpublish', t => {
@@ -104,8 +108,8 @@ test('legacy publication defaults and explicit unpublished state survive restart
   assert.ok(!f.store.contacts(f.a).some(row => row.principalId === f.B))
   f.b = f.store.connect('b', 'B reconnected', CAPABILITIES)
   assert.equal(f.store.isPublished(f.B), false)
-  f.store.register(f.b, { localId: 'B', kind: 'bot', displayName: 'B desired again' })
-  assert.equal(f.store.isPublished(f.B), true)
+  assert.throws(() => f.store.register(f.b, { localId: 'B', kind: 'bot', displayName: 'B desired again' }), {code:'BOT_RETIRED'})
+  assert.equal(f.store.isPublished(f.B), false)
 })
 
 test('hidden Bot IDs cannot open a DM or receive new DM publishes; already accepted ACKs remain stable', t => {
@@ -120,7 +124,27 @@ test('hidden Bot IDs cannot open a DM or receive new DM publishes; already accep
   assert.deepEqual(f.store.publish(f.a, original), accepted)
   assert.throws(() => f.store.createDm(f.a, f.op({ principalId: f.H, otherPrincipalId: f.B })), { code: 'BOT_NOT_PUBLISHED' })
   assert.throws(() => f.store.publish(f.a, { ...original, messageId: randomUUID() }), { code: 'BOT_NOT_PUBLISHED' })
-  f.store.syncPublication(f.b, { principalIds: [f.B] })
-  const next = f.store.publish(f.a, { ...original, messageId: randomUUID() })
-  assert.equal(f.store.pending(f.b).find(row => row.messageId === next.messageId).ai, true)
+  assert.throws(() => f.store.syncPublication(f.b, { principalIds: [f.B] }), {code:'BOT_RETIRED'})
+  const info=f.store.members(f.a,{principalId:f.H,conversationId:dm.conversationId,membershipEpoch:scope.membershipEpoch})
+  assert.equal(info.members.find(row=>row.principalId===f.B).retired,true)
+  assert.throws(()=>f.store.authorize(f.a,{principalId:f.H,conversationId:dm.conversationId,membershipEpoch:scope.membershipEpoch}),{code:'BOT_RETIRED'})
+  assert.equal(f.store.memberships(f.a).memberships.find(member=>member.conversationId===dm.conversationId).retiredPeer,true)
+  const fresh=f.store.register(f.b,{localId:'B-fresh',kind:'bot',displayName:'B'}).principalId
+  const newDm=f.store.createDm(f.a,f.op({principalId:f.H,otherPrincipalId:fresh}))
+  assert.notEqual(newDm.conversationId,dm.conversationId)
+})
+
+test('schema 5 hidden identities migrate to permanent tombstones without rewriting canonical messages',t=>{
+  const f=fixture(t,true)
+  const message=f.input(f.B);f.store.publish(f.b,message)
+  const before=f.store.db.prepare('SELECT body FROM messages WHERE id=?').get(message.messageId).body
+  f.store.db.prepare('UPDATE principal_publication SET published=0 WHERE principal_id=?').run(f.B)
+  f.store.db.exec('DROP TABLE retired_memberships; DROP TABLE principal_retirements; DELETE FROM schema_version WHERE version=6; PRAGMA user_version=5')
+  f.store.close();f.store=new HubStore(f.path)
+  f.a=f.store.connect('a','A',CAPABILITIES);f.b=f.store.connect('b','B',CAPABILITIES)
+  assert.equal(f.store.retirementOf(f.B).retired,true)
+  assert.equal(f.store.db.prepare('SELECT body FROM messages WHERE id=?').get(message.messageId).body,before)
+  assert.ok(!f.store.members(f.a,f.scope()).members.some(person=>person.principalId===f.B))
+  assert.equal(f.store.members(f.a,f.scope()).formerMembers.find(person=>person.principalId===f.B).retired,true)
+  assert.throws(()=>f.store.register(f.b,{localId:'B',kind:'bot',displayName:'B'}),{code:'BOT_RETIRED'})
 })

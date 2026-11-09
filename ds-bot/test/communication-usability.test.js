@@ -1516,3 +1516,32 @@ test('right member sidebar keeps inline controls and opens the canonical full pr
   assert.ok(panel.isConnected);assert.equal(doc.activeElement,row.querySelector('[aria-label="View participant profile"]'))
  })
 })
+
+test('retired group authors remain identifiable and inspectable without appearing in active member controls or mention choices',async()=>{
+ const old={principalId:'bot:b:old',displayName:'Tester',kind:'bot',retired:true,retiredAt:'2026-11-09T00:00:00Z'}
+ const snapshot={...state(),conversations:[{...membership,info:{...membership.info,formerMembers:[old]}}]}
+ const history=[{type:'message',conversationSeq:1,message:{messageId:'old-message',author:old,content:{text:'Retained old answer'},mentions:[]}}]
+ await pane({snapshot,history,handle:async body=>body.endpoint==='participant-profile'?{principalId:old.principalId,publicProfile:{headline:'Testing specialist',version:1}}:{}},async({doc,click})=>{
+  await click('Shared group')
+  assert.match(doc.querySelector('[data-message-id="old-message"]').textContent,/Tester.*Bot no longer exists/)
+  await click('View conversation details')
+  const group=doc.querySelector('[role=complementary]')
+  assert.equal(group.querySelector('[data-principal-id="bot:b:old"]'),null)
+  const details=[...group.querySelectorAll('details')].find(node=>node.querySelector('summary')?.textContent==='Former Bots')
+  assert.ok(details)
+  await act(async()=>{details.open=true;details.querySelector('button').click()})
+  const card=doc.querySelector('[role=dialog][aria-label="Participant information"]')
+  assert.match(card.textContent,/Bot no longer exists/);assert.match(card.textContent,/bot:b:old/)
+ })
+})
+
+test('a private chat with a retired Bot stays readable and cannot display a send composer',async()=>{
+ const old={principalId:'bot:b:old',displayName:'Tester',kind:'bot',retired:true}
+ const snapshot={...state(),conversations:[{...membership,kind:'dm',info:{kind:'dm',members:[...membership.info.members,old]}}]}
+ await pane({snapshot,history:[{type:'message',conversationSeq:1,message:{messageId:'old-message',author:old,content:{text:'Old private answer'},mentions:[]}}]},async({doc})=>{
+  await act(async()=>doc.querySelector('[data-conversation-id="group"]').click())
+  assert.match(doc.querySelector('.bt-comm-main').textContent,/Old private answer/)
+  assert.match(doc.querySelector('.bt-comm-main').textContent,/This Bot identity no longer exists/)
+  assert.equal(doc.querySelector('.bt-comm-main>footer'),null)
+ })
+})

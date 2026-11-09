@@ -6,7 +6,7 @@ export const communicationCSS = `
 .bt-comm-archive-notice{padding:0 24px;color:var(--bt-ink-2)}
 
 .bt-comm-group-contact-heading{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px}
-.bt-comm-group-contact .bt-comm-check{padding-left:28px}
+.bt-comm-group-contact .bt-comm-check{padding-left:28px;min-width:0}.bt-comm-choice-name{min-width:0;overflow-wrap:anywhere}
 .bt-comm-invitations>button{display:flex;align-items:center;justify-content:space-between;width:100%;margin:4px 0}
 .bt-comm-invitation-details dd{margin:4px 0 12px;overflow-wrap:anywhere}
 .bt-comm-invitation-details li{margin:8px 0}
@@ -52,7 +52,7 @@ export const communicationCSS = `
 .bt-comm-frame button:hover:not(:disabled):not([aria-disabled=true]){background:var(--bt-hover)}
 .bt-comm-frame button:disabled{opacity:.4;cursor:default}
 .bt-comm-frame :is(button,input,textarea,select,summary):focus-visible{outline:2px solid var(--bt-accent);outline-offset:2px}
-.bt-comm-frame :is(input:not([type=checkbox]),textarea,select){width:100%;min-width:0;border:1px solid var(--bt-line);border-radius:8px;padding:8px;background:var(--bt-card);color:var(--bt-ink);font:13px/18px var(--bt-font)}
+.bt-comm-frame :is(input:not([type=checkbox]):not([type=radio]),textarea,select){width:100%;min-width:0;border:1px solid var(--bt-line);border-radius:8px;padding:8px;background:var(--bt-card);color:var(--bt-ink);font:13px/18px var(--bt-font)}
 .bt-comm-frame textarea{resize:vertical;min-height:72px;max-height:180px;font-size:14px;line-height:22px}
 .bt-comm-frame code{font:12px/16px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;overflow-wrap:anywhere;user-select:text}
 .bt-comm-frame .bt-comm-primary{background:var(--bt-accent);border-color:var(--bt-accent);color:var(--bt-accent-ink)}
@@ -113,7 +113,7 @@ export const communicationCSS = `
 .bt-comm-reference,.bt-comm-event{font-size:12px;line-height:16px;color:var(--bt-ink-2)}
 .bt-comm-field{display:flex;flex-direction:column;gap:6px;margin:8px 0;font-size:12px;line-height:16px}
 .bt-comm-check{display:flex;gap:8px;align-items:flex-start;margin:10px 0;font-size:12px;line-height:18px;overflow-wrap:anywhere}
-.bt-comm-check input{width:16px;height:16px;flex-shrink:0;margin-top:1px}
+.bt-comm-check input{flex:0 0 16px;width:16px;height:16px;flex-shrink:0;margin-top:1px}
 .bt-comm-mentions{display:flex;gap:4px;flex-wrap:wrap}
 .bt-comm-pending-text{white-space:pre-wrap}
 .bt-comm-members{flex-shrink:0;max-height:32vh;overflow:auto;overscroll-behavior:contain;border:1px solid var(--bt-line);border-radius:12px;padding:8px 12px}

@@ -69,7 +69,7 @@ test('profile writes roll back atomically and schema 4 migrates without copying 
   const f = fixture(t, true)
   f.store.db.exec('DROP TABLE principal_public_profiles; DELETE FROM schema_version WHERE version=5; PRAGMA user_version=4')
   f.store.close(); f.store = new HubStore(f.path)
-  assert.equal(f.store.db.prepare('PRAGMA user_version').get().user_version, 5)
+  assert.equal(f.store.db.prepare('PRAGMA user_version').get().user_version, 6)
   assert.deepEqual(f.store.publicProfileOf(f.human), { headline: '', summary: '', expertise: [], languages: [], version: 0, updatedAt: null })
   const input = update(f.human)
   f.store.beforeCommit = () => { throw new Error('synthetic commit failure') }

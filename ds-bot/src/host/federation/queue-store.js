@@ -17,7 +17,7 @@ export class CommunicationQueue {
     if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true })
     this.db = new DatabaseSync(path)
     const version = this.db.prepare('PRAGMA user_version').get().user_version
-    if (version > 5) { this.db.close(); fail('SCHEMA_VERSION_UNSUPPORTED') }
+    if (version > 6) { this.db.close(); fail('SCHEMA_VERSION_UNSUPPORTED') }
     this.maxPending = maxPending
     this.beforeCommit = beforeCommit
     this.authorized = false
@@ -35,6 +35,8 @@ export class CommunicationQueue {
       CREATE TABLE IF NOT EXISTS tool_reply_completions (delivery_id TEXT PRIMARY KEY,binding_id TEXT NOT NULL,message_id TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS relationship_memory (scope TEXT NOT NULL,id TEXT NOT NULL,body TEXT NOT NULL,PRIMARY KEY(scope,id));
       DROP TABLE IF EXISTS local_address_notes;
+      CREATE TABLE IF NOT EXISTS bot_publication_generations (local_ref TEXT PRIMARY KEY,generation TEXT);
+      CREATE TABLE IF NOT EXISTS retired_local_bots (principal_id TEXT PRIMARY KEY,local_ref TEXT NOT NULL,local_id TEXT NOT NULL,name TEXT NOT NULL,retired_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS archived_conversations (conversation_id TEXT PRIMARY KEY);
       `)
     if (version < 2) {
@@ -47,7 +49,7 @@ export class CommunicationQueue {
         this.db.exec('PRAGMA user_version=2; COMMIT')
       } catch (error) { this.db.exec('ROLLBACK'); this.db.close(); throw error }
     }
-    if (version < 5) this.db.exec('PRAGMA user_version=5')
+    if (version < 6) this.db.exec('PRAGMA user_version=6')
     const old = this.db.prepare('SELECT value FROM metadata WHERE key=?').get('instanceId')?.value
     if (old && instanceId && old !== instanceId) { this.db.close(); fail('INSTANCE_ID_MISMATCH') }
     this.instanceId = old ?? instanceId ?? randomUUID()
@@ -84,6 +86,34 @@ export class CommunicationQueue {
       return { principalId: `${kind}:${this.instanceId}:${row.local_id}`, localId: row.local_id, localRef, kind, displayName }
     })
   }
+  reconcileBotPublications(bots, generations = {}) {
+    requireValue(generations && typeof generations === 'object' && !Array.isArray(generations)
+      && Object.values(generations).every(value => typeof value === 'string' && value.length > 0 && value.length <= 256), 'INVALID_CONFIG')
+    return this.transaction(() => {
+      const desired = new Map(bots.map(bot => [bot.id, bot]))
+      for (const row of this.db.prepare("SELECT * FROM local_principals WHERE kind='bot'").all()) {
+        const old = this.db.prepare('SELECT generation FROM bot_publication_generations WHERE local_ref=?').get(row.local_ref)?.generation ?? null
+        if (desired.has(row.local_ref) && old === (generations[row.local_ref] ?? null)) continue
+        const id = `bot:${this.instanceId}:${row.local_id}`
+        this.db.prepare('INSERT OR IGNORE INTO retired_local_bots VALUES (?,?,?,?,?)').run(id, row.local_ref, row.local_id, row.name, new Date().toISOString())
+        this.db.prepare("DELETE FROM local_principals WHERE kind='bot' AND local_ref=?").run(row.local_ref)
+        this.db.prepare("UPDATE inbox SET revoked=1,ai_state='revoked' WHERE principal_id=?").run(id)
+        this.db.prepare("UPDATE outbox SET state='failed',error='BOT_RETIRED' WHERE state='pending' AND (json_extract(payload,'$.author.principalId')=? OR json_extract(payload,'$.principalId')=?)").run(id, id)
+      }
+      for (const bot of bots) {
+        this.db.prepare("INSERT INTO local_principals VALUES ('bot',?,?,?) ON CONFLICT(kind,local_ref) DO UPDATE SET name=excluded.name").run(bot.id, randomUUID(), bot.name)
+        this.db.prepare('INSERT INTO bot_publication_generations VALUES (?,?) ON CONFLICT(local_ref) DO UPDATE SET generation=excluded.generation').run(bot.id, generations[bot.id] ?? null)
+      }
+      return bots.map(bot => {
+        const row = this.db.prepare("SELECT local_id FROM local_principals WHERE kind='bot' AND local_ref=?").get(bot.id)
+        return { principalId: `bot:${this.instanceId}:${row.local_id}`, localId: row.local_id, localRef: bot.id, kind: 'bot', displayName: bot.name }
+      })
+    })
+  }
+  retiredBots() {
+    return this.db.prepare('SELECT * FROM retired_local_bots').all().map(row => ({ principalId: row.principal_id, localRef: row.local_ref, localId: row.local_id, displayName: row.name, kind: 'bot', retired: true, retiredAt: row.retired_at }))
+  }
+  isRetiredBot(principalId) { return Boolean(this.db.prepare('SELECT 1 FROM retired_local_bots WHERE principal_id=?').get(principalId)) }
   binding(conversationId, principalId, epoch, botRef) {
     this.member(conversationId, principalId, epoch)
     return this.transaction(() => {
@@ -130,6 +160,7 @@ export class CommunicationQueue {
   }
   validateMessage(payload) {
     requireValue(payload.protocol === 'dsbot-communication/1' && payload.type === 'message.publish', 'PROTOCOL_VERSION_UNSUPPORTED')
+    requireValue(!this.isRetiredBot(payload.author?.principalId ?? ''), 'BOT_RETIRED')
     requireValue(this.owns(payload.author?.principalId) && payload.author.homeInstanceId === this.instanceId
       && payload.author.principalId.startsWith(`${payload.author.kind}:`), 'AUTHOR_MISMATCH')
     requireValue(['text', 'markdown'].includes(payload.content?.format) && typeof payload.content?.text === 'string'
@@ -185,7 +216,7 @@ export class CommunicationQueue {
       }
       for (const invite of snapshot.invites ?? []) requireValue(this.owns(invite.principalId), 'AUTHOR_MISMATCH')
       this.db.prepare('INSERT INTO metadata VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run('invites', JSON.stringify(snapshot.invites ?? []))
-      this.db.prepare(`UPDATE inbox SET revoked=1,ai_state=CASE WHEN ai_state='accepted' THEN ai_state ELSE 'revoked' END WHERE NOT EXISTS (SELECT 1 FROM memberships m WHERE m.conversation_id=inbox.conversation_id AND m.principal_id=inbox.principal_id AND m.epoch=inbox.epoch AND m.active=1)`).run()
+      this.db.prepare(`UPDATE inbox SET revoked=1,ai_state=CASE WHEN ai_state='accepted' THEN ai_state ELSE 'revoked' END WHERE NOT EXISTS (SELECT 1 FROM memberships m WHERE m.conversation_id=inbox.conversation_id AND m.principal_id=inbox.principal_id AND m.epoch=inbox.epoch AND m.active=1 AND coalesce(json_extract(m.body,'$.retiredPeer'),0)=0 AND coalesce(json_extract(m.body,'$.retired'),0)=0)`).run()
     })
     this.authorized = true
   }

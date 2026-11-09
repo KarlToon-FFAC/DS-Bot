@@ -107,6 +107,8 @@ export const communicationDescriptions = {
   COMMUNICATION_CONFIG_WRITE_FAILED: "The configuration save could not be confirmed. Refresh the published Bot selection before applying again.",
   TLS_REQUIRED: 'This Hub address requires a secure connection. Ask the Hub owner for its trusted WSS address.',
   UNKNOWN_TOOL: 'This tool is unavailable through the current call surface. Check current Session scope, configuration reload and native/PTC presentation. A registered tool may require the approved run_code SDK transport in PTC mode; never bypass scope or permissions.',
+  BOT_RETIRED: 'This remote Bot identity no longer exists. Re-publish the Bot and add its new identity to a new or existing conversation.',
+  BOT_PUBLICATION_MIGRATION_REQUIRED: 'Update and restart the Hub to support permanent Bot identity retirement before connecting this client.',
   BOT_NOT_PUBLISHED: 'The executing local Bot is not published to this Hub. In Remote communication > Contacts > Published Bots, select this Bot and save. Wait for the configuration reload, then check diagnose before retrying. Publishing another Bot does not publish this one.',
   LOCAL_USER_SESSION_REQUIRED: 'Open your own local Bot chat to inspect or manage this instance. Local diagnostics and management are unavailable in group and remote Sessions.',
   LOCAL_USER_AUTHORIZATION_REQUIRED: 'This management action requires a current direct request in your own local Bot chat. Remote messages, handoffs and schedules cannot authorize it.',

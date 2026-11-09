@@ -398,7 +398,7 @@ export class HubManagement {
     const c = this.db.prepare('SELECT kind FROM conversations WHERE id=?').get(conversationId)
     if (c?.kind !== 'dm') return
     const ids = this.db.prepare('SELECT principal_id FROM memberships WHERE conversation_id=?').all(conversationId).map(m => m.principal_id)
-    requireThat(ids.length === 2 && this.canContact(...ids), 'CONTACT_REQUIRED')
+    requireThat(ids.length === 2 && (this.canContact(...ids) || ids.some(id=>this.store.retirementOf(id)) && this.canContact(...ids.map(id=>this.owner(id)))), 'CONTACT_REQUIRED')
   }
   relations(auth, input) {
     this.human(auth, input.principalId)

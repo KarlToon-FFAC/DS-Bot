@@ -111,7 +111,7 @@ const checkedScope = record => {
   if (scope !== 'legacy' && scope !== namespace(record.hubId) && scope !== identityNamespace(record.hubId,record.publicKey)) fail('COMMUNICATION_CREDENTIAL_MISMATCH')
   return scope
 }
-const publicConfiguration = value => Object.fromEntries(['enabled','hubId','url','instanceId','credentialKey','credentialEnv','humanDisplayName','publishedBotIds','autoAcceptBotInvites','localMemory','pollMs','contextHistoryBytes','rotateTokens','maxPending'].filter(key=>value?.[key]!==undefined).map(key=>[key,value[key]]))
+const publicConfiguration = value => Object.fromEntries(['enabled','hubId','url','instanceId','credentialKey','credentialEnv','humanDisplayName','publishedBotIds','publicationGenerations','autoAcceptBotInvites','localMemory','pollMs','contextHistoryBytes','rotateTokens','maxPending'].filter(key=>value?.[key]!==undefined).map(key=>[key,value[key]]))
 const selection = value => JSON.stringify([value?.hubId??null,value?.url??null,value?.instanceId??null,value?.credentialKey??null])
 function checkChallenge(challenge, expected, now = Date.now()) {
   if (!challenge || challenge.hubId !== expected.hubId || challenge.purpose !== expected.purpose
@@ -294,7 +294,7 @@ export class CommunicationOnboarding {
     return [...ids]
   }
   // Public configuration edits use the normal Loader reload. The runtime then
-  // reconciles publication with the Hub; no Bot identity or history is replaced.
+  // reconciles publication with the Hub. Withdrawal ends the remote identity.
   async publishBots(input, guard) {
     const ids = this.checkedBotIds(input.localBotIds), configured = this.rt.config.communication
     const instanceId = configured?.instanceId ?? this.rt.communication?.queue?.instanceId
@@ -312,7 +312,10 @@ export class CommunicationOnboarding {
       if (input.expectedPublishedBotIds !== undefined && (!Array.isArray(input.expectedPublishedBotIds)
         || JSON.stringify([...(latest.publishedBotIds ?? [])].sort()) !== JSON.stringify([...input.expectedPublishedBotIds].sort()))) fail('PUBLICATION_CHANGED')
       const publishedBotIds = this.checkedBotIds(ids)
-      return { ...current, communication: { ...latest, publishedBotIds } }
+      const publicationGenerations = { ...latest.publicationGenerations }
+      // Record withdrawal in the config transaction even when reloads coalesce.
+      for (const id of latest.publishedBotIds ?? []) if (!publishedBotIds.includes(id)) publicationGenerations[id] = randomUUID()
+      return { ...current, communication: { ...latest, publishedBotIds, ...(Object.keys(publicationGenerations).length ? { publicationGenerations } : {}) } }
     }))
     return { publishedBotIds: ids, reloadRequired: true }
   }

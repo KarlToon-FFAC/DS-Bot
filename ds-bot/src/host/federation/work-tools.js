@@ -59,7 +59,11 @@ export async function syncWorkTools(runtime, agent, bot) {
 
 export function cancelRevokedWork(runtime) {
   for (const { controller, binding } of runtime.workControllers?.values() ?? []) {
-    try { runtime.queue.member(binding.conversationId, binding.recipientPrincipalId, binding.membershipEpoch) }
+    try {
+      if (runtime.queue.isRetiredBot?.(binding.recipientPrincipalId)) fail('BOT_RETIRED')
+      const member = runtime.queue.member(binding.conversationId, binding.recipientPrincipalId, binding.membershipEpoch)
+      if (member?.body && JSON.parse(member.body).retiredPeer) fail('BOT_RETIRED')
+    }
     catch { controller.abort(); for (const id of binding.sessionIds ?? []) runtime.rt.cancelApprovals?.(id) }
   }
 }

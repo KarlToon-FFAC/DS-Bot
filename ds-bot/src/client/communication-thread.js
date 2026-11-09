@@ -20,7 +20,7 @@ export function CommunicationThread({ member, messageId, request, canSpeak, onRe
   const failedRead = useRef(false)
   const order = useRef(0), current = useRef(null)
   current.current = page
-  const members = member.info?.members ?? [], labels = contactLabels(members)
+  const members = [...(member.info?.members ?? []), ...(member.info?.formerMembers ?? [])], labels = contactLabels(members)
   useEffect(() => {
     const token = ++order.current
     failedRead.current = false
@@ -101,7 +101,7 @@ export function ThreadReplyComposer({ storageKey, member, target, request, onSen
   const input = useRef(null), composing = useRef(false), flight = useRef(false), alive = useRef(true)
   useMentionDismiss(input, Boolean(completion), () => setCompletion(null))
   useEffect(() => { alive.current=true;return () => { alive.current = false } }, [])
-  const members = member.info?.members ?? [], labels = contactLabels(members)
+  const members = [...(member.info?.members ?? []), ...(member.info?.formerMembers ?? [])], labels = contactLabels(members)
   const currentTarget = draft.attempt?.replyToMessageId ?? target?.messageId
   const choices = completion ? mentionChoices(members,completion.query,t('All Bots')) : []
   const update = value => {

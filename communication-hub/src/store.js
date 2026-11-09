@@ -1,3 +1,4 @@
+import { retireBot } from './bot-retirement.js'
 import { DatabaseSync } from 'node:sqlite'
 import { randomUUID } from 'node:crypto'
 import { mkdirSync } from 'node:fs'
@@ -17,7 +18,7 @@ export class HubStore {
     try {
     this.db = new DatabaseSync(path)
     const version=this.db.prepare('PRAGMA user_version').get().user_version
-    if(version>5)throw new CommunicationError('SCHEMA_VERSION_UNSUPPORTED')
+    if(version>6)throw new CommunicationError('SCHEMA_VERSION_UNSUPPORTED')
     this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;
       CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY);
       INSERT OR IGNORE INTO schema_version VALUES (1);
@@ -38,6 +39,8 @@ export class HubStore {
       CREATE TABLE IF NOT EXISTS principal_preferences (principal_id TEXT PRIMARY KEY REFERENCES principals(id), display_name TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS principal_profiles (principal_id TEXT PRIMARY KEY REFERENCES principals(id), default_name TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS principal_public_profiles (principal_id TEXT PRIMARY KEY REFERENCES principals(id), body TEXT NOT NULL, version INTEGER NOT NULL, updated_at TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS principal_retirements (principal_id TEXT PRIMARY KEY REFERENCES principals(id),retired_at TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS retired_memberships (conversation_id TEXT NOT NULL REFERENCES conversations(id),principal_id TEXT NOT NULL REFERENCES principals(id),epoch TEXT NOT NULL,last_seq INTEGER NOT NULL,PRIMARY KEY(conversation_id,principal_id));
       CREATE TABLE IF NOT EXISTS principal_publication (principal_id TEXT PRIMARY KEY REFERENCES principals(id), published INTEGER NOT NULL CHECK(published IN (0,1)));
       CREATE TABLE IF NOT EXISTS principal_avatar (principal_id TEXT PRIMARY KEY REFERENCES principals(id), descriptor TEXT NOT NULL, image_revision TEXT, image TEXT);
       CREATE TABLE IF NOT EXISTS avatar_uploads (principal_id TEXT PRIMARY KEY REFERENCES principals(id), upload_id TEXT NOT NULL, revision TEXT NOT NULL, total_length INTEGER NOT NULL, data TEXT NOT NULL);
@@ -65,7 +68,11 @@ export class HubStore {
     if(version<3)this.transaction(()=>this.db.exec('INSERT OR IGNORE INTO schema_version VALUES (3); PRAGMA user_version=3;'))
     if(version<4)this.transaction(()=>this.db.exec('INSERT OR IGNORE INTO schema_version VALUES (4); PRAGMA user_version=4;'))
     if(version<5)this.transaction(()=>this.db.exec('INSERT OR IGNORE INTO schema_version VALUES (5); PRAGMA user_version=5;'))
-    requireThat(this.db.prepare('SELECT max(version) version FROM schema_version').get().version === 5, 'SCHEMA_VERSION_UNSUPPORTED')
+    if(version<6)this.transaction(()=>{
+      for(const row of this.db.prepare("SELECT principal_id FROM principal_publication WHERE published=0").all())retireBot(this,row.principal_id)
+      this.db.exec('INSERT OR IGNORE INTO schema_version VALUES (6); PRAGMA user_version=6;')
+    })
+    requireThat(this.db.prepare('SELECT max(version) version FROM schema_version').get().version === 6, 'SCHEMA_VERSION_UNSUPPORTED')
     if (!this.db.prepare('SELECT 1 FROM causal_schema WHERE version=1').get()) this.transaction(()=>{
       const latestHuman = new Map()
       for (const row of this.db.prepare('SELECT m.*,p.kind FROM messages m JOIN principals p ON p.id=m.author_id ORDER BY m.conversation_id,m.seq').all()) {
@@ -86,7 +93,7 @@ export class HubStore {
   }
   close() { if (this.closed) return; this.closed = true; try { this.db.close() } finally { this.databaseLock.close() } }
   activePrincipalCount(excludingInstance) {
-    return this.db.prepare('SELECT count(*) n FROM principals p JOIN instances i ON i.id=p.instance_id WHERE i.trusted=1 AND (? IS NULL OR i.id<>?)').get(excludingInstance??null,excludingInstance??null).n
+    return this.db.prepare('SELECT count(*) n FROM principals p JOIN instances i ON i.id=p.instance_id WHERE i.trusted=1 AND NOT EXISTS(SELECT 1 FROM principal_retirements r WHERE r.principal_id=p.id) AND (? IS NULL OR i.id<>?)').get(excludingInstance??null,excludingInstance??null).n
   }
   transaction(work) {
     this.db.exec('BEGIN IMMEDIATE')
@@ -118,7 +125,7 @@ export class HubStore {
       requireThat(!old||revision>=old.pairing_revision,'STALE_PAIRING_REVISION')
       if(!old)this.db.prepare('INSERT INTO instances(id,label,pairing_revision) VALUES (?,?,?)').run(instanceId,String(label??instanceId).slice(0,256),revision)
       else if(revision>old.pairing_revision){
-        const ownCount=this.db.prepare('SELECT count(*) n FROM principals WHERE instance_id=?').get(instanceId).n
+        const ownCount=this.db.prepare('SELECT count(*) n FROM principals p WHERE instance_id=? AND NOT EXISTS(SELECT 1 FROM principal_retirements r WHERE r.principal_id=p.id)').get(instanceId).n
         requireThat(this.activePrincipalCount(instanceId)+ownCount<=this.limits.maxPrincipals,'DIRECTORY_FULL')
         const named=this.db.prepare('SELECT label FROM hub_instance_names WHERE instance_id=?').get(instanceId)
         this.db.prepare('UPDATE instances SET trusted=1,epoch=epoch+1,pairing_revision=?,label=? WHERE id=?').run(revision,named?.label??String(label??instanceId).slice(0,256),instanceId)
@@ -143,6 +150,7 @@ export class HubStore {
     const principalId = `${kind}:${auth.instanceId}:${localId}`
     return this.transaction(() => {
       // Legacy Humans retain their identities, history and authority; only new identities are limited.
+      requireThat(!this.retirementOf(principalId),'BOT_RETIRED')
       const existing=this.db.prepare('SELECT 1 FROM principals WHERE id=?').get(principalId)
       requireThat(existing || kind !== 'human' || !this.db.prepare("SELECT 1 FROM principals WHERE instance_id=? AND kind='human'").get(auth.instanceId),'HUMAN_ALREADY_REGISTERED')
       const defaultName=displayName
@@ -176,7 +184,7 @@ export class HubStore {
     const visible = new Set(rows.map(person => person.principalId))
     const result = rows.map(person => {
       const owner = person.kind === 'human' ? person.principalId : this.ownerOfPrincipal(person.principalId)
-      return { ...person, ownerPrincipalId: visible.has(owner) ? owner : null }
+      return { ...person, ...(this.retirementOf(person.principalId) ?? {}), ownerPrincipalId: visible.has(owner) ? owner : null }
     })
     if (maxBytes === undefined) return result.map(person => ({ ...person, publicProfile: this.publicProfileOf(person.principalId) }))
     // Optional presentation metadata must not make an otherwise readable identity list overflow.
@@ -204,9 +212,15 @@ export class HubStore {
     return result
   }
   readPublicProfile(auth, input) {
-    requireThat(input && Object.keys(input).every(key => ['principalId','targetPrincipalId'].includes(key)), 'INVALID_REQUEST')
+    requireThat(input && Object.keys(input).every(key => ['principalId','targetPrincipalId','conversationId','membershipEpoch'].includes(key)), 'INVALID_REQUEST')
     this.principal(auth, identifier(input.principalId))
     const target = identifier(input.targetPrincipalId)
+    if(input.conversationId!==undefined){
+      requireThat(typeof input.membershipEpoch==='string','MEMBERSHIP_EPOCH_REQUIRED')
+      const info=this.members(auth,input)
+      requireThat([...info.members,...info.formerMembers].some(person=>person.principalId===target),'NOT_A_MEMBER')
+      return {principalId:target,publicProfile:this.publicProfileOf(target)}
+    }
     const own = this.db.prepare('SELECT 1 FROM principals WHERE id=? AND instance_id=?').get(target, auth.instanceId)
     const contact = this.contacts(auth, { principalId: input.principalId }).some(person => person.principalId === target)
     const shared = this.db.prepare(`SELECT 1 FROM memberships us JOIN memberships them ON them.conversation_id=us.conversation_id
@@ -231,7 +245,12 @@ export class HubStore {
       return { principalId: principal.principalId, publicProfile: { ...profile, version, updatedAt } }
     })
   }
+  retirementOf(principalId) {
+    const row=this.db.prepare('SELECT retired_at FROM principal_retirements WHERE principal_id=?').get(principalId)
+    return row ? {retired:true,retiredAt:row.retired_at} : null
+  }
   isPublished(principalId) {
+    if(this.retirementOf(principalId))return false
     const row=this.db.prepare('SELECT p.kind,coalesce(pub.published,1) published FROM principals p LEFT JOIN principal_publication pub ON pub.principal_id=p.id WHERE p.id=?').get(principalId)
     return Boolean(row&&(row.kind!=='bot'||row.published===1))
   }
@@ -240,18 +259,12 @@ export class HubStore {
     requireThat(input&&Object.keys(input).every(key=>key==='principalIds')&&Array.isArray(input.principalIds)&&input.principalIds.length<=this.limits.maxPrincipals,'INVALID_REQUEST')
     const ids=[...new Set(input.principalIds.map(id=>identifier(id)))].sort()
     return this.transaction(()=>{
-      for(const id of ids)requireThat(this.principal(auth,id).kind==='bot','INVALID_REQUEST')
+      for(const id of ids){requireThat(this.principal(auth,id).kind==='bot','INVALID_REQUEST');requireThat(!this.retirementOf(id),'BOT_RETIRED')}
       const selected=new Set(ids)
       for(const row of this.db.prepare("SELECT id FROM principals WHERE instance_id=? AND kind='bot'").all(auth.instanceId)){
         const published=selected.has(row.id)?1:0
         this.db.prepare('INSERT INTO principal_publication VALUES (?,?) ON CONFLICT(principal_id) DO UPDATE SET published=excluded.published').run(row.id,published)
-        if(!published){
-          this.db.prepare('UPDATE deliveries SET revoked=1 WHERE recipient_id=? AND ai=1 AND ai_accepted=0').run(row.id)
-          for(const group of this.db.prepare("SELECT id FROM conversations WHERE admin_bot=? AND kind='group' AND closed=0").all(row.id)){
-            this.db.prepare("UPDATE conversations SET admin_bot=NULL,routing_mode='mentionsOnly',version=version+1 WHERE id=?").run(group.id)
-            this.event(group.id,'routing.changed',{mode:'mentionsOnly',adminBotPrincipalId:null,reason:'principalUnpublished'})
-          }
-        }
+        if(!published)retireBot(this,row.id)
       }
       return {principalIds:ids}
     })
@@ -366,10 +379,13 @@ export class HubStore {
     const data=row.image.slice(offset,offset+limit),nextOffset=offset+data.length
     return {principalId:input.principalId,imageRevision:input.imageRevision,offset,data,totalLength:row.image.length,nextOffset,done:nextOffset===row.image.length}
   }
-  member(auth, conversationId, principalId, epoch) {
+  member(auth, conversationId, principalId, epoch, archive = false) {
     this.principal(auth, principalId)
     const row = this.db.prepare('SELECT * FROM memberships WHERE conversation_id=? AND principal_id=?').get(conversationId,principalId)
-    requireThat(row?.active, 'NOT_A_MEMBER')
+    const retired=archive && this.db.prepare('SELECT last_seq FROM retired_memberships WHERE conversation_id=? AND principal_id=? AND epoch=?').get(conversationId,principalId,row?.epoch ?? '')
+    requireThat(archive || !this.retirementOf(principalId),'BOT_RETIRED')
+    requireThat(row?.active || retired, 'NOT_A_MEMBER')
+    if(retired)row.read_until=retired.last_seq
     requireThat(['owner','admin','member'].includes(row.role),'FORBIDDEN')
     requireThat(!epoch || epoch === row.epoch, 'MEMBERSHIP_REVOKED')
     return row
@@ -705,7 +721,7 @@ export class HubStore {
       const sender=this.member(auth,message.conversationId,author.principalId,message.membershipEpoch)
       requireThat(!this.db.prepare('SELECT 1 FROM events WHERE id=?').get(message.messageId),'MESSAGE_ID_CONFLICT')
       const conversation=this.db.prepare('SELECT * FROM conversations WHERE id=?').get(message.conversationId)
-      if(conversation.kind==='dm')requireThat(!this.db.prepare("SELECT 1 FROM memberships m JOIN principals p ON p.id=m.principal_id JOIN principal_publication pub ON pub.principal_id=p.id WHERE m.conversation_id=? AND m.active=1 AND p.kind='bot' AND pub.published=0").get(message.conversationId),'BOT_NOT_PUBLISHED')
+      if(conversation.kind==='dm')requireThat(!this.db.prepare("SELECT 1 FROM memberships m JOIN principals p ON p.id=m.principal_id JOIN principal_publication pub ON pub.principal_id=p.id WHERE m.conversation_id=? AND p.kind='bot' AND pub.published=0").get(message.conversationId),'BOT_NOT_PUBLISHED')
       if(conversation.kind==='group'){
         requireThat(['owner','admin','member'].includes(sender.role),'FORBIDDEN')
         requireThat(author.kind==='human'?sender.speaking_mode==='speak':['passive','active'].includes(sender.speaking_mode),'SPEAKING_FORBIDDEN')
@@ -737,8 +753,9 @@ export class HubStore {
       }
       const members=this.db.prepare('SELECT m.*,p.kind,coalesce(pub.published,1) published FROM memberships m JOIN principals p ON p.id=m.principal_id LEFT JOIN principal_publication pub ON pub.principal_id=p.id WHERE conversation_id=? AND active=1').all(message.conversationId)
       if(message.attachments?.length)for(const member of members){const instance=this.db.prepare('SELECT instance_id FROM principals WHERE id=?').get(member.principal_id);requireThat(this.db.prepare('SELECT attachments FROM instance_features WHERE instance_id=?').get(instance.instance_id)?.attachments===1,'ATTACHMENT_CAPABILITY_REQUIRED')}
-      for(const mention of message.mentions) requireThat(members.some(member=>member.principal_id===mention.principalId),'UNKNOWN_MENTION')
+      for(const mention of message.mentions){requireThat(!this.retirementOf(mention.principalId),'BOT_RETIRED');requireThat(members.some(member=>member.principal_id===mention.principalId),'UNKNOWN_MENTION')}
       for(const target of message.activationTargets??[]){
+        requireThat(!this.retirementOf(target.principalId),'BOT_RETIRED')
         const recipient=members.find(member=>member.kind==='bot'&&member.principal_id===target.principalId)
         requireThat(recipient,'UNKNOWN_ACTIVATION_TARGET')
         requireThat(recipient.published===1,'BOT_NOT_PUBLISHED')
@@ -826,18 +843,19 @@ export class HubStore {
     this.check(auth)
     const members=this.db.prepare('SELECT m.*,c.title,c.kind,c.version,c.routing_mode,c.admin_bot,c.owner_id,c.closed,c.seq FROM memberships m JOIN principals p ON p.id=m.principal_id JOIN conversations c ON c.id=m.conversation_id WHERE p.instance_id=?').all(auth.instanceId)
     const invites=this.db.prepare('SELECT i.id inviteId,i.conversation_id conversationId,i.principal_id principalId,p.name principalName,i.inviter_id inviterPrincipalId,source.name inviterName,source.instance_id inviterInstanceId,a.address inviterIpAddress,c.title FROM invites i JOIN principals p ON p.id=i.principal_id JOIN principals source ON source.id=i.inviter_id LEFT JOIN instance_addresses a ON a.instance_id=source.instance_id JOIN conversations c ON c.id=i.conversation_id WHERE p.instance_id=? AND i.active=1').all(auth.instanceId)
-    return {memberships:members.map(m=>({conversationId:m.conversation_id,principalId:m.principal_id,membershipEpoch:m.epoch,joinSeq:m.join_seq,active:Boolean(m.active),manager:Boolean(m.manager),role:m.role,speakingMode:m.speaking_mode,ownerPrincipalId:m.owner_id,dissolved:Boolean(m.closed),title:m.title,kind:m.kind,membershipVersion:m.version,routingMode:m.routing_mode,adminBotPrincipalId:m.admin_bot,watermark:m.seq})),invites}
+    return {memberships:members.map(m=>({conversationId:m.conversation_id,principalId:m.principal_id,membershipEpoch:m.epoch,joinSeq:m.join_seq,active:Boolean(m.active || this.db.prepare('SELECT 1 FROM retired_memberships WHERE conversation_id=? AND principal_id=? AND epoch=?').get(m.conversation_id,m.principal_id,m.epoch)),manager:Boolean(m.manager),role:m.role,speakingMode:m.speaking_mode,ownerPrincipalId:m.owner_id,dissolved:Boolean(m.closed),...(m.kind==='dm' && this.db.prepare('SELECT 1 FROM memberships dm JOIN principal_retirements r ON r.principal_id=dm.principal_id WHERE dm.conversation_id=?').get(m.conversation_id)?{retiredPeer:true}:{}),...(this.retirementOf(m.principal_id) ?? {}),title:m.title,kind:m.kind,membershipVersion:m.version,routingMode:m.routing_mode,adminBotPrincipalId:m.admin_bot,watermark:this.db.prepare('SELECT last_seq FROM retired_memberships WHERE conversation_id=? AND principal_id=? AND epoch=?').get(m.conversation_id,m.principal_id,m.epoch)?.last_seq ?? m.seq})),invites}
   }
   sync(auth,input) {
-    const member=this.member(auth,input.conversationId,input.principalId,input.membershipEpoch)
+    const member=this.member(auth,input.conversationId,input.principalId,input.membershipEpoch,true)
+    if(member.read_until!==undefined)this.dmPolicy?.(input.conversationId)
     requireThat(Number.isSafeInteger(input.after)&&input.after>=0,'INVALID_REQUEST')
     requireThat(input.limit===undefined||Number.isSafeInteger(input.limit)&&input.limit>0,'INVALID_REQUEST')
     const after=Math.max(input.after,member.join_seq-1), limit=Math.min(Math.max(input.limit??100,1),500)
     const events=[]
-    const watermark=this.db.prepare('SELECT seq FROM conversations WHERE id=?').get(input.conversationId).seq
+    const watermark=member.read_until ?? this.db.prepare('SELECT seq FROM conversations WHERE id=?').get(input.conversationId).seq
     requireThat(input.after<=watermark,'HISTORY_GAP')
     let bytes=responseBytes(this.syncValue(member,watermark,events))
-    for(const row of this.db.prepare('SELECT body FROM events WHERE conversation_id=? AND seq>? ORDER BY seq LIMIT ?').iterate(input.conversationId,after,limit)){
+    for(const row of this.db.prepare('SELECT body FROM events WHERE conversation_id=? AND seq>? AND seq<=? ORDER BY seq LIMIT ?').iterate(input.conversationId,after,watermark,limit)){
       const size=Buffer.byteLength(row.body)+(events.length?1:0)
       if(bytes+size>this.limits.maxEnvelopeBytes){requireThat(events.length>0,'PAYLOAD_TOO_LARGE');break}
       bytes+=size;events.push(JSON.parse(row.body))
@@ -847,20 +865,22 @@ export class HubStore {
   authorize(auth,input) {
     const member=this.member(auth,input.conversationId,input.principalId,input.membershipEpoch)
     this.dmPolicy?.(input.conversationId)
+    requireThat(!this.db.prepare("SELECT 1 FROM conversations c JOIN memberships m ON m.conversation_id=c.id JOIN principal_retirements r ON r.principal_id=m.principal_id WHERE c.id=? AND c.kind='dm'").get(input.conversationId),'BOT_RETIRED')
     return {conversationId:member.conversation_id,principalId:member.principal_id,membershipEpoch:member.epoch,joinSeq:member.join_seq,role:member.role,speakingMode:member.speaking_mode}
   }
   members(auth,input) {
-    this.member(auth,input.conversationId,input.principalId,input.membershipEpoch)
+    const reader=this.member(auth,input.conversationId,input.principalId,input.membershipEpoch,true)
     this.dmPolicy?.(input.conversationId)
     const conversation=this.db.prepare('SELECT title,kind,version,routing_mode,admin_bot,owner_id FROM conversations WHERE id=?').get(input.conversationId)
-    const result = {conversationId:input.conversationId,title:conversation.title,kind:conversation.kind,membershipVersion:conversation.version,routingMode:conversation.routing_mode,adminBotPrincipalId:conversation.admin_bot,ownerPrincipalId:conversation.owner_id,members:[]}
+    const result = {conversationId:input.conversationId,title:conversation.title,kind:conversation.kind,membershipVersion:conversation.version,routingMode:conversation.routing_mode,adminBotPrincipalId:conversation.admin_bot,ownerPrincipalId:conversation.owner_id,members:[],formerMembers:[]}
     const maxBytes = this.limits.maxEnvelopeBytes - responseBytes(result) + responseBytes([])
-    result.members=this.participantProfiles(this.db.prepare('SELECT p.id principalId,p.kind,p.name displayName,p.instance_id homeInstanceId,i.label instanceLabel,m.manager,m.role,m.speaking_mode speakingMode FROM memberships m JOIN principals p ON p.id=m.principal_id JOIN instances i ON i.id=p.instance_id WHERE m.conversation_id=? AND m.active=1 ORDER BY p.id').all(input.conversationId).map(person=>({...person,published:this.isPublished(person.principalId),avatar:this.avatarOf(person.principalId)})), { maxBytes })
+    result.members=this.participantProfiles(this.db.prepare('SELECT p.id principalId,p.kind,p.name displayName,p.instance_id homeInstanceId,i.label instanceLabel,m.manager,m.role,m.speaking_mode speakingMode FROM memberships m JOIN principals p ON p.id=m.principal_id JOIN instances i ON i.id=p.instance_id WHERE m.conversation_id=? AND (m.active=1 OR EXISTS(SELECT 1 FROM principal_retirements r WHERE r.principal_id=p.id)) AND m.join_seq<=? ORDER BY p.id').all(input.conversationId,reader.read_until ?? Number.MAX_SAFE_INTEGER).map(person=>({...person,published:this.isPublished(person.principalId),avatar:this.avatarOf(person.principalId)})), { maxBytes })
+    if(conversation.kind==='group'){result.formerMembers=result.members.filter(person=>person.retired);result.members=result.members.filter(person=>!person.retired)}
     return result
   }
   acknowledgeCursor(auth,input) {
-    const member=this.member(auth,input.conversationId,input.principalId,input.membershipEpoch)
-    const watermark=this.db.prepare('SELECT seq FROM conversations WHERE id=?').get(input.conversationId).seq
+    const member=this.member(auth,input.conversationId,input.principalId,input.membershipEpoch,true)
+    const watermark=member.read_until ?? this.db.prepare('SELECT seq FROM conversations WHERE id=?').get(input.conversationId).seq
     requireThat(Number.isSafeInteger(input.seq)&&input.seq>=member.join_seq-1&&input.seq<=watermark,'HISTORY_GAP')
     return this.transaction(()=>{
       this.db.prepare('INSERT INTO cursors VALUES (?,?,?,?) ON CONFLICT(conversation_id,principal_id,membership_epoch) DO UPDATE SET seq=max(seq,excluded.seq)').run(input.conversationId,input.principalId,member.epoch,input.seq)

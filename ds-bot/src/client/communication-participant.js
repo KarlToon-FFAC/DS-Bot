@@ -19,7 +19,7 @@ export function ParticipantInformation({ person, people, request, conversationId
   const ownerRows = ownerId ? people.filter(item => item.principalId === ownerId && item.kind === 'human') : []
   const owner = ownerRows.length ? ownerRows.reduce((known,item) => ({...known,...item}), {}) : null
   const profile = loaded ?? (person.publicProfile?.truncated ? contact?.publicProfile : person.publicProfile) ?? contact?.publicProfile
-  return h('section', { className: 'bt-comm-participant-profile' }, personLabel(person), h('p', null, t(roleLabel(person.role ?? 'member'))),
+  return h('section', { className: 'bt-comm-participant-profile' }, personLabel(person), h('p', null, t(person.retired ? 'Bot no longer exists' : roleLabel(person.role ?? 'member'))),
     person.kind === 'bot' ? h('div', { className: 'bt-comm-participant-owner' }, h('h3', null, t('From contact')),
       owner ? h('p', null, h(CommunicationAvatar, { person: owner, request, size: 28 }), owner.displayName,
         owner.ipAddress ? h('small', null, owner.ipAddress) : null) : h('p', null, t('Owner information unavailable'))) : null,
@@ -28,6 +28,6 @@ export function ParticipantInformation({ person, people, request, conversationId
     profile?.expertise?.length ? h('ul', { className: 'bt-comm-directory-skills' }, profile.expertise.map(term => h('li', { key: term }, term))) : null,
     !profile?.headline && !profile?.summary && !profile?.expertise?.length ? h('p', { className: 'bt-comm-reference' }, t('No public profile shared.')) : null,
     error ? h('p', { role: 'status', className: 'bt-comm-reference' }, t('Profile details are unavailable.')) : null,
-    h('details', null, h('summary', null, t('Identity details')), h('code', null, person.principalId),
+    h('details', null, h('summary', null, t('Identity details')), h('code', null, person.principalId), person.retiredAt ? h('p', null, t('Identity ended'), ': ', person.retiredAt) : null,
       person.instanceLabel || person.homeInstanceId ? h('p', null, person.instanceLabel ?? person.homeInstanceId) : null))
 }

@@ -86,8 +86,14 @@ test('revoked or unpublished recipients cannot fabricate starts, and event creat
   assert.throws(() => f.receipt(delivery, 'aiStarted'), { code: 'CONTACT_REQUIRED' }); assert.deepEqual(f.events(), [])
   f.store.dmPolicy = undefined
   f.receipt(delivery, 'aiAccepted'); f.store.syncPublication(f.b, { principalIds: [] })
-  assert.throws(() => f.receipt(delivery, 'aiStarted'), { code: 'BOT_NOT_PUBLISHED' })
-  f.store.syncPublication(f.b, { principalIds: [f.K] })
+  assert.throws(() => f.receipt(delivery, 'aiStarted'), { code: 'MEMBERSHIP_REVOKED' })
+  assert.throws(()=>f.store.syncPublication(f.b, { principalIds: [f.K] }),{code:'BOT_RETIRED'})
+  assert.deepEqual(f.events(), [])
+})
+
+test('removed and rejoined Bot cannot claim work from its old epoch',t=>{
+  const f=fixture(t), delivery=f.delivery(f.send())
+  f.receipt(delivery,'targetStored');f.receipt(delivery,'aiAccepted')
   f.store.remove(f.a, f.op({ conversationId: f.group, principalId: f.H, membershipEpoch: f.scope().membershipEpoch, targetPrincipalId: f.K }))
   f.join()
   assert.throws(() => f.receipt(delivery, 'aiStarted'), { code: 'MEMBERSHIP_REVOKED' })

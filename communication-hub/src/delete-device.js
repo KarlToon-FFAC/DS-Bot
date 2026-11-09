@@ -68,7 +68,7 @@ export function deleteDevice(management, input) {
     for (const conversationId of deletedConversations) {
       const roots = db.prepare('SELECT id FROM causal_roots WHERE conversation_id=?').all(conversationId)
       for (const root of roots) { removedIds.add(root.id); drop('bot_dispatches', 'cause_key', root.id) }
-      for (const table of ['events', 'invites', 'memberships', 'cursors', 'causal_roots']) drop(table, 'conversation_id', conversationId)
+      for (const table of ['retired_memberships', 'events', 'invites', 'memberships', 'cursors', 'causal_roots']) drop(table, 'conversation_id', conversationId)
       drop('conversations', 'id', conversationId)
     }
     for (const conversation of sharedConversations) {
@@ -87,7 +87,7 @@ export function deleteDevice(management, input) {
     }
     for (const principalId of principalIds) {
       for (const column of ['principal_id', 'inviter_id']) drop('invites', column, principalId)
-      for (const table of ['memberships', 'cursors', 'principal_preferences', 'principal_profiles', 'principal_publication', 'principal_avatar', 'avatar_uploads', 'hub_user_codes']) drop(table, 'principal_id', principalId)
+      for (const table of ['retired_memberships', 'principal_retirements', 'memberships', 'cursors', 'principal_preferences', 'principal_profiles', 'principal_publication', 'principal_avatar', 'avatar_uploads', 'hub_user_codes']) drop(table, 'principal_id', principalId)
       for (const column of ['sender', 'target']) drop('hub_contact_requests', column, principalId)
       for (const column of ['left_id', 'right_id']) drop('hub_contacts', column, principalId)
       drop('input_updates', 'recipient_id', principalId)

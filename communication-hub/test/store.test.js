@@ -246,7 +246,7 @@ test('export source mapping, complete outbox and cursor commit together and reus
 test('future database schema versions are refused before migration and existing records remain intact',()=>{
   const root=directory()
   try{
-    for(const [name,version,load] of [['hub',6,path=>new HubStore(path)],['client',6,path=>new CommunicationQueue(path,{instanceId:'a'})]]){
+    for(const [name,version,load] of [['hub',7,path=>new HubStore(path)],['client',7,path=>new CommunicationQueue(path,{instanceId:'a'})]]){
       const path=join(root,`${name}-future.sqlite`),future=new DatabaseSync(path)
       future.exec(`PRAGMA user_version=${version}; CREATE TABLE marker(value TEXT); INSERT INTO marker VALUES ('keep');`)
       future.close()

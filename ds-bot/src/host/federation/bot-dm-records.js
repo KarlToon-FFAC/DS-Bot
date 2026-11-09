@@ -2,7 +2,9 @@ import { conversationSummary } from './conversation-summary.js'
 const fail = code => { throw Object.assign(new Error(code), { code }) }
 
 function ownedBots(runtime) {
-  return new Map([...(runtime.bots ?? [])].filter(([id]) => runtime.rt?.botOf?.(id)).map(([id, bot]) => [bot.principalId, id]))
+  const current = [...(runtime.bots ?? [])].filter(([id]) => runtime.rt?.botOf?.(id)).map(([id, bot]) => [bot.principalId, id])
+  const retired = (runtime.queue.retiredBots?.() ?? []).map(bot => [bot.principalId, bot.localRef])
+  return new Map([...current, ...retired])
 }
 function botDm(info) {
   return info?.kind === 'dm' && info.members?.length === 2 && info.members.every(person => person.kind === 'bot')
@@ -20,8 +22,10 @@ export function botDmRecords(runtime) {
 }
 export function botDmContext(runtime, input) {
   if (typeof input.membershipEpoch !== 'string') fail('MEMBERSHIP_EPOCH_REQUIRED')
-  const bot = runtime.bots.get(input.localBotId)
-  if (!bot || !runtime.rt.botOf(input.localBotId)) fail('BOT_NOT_PUBLISHED')
+  const owned = ownedBots(runtime)
+  const candidate = runtime.queue.memberships().find(member => member.conversationId === input.conversationId && owned.get(member.principalId) === input.localBotId)
+  if (!candidate) fail('BOT_NOT_PUBLISHED')
+  const bot = { principalId: candidate.principalId }
   const member = runtime.member(bot.principalId, input.conversationId, input.membershipEpoch)
   const info = runtime.conversations.get(input.conversationId)
   if (member.kind !== 'dm' || !botDm(info) || !info.members.some(person => person.principalId === bot.principalId)) fail('FORBIDDEN')
@@ -30,8 +34,10 @@ export function botDmContext(runtime, input) {
 export async function participantProfile(runtime, input) {
   const actor = input.localBotId === undefined ? runtime.human.principalId : botDmContext(runtime, input).principalId
   const info = await runtime.members(actor, input)
-  if (!info.members.some(person => person.principalId === input.targetPrincipalId)) fail('NOT_A_MEMBER')
-  const result = await runtime.transport.request('principal.public-profile.read', { principalId: actor, targetPrincipalId: input.targetPrincipalId })
+  if (![...info.members, ...(info.formerMembers ?? [])].some(person => person.principalId === input.targetPrincipalId)) fail('NOT_A_MEMBER')
+  const former = [...info.members, ...(info.formerMembers ?? [])].find(person => person.principalId === input.targetPrincipalId && person.retired)
+  if (former?.publicProfile && !former.publicProfile.truncated) return { principalId: former.principalId, publicProfile: former.publicProfile }
+  const result = await runtime.transport.request('principal.public-profile.read', { principalId: actor, targetPrincipalId: input.targetPrincipalId, conversationId: input.conversationId, membershipEpoch: input.membershipEpoch })
   if (result.principalId !== input.targetPrincipalId || !result.publicProfile || result.publicProfile.truncated) fail('INVALID_PUBLIC_PROFILE_RESPONSE')
   return result
 }

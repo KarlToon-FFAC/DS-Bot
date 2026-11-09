@@ -119,3 +119,20 @@ test('a legacy active Bot still brings in its canonical Human when the original 
  const parent=store.memberships(b).memberships.find(m=>m.conversationId===group&&m.principalId===B)
  assert.equal(parent.active,true);assert.equal(parent.role,'member');assert.equal(parent.ownerPrincipalId,C)
 })
+
+test('retired private history remains contact-scoped and cannot stall active reconciliation after contact revocation',t=>{
+  const {store,a,b,A,B,one,two}=fixture(t),m=new HubManagement(store)
+  store.contactPolicy=(auth,actor,target)=>m.assertContact(auth,actor,target)
+  store.dmPolicy=id=>m.assertDm(id)
+  const request=m.requestContact(a,op({principalId:A,userCode:m.code(b,{principalId:B}).userCode,sharePublishedBots:true}))
+  m.respondContact(b,op({principalId:B,requestId:request.requestId,expectedVersion:1,sharePublishedBots:true}),'accept')
+  const dm=store.createDm(a,op({principalId:one,otherPrincipalId:two})).conversationId
+  const old=store.memberships(a).memberships.find(member=>member.conversationId===dm)
+  store.syncPublication(a,{principalIds:[]})
+  assert.equal(store.members(a,{principalId:one,conversationId:dm,membershipEpoch:old.membershipEpoch}).members.find(person=>person.principalId===one).retired,true)
+  assert.ok(store.sync(a,{principalId:one,conversationId:dm,membershipEpoch:old.membershipEpoch,after:0}).events.length>0)
+  m.revokeContact(a,op({principalId:A,otherHumanPrincipalId:B,expectedVersion:1}))
+  assert.ok(!store.memberships(a).memberships.find(member=>member.conversationId===dm).active)
+  assert.throws(()=>store.sync(a,{principalId:one,conversationId:dm,membershipEpoch:old.membershipEpoch,after:0}))
+  assert.throws(()=>store.members(b,{principalId:two,conversationId:dm,membershipEpoch:store.memberships(b).memberships.find(member=>member.conversationId===dm).membershipEpoch}))
+})

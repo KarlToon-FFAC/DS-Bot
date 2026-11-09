@@ -327,7 +327,8 @@ test('Human publication lists only local Bot metadata and updates the exact sele
   assert.deepEqual(result, { publishedBotIds: ['bot-two'], reloadRequired: true })
   assert.equal(f.configWrites.length, 1)
   assert.deepEqual(f.configWrites[0], { untouched: 'local', communication: { enabled: true, ...hub, instanceId: 'instance', credentialKey: 'reference',
-    humanDisplayName: 'Person', publishedBotIds: ['bot-two'], pollMs: 555 } })
+    humanDisplayName: 'Person', publishedBotIds: ['bot-two'], pollMs: 555, publicationGenerations: { 'bot-one': f.configWrites[0].communication.publicationGenerations['bot-one'] } } })
+  assert.match(f.configWrites[0].communication.publicationGenerations['bot-one'], /^[a-f0-9-]{36}$/)
   await f.onboarding.handle('publish-bots', { localBotIds: [] }, human)
   assert.deepEqual(f.configWrites.at(-1).communication.publishedBotIds, [])
   assert.equal(f.saves, 0, 'publishing never creates or changes device credentials')
@@ -435,4 +436,17 @@ test('local memory settings default on, require the local Human and preserve oth
   assert.equal(f.configWrites.at(-1).communication.credentialKey, 'reference')
   assert.equal(f.configWrites.at(-1).untouched, 'local')
   assert.equal(f.sockets, 0)
+})
+
+test('offline withdrawal and re-publication retain a changed generation even when the Loader coalesces edits',async()=>{
+  const f=fixture({current:{communication:{...hub,instanceId:'instance',publishedBotIds:['worker']}}})
+  f.rt.state={bots:{worker:{id:'worker',name:'Worker'}}};f.rt.botOf=id=>f.rt.state.bots[id]
+  await f.onboarding.handle('publish-bots',{localBotIds:['worker']},human)
+  assert.equal(f.rt.config.communication.publicationGenerations,undefined)
+  await f.onboarding.handle('publish-bots',{localBotIds:[]},human)
+  const generation=f.rt.config.communication.publicationGenerations.worker
+  await f.onboarding.handle('publish-bots',{localBotIds:['worker']},human)
+  assert.equal(f.rt.config.communication.publicationGenerations.worker,generation)
+  await f.onboarding.handle('publish-bots',{localBotIds:[]},human)
+  assert.notEqual(f.rt.config.communication.publicationGenerations.worker,generation)
 })

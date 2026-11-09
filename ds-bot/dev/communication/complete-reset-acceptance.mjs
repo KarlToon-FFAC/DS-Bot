@@ -18,13 +18,14 @@ import { benchClient, repo } from './bench-client.mjs'
 import { communicationCapabilities } from '../../src/host/federation/transport.js'
 
 if (process.argv.includes('--help')) {
-  console.log('Usage: node ds-bot/dev/communication/complete-reset-acceptance.mjs [--web-port 3235] [--mock-port 8935] [--hub-port 3239] [--keep-profiles]\nRun only in the reserved serial integration window. Creates fresh .dsh-test-hub-onboard-* profiles; never uses ~/.dsh. Evidence contains paths, counts and statuses only. Failed profiles are retained for diagnosis. Browser UI is not observed.')
+  console.log('Usage: node ds-bot/dev/communication/complete-reset-acceptance.mjs [--web-port 3235] [--mock-port 8935] [--hub-port 3239] [--keep-profiles] [--publication-lifecycle]\nRun only in the reserved serial integration window. Creates fresh .dsh-test-hub-onboard-* profiles; never uses ~/.dsh. Evidence contains paths, counts and statuses only. Failed profiles are retained for diagnosis. Browser UI is not observed.')
   process.exit(0)
 }
-const options = { web: 3235, mock: 8935, hub: 3239, keep: false }
+const options = { web: 3235, mock: 8935, hub: 3239, keep: false, publication: false }
 for (let i = 2; i < process.argv.length; i++) {
   const flag = process.argv[i]
   if (flag === '--keep-profiles') options.keep = true
+  else if (flag === '--publication-lifecycle') options.publication = true
   else {
     const key = { '--web-port': 'web', '--mock-port': 'mock', '--hub-port': 'hub' }[flag]
     assert.ok(key, 'Unknown acceptance argument')
@@ -234,6 +235,59 @@ async function contactAndGroup(label, attachments = []) {
   assert.ok(reply.responseToDeliveryId)
   return { conversationId, inputId: sent.messageId, replyId: reply.messageId }
 }
+async function publicationLifecycle(sender, recipient, dm, humanDm, groupId) {
+  const oldPrincipal=recipient.bot
+  await api(recipient,'publish-bots',{localBotIds:[],expectedPublishedBotIds:[recipient.botId]})
+  await until(async()=>{
+    const state=await api(sender,'state'), group=state.conversations.find(item=>item.conversationId===groupId), direct=state.conversations.find(item=>item.conversationId===humanDm.conversationId)
+    return group?.info?.formerMembers?.some(person=>person.principalId===oldPrincipal&&person.retired) && direct?.info?.members.some(person=>person.principalId===oldPrincipal&&person.retired)
+  },'withdrawal visible in group and Human DM')
+  const oldRecord=await until(async()=>(await api(recipient,'state')).botConversations.find(item=>item.conversationId===dm.conversationId),'withdrawn Bot retains owned private record')
+  assert.ok((await api(recipient,'bot-dm-history',{conversationId:dm.conversationId,localBotId:recipient.botId,membershipEpoch:oldRecord.membershipEpoch})).events.some(event=>event.type==='message'))
+  await assert.rejects(topology.send(sender,humanDm.conversationId,'Retired identity must refuse'),{code:'BOT_RETIRED'})
+  record('withdrawal-marks-group-and-dm-identities-and-preserves-owner-private-history')
+  await publish(recipient)
+  assert.notEqual(recipient.bot,oldPrincipal)
+  await until(async()=>(await api(sender,'state')).contacts.some(person=>person.principalId===recipient.bot),'new published identity visible')
+  const before=(await api(sender,'state')).conversations.find(item=>item.conversationId===groupId)
+  assert.ok(!before.info.members.some(person=>person.principalId===recipient.bot))
+  await topology.operation(sender,'invite',{conversationId:groupId,inviteePrincipalId:recipient.bot})
+  const echo=`new-publication-${nonce}`
+  await topology.send(sender,groupId,`COMM-ECHO ${echo}`,[recipient.bot])
+  await until(()=>topology.hasText(sender,groupId,`Communication reply ${echo}`),'fresh identity responds only after explicit rejoin',60000)
+  const freshDm=await topology.operation(sender,'dm',{otherPrincipalId:recipient.bot})
+  assert.notEqual(freshDm.conversationId,humanDm.conversationId)
+  record('same-local-Bot-republishes-with-fresh-id-no-inherited-membership-and-new-DM')
+  const disposable=await recipient.client.request('/api/bot',{endpoint:'create-bot',payload:{name:'Disposable published Bot',model:'deepseek-official/deepseek-v4-pro'}})
+  await api(recipient,'publish-bots',{localBotIds:[recipient.botId,disposable.id]})
+  const deleted=await until(async()=>(await api(recipient,'state')).localBots?.find(bot=>bot.displayName==='Disposable published Bot'),'disposable publication reconciled')
+  await until(async()=>(await api(sender,'state')).contacts.some(person=>person.principalId===deleted.principalId),'disposable visible remotely')
+  await topology.operation(sender,'invite',{conversationId:groupId,inviteePrincipalId:deleted.principalId})
+  const deletedDm=await topology.operation(sender,'dm',{otherPrincipalId:deleted.principalId})
+  const tag=`deleted-bot-${nonce}`
+  await topology.send(sender,deletedDm.conversationId,`COMM-ECHO ${tag}`)
+  await until(()=>topology.hasText(sender,deletedDm.conversationId,`Communication reply ${tag}`),'disposable Bot actual Mock reply',60000)
+  await recipient.client.request('/api/bot',{endpoint:'delete-bot',payload:{id:disposable.id}})
+  await until(async()=>{
+    const state=await api(sender,'state'), group=state.conversations.find(item=>item.conversationId===groupId), direct=state.conversations.find(item=>item.conversationId===deletedDm.conversationId)
+    return group?.info?.formerMembers?.some(person=>person.principalId===deleted.principalId&&person.retired) && direct?.info?.members.some(person=>person.principalId===deleted.principalId&&person.retired)
+  },'local deletion retires remote group and DM identities without restart')
+  await assert.rejects(topology.send(sender,deletedDm.conversationId,'Deleted identity must refuse'),{code:'BOT_RETIRED'})
+  record('permanent-local-deletion-retires-remote-group-and-DM-without-manual-restart')
+  await topology.bench(recipient,'stop');await startPeer(recipient)
+  const restarted=await until(async()=>{const state=await api(recipient,'state');return state.connected&&state.reconciled&&state},'restarted recipient reconciled')
+  assert.equal(restarted.localBots.length,1);assert.equal(restarted.localBots[0].principalId,recipient.bot)
+  const retained=restarted.botConversations.find(item=>item.conversationId===dm.conversationId)
+  assert.ok(retained)
+  assert.ok((await api(recipient,'bot-dm-history',{conversationId:dm.conversationId,localBotId:recipient.botId,membershipEpoch:retained.membershipEpoch})).events.some(event=>event.type==='message'))
+  record('restart-keeps-new-identity-and-retired-private-record-despite-deleted-config-entry')
+  await stopHub();await startHub()
+  for(const peer of topology.peers)await until(async()=>{const value=await api(peer,'state');return value.connected&&value.reconciled},'Hub restart reconciles both clients')
+  const info=(await api(sender,'state')).conversations.find(item=>item.conversationId===humanDm.conversationId)?.info
+  assert.equal(info.members.find(person=>person.principalId===oldPrincipal).retired,true)
+  assert.ok((await api(recipient,'bot-dm-history',{conversationId:dm.conversationId,localBotId:recipient.botId,membershipEpoch:retained.membershipEpoch})).events.some(event=>event.type==='message'))
+  record('Hub-restart-preserves-tombstones-and-bounded-readable-private-history')
+}
 function pathsFor(peer) {
   const profile = join(peer.home, 'profiles/communication-test')
   const paths = { dshHome: peer.home, home: join(peer.home, 'bot'), profiles: [join(profile, 'cordis.yml'), join(profile, 'cordis.patch.yml'), join(peer.home, 'bench.patch.yml')], credentials: join(peer.home, '.credentials.yaml'), sessions: join(peer.home, 'sessions'), attachmentsHome: peer.home, storageRoot: join(peer.home, 'storages') }
@@ -359,7 +413,7 @@ try {
     await peer.client.request('/api/bot', { endpoint: 'update-bot', payload: { id: peer.botId, name: `Retained local ${peer.id}`, model: 'deepseek-official/deepseek-v4-pro' } })
     await peer.client.request('/api/bot', { endpoint: 'send', payload: { sessionId: peer.botId, text: `ordinary-reset-canary-${nonce}-${peer.id}` } })
     await until(async () => { const metrics = await peer.client.api({ operation: 'metrics' }); return metrics.chiefEvents > 0 && metrics.chiefStatus === 'idle' && metrics.chiefPending === 0 }, 'ordinary local chat settled', 45000)
-    if (peer.id === 'a') await legacyStaticPrelude(peer)
+    if (peer.id === 'a' && !options.publication) await legacyStaticPrelude(peer)
     await enroll(peer, oldHub); await publish(peer)
     peer.old = { instanceId: peer.instanceId, human: peer.human, bot: peer.bot, userCode: (await api(peer, 'user-code')).userCode }
   }
@@ -368,6 +422,20 @@ try {
   stage('old contact group remote attachment and actual DSH reply')
   const oldGroup = await contactAndGroup('before-reset', [attachment])
   record('old-enrolled-DSH-contact-group-attachment-and-Mock-reply')
+  // Publication mode exercises lifecycle only; offline reset checks remain in the default mode.
+  if(options.publication){
+    const [sender,recipient]=topology.peers
+    const humanDm=await topology.operation(sender,'dm',{otherPrincipalId:recipient.bot}),tag=`publication-dm-${nonce}`
+    await until(async()=>(await api(sender,'state')).conversations.some(item=>item.conversationId===humanDm.conversationId),'Human DM visible')
+    await topology.send(sender,humanDm.conversationId,`COMM-ECHO ${tag}`)
+    await until(()=>topology.hasText(sender,humanDm.conversationId,`Communication reply ${tag}`),'Human DM actual Mock answer',60000)
+    await sender.client.request('/api/bot',{endpoint:'send',payload:{sessionId:sender.botId,text:`COMM-SEND ${recipient.bot} ${tag}`}})
+    const dm=await until(async()=>(await api(sender,'state')).botConversations.find(item=>item.info.members.some(person=>person.principalId===recipient.bot)),'Bot private record visible',60000)
+    await until(async()=>(await api(sender,'bot-dm-history',{conversationId:dm.conversationId,localBotId:sender.botId,membershipEpoch:dm.membershipEpoch})).events.some(event=>event.message?.content.text===`Communication reply ${tag}`),'Bot DM actual Mock reply',60000)
+    stage('publication withdrawal re-publication deletion and restart')
+    await publicationLifecycle(sender,recipient,dm,humanDm,oldGroup.conversationId)
+    evidence.status='PASS'
+  }else{
   for (const peer of topology.peers) {
     await topology.bench(peer, 'stop')
     peer.paths = pathsFor(peer); evidence.paths.clients.push({ peer: peer.id, ...peer.paths })
@@ -514,6 +582,7 @@ try {
     assert.ok(peer.before.remoteDirectories.every(path => !existsSync(path)))
   }
   evidence.status = 'PASS'
+  }
 } catch (error) {
   evidence.status = 'FAIL'; evidence.error = /^[A-Z_]+$/.test(error.code ?? '') ? error.code : 'ACCEPTANCE_FAILED'
   if (error.target && typeof error.target === 'string') evidence.target = error.target

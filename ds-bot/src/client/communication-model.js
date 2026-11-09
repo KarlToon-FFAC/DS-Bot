@@ -1,3 +1,4 @@
+import { t } from './i18n.js'
 import { mentionSpans } from '../shared/mentions.js'
 import { normalizeIpAddress } from '../shared/ip-address.js'
 
@@ -11,6 +12,7 @@ export function contactLabels(contacts) {
       label += ' · ' + origin(contact)
       if (sameName.filter(other => origin(other) === origin(contact)).length > 1) label += ' · ' + contact.principalId.slice(-8)
     }
+    if (contact.retired) label += ' · ' + t('Bot no longer exists')
     return [contact.principalId, label]
   }))
 }
@@ -63,6 +65,7 @@ export function mentionQuery(text, caret) {
 }
 
 export function mentionChoices(members, query, allLabel = 'All Bots') {
+  members = members.filter(person => !person.retired)
   const needle = query.toLocaleLowerCase()
   return [
     ...(members.some(person => person.kind === 'bot') ? [{ principalId: '@all', displayName: allLabel, all: true }] : []),

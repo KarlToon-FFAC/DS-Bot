@@ -82,6 +82,11 @@ var ZH = {
   "From contact": "所属联系人",
   "Owner information unavailable": "所属联系人信息暂不可用",
   "Public profile": "公开资料",
+  "Hiding or deleting a published Bot permanently ends its remote identity. Old chats stay readable. Publishing it again creates a new identity that must rejoin groups.": "隐藏或删除已发布的 Bot 会永久结束它的对外身份，旧聊天记录仍可查阅。重新发布会创建新身份，需要重新加入群聊。",
+  "Former Bots": "已退出的旧 Bot 身份",
+  "Bot no longer exists": "Bot 已不存在（旧身份）",
+  "Identity ended": "身份结束时间",
+  "This Bot identity no longer exists. This chat is read only. A re-published Bot must start a new chat.": "此 Bot 的对外身份已不存在，本会话仅供查阅。重新发布的 Bot 需要建立新会话。",
   "No public profile shared.": "尚未填写公开资料。",
   "Profile details are unavailable.": "暂时无法读取完整资料。",
   "Identity details": "身份详情",
@@ -12314,6 +12319,8 @@ var communicationDescriptions = {
   COMMUNICATION_CONFIG_WRITE_FAILED: "The configuration save could not be confirmed. Refresh the published Bot selection before applying again.",
   TLS_REQUIRED: "This Hub address requires a secure connection. Ask the Hub owner for its trusted WSS address.",
   UNKNOWN_TOOL: "This tool is unavailable through the current call surface. Check current Session scope, configuration reload and native/PTC presentation. A registered tool may require the approved run_code SDK transport in PTC mode; never bypass scope or permissions.",
+  BOT_RETIRED: "This remote Bot identity no longer exists. Re-publish the Bot and add its new identity to a new or existing conversation.",
+  BOT_PUBLICATION_MIGRATION_REQUIRED: "Update and restart the Hub to support permanent Bot identity retirement before connecting this client.",
   BOT_NOT_PUBLISHED: "The executing local Bot is not published to this Hub. In Remote communication > Contacts > Published Bots, select this Bot and save. Wait for the configuration reload, then check diagnose before retrying. Publishing another Bot does not publish this one.",
   LOCAL_USER_SESSION_REQUIRED: "Open your own local Bot chat to inspect or manage this instance. Local diagnostics and management are unavailable in group and remote Sessions.",
   LOCAL_USER_AUTHORIZATION_REQUIRED: "This management action requires a current direct request in your own local Bot chat. Remote messages, handoffs and schedules cannot authorize it.",
@@ -12588,6 +12595,7 @@ var definitive = /* @__PURE__ */ new Set([
   "PEER_REVOKED",
   "MEMBERSHIP_LIMIT",
   "BOT_NOT_PUBLISHED",
+  "BOT_RETIRED",
   "CONTACT_REQUIRED",
   "UNKNOWN_PRINCIPAL",
   "OPERATION_ID_CONFLICT"
@@ -21723,6 +21731,7 @@ function contactLabels(contacts) {
       label += " · " + origin(contact);
       if (sameName.filter((other) => origin(other) === origin(contact)).length > 1) label += " · " + contact.principalId.slice(-8);
     }
+    if (contact.retired) label += " · " + t("Bot no longer exists");
     return [contact.principalId, label];
   }));
 }
@@ -21766,6 +21775,7 @@ function mentionQuery(text, caret) {
   return match ? { start: caret - match[1].length - 1, end: caret, query: match[1] } : null;
 }
 function mentionChoices(members, query, allLabel = "All Bots") {
+  members = members.filter((person) => !person.retired);
   const needle = query.toLocaleLowerCase();
   return [
     ...members.some((person) => person.kind === "bot") ? [{ principalId: "@all", displayName: allLabel, all: true }] : [],
@@ -22167,7 +22177,7 @@ function ParticipantInformation({ person, people, request, conversationId, membe
     "section",
     { className: "bt-comm-participant-profile" },
     personLabel(person),
-    (0, import_react56.createElement)("p", null, t(roleLabel(person.role ?? "member"))),
+    (0, import_react56.createElement)("p", null, t(person.retired ? "Bot no longer exists" : roleLabel(person.role ?? "member"))),
     person.kind === "bot" ? (0, import_react56.createElement)(
       "div",
       { className: "bt-comm-participant-owner" },
@@ -22191,6 +22201,7 @@ function ParticipantInformation({ person, people, request, conversationId, membe
       null,
       (0, import_react56.createElement)("summary", null, t("Identity details")),
       (0, import_react56.createElement)("code", null, person.principalId),
+      person.retiredAt ? (0, import_react56.createElement)("p", null, t("Identity ended"), ": ", person.retiredAt) : null,
       person.instanceLabel || person.homeInstanceId ? (0, import_react56.createElement)("p", null, person.instanceLabel ?? person.homeInstanceId) : null
     )
   );
@@ -22357,7 +22368,7 @@ function GroupBotChoices({ contacts, humanId, instanceId, selected, onChange, re
         { key: bot.principalId, className: "bt-comm-check" },
         (0, import_react58.createElement)("input", { type: single ? "radio" : "checkbox", name: single ? "invite-group-bot" : void 0, "aria-label": `${t("Invite")} ${bot.displayName}`, checked: selected.includes(bot.principalId), onChange: (event) => onChange(event.target.checked ? single ? [bot.principalId] : [...selected, bot.principalId] : selected.filter((id) => id !== bot.principalId)) }),
         (0, import_react58.createElement)(CommunicationAvatar, { person: bot, request, size: 24 }),
-        bot.displayName
+        (0, import_react58.createElement)("span", { className: "bt-comm-choice-name" }, bot.displayName)
       ))
     )),
     (0, import_react58.createElement)("p", { className: "bt-comm-reference" }, t("Selected Bots and their owners join the group immediately."))
@@ -22944,6 +22955,7 @@ function OwnRemoteProfile({ request, operation, revision, bots = [] }) {
       "details",
       { className: "bt-comm-contact-section", open: true },
       (0, import_react60.createElement)("summary", null, t("Published Bots")),
+      (0, import_react60.createElement)("p", { className: "bt-comm-reference" }, t("Hiding or deleting a published Bot permanently ends its remote identity. Old chats stay readable. Publishing it again creates a new identity that must rejoin groups.")),
       (0, import_react60.createElement)(BotChoices, { bots: available.bots, selected: published, onChange: (value) => {
         if (!publicationDirty.current) publicationBase.current = [...available.publishedBotIds];
         publicationDirty.current = true;
@@ -23250,8 +23262,9 @@ function ConversationRow({ conversation, humanId, labels, selected, request, onC
   const name = conversationTitle(conversation, humanId, labels);
   const preview = conversation.lastMessage?.summary ?? "";
   const author = conversation.lastMessage?.author;
-  const current = (conversation.info?.members ?? []).find((person) => person.principalId === author?.principalId);
-  const sender = current ? contactLabels(conversation.info.members).get(current.principalId) : null;
+  const people = [...conversation.info?.members ?? [], ...conversation.info?.formerMembers ?? []];
+  const current = people.find((person) => person.principalId === author?.principalId);
+  const sender = current ? contactLabels(people).get(current.principalId) : null;
   const summary = preview && conversation.kind === "group" && sender ? `${sender}: ${preview}` : preview;
   const accessibleName = [name, summary, conversation.unread > 0 ? `${conversation.unread} ${t("Unread")}` : ""].filter(Boolean).join(", ");
   return (0, import_react63.createElement)(
@@ -23436,7 +23449,7 @@ function CommunicationThread({ member, messageId, request, canSpeak, onReply, on
   const failedRead = (0, import_react67.useRef)(false);
   const order = (0, import_react67.useRef)(0), current = (0, import_react67.useRef)(null);
   current.current = page;
-  const members = member.info?.members ?? [], labels = contactLabels(members);
+  const members = [...member.info?.members ?? [], ...member.info?.formerMembers ?? []], labels = contactLabels(members);
   (0, import_react67.useEffect)(() => {
     const token = ++order.current;
     failedRead.current = false;
@@ -23572,7 +23585,7 @@ function ThreadReplyComposer({ storageKey, member, target, request, onSent, atta
       alive.current = false;
     };
   }, []);
-  const members = member.info?.members ?? [], labels = contactLabels(members);
+  const members = [...member.info?.members ?? [], ...member.info?.formerMembers ?? []], labels = contactLabels(members);
   const currentTarget = draft.attempt?.replyToMessageId ?? target?.messageId;
   const choices = completion ? mentionChoices(members, completion.query, t("All Bots")) : [];
   const update = (value) => {
@@ -23808,7 +23821,7 @@ var communicationCSS = `
 .bt-comm-archive-notice{padding:0 24px;color:var(--bt-ink-2)}
 
 .bt-comm-group-contact-heading{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px}
-.bt-comm-group-contact .bt-comm-check{padding-left:28px}
+.bt-comm-group-contact .bt-comm-check{padding-left:28px;min-width:0}.bt-comm-choice-name{min-width:0;overflow-wrap:anywhere}
 .bt-comm-invitations>button{display:flex;align-items:center;justify-content:space-between;width:100%;margin:4px 0}
 .bt-comm-invitation-details dd{margin:4px 0 12px;overflow-wrap:anywhere}
 .bt-comm-invitation-details li{margin:8px 0}
@@ -23854,7 +23867,7 @@ var communicationCSS = `
 .bt-comm-frame button:hover:not(:disabled):not([aria-disabled=true]){background:var(--bt-hover)}
 .bt-comm-frame button:disabled{opacity:.4;cursor:default}
 .bt-comm-frame :is(button,input,textarea,select,summary):focus-visible{outline:2px solid var(--bt-accent);outline-offset:2px}
-.bt-comm-frame :is(input:not([type=checkbox]),textarea,select){width:100%;min-width:0;border:1px solid var(--bt-line);border-radius:8px;padding:8px;background:var(--bt-card);color:var(--bt-ink);font:13px/18px var(--bt-font)}
+.bt-comm-frame :is(input:not([type=checkbox]):not([type=radio]),textarea,select){width:100%;min-width:0;border:1px solid var(--bt-line);border-radius:8px;padding:8px;background:var(--bt-card);color:var(--bt-ink);font:13px/18px var(--bt-font)}
 .bt-comm-frame textarea{resize:vertical;min-height:72px;max-height:180px;font-size:14px;line-height:22px}
 .bt-comm-frame code{font:12px/16px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;overflow-wrap:anywhere;user-select:text}
 .bt-comm-frame .bt-comm-primary{background:var(--bt-accent);border-color:var(--bt-accent);color:var(--bt-accent-ink)}
@@ -23915,7 +23928,7 @@ var communicationCSS = `
 .bt-comm-reference,.bt-comm-event{font-size:12px;line-height:16px;color:var(--bt-ink-2)}
 .bt-comm-field{display:flex;flex-direction:column;gap:6px;margin:8px 0;font-size:12px;line-height:16px}
 .bt-comm-check{display:flex;gap:8px;align-items:flex-start;margin:10px 0;font-size:12px;line-height:18px;overflow-wrap:anywhere}
-.bt-comm-check input{width:16px;height:16px;flex-shrink:0;margin-top:1px}
+.bt-comm-check input{flex:0 0 16px;width:16px;height:16px;flex-shrink:0;margin-top:1px}
 .bt-comm-mentions{display:flex;gap:4px;flex-wrap:wrap}
 .bt-comm-pending-text{white-space:pre-wrap}
 .bt-comm-members{flex-shrink:0;max-height:32vh;overflow:auto;overscroll-behavior:contain;border:1px solid var(--bt-line);border-radius:12px;padding:8px 12px}
@@ -24457,6 +24470,7 @@ function GroupSettings({ member, contacts, operation, pendingSettings, operation
           group.person ? memberRow(group.person) : (0, import_react69.createElement)("p", { className: "bt-comm-reference" }, t("Owner information unavailable")),
           group.bots.length ? (0, import_react69.createElement)("div", { className: "bt-comm-member-bots" }, group.bots.map(memberRow)) : null
         ))),
+        member.info?.formerMembers?.length ? (0, import_react69.createElement)("details", null, (0, import_react69.createElement)("summary", null, t("Former Bots")), member.info.formerMembers.map((person) => btn(person.displayName, (event) => onInspect([person.principalId], event.currentTarget), { key: person.principalId, children: personLabel(person) }))) : null,
         (0, import_react69.createElement)("p", { className: "bt-comm-reference" }, t("Both Bot modes may @mention current group Bots in an authorized final reply. Reply-only Bots cannot initiate messages or send proactively with tools. Active Bots may also initiate with tools. Bot delegation chains stop at the server’s finite limit.")),
         canManage ? (0, import_react69.createElement)(
           import_react69.Fragment,
@@ -24556,6 +24570,10 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
   const archivedConversations = allConversations.filter((item) => item.kind === "dm" && archivedIds.has(item.conversationId));
   const member = allConversations.find((item) => item.conversationId === selected);
   const conversationRequest = (0, import_react69.useMemo)(() => (body) => request(member?.archive && ["history", "reference"].includes(body.endpoint) ? { ...body, endpoint: `bot-dm-${body.endpoint}`, localBotId: member.viewerBotId, membershipEpoch: member.membershipEpoch } : body), [request, member?.archive, member?.viewerBotId, member?.membershipEpoch]);
+  for (const person of allConversations.flatMap((item) => [...item.info?.members ?? [], ...item.info?.formerMembers ?? []])) {
+    if (!labels.has(person.principalId)) labels.set(person.principalId, person.displayName);
+    if (person.retired) labels.set(person.principalId, `${person.displayName} · ${t("Bot no longer exists")}`);
+  }
   const key = `${scope}:${selected}`;
   contextKey.current = `${key}:${member?.membershipEpoch}`;
   (0, import_react69.useEffect)(() => {
@@ -24904,7 +24922,8 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
   const ownOutbox = member ? (state?.outbox ?? []).filter((item) => (!item.principalId || item.principalId === state.humanPrincipalId) && item.type === "message.publish" && item.conversationId === selected) : [];
   const activityOutbox = (state?.outbox ?? []).filter((item) => (!item.principalId || item.principalId === state.humanPrincipalId) && item.type === "message.publish" && (!member || item.conversationId === selected));
   const currentMembers = member?.info?.members ?? [];
-  const canSpeak = member && !member.archive && (member.kind !== "group" || member.speakingMode === "speak");
+  const knownMembers = [...currentMembers, ...member?.info?.formerMembers ?? []];
+  const canSpeak = member && !member.archive && !currentMembers.some((person) => person.retired) && (member.kind !== "group" || member.speakingMode === "speak");
   const contacts = state?.contacts ?? [];
   const attach = async (files) => {
     const context = contextKey.current;
@@ -24932,7 +24951,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
   });
   const remoteCount = contacts.filter((contact) => contact.homeInstanceId !== state?.instanceId).length;
   const inspect = (ids) => {
-    const authorized2 = ids.filter((id) => currentMembers.some((person) => person.principalId === id));
+    const authorized2 = ids.filter((id) => [...currentMembers, ...member?.info?.formerMembers ?? []].some((person) => person.principalId === id));
     if (authorized2.length) {
       setInspectedIds(authorized2);
       showPanel("participant");
@@ -25217,7 +25236,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
             setActivePanel("");
             input.current?.focus();
           }
-        }) : activePanel === "participant" ? (0, import_react69.createElement)("div", { className: "bt-comm-participant-information" }, currentMembers.filter((person) => inspectedIds.includes(person.principalId)).map((person) => (0, import_react69.createElement)(ParticipantInformation, { key: person.principalId, person, people: [...currentMembers, ...contacts], request, conversationId: selected, membershipEpoch: member.membershipEpoch, localBotId: member.viewerBotId, roleLabel, personLabel }))) : activePanel === "manage-contacts" ? (0, import_react69.createElement)(ContactManager, { key: scope, request, operation, contacts, connectionKnown: state?.connected === true && !pollError, revision: `${state?.managementRevision ?? ""}:${state?.connected ?? false}`, humanPrincipalId: state?.humanPrincipalId, instanceId: state?.instanceId, onMessage: messageContact, messageBusy: busy }) : activePanel === "profile" ? (0, import_react69.createElement)(HumanProfile, { key: scope, human: contacts.find((person) => person.principalId === state?.humanPrincipalId) ?? { principalId: state?.humanPrincipalId ?? "human:local", displayName: t("You"), kind: "human" }, request, operation }) : activePanel === "pairing" ? (0, import_react69.createElement)(AddDevice, { request, revision: `${team.communicationEnabled}:${team.communicationHubId}:${state?.managementRevision ?? ""}:${state?.connected ?? false}`, displayName: contacts.find((person) => person.principalId === state?.humanPrincipalId)?.displayName ?? t("You") }) : (0, import_react69.createElement)(
+        }) : activePanel === "participant" ? (0, import_react69.createElement)("div", { className: "bt-comm-participant-information" }, [...currentMembers, ...member?.info?.formerMembers ?? []].filter((person) => inspectedIds.includes(person.principalId)).map((person) => (0, import_react69.createElement)(ParticipantInformation, { key: person.principalId, person, people: [...currentMembers, ...member?.info?.formerMembers ?? [], ...contacts], request, conversationId: selected, membershipEpoch: member.membershipEpoch, localBotId: member.viewerBotId, roleLabel, personLabel }))) : activePanel === "manage-contacts" ? (0, import_react69.createElement)(ContactManager, { key: scope, request, operation, contacts, connectionKnown: state?.connected === true && !pollError, revision: `${state?.managementRevision ?? ""}:${state?.connected ?? false}`, humanPrincipalId: state?.humanPrincipalId, instanceId: state?.instanceId, onMessage: messageContact, messageBusy: busy }) : activePanel === "profile" ? (0, import_react69.createElement)(HumanProfile, { key: scope, human: contacts.find((person) => person.principalId === state?.humanPrincipalId) ?? { principalId: state?.humanPrincipalId ?? "human:local", displayName: t("You"), kind: "human" }, request, operation }) : activePanel === "pairing" ? (0, import_react69.createElement)(AddDevice, { request, revision: `${team.communicationEnabled}:${team.communicationHubId}:${state?.managementRevision ?? ""}:${state?.connected ?? false}`, displayName: contacts.find((person) => person.principalId === state?.humanPrincipalId)?.displayName ?? t("You") }) : (0, import_react69.createElement)(
           import_react69.Fragment,
           null,
           activePanel === "group" ? (0, import_react69.createElement)("label", { className: "bt-comm-field" }, t("Group name"), (0, import_react69.createElement)("input", { value: title, onChange: (event) => setTitle(event.target.value), "aria-label": t("Group name") })) : null,
@@ -25319,7 +25338,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
         } },
         member && events.length > 0 && events[0].conversationSeq > member.joinSeq ? btn("Load earlier messages", () => setOlder(events[0].conversationSeq - 1)) : null,
         older !== null ? btn("Show latest messages", () => setOlder(null)) : null,
-        communicationLogEvents(events).map((event) => event.type === "bot.work.started" ? (0, import_react69.createElement)(BotWorkStarted, { key: event.eventId, event, members: currentMembers, request, onInspect: inspect }) : (0, import_react69.createElement)(
+        communicationLogEvents(events).map((event) => event.type === "bot.work.started" ? (0, import_react69.createElement)(BotWorkStarted, { key: event.eventId, event, members: knownMembers, request, onInspect: inspect }) : (0, import_react69.createElement)(
           "article",
           { key: event.message.messageId, "data-message-id": event.message.messageId, "data-self": event.message.author.principalId === state.humanPrincipalId, "data-referenced": event.message.messageId === referenced },
           avatar(event.message.author.principalId, contacts.find((person) => person.principalId === event.message.author.principalId)?.displayName ?? event.message.author.displayName),
@@ -25336,7 +25355,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
               labels,
               onJump: openReference
             }) : null,
-            (0, import_react69.createElement)("div", { className: "bt-comm-body" }, (0, import_react69.createElement)(CommunicationMessage, { message: event.message, members: currentMembers, request, onInspect: inspect }))
+            (0, import_react69.createElement)("div", { className: "bt-comm-body" }, (0, import_react69.createElement)(CommunicationMessage, { message: event.message, members: knownMembers, request, onInspect: inspect }))
           ),
           (0, import_react69.createElement)(
             CommunicationMessageActions,
@@ -25357,6 +25376,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
           (0, import_react69.createElement)("p", { role: "status" }, t(item.state === "accepted" ? "Hub accepted" : "Queued on this device"))
         ))
       ),
+      currentMembers.some((person) => person.retired) ? (0, import_react69.createElement)("p", { role: "status", className: "bt-comm-reference" }, t("This Bot identity no longer exists. This chat is read only. A re-published Bot must start a new chat.")) : null,
       canSpeak ? (0, import_react69.createElement)(
         "footer",
         null,

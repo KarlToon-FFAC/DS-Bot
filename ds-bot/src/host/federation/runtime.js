@@ -29,7 +29,7 @@ const humanSendIntent = input => JSON.stringify([input.conversationId, input.tex
 export class CommunicationRuntime {
   constructor(rt, settings, credential, toolDefinitions, { onAuthenticationFailure } = {}) {
     communicationUrl(settings.url)
-    if (!Array.isArray(settings.publishedBotIds ?? []) || (settings.publishedBotIds ?? []).some(id => !rt.botOf(id))) fail('BOT_NOT_FOUND')
+    if (!Array.isArray(settings.publishedBotIds ?? [])) fail('BOT_NOT_FOUND')
     if (typeof (settings.humanDisplayName ?? 'You') !== 'string' || !(settings.humanDisplayName ?? 'You').trim()) fail('INVALID_CONFIG')
     if (settings.rotateTokens !== undefined && (!Number.isSafeInteger(settings.rotateTokens) || settings.rotateTokens <= 0)) fail('INVALID_CONFIG')
     if (!Number.isSafeInteger(settings.contextHistoryBytes ?? 131072) || (settings.contextHistoryBytes ?? 131072) < 1024
@@ -40,14 +40,11 @@ export class CommunicationRuntime {
     this.settings = settings
     this.queue = new CommunicationQueue(settings.dataPath ?? join(rt.home, 'communication.sqlite'), { instanceId: settings.instanceId, maxPending: settings.maxPending ?? 1000 })
     this.relationships = new RelationshipMemory(this.queue, settings)
-    try { this.human = this.queue.localPrincipal('human', 'local-user', settings.humanDisplayName ?? 'You', settings.credentialKey ? 'local-user' : undefined) }
-    catch (error) { this.queue.close(); throw error }
-    this.bots = new Map()
-    for (const id of settings.publishedBotIds ?? []) {
-      const bot = rt.botOf(id)
-      if (!bot) fail('BOT_NOT_FOUND')
-      this.bots.set(id, this.queue.localPrincipal('bot', id, bot.name))
-    }
+    try {
+      this.human = this.queue.localPrincipal('human', 'local-user', settings.humanDisplayName ?? 'You', settings.credentialKey ? 'local-user' : undefined)
+      const published = (settings.publishedBotIds ?? []).filter(id => rt.botOf(id)).map(id => ({ id, name: rt.botOf(id).name }))
+      this.bots = new Map(this.queue.reconcileBotPublications(published, settings.publicationGenerations).map(bot => [bot.localRef, bot]))
+    } catch (error) { this.queue.close(); throw error }
     this.tools = toolDefinitions
     this.owners = new Map()
     this.scoped = new WeakSet()
@@ -73,6 +70,8 @@ export class CommunicationRuntime {
       onInvalidate: scope => { if (scope !== 'messages') this.managementRevision += 1 },
       onConnect: async welcome => {
         this.managementRevision += 1
+        if (!welcome?.capabilities?.includes('bot-publication-generations')) fail('BOT_PUBLICATION_MIGRATION_REQUIRED')
+        await this.reconcileDeletedBots()
         await this.registerLocalIdentities()
         if (welcome?.capabilities?.includes('principal-publication')) {
           await this.transport.request('principal.publication', { principalIds: [...this.bots.values()].map(bot => bot.principalId) })
@@ -82,6 +81,7 @@ export class CommunicationRuntime {
         this.transportError = null
       },
       onChange: async () => {
+        await this.reconcileDeletedBots()
         cancelRevokedWork(this)
         const generation = this.transport.generation, socket = this.transport.socket
         const contacts = await this.transport.request('contacts.list')
@@ -140,12 +140,39 @@ export class CommunicationRuntime {
     this.installHooks()
     this.transport.start({ pollMs: settings.pollMs ?? 500 })
   }
+  async reconcileDeletedBots() {
+    const removed = [...this.bots].filter(([id]) => !this.rt.botOf(id))
+    if (!removed.length) return
+    const live = [...this.bots.keys()].filter(id => this.rt.botOf(id)).map(id => ({ id, name: this.rt.botOf(id).name }))
+    this.queue.reconcileBotPublications(live, this.settings.publicationGenerations)
+    for (const [id] of removed) this.bots.delete(id)
+    cancelRevokedWork(this)
+    for (const binding of this.queue.bindings()) if (this.queue?.isRetiredBot?.(binding.recipientPrincipalId)) {
+      for (const sessionId of binding.sessionIds) this.rt.cancelApprovals?.(sessionId)
+    }
+    await this.transport.request('principal.publication', { principalIds: [...this.bots.values()].map(bot => bot.principalId) })
+    this.publicationSyncedAt = new Date().toISOString()
+    this.managementRevision += 1
+  }
   async registerLocalIdentities() {
-    for (const principal of [this.human, ...this.bots.values()]) {
+    for (const identity of [this.human, ...this.bots.values()]) {
+      let principal = identity.kind === 'bot' ? this.bots.get(identity.localRef) : identity
+      if (!principal) continue
       const name = principal.kind === 'bot' ? this.rt.botOf(principal.localRef)?.name : this.settings.humanDisplayName ?? 'You'
       if (!name) continue
       principal.displayName = name
-      const registered = await this.transport.request('principal.register', { localId: principal.localId, kind: principal.kind, displayName: name })
+      let registered
+      try { registered = await this.transport.request('principal.register', { localId: principal.localId, kind: principal.kind, displayName: name }) }
+      catch (error) {
+        if (error.code !== 'BOT_RETIRED' || principal.kind !== 'bot') throw error
+        // A migrated Hub or an older local backup can know a lifetime ended before this queue did.
+        const desired = [...this.bots.keys()].filter(id => this.rt.botOf(id)).map(id => ({ id, name: this.rt.botOf(id).name }))
+        this.queue.reconcileBotPublications(desired.filter(bot => bot.id !== principal.localRef), this.settings.publicationGenerations)
+        this.bots = new Map(this.queue.reconcileBotPublications(desired, this.settings.publicationGenerations).map(bot => [bot.localRef, bot]))
+        principal = this.bots.get(principal.localRef)
+        cancelRevokedWork(this)
+        registered = await this.transport.request('principal.register', { localId: principal.localId, kind: 'bot', displayName: name })
+      }
       principal.displayName = registered.displayName
     }
   }
@@ -162,6 +189,8 @@ export class CommunicationRuntime {
     const botId = this.owners.get(sessionId)?.localBotRef ?? this.rt.selfOf(sessionId)
     const actor = this.bots.get(botId)
     if (!actor || !this.rt.botOf(botId)) fail('BOT_NOT_PUBLISHED')
+    const binding = this.owners.get(sessionId)
+    if (binding && binding.recipientPrincipalId !== actor.principalId) fail('BOT_RETIRED')
     return actor
   }
   async toolSource(exec) {
@@ -213,6 +242,7 @@ export class CommunicationRuntime {
     return member
   }
   async authorize(binding) {
+    if (this.queue?.isRetiredBot?.(binding.recipientPrincipalId)) fail('BOT_RETIRED')
     if (!this.transport.connected) fail('COMMUNICATION_AUTHORIZATION_UNKNOWN')
     return this.transport.request('conversation.authorize', { conversationId: binding.conversationId,
       principalId: binding.recipientPrincipalId, membershipEpoch: binding.membershipEpoch })
@@ -374,6 +404,7 @@ export class CommunicationRuntime {
   }
   async syncWorkContext(agent) {
     const binding = this.owners.get(agent.id)
+    if (binding && this.queue?.isRetiredBot?.(binding.recipientPrincipalId)) fail('BOT_RETIRED')
     const bot = binding && this.rt.botOf(binding.localBotRef)
     if (!bot) fail('COMMUNICATION_WORKSPACE_UNAVAILABLE')
     const cwd = await botWorkDirectory(this.rt, bot)
@@ -423,7 +454,7 @@ export class CommunicationRuntime {
     return result
   }
   async refreshConversation(conversationId) {
-    const member = this.queue.memberships().find(item => item.conversationId === conversationId)
+    const member = this.queue.memberships().filter(item => item.conversationId === conversationId).sort((a,b) => Number(Boolean(a.retired)) - Number(Boolean(b.retired)) || Number(b.principalId === this.human.principalId) - Number(a.principalId === this.human.principalId))[0]
     if (!member) { this.conversations.delete(conversationId); return }
     const info = await this.transport.request('conversation.members', { conversationId, principalId: member.principalId, membershipEpoch: member.membershipEpoch })
     const current = this.queue.memberships().find(item => item.conversationId === conversationId && item.principalId === member.principalId && item.membershipEpoch === member.membershipEpoch)
@@ -435,6 +466,8 @@ export class CommunicationRuntime {
     }
   }
   message(principalId, conversationId, { text, mentions = [], activationTargets = [], replyToMessageId = null, responseToDeliveryId, causationDeliveryId, localUserIntent, membershipEpoch, messageId = randomUUID(), clientCreatedAt = new Date().toISOString(), attachments, files, updateForMessageId, updateRecipientPrincipalId, inputUpdateIds } = {}) {
+    const lifetime = this.conversations?.get(conversationId)
+    if (this.queue?.isRetiredBot?.(principalId) || lifetime?.kind === 'dm' && lifetime.members.some(person => person.retired)) fail('BOT_RETIRED')
     if (files) fail('UNSUPPORTED_CONTENT')
     if (localUserIntent && !this.transport?.welcome?.capabilities?.includes('local-user-intent')) fail('UNSUPPORTED_CAPABILITY')
     const admitted = normalizeAttachments(attachments)
@@ -806,6 +839,7 @@ export class CommunicationRuntime {
       conversationId: delivery.conversationId, bindingId: binding.id, sessionId: agent.id })
   }
   async recoverInterrupted(binding) {
+    if (this.queue?.isRetiredBot?.(binding.recipientPrincipalId)) return
     this.recoveryAttempts ??= new Map()
     try { this.queue.member(binding.conversationId, binding.recipientPrincipalId, binding.membershipEpoch) } catch { return }
     const inspected = await inspectBinding(this.ctx.sessionController, binding, AbortSignal.timeout(15000)), sessions = []
@@ -873,7 +907,7 @@ export class CommunicationRuntime {
   }
   async export(binding) {
     const principal = this.bots.get(binding.localBotRef)
-    if (!principal) return
+    if (!principal || principal.principalId !== binding.recipientPrincipalId || this.queue?.isRetiredBot?.(binding.recipientPrincipalId)) return
     try { this.queue.member(binding.conversationId, binding.recipientPrincipalId, binding.membershipEpoch) } catch { return }
     const safeIds = new Set()
     for (const id of binding.sessionIds) {
@@ -961,6 +995,7 @@ export class CommunicationRuntime {
     if (this.rt.readOnly() !== undefined) fail('COMMUNICATION_READ_ONLY')
     await this.cancelRevoked()
     for (const binding of this.queue.bindings()) {
+      if (this.queue?.isRetiredBot?.(binding.recipientPrincipalId)) continue
       try { await this.processUpdates(binding); await this.export(binding); await this.recoverInterrupted(binding) } catch (error) { this.errors.set(binding.id, error.code ?? 'RECOVERY_UNKNOWN') }
     }
     const seen = new Set(), injectionFailed = new Set()
@@ -975,6 +1010,7 @@ export class CommunicationRuntime {
       }
     }
     for (const binding of this.queue.bindings()) {
+      if (this.queue?.isRetiredBot?.(binding.recipientPrincipalId)) continue
       try {
         await this.export(binding)
           if (!injectionFailed.has(binding.id) && !['INPUT_CANCELED','COMMUNICATION_SESSION_MIGRATION_REQUIRED','COMMUNICATION_INPUT_SOURCE_UNKNOWN'].includes(this.errors.get(binding.id))) this.errors.delete(binding.id)

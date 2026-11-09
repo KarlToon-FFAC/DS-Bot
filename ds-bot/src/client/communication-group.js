@@ -25,7 +25,7 @@ export function GroupBotChoices({ contacts, humanId, instanceId, selected, onCha
       h('strong', null, person.displayName), h('span', { className: 'bt-comm-reference' }, person.ipAddress ?? t('Address unavailable'))),
     bots.map(bot => h('label', { key: bot.principalId, className: 'bt-comm-check' },
       h('input', { type: single ? 'radio' : 'checkbox', name: single ? 'invite-group-bot' : undefined, 'aria-label': `${t('Invite')} ${bot.displayName}`, checked: selected.includes(bot.principalId), onChange: event => onChange(event.target.checked ? single ? [bot.principalId] : [...selected, bot.principalId] : selected.filter(id => id !== bot.principalId)) }),
-      h(CommunicationAvatar, { person: bot, request, size: 24 }), bot.displayName)))),
+      h(CommunicationAvatar, { person: bot, request, size: 24 }), h('span', { className: 'bt-comm-choice-name' }, bot.displayName))))),
     h('p', { className: 'bt-comm-reference' }, t('Selected Bots and their owners join the group immediately.')))
 }
 

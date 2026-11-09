@@ -1,0 +1,77 @@
+{
+  "verifiedOn": "2026-11-09",
+  "baseCommit": "4d2e3da5dfe93c86b39df40e4697feece81f60c4",
+  "model": "deterministic Mock; no real model key or user DSH data",
+  "plugin": {
+    "total": 2030,
+    "passed": 2025,
+    "skipped": 5,
+    "failed": 0
+  },
+  "hub": {
+    "total": 195,
+    "passed": 195,
+    "failed": 0
+  },
+  "nativeSmoke": {
+    "passed": 52
+  },
+  "chromium": {
+    "desktop": [
+      1280,
+      900
+    ],
+    "mobile": [
+      390,
+      844
+    ],
+    "radioAndBotNameWithinDialog": true,
+    "selection": true,
+    "retiredAuthorAttribution": true,
+    "retiredDmReadOnly": true,
+    "retiredProfileDetails": true,
+    "pageErrors": 0,
+    "fixtures": "synthetic records rendered with production components/styles"
+  },
+  "twoDsh": {
+    "status": "PASS",
+    "transport": "real WSS Hub with fixture CA; two isolated DSH profiles",
+    "cases": [
+      {
+        "id": "cli-created-group-before-reset-visible-on-both-devices-without-acceptance",
+        "status": "PASS"
+      },
+      {
+        "id": "old-enrolled-DSH-contact-group-attachment-and-Mock-reply",
+        "status": "PASS"
+      },
+      {
+        "id": "withdrawal-marks-group-and-dm-identities-and-preserves-owner-private-history",
+        "status": "PASS"
+      },
+      {
+        "id": "same-local-Bot-republishes-with-fresh-id-no-inherited-membership-and-new-DM",
+        "status": "PASS"
+      },
+      {
+        "id": "permanent-local-deletion-retires-remote-group-and-DM-without-manual-restart",
+        "status": "PASS"
+      },
+      {
+        "id": "restart-keeps-new-identity-and-retired-private-record-despite-deleted-config-entry",
+        "status": "PASS"
+      },
+      {
+        "id": "Hub-restart-preserves-tombstones-and-bounded-readable-private-history",
+        "status": "PASS"
+      }
+    ],
+    "portsReleased": true,
+    "ownedArtifactsRemoved": true
+  },
+  "limitations": [
+    "Linux execution; no live Windows deployment",
+    "Browser layout uses synthetic records; two-DSH lifecycle is verified through real public API/CLI and Mock turns",
+    "Publication mode does not claim offline reset acceptance"
+  ]
+}

@@ -24,8 +24,9 @@ export function ConversationRow({ conversation, humanId, labels, selected, reque
   const name = conversationTitle(conversation, humanId, labels)
   const preview = conversation.lastMessage?.summary ?? ''
   const author = conversation.lastMessage?.author
-  const current = (conversation.info?.members ?? []).find(person => person.principalId === author?.principalId)
-  const sender = current ? contactLabels(conversation.info.members).get(current.principalId) : null
+  const people = [...(conversation.info?.members ?? []), ...(conversation.info?.formerMembers ?? [])]
+  const current = people.find(person => person.principalId === author?.principalId)
+  const sender = current ? contactLabels(people).get(current.principalId) : null
   const summary = preview && conversation.kind === 'group' && sender ? `${sender}: ${preview}` : preview
   const accessibleName = [name, summary, conversation.unread > 0 ? `${conversation.unread} ${t('Unread')}` : ''].filter(Boolean).join(', ')
   return h('button', { type: 'button', className: 'bt-comm-conversation-row', disabled, 'aria-label': accessibleName, 'aria-pressed': selected, 'aria-current': selected ? 'page' : undefined,
