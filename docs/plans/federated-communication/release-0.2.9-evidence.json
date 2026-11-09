@@ -1,0 +1,49 @@
+{
+  "date": "2026-11-09",
+  "version": "V0.2.9",
+  "status": "PASSED",
+  "authorization": "user explicitly requested upgrading to 0.2.9",
+  "scope": [
+    "compact healthy connection status",
+    "dedicated pending-publication receipt and PUBLICATION_RELOAD_REQUIRED",
+    "safe CLI publication/mention diagnostic fields",
+    "current group membership preflight independent of contacts"
+  ],
+  "protocol": "dsbot-communication/1 unchanged",
+  "requiredCapabilities": "unchanged",
+  "pluginTests": {
+    "total": 2059,
+    "passed": 2054,
+    "skipped": 5,
+    "failed": 0
+  },
+  "hubTests": {
+    "total": 199,
+    "passed": 199,
+    "failed": 0
+  },
+  "releaseNativeDshMockCliAcceptance": {
+    "status": "PASSED",
+    "model": "deterministic Mock",
+    "cases": [
+      "real-CLI-publication-save-has-explicit-pending-publication-receipt",
+      "pending-Bot-scope-is-distinguished-from-unpublished-and-native-ConfigEditor-reload-completes",
+      "real-CLI-mentions-a-current-group-Bot-never-present-in-the-senders-contact-directory",
+      "live-unshared-outsider-is-denied-by-Hub-membership-with-safe-CLI-origin-details",
+      "Bot-scoped-private-history-archiving-and-relationship-memory-work-after-native-publication-reload",
+      "group-only-mention-authorization-and-published-configuration-survive-native-Host-restart",
+      "retired-member-and-retired-never-member-retain-BOT_RETIRED-after-partial-scope-publication"
+    ]
+  },
+  "chromium": "desktop/mobile compact connection, real Hub version header, incompatible-version guidance, live recovery and read-only receiving Bot DM passed; zero browser errors",
+  "nativeBehaviorSmoke": {
+    "passedSteps": 52,
+    "source": "same fix implementation before package-version-only upgrade",
+    "testedPackageVersion": "V0.2.8"
+  },
+  "lint": "passed with existing warnings",
+  "generatedClient": "fresh",
+  "packageAndLockVersions": "both Hub and plugin verified at 0.2.9",
+  "cleanup": "all owned acceptance, Hub and Mock processes stopped",
+  "production": "not deployed by these tests; no production endpoints or real LLM keys used"
+}
