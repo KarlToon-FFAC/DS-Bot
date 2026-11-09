@@ -86,9 +86,16 @@ var ZH = {
   "Former Bots": "已退出的旧 Bot 身份",
   "Client": "客户端",
   "Version not reported": "未报告版本",
+  "The client and Hub use incompatible communication protocols. Update the component that lacks the required protocol; conversation data does not need a reset.": "客户端与 Hub 的通信协议不兼容，请更新不支持所需协议的一端，无需重置对话数据。",
+  "Explicit Bot activation is required. Update the component missing that capability. Queued intents are retained.": "通信需要显式激活 Bot 的能力，请更新缺少该能力的一端，待发操作会保留。",
+  "Client update required to connect": "请更新客户端后连接",
+  "Update the client to use this Hub. Its required protocol or capabilities are not supported.": "请更新客户端后使用此 Hub，当前客户端不支持 Hub 要求的协议或能力。",
+  "Update the Hub to support this client’s required protocol and capabilities.": "请更新 Hub，以支持当前客户端要求的协议和能力。",
+  "Update the client or Hub to compatible protocol and capability versions.": "请更新客户端或 Hub，使双方协议和必需能力兼容。",
+  "A newer client release is available. Update the client; communication remains available with compatible protocols and capabilities.": "客户端有新版本，请更新；协议和能力兼容时仍可正常通信。",
+  "The release versions differ. Communication remains available with compatible protocols and capabilities.": "两端发布版本不同；协议和能力兼容时仍可正常通信。",
   "Client and Hub versions are incompatible": "客户端与 Hub 版本不兼容",
   "Connected to Hub · versions differ": "已连接 Hub · 两端版本不同",
-  "Update the client and Hub to the same federation release. Saved conversations and queued messages are retained.": "请将客户端与 Hub 更新到同一联邦版本。已保存的会话和待发消息会保留。",
   "Hub trust updated. Reconnecting with the new CA.": "Hub 信任已更新，正在使用新 CA 重新连接。",
   "Hub trust updated. Restart the host to use the new CA.": "Hub 信任已更新，请重启宿主以使用新 CA。",
   "Remote work confirmation": "远程工作确认",
@@ -442,7 +449,7 @@ var ZH = {
   "Membership is still syncing. Wait briefly, then retry the same request.": "成员列表仍在同步。请稍候，并重试原请求。",
   "Some history is missing. Wait for synchronization before sending.": "部分历史尚未同步完整，请等待同步后再发送。",
   "Another connection replaced this one. Close the duplicate instance and restart this one.": "另一个连接替代了本机连接，请关闭重复实例后重启本机实例。",
-  "This device and the Hub use incompatible versions. Update them to the same revision.": "本机与通信服务的版本不兼容，请更新到同一版本。",
+  "The client and Hub do not share the required communication capabilities. Update the component missing those capabilities.": "客户端与 Hub 缺少共同必需的通信能力，请更新缺少这些能力的一端。",
   "This Hub address requires a secure connection. Ask the Hub owner for its trusted WSS address.": "此通信服务地址需要安全连接，请管理者提供可信的 WSS 地址。",
   "Send not confirmed. Retry the same message to avoid sending it twice.": "尚未确认发送结果，请重试原消息以避免重复发送。",
   "Enter to send · Shift+Enter for a new line": "Enter 发送 · Shift+Enter 换行",
@@ -3058,6 +3065,8 @@ html[data-windows-titlebar] .bt-leftcol,html[data-platform=darwin] .bt-leftcol{b
 html[data-bt-collapsing] [class*="_frame"]:has(>[class*="_sidebarCol"]){transition:none!important}
 .bt-leftcol[data-left=drawer]{background:var(--bt-sidebar);box-shadow:8px 0 24px rgba(0,0,0,.14)}
 .bt-leftcol>.bt-side{width:100%}
+.bt-side-bottom{display:flex;flex-direction:column;flex:none;gap:4px}
+.bt-rail .bt-side-bottom{align-items:center}
 .bt-leftcol-foot{display:flex;align-items:center;gap:9px;padding-top:8px;flex:none}
 .bt-rail{align-items:center;padding:0}
 .bt-rail .bt-row{justify-content:center;width:56px;height:56px;min-height:56px;padding:0;border-radius:16px}
@@ -10427,7 +10436,6 @@ function TeamSidebar(props) {
     "div",
     { className: wideContent ? "bt-side" : "bt-side bt-rail", onKeyDown: typeToSearch },
     top,
-    (0, import_react19.createElement)("button", { type: "button", className: "bt-soft", onClick: actions.openCommunication, "aria-label": t("Remote communication"), title: t("Remote communication") }, wideContent ? t("Remote communication") : "↔"),
     wideContent && roster.readOnly ? (0, import_react19.createElement)("div", { className: "bt-hint bt-read-only", role: "status" }, hostText(roster.readOnly)) : null,
     (0, import_react19.createElement)(
       "div",
@@ -10435,7 +10443,12 @@ function TeamSidebar(props) {
       wideContent ? main ? (0, import_react19.createElement)(BotRow, { ...rowProps, bot: main, marked: markedUnread[main.id] === true }) : roster.ready ? null : (0, import_react19.createElement)("div", { className: "bt-hint" }, uiNow.bootFailed ? bootHint() : t("Setting up your Main Bot…")) : null,
       order.map((entry) => entry.kind === "bot" ? (0, import_react19.createElement)(BotRow, { key: entry.item.id, ...rowProps, bot: entry.item, marked: markedUnread[entry.item.id] === true }) : entry.kind === "room" ? (0, import_react19.createElement)(RoomRow, { key: entry.item.id, ...rowProps, room: entry.item, marked: markedUnread[entry.item.id] === true }) : (0, import_react19.createElement)(AgentRow, { key: entry.item.id, ...rowProps, agent: entry.item, marked: markedUnread[entry.item.id] === true }))
     ),
-    foot
+    (0, import_react19.createElement)(
+      "div",
+      { className: "bt-side-bottom" },
+      (0, import_react19.createElement)("button", { type: "button", className: wideContent ? "bt-soft bt-remote-entry" : "bt-round bt-remote-entry", onClick: actions.openCommunication, "aria-label": t("Remote communication"), title: t("Remote communication") }, wideContent ? t("Remote communication") : "↔"),
+      foot
+    )
   );
   return (0, import_react19.createElement)(
     import_react19.Fragment,
@@ -12307,10 +12320,10 @@ var communicationDescriptions = {
   AUTHORIZATION_PENDING: "Membership is still syncing. Wait briefly, then retry the same request.",
   HISTORY_GAP: "Some history is missing. Wait for synchronization before sending.",
   STALE_CONNECTION: "Another connection replaced this one. Close the duplicate instance and restart this one.",
-  PROTOCOL_VERSION_UNSUPPORTED: "The client and Hub use incompatible communication protocols. Update both components to the same federation release; do not reset conversation data.",
-  UNSUPPORTED_CAPABILITY: "This device and the Hub use incompatible versions. Update them to the same revision.",
+  PROTOCOL_VERSION_UNSUPPORTED: "The client and Hub use incompatible communication protocols. Update the component that lacks the required protocol; conversation data does not need a reset.",
+  UNSUPPORTED_CAPABILITY: "The client and Hub do not share the required communication capabilities. Update the component missing those capabilities.",
   BOUNDED_COLLABORATION_REQUIRED: "Upgrade the Hub to support bounded Bot collaboration. Your queued messages are retained.",
-  EXPLICIT_ACTIVATION_REQUIRED: "Update this device and the Hub together: explicit Bot activation is required. Queued intents are retained.",
+  EXPLICIT_ACTIVATION_REQUIRED: "Explicit Bot activation is required. Update the component missing that capability. Queued intents are retained.",
   CONNECTION_LOST: "The Hub connection was lost. Check current status before retrying the same operation; it may already be committed.",
   REQUEST_TIMEOUT: "The Hub response timed out. Check current status before retrying the same operation; it may already be committed.",
   STORAGE_UNAVAILABLE: "The Hub temporarily cannot store this operation. Its original request ID is retained.",
@@ -21692,7 +21705,7 @@ function listedOpener({ list, open, refresh, current }) {
 // package.json
 var package_default = {
   name: "ds-bot",
-  version: "0.2.7",
+  version: "0.2.8",
   description: "DS Bot: a team of long-lived Bots for DeepSeek Harness, with Main Bots, Bot-to-Bot messages and group chats",
   keywords: [
     "dsh-plugin",
@@ -21822,9 +21835,17 @@ var incompatibilities = /* @__PURE__ */ new Set([
   "BOUNDED_COLLABORATION_REQUIRED",
   "BOT_PUBLICATION_MIGRATION_REQUIRED",
   "PROACTIVE_ROOT_CAPABILITY_REQUIRED",
-  "SCHEMA_VERSION_UNSUPPORTED"
+  "SCHEMA_VERSION_UNSUPPORTED",
+  "ATTACHMENT_CAPABILITY_REQUIRED"
 ]);
 var incompatibleCommunication = (code) => incompatibilities.has(code);
+function communicationReleaseRelation(client, hub) {
+  const parse2 = (value) => typeof value === "string" ? value.match(/^[vV]?(\d+)\.(\d+)\.(\d+)(?:\+[a-zA-Z0-9.-]+)?$/)?.slice(1).map(BigInt) : null;
+  const a = parse2(client), b = parse2(hub);
+  if (!a || !b) return "unknown";
+  for (let index = 0; index < 3; index += 1) if (a[index] !== b[index]) return a[index] < b[index] ? "client-older" : "client-newer";
+  return "same";
+}
 function communicationCompatibility(welcome, code) {
   const supplied = welcome?.communicationVersion;
   const value = typeof supplied === "string" ? supplied.replace(/^[vV](?=\d)/, "") : supplied;
@@ -21832,6 +21853,9 @@ function communicationCompatibility(welcome, code) {
   return {
     clientVersion: COMMUNICATION_VERSION,
     hubVersion,
+    releaseRelation: communicationReleaseRelation(COMMUNICATION_VERSION, hubVersion),
+    protocol: typeof welcome?.protocol === "string" && /^dsbot-communication\/\d+$/.test(welcome.protocol) ? welcome.protocol : null,
+    updateTarget: incompatibleCommunication(code) && ["client", "hub", "both"].includes(welcome?.updateTarget) ? welcome.updateTarget : null,
     status: incompatibleCommunication(code) ? "incompatible" : !hubVersion ? "unknown" : hubVersion === COMMUNICATION_VERSION ? "matched" : "different",
     ...incompatibleCommunication(code) ? { code } : {}
   };
@@ -24019,7 +24043,11 @@ var communicationCSS = `
 .bt-comm-attachment-drafts>span{display:inline-flex;align-items:center;gap:4px;max-width:220px;overflow:hidden;word-break:break-all}
 .bt-comm-attachment-drafts button{padding:2px;border:0;background:none;color:inherit}
 .bt-comm-attachment-drafts svg{width:14px;height:14px}
-.bt-comm-nav-heading .bt-comm-settings-icon{width:32px;height:32px;padding:6px;display:grid;place-items:center;flex:none;background:none;border-color:transparent}
+.bt-comm-nav-heading .bt-comm-settings-icon{position:relative;width:32px;height:32px;padding:6px;display:grid;place-items:center;flex:none;background:none;border-color:transparent}
+.bt-comm-request-badge{position:absolute;top:-4px;right:-4px;display:flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding:0 4px;border-radius:999px;background:var(--bt-accent);color:var(--bt-accent-ink);font-size:10px;font-weight:600;line-height:16px;font-variant-numeric:tabular-nums;box-shadow:0 0 0 2px var(--bt-sidebar);pointer-events:none}
+.bt-comm-nav-scroll{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:8px}
+.bt-comm-nav-footer{flex:none;padding-top:8px;border-top:.5px solid var(--bt-line)}
+.bt-comm-nav-footer>.bt-comm-back{width:100%}
 .bt-comm-personal-settings>section{margin-top:16px;padding-top:12px;border-top:1px solid var(--bt-line)}
 .bt-comm-personal-settings>section>button{margin:6px 8px 6px 0}
 .bt-comm-thread-log{--reply-step:18px;min-width:0}
@@ -24050,7 +24078,7 @@ var communicationCSS = `
 .bt-comm-frame code{font:12px/16px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;overflow-wrap:anywhere;user-select:text}
 .bt-comm-frame .bt-comm-primary{background:var(--bt-accent);border-color:var(--bt-accent);color:var(--bt-accent-ink)}
 .bt-comm-frame .bt-comm-primary:hover{background:color-mix(in srgb,var(--bt-accent) 88%,var(--bt-main))}
-.bt-comm-nav{background:var(--bt-sidebar);border-right:1px solid var(--bt-line);padding:20px 16px;overflow:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:12px;min-height:0}
+.bt-comm-nav{background:var(--bt-sidebar);border-right:1px solid var(--bt-line);padding:20px 16px;overflow:hidden;display:flex;flex-direction:column;gap:12px;min-height:0}
 .bt-comm-nav-heading{display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:10px}
 .bt-comm-frame .bt-comm-back{border-color:transparent;background:transparent;padding:4px 0;font-size:12px;color:var(--bt-ink-2)}
 .bt-comm-connection{padding:12px;border:1px solid var(--bt-line);background:var(--bt-card);border-radius:12px}
@@ -24711,6 +24739,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
   }
   const state = !team.communicationEnabled || team.communicationHubId && receivedState?.hubId !== team.communicationHubId ? null : receivedState;
   const [pollError, setPollError] = (0, import_react69.useState)(""), [syncError, setSyncError] = (0, import_react69.useState)(null);
+  const [contactRequests, setContactRequests] = (0, import_react69.useState)(null);
   (0, import_react69.useEffect)(() => {
     if (request === communicationRequest) void request({ endpoint: "reset-status" }).catch((error2) => setPollError(communicationFailure(error2)));
   }, [request]);
@@ -24810,6 +24839,24 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
       live.stop();
     };
   }, [team.communicationEnabled, team.communicationHubId, request]);
+  (0, import_react69.useEffect)(() => {
+    if (!state?.connected || !state.humanPrincipalId) {
+      setContactRequests(null);
+      return void 0;
+    }
+    let current = true;
+    const live = liveRefresh(async () => {
+      const requests2 = await request({ endpoint: "contact-requests" });
+      if (current) setContactRequests({ scope, requests: Array.isArray(requests2) ? requests2 : [] });
+    }, { onError: () => {
+      if (current) setContactRequests(null);
+    } });
+    return () => {
+      current = false;
+      live.stop();
+    };
+  }, [request, scope, state?.connected, state?.humanPrincipalId, state?.managementRevision]);
+  const pendingContacts = state?.connected && contactRequests?.scope === scope ? contactRequests.requests.filter((item) => item.status === "pending").length : 0;
   (0, import_react69.useEffect)(() => {
     if (!shown) return void 0;
     const returning = Boolean(previousPanel.current && !activePanel);
@@ -25170,7 +25217,10 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
   const connectionBlocked = state?.error && !["CONNECTION_LOST", "REQUEST_TIMEOUT", "STORAGE_UNAVAILABLE", "BACKPRESSURE", "HISTORY_GAP"].includes(state.error);
   const compatibility = state?.compatibility ?? communicationCompatibility(null, state?.error);
   const versionBlocked = incompatibleCommunication(state?.error) || compatibility.status === "incompatible";
-  const connectionLabel = !team.communicationEnabled ? "Not configured" : versionBlocked ? "Client and Hub versions are incompatible" : pollError ? "Offline" : !state ? "Connecting…" : state.connected ? compatibility.status === "different" ? "Connected to Hub · versions differ" : "Connected to Hub" : connectionBlocked ? "Offline" : "Reconnecting to Hub";
+  const clientOlder = communicationReleaseRelation(compatibility.clientVersion, compatibility.hubVersion) === "client-older";
+  const updateClient = versionBlocked && (compatibility.updateTarget === "client" || compatibility.updateTarget !== "hub" && clientOlder);
+  const versionNotice = versionBlocked ? updateClient ? "Update the client to use this Hub. Its required protocol or capabilities are not supported." : compatibility.updateTarget === "hub" ? "Update the Hub to support this client’s required protocol and capabilities." : "Update the client or Hub to compatible protocol and capability versions." : clientOlder ? "A newer client release is available. Update the client; communication remains available with compatible protocols and capabilities." : "The release versions differ. Communication remains available with compatible protocols and capabilities.";
+  const connectionLabel = !team.communicationEnabled ? "Not configured" : versionBlocked ? updateClient ? "Client update required to connect" : "Client and Hub versions are incompatible" : pollError ? "Offline" : !state ? "Connecting…" : state.connected ? compatibility.status === "different" ? "Connected to Hub · versions differ" : "Connected to Hub" : connectionBlocked ? "Offline" : "Reconnecting to Hub";
   const roleLabel = (role) => role === "owner" ? "Group owner" : role === "admin" ? "Group admin" : "Group member";
   const avatar = (id, name) => {
     const contact = contacts.find((person) => person.principalId === id);
@@ -25239,7 +25289,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
           "div",
           { className: "bt-comm-nav-actions" },
           btn("Personal settings", (event) => showPanel("settings", event.currentTarget), { className: "bt-comm-settings-icon", "aria-label": t("Personal settings"), title: t("Personal settings"), children: (0, import_react69.createElement)(GearIcon) }),
-          btn("Contacts", (event) => showPanel("manage-contacts", event.currentTarget), { className: "bt-comm-settings-icon", "aria-label": t("Contacts"), title: t("Contacts"), disabled: busy || !team.communicationEnabled, children: (0, import_react69.createElement)(PeopleIcon) }),
+          btn("Contacts", (event) => showPanel("manage-contacts", event.currentTarget), { className: "bt-comm-settings-icon", "aria-label": t("Contacts"), title: t("Contacts"), "aria-describedby": pendingContacts ? "bt-comm-contact-pending" : void 0, disabled: busy || !team.communicationEnabled, children: (0, import_react69.createElement)(import_react69.Fragment, null, (0, import_react69.createElement)(PeopleIcon), pendingContacts ? (0, import_react69.createElement)("span", { id: "bt-comm-contact-pending", className: "bt-comm-request-badge", role: "status", "aria-label": `${pendingContacts} ${t("pending")}` }, pendingContacts > 99 ? "99+" : pendingContacts) : null) }),
           btn("Search", (event) => showPanel("search", event.currentTarget), { className: "bt-comm-settings-icon", "aria-label": t("Search"), title: t("Search"), children: (0, import_react69.createElement)(SearchIcon) }),
           (0, import_react69.createElement)(
             "div",
@@ -25269,36 +25319,40 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
           }, { className: "bt-comm-settings-icon bt-comm-collapse", "aria-label": t("Collapse sidebar"), "aria-controls": "bt-comm-nav", "aria-expanded": true, title: t("Collapse sidebar"), children: (0, import_react69.createElement)(SidebarIcon) })
         )
       ),
-      btn("Back to local chats", close, { className: "bt-comm-back" }),
-      member ? btn("Back to conversation", () => setBrowse(false), { className: "bt-comm-mobile" }) : null,
-      state ? (0, import_react69.createElement)(CommunicationWorkApprovals, { key: scope, state, request, refresh }) : null,
       (0, import_react69.createElement)(
-        "section",
-        { className: "bt-comm-connection", "aria-label": t("Connection status") },
-        (0, import_react69.createElement)("p", { className: "bt-comm-connection-label", role: "status", "data-connected": Boolean(state?.connected && !pollError) }, (0, import_react69.createElement)("span", { className: "bt-comm-dot", "aria-hidden": true }), t(connectionLabel)),
-        team.communicationEnabled && state ? (0, import_react69.createElement)("p", { className: "bt-comm-reference", "data-communication-versions": true }, t("Client"), ": ", displayCommunicationVersion(compatibility.clientVersion), " · Hub: ", displayCommunicationVersion(compatibility.hubVersion) ?? t("Version not reported")) : null,
-        team.communicationEnabled && (versionBlocked || compatibility.status === "different") ? (0, import_react69.createElement)("p", { className: "bt-comm-reference", role: "status" }, t("Update the client and Hub to the same federation release. Saved conversations and queued messages are retained.")) : null,
-        team.communicationEnabled && versionBlocked && state?.error ? (0, import_react69.createElement)("p", { className: "bt-comm-reference", role: "status" }, communicationFailure({ code: state.error })) : null,
-        state ? (0, import_react69.createElement)("p", { className: "bt-comm-reference bt-comm-connection-details" }, `${state.instanceId} · ${t("Remote contacts")}: ${remoteCount}`) : null,
-        pollError ? (0, import_react69.createElement)("p", { className: "bt-comm-reference", role: "status" }, t("Status may be out of date."), " ", pollError) : null,
-        team.communicationEnabled && !state?.connected && !connectionBlocked ? (0, import_react69.createElement)("p", { className: "bt-comm-reference" }, t("Queued messages send automatically when the connection returns.")) : null,
+        "div",
+        { className: "bt-comm-nav-scroll" },
+        member ? btn("Back to conversation", () => setBrowse(false), { className: "bt-comm-mobile" }) : null,
+        state ? (0, import_react69.createElement)(CommunicationWorkApprovals, { key: scope, state, request, refresh }) : null,
+        (0, import_react69.createElement)(
+          "section",
+          { className: "bt-comm-connection", "aria-label": t("Connection status") },
+          (0, import_react69.createElement)("p", { className: "bt-comm-connection-label", role: "status", "data-connected": Boolean(state?.connected && !pollError) }, (0, import_react69.createElement)("span", { className: "bt-comm-dot", "aria-hidden": true }), t(connectionLabel)),
+          team.communicationEnabled && state ? (0, import_react69.createElement)("p", { className: "bt-comm-reference", "data-communication-versions": true }, t("Client"), ": ", displayCommunicationVersion(compatibility.clientVersion), " · Hub: ", displayCommunicationVersion(compatibility.hubVersion) ?? t("Version not reported")) : null,
+          team.communicationEnabled && (versionBlocked || compatibility.status === "different") ? (0, import_react69.createElement)("p", { className: "bt-comm-reference", role: "status" }, t(versionNotice)) : null,
+          team.communicationEnabled && versionBlocked && state?.error ? (0, import_react69.createElement)("p", { className: "bt-comm-reference", role: "status" }, communicationFailure({ code: state.error })) : null,
+          state ? (0, import_react69.createElement)("p", { className: "bt-comm-reference bt-comm-connection-details" }, `${state.instanceId} · ${t("Remote contacts")}: ${remoteCount}`) : null,
+          pollError ? (0, import_react69.createElement)("p", { className: "bt-comm-reference", role: "status" }, t("Status may be out of date."), " ", pollError) : null,
+          team.communicationEnabled && !state?.connected && !connectionBlocked ? (0, import_react69.createElement)("p", { className: "bt-comm-reference" }, t("Queued messages send automatically when the connection returns.")) : null,
+          null
+        ),
+        (0, import_react69.createElement)("div", { className: "bt-comm-section-title" }, t("Conversations"), (0, import_react69.createElement)("span", null, visibleConversations.length)),
+        (0, import_react69.createElement)("nav", { "aria-label": t("Communication conversations") }, visibleConversations.map((item) => (0, import_react69.createElement)(ConversationRow, { key: item.conversationId, conversation: item, humanId: state.humanPrincipalId, labels, request, selected: item.conversationId === selected, onChoose: choose, disabled: busy }))),
+        visibleBotConversations.length ? (0, import_react69.createElement)(
+          import_react69.Fragment,
+          null,
+          (0, import_react69.createElement)("div", { className: "bt-comm-section-title" }, t("Bot private chats"), (0, import_react69.createElement)("span", null, visibleBotConversations.length)),
+          (0, import_react69.createElement)("nav", { "aria-label": t("Bot private chats") }, visibleBotConversations.map((item) => (0, import_react69.createElement)(ConversationRow, { key: item.conversationId, conversation: item, humanId: item.viewerPrincipalId, labels, request, selected: item.conversationId === selected, onChoose: choose, disabled: busy })))
+        ) : null,
+        archivedConversations.length ? btn("Archived private chats", (event) => showPanel("archives", event.currentTarget), { className: "bt-comm-archive-entry", children: (0, import_react69.createElement)(import_react69.Fragment, null, (0, import_react69.createElement)(ArchiveIcon), t("Archived private chats"), (0, import_react69.createElement)("span", { className: "bt-comm-count" }, archivedConversations.length)) }) : null,
+        !visibleConversations.length && !visibleBotConversations.length ? (0, import_react69.createElement)("p", { className: "bt-comm-reference" }, t("Your cross-device conversations will appear here.")) : null,
+        invitations.length ? (0, import_react69.createElement)("div", { className: "bt-comm-invitations" }, (0, import_react69.createElement)("h3", null, t("Invitations")), invitations.map((item) => btn(item.title, (event) => {
+          setInvitationKey(item.key);
+          showPanel("invitation", event.currentTarget);
+        }, { key: item.key, "data-invitation-group": item.key, children: (0, import_react69.createElement)(import_react69.Fragment, null, item.title, (0, import_react69.createElement)("span", { className: "bt-comm-count" }, item.targets.length)) }))) : null,
         null
       ),
-      (0, import_react69.createElement)("div", { className: "bt-comm-section-title" }, t("Conversations"), (0, import_react69.createElement)("span", null, visibleConversations.length)),
-      (0, import_react69.createElement)("nav", { "aria-label": t("Communication conversations") }, visibleConversations.map((item) => (0, import_react69.createElement)(ConversationRow, { key: item.conversationId, conversation: item, humanId: state.humanPrincipalId, labels, request, selected: item.conversationId === selected, onChoose: choose, disabled: busy }))),
-      visibleBotConversations.length ? (0, import_react69.createElement)(
-        import_react69.Fragment,
-        null,
-        (0, import_react69.createElement)("div", { className: "bt-comm-section-title" }, t("Bot private chats"), (0, import_react69.createElement)("span", null, visibleBotConversations.length)),
-        (0, import_react69.createElement)("nav", { "aria-label": t("Bot private chats") }, visibleBotConversations.map((item) => (0, import_react69.createElement)(ConversationRow, { key: item.conversationId, conversation: item, humanId: item.viewerPrincipalId, labels, request, selected: item.conversationId === selected, onChoose: choose, disabled: busy })))
-      ) : null,
-      archivedConversations.length ? btn("Archived private chats", (event) => showPanel("archives", event.currentTarget), { className: "bt-comm-archive-entry", children: (0, import_react69.createElement)(import_react69.Fragment, null, (0, import_react69.createElement)(ArchiveIcon), t("Archived private chats"), (0, import_react69.createElement)("span", { className: "bt-comm-count" }, archivedConversations.length)) }) : null,
-      !visibleConversations.length && !visibleBotConversations.length ? (0, import_react69.createElement)("p", { className: "bt-comm-reference" }, t("Your cross-device conversations will appear here.")) : null,
-      invitations.length ? (0, import_react69.createElement)("div", { className: "bt-comm-invitations" }, (0, import_react69.createElement)("h3", null, t("Invitations")), invitations.map((item) => btn(item.title, (event) => {
-        setInvitationKey(item.key);
-        showPanel("invitation", event.currentTarget);
-      }, { key: item.key, "data-invitation-group": item.key, children: (0, import_react69.createElement)(import_react69.Fragment, null, item.title, (0, import_react69.createElement)("span", { className: "bt-comm-count" }, item.targets.length)) }))) : null,
-      null
+      (0, import_react69.createElement)("div", { className: "bt-comm-nav-footer" }, btn("Back to local chats", close, { className: "bt-comm-back" }))
     ),
     activePanel ? (0, import_react69.createElement)(
       "div",

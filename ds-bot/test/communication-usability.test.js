@@ -303,7 +303,7 @@ for (const hiddenValue of [JSON.stringify(['a:group', 'a:dm', 'hub-one:a:group',
       assert.deepEqual(ids(), ['group', 'dm'])
       assert.equal(doc.querySelector('textarea[aria-label="Communication message"]').value, 'Keep my saved draft')
       for (const [key, value] of Object.entries(storage)) assert.equal(dom.window.sessionStorage.getItem(key), value, key)
-      assert.equal(calls.some(call => !['state', 'history', 'read', 'avatar'].includes(call.endpoint)), false, 'restoration performs no membership or message mutation')
+      assert.equal(calls.some(call => !['state', 'history', 'read', 'avatar', 'contact-requests'].includes(call.endpoint)), false, 'restoration performs no membership or message mutation')
       snapshot.hubId = 'hub-one'; snapshot.queueScope = 'isolated'
       snapshot.conversations = [{ ...membership, title: 'Current Hub group' }]
       await autoRefresh()
@@ -668,7 +668,7 @@ test('Human and group rename send authenticated versioned requests and failed se
 
 test('automatic device setup stays available without the manual configuration guide', async () => {
   for (const enabled of [false, true]) {
-    await pane({ enabled, snapshot: state(), handle: async body => { if(body.endpoint==='work-approval-settings')return {remoteWorkApproval:'inherit'};if(body.endpoint==='memory-settings')return {localMemory:true};if(body.endpoint==='human-profile-info')return {principalId:'human:a:owner',publicProfile:{headline:'',summary:'',expertise:[],languages:[],version:0,updatedAt:null}};assert.equal(body.endpoint, 'onboarding-storage'); return { storage: { defaultProvider: 'owner-acl-plaintext', encryptedByDefault: false, agentIsolation: false }, enrollments: [] } } }, async ({ doc, dom, calls, click, panel }) => {
+    await pane({ enabled, snapshot: state(), handle: async body => { if(body.endpoint==='contact-requests')return [];if(body.endpoint==='work-approval-settings')return {remoteWorkApproval:'inherit'};if(body.endpoint==='memory-settings')return {localMemory:true};if(body.endpoint==='human-profile-info')return {principalId:'human:a:owner',publicProfile:{headline:'',summary:'',expertise:[],languages:[],version:0,updatedAt:null}};assert.equal(body.endpoint, 'onboarding-storage'); return { storage: { defaultProvider: 'owner-acl-plaintext', encryptedByDefault: false, agentIsolation: false }, enrollments: [] } } }, async ({ doc, dom, calls, click, panel }) => {
       await click('Personal settings')
       await click('Join Hub')
       const setup = doc.querySelector('.bt-comm-modal[aria-label="Add a device"]')
@@ -679,11 +679,11 @@ test('automatic device setup stays available without the manual configuration gu
       assert.equal(setup.querySelector('[aria-label="Hub configuration example"]'), null)
       assert.equal(setup.querySelector('[aria-label="Device configuration example"]'), null)
       assert.doesNotMatch(setup.textContent, /Manual configuration guide|publishedBotIds|credentialEnv/)
-      assert.equal(calls.filter(call => !['state', 'onboarding-storage', 'memory-settings', 'human-profile-info', 'user-code', 'available-bots', 'work-approval-settings'].includes(call.endpoint)).length, 0, JSON.stringify(calls.map(call => call.endpoint)))
+      assert.equal(calls.filter(call => !['state', 'onboarding-storage', 'memory-settings', 'human-profile-info', 'user-code', 'available-bots', 'work-approval-settings', 'contact-requests'].includes(call.endpoint)).length, 0, JSON.stringify(calls.map(call => call.endpoint)))
       await act(async () => doc.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })))
       assert.equal(doc.querySelector('.bt-comm-modal'), null)
       assert.equal(panel.getSnapshot(), true)
-      assert.equal(calls.filter(call => !['state', 'onboarding-storage', 'memory-settings', 'human-profile-info', 'user-code', 'available-bots', 'work-approval-settings'].includes(call.endpoint)).length, 0, JSON.stringify(calls.map(call => call.endpoint)))
+      assert.equal(calls.filter(call => !['state', 'onboarding-storage', 'memory-settings', 'human-profile-info', 'user-code', 'available-bots', 'work-approval-settings', 'contact-requests'].includes(call.endpoint)).length, 0, JSON.stringify(calls.map(call => call.endpoint)))
     })
   }
 })
@@ -732,6 +732,7 @@ test('an uncertain group creation reuses its persisted operation ID after a full
   const snapshot = state(), attempts = []
   await pane({ snapshot, handle: async body => {
     assert.equal(body.endpoint, 'create-group')
+    if (body.endpoint === 'contact-requests') return []
     attempts.push(body)
     if (attempts.length === 1) throw Object.assign(new Error('Hub ACK lost'),{code:'REQUEST_TIMEOUT'})
     snapshot.conversations = [membership]
@@ -870,6 +871,7 @@ test('an uncertain settings save preserves newer edits and retries the same payl
   const snapshot = state(); snapshot.conversations = [{ ...membership }]
   const attempts = []; let rejectFirst
   await pane({ snapshot, handle: async body => {
+    if (body.endpoint === 'contact-requests') return []
     attempts.push(body)
     if (attempts.length === 1) return new Promise((_resolve, reject) => { rejectFirst = reject })
     snapshot.conversations = [{ ...snapshot.conversations[0], title: body.title, membershipVersion: attempts.length }]
@@ -989,6 +991,7 @@ test('an acknowledged settings save stays confirmed when the follow-up status re
   const snapshot = state(); snapshot.conversations = [membership]
   let unavailable = false; const versions = []
   await pane({ snapshot, getState: () => { if (unavailable) throw new TypeError('status unavailable'); return { ...snapshot } }, handle: async body => {
+    if (body.endpoint === 'contact-requests') return []
     versions.push(body.expectedVersion); unavailable = true
     return { updated: true, conversationId: 'group', membershipVersion: body.expectedVersion + 1 }
   } }, async ({ doc, click, edit }) => {
@@ -1026,7 +1029,7 @@ test('canonical started history deduplicates beneath messages and member chips o
     assert.equal(inspector.querySelector('input,select,textarea'), null)
     assert.equal(inspector.querySelectorAll('button').length, 2)
     assert.ok(inspector.querySelector('[aria-label="Close dialog"]'))
-    assert.ok(calls.every(body => ['state', 'history', 'read', 'participant-profile'].includes(body.endpoint)), 'inspection performs no writes or local Bot navigation')
+    assert.ok(calls.every(body => ['state', 'history', 'read', 'participant-profile', 'contact-requests'].includes(body.endpoint)), 'inspection performs no writes or local Bot navigation')
   })
 })
 
@@ -1086,7 +1089,7 @@ test('routine failures, queues and reconciliation have no bottom console and act
     assert.match(activity.textContent, /Preserved failed text|Pending text/)
     assert.match(activity.textContent, /CURRENT_RECONCILE/); assert.match(activity.textContent, /CURRENT_EXPORT/)
     assert.doesNotMatch(activity.textContent, /OTHER_RECONCILE|SECRET_BOT_FAILURE|Operation failed/)
-    assert.equal(calls.some(body => !['state', 'history', 'read', 'participant-profile'].includes(body.endpoint)), false)
+    assert.equal(calls.some(body => !['state', 'history', 'read', 'participant-profile', 'contact-requests'].includes(body.endpoint)), false)
     await click('Cancel')
     await edit(doc.querySelector('.bt-comm-main textarea'), 'Retained original intent')
     await click('Send message')
@@ -1552,7 +1555,7 @@ test('connection status names version incompatibility and the concrete upgrade r
   await pane({snapshot:{...state(),connected:false,error:code}},async({doc})=>{
    const connection=doc.querySelector('.bt-comm-connection')
    assert.equal(connection.querySelector('.bt-comm-connection-label').textContent,'Client and Hub versions are incompatible')
-   assert.match(connection.textContent,new RegExp(code));assert.match(connection.textContent,/Update the client and Hub/)
+   assert.match(connection.textContent,new RegExp(code));assert.match(connection.textContent,/Update the client or Hub/)
    assert.match(connection.textContent,/Version not reported/)
   })
  }
@@ -1567,5 +1570,58 @@ test('compatible version differences and subsequent matching versions update liv
   snapshot={...snapshot,compatibility:{...snapshot.compatibility,hubVersion:'0.2.7',status:'matched'}}
   await autoRefresh()
   assert.equal(connection.querySelector('.bt-comm-connection-label').textContent,'Connected to Hub')
+ })
+})
+
+
+test('Contacts shows only pending request counts, refreshes without opening the dialog and clears after resolution',async()=>{
+ const snapshot={...state(),managementRevision:1}
+ let requests=[{requestId:'incoming',status:'pending',direction:'incoming'},{requestId:'outgoing',status:'pending',direction:'outgoing'},{requestId:'old',status:'rejected',direction:'incoming'}]
+ await pane({snapshot,handle:async body=>body.endpoint==='contact-requests'?requests:[]},async({doc,button,autoRefresh,calls})=>{
+  const badge=()=>button('Contacts').querySelector('.bt-comm-request-badge')
+  assert.equal(badge().textContent,'2')
+  assert.equal(badge().getAttribute('aria-label'),'2 pending')
+  assert.equal(button('Contacts').getAttribute('aria-describedby'),badge().id)
+  assert.equal(doc.querySelector('.bt-comm-modal'),null)
+  requests=requests.map(item=>({...item,status:'accepted'}));snapshot.managementRevision++
+  await autoRefresh()
+  assert.equal(badge(),null)
+  assert.equal(button('Contacts').hasAttribute('aria-describedby'),false)
+  requests=[{requestId:'new',status:'pending',direction:'incoming'}];snapshot.managementRevision++
+  await autoRefresh();assert.equal(badge().textContent,'1')
+  snapshot.connected=false;await autoRefresh();assert.equal(badge(),null)
+  assert.ok(calls.some(call=>call.endpoint==='contact-requests'))
+  assert.equal(calls.some(call=>['accept-contact','reject-contact','cancel-contact','request-contact'].includes(call.endpoint)),false)
+ })
+})
+
+test('a late request count from a previous Hub cannot add a badge to the selected Hub',async()=>{
+ let finish
+ let snapshot={...state(),hubId:'hub-a'}
+ await pane({getState:()=>snapshot,handle:async body=>body.endpoint==='contact-requests'?new Promise(resolve=>{finish=resolve}):[]},async({roster,button,autoRefresh})=>{
+  assert.equal(typeof finish,'function')
+  const oldFinish=finish
+  await act(async()=>{snapshot={...state(),hubId:'hub-b',connected:false};updateLiveRoster(roster,{communicationEnabled:true,communicationHubId:'hub-b'})})
+  await autoRefresh()
+  await act(async()=>oldFinish([{requestId:'old-hub-request',status:'pending'}]))
+  assert.equal(button('Contacts').querySelector('.bt-comm-request-badge'),null)
+ })
+})
+
+
+test('older client releases show an advisory while connected, and a required update only for protocol failure',async()=>{
+ let snapshot={...state(),compatibility:{clientVersion:'0.2.7',hubVersion:'0.2.8',status:'different'}}
+ await pane({getState:()=>snapshot},async({doc,autoRefresh})=>{
+  const connection=()=>doc.querySelector('.bt-comm-connection')
+  assert.match(connection().textContent,/newer client release is available/)
+  assert.match(connection().textContent,/communication remains available/)
+  assert.equal(connection().querySelector('.bt-comm-connection-label').textContent,'Connected to Hub · versions differ')
+  snapshot={...snapshot,connected:false,error:'HUB_CONNECTION_REFUSED'}
+  await autoRefresh()
+  assert.doesNotMatch(connection().textContent,/Client update required to connect/)
+  snapshot={...snapshot,error:'UNSUPPORTED_CAPABILITY',compatibility:{...snapshot.compatibility,status:'incompatible',updateTarget:'client'}}
+  await autoRefresh()
+  assert.equal(connection().querySelector('.bt-comm-connection-label').textContent,'Client update required to connect')
+  assert.match(connection().textContent,/required protocol or capabilities are not supported/)
  })
 })

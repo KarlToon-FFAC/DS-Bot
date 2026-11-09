@@ -573,7 +573,6 @@ export function TeamSidebar(props) {
         h(AccountLauncher, { seat: false, actions }))
   const content = h('div', { className: wideContent ? 'bt-side' : 'bt-side bt-rail', onKeyDown: typeToSearch },
     top,
-    h('button', { type: 'button', className: 'bt-soft', onClick: actions.openCommunication, 'aria-label': t('Remote communication'), title: t('Remote communication') }, wideContent ? t('Remote communication') : '↔'),
     wideContent && roster.readOnly ? h('div', { className: 'bt-hint bt-read-only', role: 'status' }, hostText(roster.readOnly)) : null,
     h('div', { ref: listRef, className: 'bt-list', role: 'region', 'aria-label': t('Bot list') },
       wideContent ? (main ? h(BotRow, { ...rowProps, bot: main, marked: markedUnread[main.id] === true }) : roster.ready ? null : h('div', { className: 'bt-hint' }, uiNow.bootFailed ? bootHint() : t('Setting up your Main Bot…'))) : null,
@@ -582,7 +581,9 @@ export function TeamSidebar(props) {
         : entry.kind === 'room'
           ? h(RoomRow, { key: entry.item.id, ...rowProps, room: entry.item, marked: markedUnread[entry.item.id] === true })
           : h(AgentRow, { key: entry.item.id, ...rowProps, agent: entry.item, marked: markedUnread[entry.item.id] === true })))),
-    foot)
+    h('div', { className: 'bt-side-bottom' },
+      h('button', { type: 'button', className: wideContent ? 'bt-soft bt-remote-entry' : 'bt-round bt-remote-entry', onClick: actions.openCommunication, 'aria-label': t('Remote communication'), title: t('Remote communication') }, wideContent ? t('Remote communication') : '↔'),
+      foot))
   return h(Fragment, null,
     h(TitleToggle, { hidden: mode === 'hidden', onToggle }),
     mode === 'hidden' ? null : h(LeftColumn, { mode, width: ourWidth, onGrip: startDrag }, content))

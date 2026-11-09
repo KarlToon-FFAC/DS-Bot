@@ -6,6 +6,7 @@ const {chromium}=await import(process.env.DSBOT_PLAYWRIGHT_MODULE ?? 'playwright
 import {createServer} from 'node:http'
 import assert from 'node:assert/strict'
 import {managementPage} from '../../../communication-hub/src/management-ui.js'
+import {COMMUNICATION_VERSION as HUB_VERSION} from '../../../communication-hub/src/version.js'
 const root=resolve(import.meta.dirname,'../..'), client=root+'/src/client', harness=root+'/dev/harness/node_modules'
 const output=resolve(process.argv[2] ?? join(root,'../.dsh-test-tools/publication-ui'));mkdirSync(output,{recursive:true})
 const entry=`
@@ -75,7 +76,7 @@ try{
  await page.setViewportSize({width:390,height:844});await confirm.scrollIntoViewIfNeeded()
  await page.screenshot({animations:'disabled',path:join(output,'remote-confirmation-setting-mobile.png')})
  await page.goto(`http://127.0.0.1:${server.address().port}/hub`)
- assert.equal(await page.getByLabel('Hub version',{exact:true}).innerText(),'V0.2.7')
+ assert.equal(await page.getByLabel('Hub version',{exact:true}).innerText(),`V${HUB_VERSION}`)
  await page.screenshot({animations:'disabled',path:join(output,'hub-version-header-mobile.png')})
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth))
  await page.setViewportSize({width:1280,height:900})

@@ -1,4 +1,4 @@
-import { communicationCompatibility } from '../../shared/communication-version.js'
+import { communicationCompatibility, incompatibleCommunication } from '../../shared/communication-version.js'
 import { randomUUID } from 'node:crypto'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { ATTACHMENT_CAPABILITY } from '../../shared/communication-attachments.js'
@@ -94,7 +94,7 @@ export class CommunicationTransport {
     this.transition('connecting')
     this.welcome = null
     this.compatibility = communicationCompatibility()
-    let socket
+    let socket, handshake
     try {
       const credential = typeof this.credential === 'function' ? await this.credential() : this.credential
       this.assertCurrent(generation)
@@ -119,7 +119,9 @@ export class CommunicationTransport {
           else {
             const code = response.error?.code ?? 'INVALID_RESPONSE'
             if (code === 'STALE_CONNECTION') { this.fenced = true; this.transition('fenced'); this.disconnect(socket) }
-            pending.reject(errorWith(code, response.error?.message))
+            const error = errorWith(code, response.error?.message)
+            if (incompatibleCommunication(code)) error.compatibility = response.error?.details?.compatibility
+            pending.reject(error)
           }
         } catch { this.onError?.({ code: 'INVALID_RESPONSE' }) }
       })
@@ -151,6 +153,7 @@ export class CommunicationTransport {
         ? await credential.authenticate(send, capabilities)
         : await send('hello', { instanceId: this.queue.instanceId, credential, capabilities })
       this.assertCurrent(generation, socket)
+      handshake = welcome
       this.compatibility = communicationCompatibility(welcome)
       if (!welcome.capabilities?.includes('explicit-bot-activation')) throw errorWith('EXPLICIT_ACTIVATION_REQUIRED')
       if (welcome.protocol !== PROTOCOL || welcome.instanceId !== this.queue.instanceId || !CAPABILITIES.every(value => welcome.capabilities?.includes(value))) throw errorWith('UNSUPPORTED_CAPABILITY')
@@ -164,7 +167,7 @@ export class CommunicationTransport {
       this.assertCurrent(generation, socket)
       return welcome
     } catch (error) {
-      if (generation === this.generation) { this.compatibility = communicationCompatibility({ communicationVersion: this.compatibility?.hubVersion }, error.code); this.transition(this.fenced ? 'fenced' : 'disconnected'); this.disconnect(socket) }
+      if (generation === this.generation) { this.compatibility = communicationCompatibility(error.compatibility ?? (handshake ? { ...handshake, updateTarget: 'hub' } : { communicationVersion: this.compatibility?.hubVersion }), error.code); this.transition(this.fenced ? 'fenced' : 'disconnected'); this.disconnect(socket) }
       else socket?.close()
       throw error
     }

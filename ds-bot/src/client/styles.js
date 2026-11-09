@@ -161,6 +161,8 @@ html[data-windows-titlebar] .bt-leftcol,html[data-platform=darwin] .bt-leftcol{b
 html[data-bt-collapsing] [class*="_frame"]:has(>[class*="_sidebarCol"]){transition:none!important}
 .bt-leftcol[data-left=drawer]{background:var(--bt-sidebar);box-shadow:8px 0 24px rgba(0,0,0,.14)}
 .bt-leftcol>.bt-side{width:100%}
+.bt-side-bottom{display:flex;flex-direction:column;flex:none;gap:4px}
+.bt-rail .bt-side-bottom{align-items:center}
 .bt-leftcol-foot{display:flex;align-items:center;gap:9px;padding-top:8px;flex:none}
 .bt-rail{align-items:center;padding:0}
 .bt-rail .bt-row{justify-content:center;width:56px;height:56px;min-height:56px;padding:0;border-radius:16px}

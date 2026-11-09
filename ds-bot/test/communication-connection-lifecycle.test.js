@@ -167,3 +167,22 @@ test('an explicit reconnect cannot remove a stale-connection fencing decision',a
  assert.equal(client.lastError,'STALE_CONNECTION')
  client.stop()
 })
+
+for(const release of ['0.1.0','999.0.0'])test(`compatible handshake accepts release ${release} and performs RPC despite different GUI releases`,async()=>{
+ const {client,socket}=fixture()
+ socket.send=data=>{const frame=JSON.parse(data);socket.sent.push(frame);queueMicrotask(()=>socket.reply(frame.id,frame.type==='hello'?{protocol:'dsbot-communication/1',communicationVersion:release,instanceId:'a',capabilities:communicationCapabilities(),limits:{maxEnvelopeBytes:100000}}:[]))}
+ try{
+  await client.connect();assert.equal(client.connected,true);assert.equal(client.compatibility.status,'different')
+  assert.deepEqual(await client.request('contacts.list'),[])
+ }finally{client.stop()}
+})
+
+test('a rejected handshake preserves safe Hub version, required protocol and client upgrade guidance before welcome',async()=>{
+ const {client,socket}=fixture()
+ socket.send=data=>{const frame=JSON.parse(data);queueMicrotask(()=>socket.dispatchEvent(new MessageEvent('message',{data:JSON.stringify({id:frame.id,ok:false,error:{code:'UNSUPPORTED_CAPABILITY',details:{compatibility:{communicationVersion:'999.0.0',protocol:'dsbot-communication/1',updateTarget:'client'}}}})})))}
+ try{
+  await assert.rejects(client.connect(),{code:'UNSUPPORTED_CAPABILITY'})
+  assert.equal(client.connected,false);assert.equal(client.compatibility.status,'incompatible')
+  assert.equal(client.compatibility.hubVersion,'999.0.0');assert.equal(client.compatibility.updateTarget,'client')
+ }finally{client.stop()}
+})

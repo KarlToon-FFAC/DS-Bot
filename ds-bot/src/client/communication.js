@@ -1,4 +1,4 @@
-import { communicationCompatibility, incompatibleCommunication, displayCommunicationVersion } from '../shared/communication-version.js'
+import { communicationCompatibility, incompatibleCommunication, displayCommunicationVersion, communicationReleaseRelation } from '../shared/communication-version.js'
 import { useMentionDismiss } from './communication-mentions.js'
 import { CommunicationActionDialog } from './communication-dialog.js'
 import { ParticipantInformation } from './communication-participant.js'
@@ -190,6 +190,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
   if (currentStateScope.current !== stateScope) { currentStateScope.current = stateScope; stateOrder.current += 1 }
   const state = !team.communicationEnabled || team.communicationHubId && receivedState?.hubId !== team.communicationHubId ? null : receivedState
   const [pollError, setPollError] = useState(''), [syncError, setSyncError] = useState(null)
+  const [contactRequests, setContactRequests] = useState(null)
   useEffect(() => { if (request === communicationRequest) void request({ endpoint: 'reset-status' }).catch(error => setPollError(friendly(error))) }, [request])
   const [operationPending, setOperationPending] = useState(() => readOperationIds().length > 0)
   const [attaching,setAttaching]=useState(false),attachmentFlight=useRef(false)
@@ -264,6 +265,16 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
     const live = liveRefresh(refresh, { intervalMs: 750 })
     return () => { stateOrder.current += 1; live.stop() }
   }, [team.communicationEnabled, team.communicationHubId, request])
+  useEffect(() => {
+    if (!state?.connected || !state.humanPrincipalId) { setContactRequests(null); return undefined }
+    let current = true
+    const live = liveRefresh(async () => {
+      const requests = await request({ endpoint: 'contact-requests' })
+      if (current) setContactRequests({ scope, requests: Array.isArray(requests) ? requests : [] })
+    }, { onError: () => { if (current) setContactRequests(null) } })
+    return () => { current = false; live.stop() }
+  }, [request, scope, state?.connected, state?.humanPrincipalId, state?.managementRevision])
+  const pendingContacts = state?.connected && contactRequests?.scope === scope ? contactRequests.requests.filter(item => item.status === 'pending').length : 0
   useEffect(() => {
     if (!shown) return undefined
     const returning=Boolean(previousPanel.current&&!activePanel)
@@ -464,7 +475,10 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
   const connectionBlocked = state?.error && !['CONNECTION_LOST','REQUEST_TIMEOUT','STORAGE_UNAVAILABLE','BACKPRESSURE','HISTORY_GAP'].includes(state.error)
   const compatibility = state?.compatibility ?? communicationCompatibility(null, state?.error)
   const versionBlocked = incompatibleCommunication(state?.error) || compatibility.status === 'incompatible'
-  const connectionLabel = !team.communicationEnabled ? 'Not configured' : versionBlocked ? 'Client and Hub versions are incompatible' : pollError ? 'Offline' : !state ? 'Connecting…' : state.connected ? compatibility.status === 'different' ? 'Connected to Hub · versions differ' : 'Connected to Hub' : connectionBlocked ? 'Offline' : 'Reconnecting to Hub'
+  const clientOlder = communicationReleaseRelation(compatibility.clientVersion, compatibility.hubVersion) === 'client-older'
+  const updateClient = versionBlocked && (compatibility.updateTarget === 'client' || compatibility.updateTarget !== 'hub' && clientOlder)
+  const versionNotice = versionBlocked ? updateClient ? 'Update the client to use this Hub. Its required protocol or capabilities are not supported.' : compatibility.updateTarget === 'hub' ? 'Update the Hub to support this client’s required protocol and capabilities.' : 'Update the client or Hub to compatible protocol and capability versions.' : clientOlder ? 'A newer client release is available. Update the client; communication remains available with compatible protocols and capabilities.' : 'The release versions differ. Communication remains available with compatible protocols and capabilities.'
+  const connectionLabel = !team.communicationEnabled ? 'Not configured' : versionBlocked ? updateClient ? 'Client update required to connect' : 'Client and Hub versions are incompatible' : pollError ? 'Offline' : !state ? 'Connecting…' : state.connected ? compatibility.status === 'different' ? 'Connected to Hub · versions differ' : 'Connected to Hub' : connectionBlocked ? 'Offline' : 'Reconnecting to Hub'
   const roleLabel = role => role === 'owner' ? 'Group owner' : role === 'admin' ? 'Group admin' : 'Group member'
   const avatar = (id, name) => {
     const contact = contacts.find(person => person.principalId === id)
@@ -502,7 +516,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
       h('div', { className: 'bt-comm-nav-heading' }, h('h2', {title:t('Remote communication')}, t('Remote communication')),
         h('div', { className:'bt-comm-nav-actions' },
           btn('Personal settings', event => showPanel('settings', event.currentTarget), { className: 'bt-comm-settings-icon', 'aria-label': t('Personal settings'), title: t('Personal settings'), children: h(GearIcon) }),
-          btn('Contacts', event => showPanel('manage-contacts', event.currentTarget), { className: 'bt-comm-settings-icon', 'aria-label': t('Contacts'), title: t('Contacts'), disabled: busy || !team.communicationEnabled, children: h(PeopleIcon) }),
+          btn('Contacts', event => showPanel('manage-contacts', event.currentTarget), { className: 'bt-comm-settings-icon', 'aria-label': t('Contacts'), title: t('Contacts'), 'aria-describedby': pendingContacts ? 'bt-comm-contact-pending' : undefined, disabled: busy || !team.communicationEnabled, children: h(Fragment, null, h(PeopleIcon), pendingContacts ? h('span', { id: 'bt-comm-contact-pending', className: 'bt-comm-request-badge', role: 'status', 'aria-label': `${pendingContacts} ${t('pending')}` }, pendingContacts > 99 ? '99+' : pendingContacts) : null) }),
           btn('Search',event=>showPanel('search',event.currentTarget),{className:'bt-comm-settings-icon','aria-label':t('Search'),title:t('Search'),children:h(SearchIcon)}),
           h('div',{ref:newMenu,className:'bt-comm-new-menu',onKeyDown:event=>{
             if(!newMenuOpen||!['ArrowDown','ArrowUp','Home','End'].includes(event.key))return
@@ -514,13 +528,13 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
               btn('New message',()=>showPanel('contacts'),{role:'menuitem',disabled:busy||!team.communicationEnabled,children:h(Fragment,null,h(ChatsIcon),t('New message'))}),
               btn('New group',()=>showPanel('group'),{role:'menuitem',disabled:busy||!team.communicationEnabled,children:h(Fragment,null,h(PeopleIcon),t('New group'))})):null),
           btn('Collapse sidebar',()=>{setNewMenuOpen(false);collapseSidebar(true)},{className:'bt-comm-settings-icon bt-comm-collapse','aria-label':t('Collapse sidebar'),'aria-controls':'bt-comm-nav','aria-expanded':true,title:t('Collapse sidebar'),children:h(SidebarIcon)}))),
-      btn('Back to local chats', close, { className: 'bt-comm-back' }),
+      h('div', { className: 'bt-comm-nav-scroll' },
       member ? btn('Back to conversation', () => setBrowse(false), { className: 'bt-comm-mobile' }) : null,
       state ? h(CommunicationWorkApprovals, {key:scope,state,request,refresh}) : null,
       h('section', { className: 'bt-comm-connection', 'aria-label': t('Connection status') },
         h('p', { className: 'bt-comm-connection-label', role: 'status', 'data-connected': Boolean(state?.connected && !pollError) }, h('span', { className: 'bt-comm-dot', 'aria-hidden': true }), t(connectionLabel)),
         team.communicationEnabled && state ? h('p', { className: 'bt-comm-reference', 'data-communication-versions': true }, t('Client'), ': ', displayCommunicationVersion(compatibility.clientVersion), ' · Hub: ', displayCommunicationVersion(compatibility.hubVersion) ?? t('Version not reported')) : null,
-        team.communicationEnabled && (versionBlocked || compatibility.status === 'different') ? h('p', { className: 'bt-comm-reference', role: 'status' }, t('Update the client and Hub to the same federation release. Saved conversations and queued messages are retained.')) : null,
+        team.communicationEnabled && (versionBlocked || compatibility.status === 'different') ? h('p', { className: 'bt-comm-reference', role: 'status' }, t(versionNotice)) : null,
         team.communicationEnabled && versionBlocked && state?.error ? h('p', { className: 'bt-comm-reference', role: 'status' }, friendly({ code: state.error })) : null,
         state ? h('p', { className: 'bt-comm-reference bt-comm-connection-details' }, `${state.instanceId} · ${t('Remote contacts')}: ${remoteCount}`) : null,
         pollError ? h('p', { className: 'bt-comm-reference', role: 'status' }, t('Status may be out of date.'), ' ', pollError) : null,
@@ -536,6 +550,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
       invitations.length ? h('div', { className: 'bt-comm-invitations' }, h('h3', null, t('Invitations')), invitations.map(item =>
         btn(item.title, event => { setInvitationKey(item.key); showPanel('invitation', event.currentTarget) }, { key: item.key, 'data-invitation-group': item.key, children: h(Fragment, null, item.title, h('span', { className: 'bt-comm-count' }, item.targets.length)) }))) : null,
       null),
+      h('div', { className: 'bt-comm-nav-footer' }, btn('Back to local chats', close, { className: 'bt-comm-back' }))),
     activePanel ? h('div', { className: `bt-comm-modal-backdrop${activePanel==='thread'?' bt-comm-thread-backdrop':''}`, onMouseDown: event => { if (event.target === event.currentTarget) { setActivePanel(''); chooserTrigger.current?.focus() } } },
       h('section', { ref: chooser, className: `bt-comm-modal${activePanel==='thread'?' bt-comm-thread-popover':''}${activePanel==='manage-contacts'?' bt-comm-contacts-modal':''}`,style:activePanel==='thread'?threadPosition:undefined, role: 'dialog', 'aria-modal': true, 'aria-label': t(activePanel === 'archives' ? 'Archived private chats' : activePanel === 'invitation' ? 'Invitation details' : activePanel === 'search' ? 'Search' : activePanel === 'settings' ? 'Personal settings' : activePanel === 'thread' ? 'Message replies' : activePanel === 'activity' ? 'Activity details' : activePanel === 'participant' ? 'Participant information' : activePanel === 'manage-contacts' ? 'Manage contacts' : activePanel === 'profile' ? 'Human profile' : activePanel === 'pairing' ? 'Add a device' : activePanel === 'group' ? 'New group' : 'New message') },
         activePanel==='thread'?h('button',{type:'button',onClick:()=>{setActivePanel('');chooserTrigger.current?.focus()},className:'bt-comm-thread-close','aria-label':t('Close replies'),title:t('Close replies')},h(CloseIcon)):null,

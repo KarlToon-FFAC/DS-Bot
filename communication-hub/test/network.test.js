@@ -266,7 +266,7 @@ test('base-capability legacy clients still connect while the Hub advertises boun
     const directory=JSON.parse((await contacts)[0].toString())
     assert.equal(directory.ok,true)
     assert.deepEqual(directory.value,[])
-  }finally{socket.terminate();await hub.close()}
+  }finally{socket?.terminate();await hub.close()}
 })
 
 test('authenticated welcome advertises only an enabled configured management address and ignores caller claims',async()=>{
@@ -286,7 +286,7 @@ test('authenticated welcome advertises only an enabled configured management add
         assert.equal(Object.hasOwn(welcome.value,'managementUrl'),false)
         assert.equal(hub.managementUrl,null)
       }
-    }finally{socket.terminate();await hub.close()}
+    }finally{socket?.terminate();await hub.close()}
   }
 })
 
@@ -336,4 +336,39 @@ test('authenticated legacy owner recovery RPC is unknown and cannot mutate store
     await assert.rejects(a.client.request('group.reclaim', op({ principalId, conversationId, expectedVersion: 1 })), { code: 'UNKNOWN_OPERATION' })
     assert.deepEqual({ members: hub.store.db.prepare('SELECT * FROM memberships').all(), conversations: hub.store.db.prepare('SELECT * FROM conversations').all(), events: hub.store.db.prepare('SELECT * FROM events').all() }, before)
   } finally { a.client.stop(); a.queue.close(); await hub.close() }
+})
+
+test('an old client handshake receives specific protocol/capability upgrade diagnostics instead of an opaque offline result',{timeout:10000},async()=>{
+ const hub=await startHub({databasePath:':memory:',port:0,peers})
+ let socket
+ try{
+  for(const protocol of [PROTOCOL,'dsbot-communication/0']){
+   socket=new WebSocket(hub.url);await once(socket,'open')
+   const response=once(socket,'message')
+   socket.send(JSON.stringify({id:randomUUID(),protocol,type:'hello',payload:{instanceId:'a',credential:credentials.a,capabilities:['text']}}))
+   const [data]=await response,result=JSON.parse(data)
+   assert.equal(result.ok,false)
+   assert.equal(result.error.code,protocol===PROTOCOL?'UNSUPPORTED_CAPABILITY':'PROTOCOL_VERSION_UNSUPPORTED')
+   assert.equal(result.error.details.compatibility.protocol,PROTOCOL)
+   assert.match(result.error.details.compatibility.communicationVersion,/^\d+\.\d+\.\d+$/)
+   assert.equal(result.error.details.compatibility.updateTarget,protocol===PROTOCOL?'client':'both')
+   assert.equal(JSON.stringify(result).includes(credentials.a),false)
+   socket.terminate()
+  }
+ }finally{socket?.terminate();await hub.close()}
+})
+
+test('different release metadata alone cannot block a real client from publishing a message',async()=>{
+ for(const release of ['0.1.0','999.0.0']){
+  const hub=await startHub({databasePath:':memory:',port:0,peers,beforeResponse:({type,value})=>{if(type==='hello')value.communicationVersion=release}})
+  const a=makeClient('a',hub.url)
+  try{
+   await a.client.connect();assert.equal(a.client.compatibility.status,'different')
+   const principalId=(await a.client.request('principal.register',{localId:'owner',kind:'human',displayName:'Owner'})).principalId
+   const {conversationId}=await a.client.request('group.create',op({principalId,title:'Compatible independent GUI release'}))
+   const member=(await a.client.request('memberships.list')).memberships.find(row=>row.conversationId===conversationId)
+   const result=await a.client.request('message.publish',payload(principalId,conversationId,member.membershipEpoch))
+   assert.equal(result.status,'hubAccepted');assert.equal(a.client.connected,true)
+  }finally{a.client.stop();a.queue.close();await hub.close()}
+ }
 })

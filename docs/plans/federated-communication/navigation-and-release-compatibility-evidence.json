@@ -1,0 +1,58 @@
+{
+  "date": "2026-11-09",
+  "release": "V0.2.8",
+  "status": "PASSED",
+  "protocol": "dsbot-communication/1 (unchanged)",
+  "requiredCapabilities": "unchanged; package versions are not connection gates",
+  "pluginTests": {
+    "total": 2055,
+    "passed": 2050,
+    "skipped": 5,
+    "failed": 0
+  },
+  "hubTests": {
+    "total": 198,
+    "passed": 198,
+    "failed": 0
+  },
+  "nativeDshMockSmoke": {
+    "passedSteps": 52,
+    "failedSteps": 0
+  },
+  "twoDshMockCli": {
+    "status": "PASSED",
+    "model": "deterministic Mock",
+    "cases": [
+      "real-CLI-Human-to-remote-Bot-DM-is-visible-to-receiving-owner-without-Human-membership",
+      "receiving-owner-record-and-both-message-directions-survive-Host-restart",
+      "real-CLI-can-mention-current-group-member-outside-contact-directory",
+      "live-published-Bot-outside-group-remains-UNKNOWN_MENTION",
+      "real-CLI-distinguishes-retired-group-member-and-retired-never-member-from-unknown-mention"
+    ]
+  },
+  "realWebSocketRegression": [
+    "older/newer release metadata accepts message publication with unchanged protocol/capabilities",
+    "old protocol/missing client capability rejects with safe version and update metadata"
+  ],
+  "chromium": {
+    "status": "PASSED",
+    "browserErrors": 0,
+    "viewports": [
+      "1280x900 desktop",
+      "390x844 narrow drawer",
+      "collapsed desktop rail"
+    ],
+    "checks": [
+      "pending count appears without opening Contacts",
+      "accept/cancel updates badge from 2 to 1 to absent",
+      "both bottom navigation controls stay fixed while long lists scroll",
+      "older compatible release is advisory",
+      "protocol incompatibility shows client update required",
+      "existing version/recovery/private-DM UI acceptance still passes"
+    ]
+  },
+  "lint": "passed with existing warnings",
+  "generatedBundle": "fresh",
+  "testData": "isolated synthetic/Mock only; no user data, real keys or production endpoints",
+  "cleanup": "all owned benches, topology and browser servers stopped"
+}

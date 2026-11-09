@@ -3,6 +3,7 @@ import { createServer as createHttpsServer } from 'node:https'
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { WebSocketServer } from 'ws'
 import { HubStore } from './store.js'
+import { COMMUNICATION_VERSION } from './version.js'
 import { HubManagement } from './management-store.js'
 import { createManagementHttp } from './management-http.js'
 import { CommunicationError, PROTOCOL, identifier, requireThat } from './protocol.js'
@@ -179,7 +180,9 @@ export async function startHub({ databasePath, databaseLock, peers, host='127.0.
         }
       }catch(error){
         const known=error instanceof CommunicationError
-        if(socket.readyState===1)socket.send(JSON.stringify({id,ok:false,error:{code:known?error.code:'STORAGE_UNAVAILABLE',message:known?error.message:'Communication request could not be committed',...(known&&error.details?{details:error.details}:{})}}))
+        const compatibility = known && ['PROTOCOL_VERSION_UNSUPPORTED','UNSUPPORTED_CAPABILITY','EXPLICIT_ACTIVATION_REQUIRED','ATTACHMENT_CAPABILITY_REQUIRED'].includes(error.code)
+          ? { compatibility: { protocol: PROTOCOL, communicationVersion: COMMUNICATION_VERSION, updateTarget: error.code === 'PROTOCOL_VERSION_UNSUPPORTED' ? 'both' : 'client' } } : {}
+        if(socket.readyState===1)socket.send(JSON.stringify({id,ok:false,error:{code:known?error.code:'STORAGE_UNAVAILABLE',message:known?error.message:'Communication request could not be committed',...(known&&(error.details||compatibility.compatibility)?{details:{...error.details,...compatibility}}:{})}}))
         if(!auth)socket.close(1008,'Handshake rejected')
       }
     })

@@ -26,7 +26,11 @@ export const communicationCSS = `
 .bt-comm-attachment-drafts>span{display:inline-flex;align-items:center;gap:4px;max-width:220px;overflow:hidden;word-break:break-all}
 .bt-comm-attachment-drafts button{padding:2px;border:0;background:none;color:inherit}
 .bt-comm-attachment-drafts svg{width:14px;height:14px}
-.bt-comm-nav-heading .bt-comm-settings-icon{width:32px;height:32px;padding:6px;display:grid;place-items:center;flex:none;background:none;border-color:transparent}
+.bt-comm-nav-heading .bt-comm-settings-icon{position:relative;width:32px;height:32px;padding:6px;display:grid;place-items:center;flex:none;background:none;border-color:transparent}
+.bt-comm-request-badge{position:absolute;top:-4px;right:-4px;display:flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding:0 4px;border-radius:999px;background:var(--bt-accent);color:var(--bt-accent-ink);font-size:10px;font-weight:600;line-height:16px;font-variant-numeric:tabular-nums;box-shadow:0 0 0 2px var(--bt-sidebar);pointer-events:none}
+.bt-comm-nav-scroll{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:8px}
+.bt-comm-nav-footer{flex:none;padding-top:8px;border-top:.5px solid var(--bt-line)}
+.bt-comm-nav-footer>.bt-comm-back{width:100%}
 .bt-comm-personal-settings>section{margin-top:16px;padding-top:12px;border-top:1px solid var(--bt-line)}
 .bt-comm-personal-settings>section>button{margin:6px 8px 6px 0}
 .bt-comm-thread-log{--reply-step:18px;min-width:0}
@@ -57,7 +61,7 @@ export const communicationCSS = `
 .bt-comm-frame code{font:12px/16px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;overflow-wrap:anywhere;user-select:text}
 .bt-comm-frame .bt-comm-primary{background:var(--bt-accent);border-color:var(--bt-accent);color:var(--bt-accent-ink)}
 .bt-comm-frame .bt-comm-primary:hover{background:color-mix(in srgb,var(--bt-accent) 88%,var(--bt-main))}
-.bt-comm-nav{background:var(--bt-sidebar);border-right:1px solid var(--bt-line);padding:20px 16px;overflow:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:12px;min-height:0}
+.bt-comm-nav{background:var(--bt-sidebar);border-right:1px solid var(--bt-line);padding:20px 16px;overflow:hidden;display:flex;flex-direction:column;gap:12px;min-height:0}
 .bt-comm-nav-heading{display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:10px}
 .bt-comm-frame .bt-comm-back{border-color:transparent;background:transparent;padding:4px 0;font-size:12px;color:var(--bt-ink-2)}
 .bt-comm-connection{padding:12px;border:1px solid var(--bt-line);background:var(--bt-card);border-radius:12px}
