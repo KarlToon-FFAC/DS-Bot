@@ -34,3 +34,16 @@ test('a known Chinese recipient plus an inline prose @ resolves only the actual 
  assert.throws(()=>communicationMentions('@陌生成员 你好',contacts),{code:'UNKNOWN_MENTION'})
  assert.throws(()=>communicationMentions('普通文字',contacts,['bot:b:removed']),{code:'UNKNOWN_MENTION'})
 })
+
+test('retired recipients have a dedicated error and @all only selects current Bots',()=>{
+ const current={principalId:'bot:b:new',displayName:'Current',kind:'bot'}
+ const retired={principalId:'bot:b:old',displayName:'Former',kind:'bot',retired:true}
+ assert.throws(()=>communicationMentions('Hello',[current],[retired.principalId],{retired:[retired]}),{code:'BOT_RETIRED'})
+ assert.throws(()=>communicationMentions('@Former hello',[current],[],{retired:[retired]}),{code:'BOT_RETIRED'})
+ assert.throws(()=>communicationMentions('@Former hello',[current,retired]),{code:'BOT_RETIRED'})
+ assert.deepEqual(communicationMentions('@all hello',[current,retired]),[{principalId:current.principalId}])
+ assert.deepEqual(communicationMentions('Previously @Former helped',[current],[],{displayOnly:true,retired:[retired]}),[])
+ const replacement={...current,displayName:'Former'}
+ assert.deepEqual(communicationMentions('@Former hello',[replacement],[],{retired:[retired]}),[{principalId:replacement.principalId}])
+ assert.throws(()=>communicationMentions('@Former hello',[replacement],[retired.principalId],{retired:[retired]}),{code:'BOT_RETIRED'})
+})

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { COMMUNICATION_VERSION } from '../src/shared/communication-version.js'
 import { readFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -191,11 +192,19 @@ export function prepare(operation, input = {}) {
   return { operation, request, input }
 }
 
+const fieldDescriptions = {
+  localBotId: 'Exact native Bot id from available-bots.bots[].id, often session-<id>. Not a global bot:<instance>:<id>, a name, or another/current remote Session id.',
+  localBotIds: 'Native Bot ids from available-bots.bots[].id (often session-<id>); never global bot:<instance>:<id> principal ids. After publishing, wait for state.reloadRequired=false and current membership before Bot-scoped operations.',
+  mentions: 'CLI/API accepts an array of exact principal-id strings. The host normalizes these to protocol {principalId} objects and validates current conversation membership, including group members outside your contact directory.',
+}
+const describeOperation = (name, fields) => ({ fields, required: required[name] ?? [],
+  fieldDescriptions: Object.fromEntries(Object.keys(fields).filter(key => fieldDescriptions[key]).map(key => [key, fieldDescriptions[key]])) })
+
 export const help = operation => JSON.stringify({
-  name: 'dsbot-remote', usage: 'dsbot-remote <operation> [--json] [--config <explicit-file>] < request.json',
+  name: 'dsbot-remote', version: `V${COMMUNICATION_VERSION}`, usage: 'dsbot-remote <operation> [--json] [--config <explicit-file>] < request.json',
   authentication: 'DSBOT_REMOTE_URL and DSBOT_REMOTE_COOKIE, or explicit --config JSON {url,cookie}. Local loopback only; no discovery. Never put a cookie in argv.',
-  operations: operation && schemas[operation] ? { [operation]: { fields: schemas[operation], required: required[operation] ?? [] } }
-    : Object.fromEntries(Object.entries(schemas).map(([name, fields]) => [name, { fields, required: required[name] ?? [] }])),
+  operations: operation && schemas[operation] ? { [operation]: describeOperation(operation, schemas[operation]) }
+    : Object.fromEntries(Object.entries(schemas).map(([name, fields]) => [name, describeOperation(name, fields)])),
   retry: 'dsbot-remote retry < original-request.json; use the request object from the previous result/error unchanged. No automatic retries for uncertain outcomes. A definite local reset-generation rejection is reconciled once with the same request IDs.',
   settings: 'save-settings atomically validates/applies title, routing and member policies against one expectedVersion and increments the group version once. No partial save; retry the complete original request with its original operationId.',
   profile: 'profile-human changes only the authenticated Human. avatar:null resets to a name-derived avatar; avatar:{image:dataURL} uses a consenting custom PNG/JPEG/WebP/GIF image, max 160000 characters. No URLs or file paths. Preserve the complete original operationId/request for an uncertain retry. Profile requests and avatar reads contain image data: keep them private to the intended audience.',

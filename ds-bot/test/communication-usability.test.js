@@ -1559,12 +1559,12 @@ test('connection status names version incompatibility and the concrete upgrade r
 })
 
 test('compatible version differences and subsequent matching versions update live without reconnect instructions for an outage',async()=>{
- let snapshot={...state(),connected:true,compatibility:{clientVersion:'2026.11.09.2',hubVersion:'2026.11.01.1',status:'different'}}
+ let snapshot={...state(),connected:true,compatibility:{clientVersion:'0.2.7',hubVersion:'0.2.6',status:'different'}}
  await pane({getState:()=>snapshot},async({doc,autoRefresh})=>{
   const connection=doc.querySelector('.bt-comm-connection')
   assert.equal(connection.querySelector('.bt-comm-connection-label').textContent,'Connected to Hub · versions differ')
-  assert.match(connection.textContent,/2026\.11\.09\.2.*2026\.11\.01\.1/)
-  snapshot={...snapshot,compatibility:{...snapshot.compatibility,hubVersion:'2026.11.09.2',status:'matched'}}
+  assert.match(connection.textContent,/V0\.2\.7.*V0\.2\.6/)
+  snapshot={...snapshot,compatibility:{...snapshot.compatibility,hubVersion:'0.2.7',status:'matched'}}
   await autoRefresh()
   assert.equal(connection.querySelector('.bt-comm-connection-label').textContent,'Connected to Hub')
  })

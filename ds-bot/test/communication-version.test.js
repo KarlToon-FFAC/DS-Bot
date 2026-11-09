@@ -14,3 +14,11 @@ test('Hub and client share a federation release and distinguish compatible diffe
  assert.equal(incompatibleCommunication('PROTOCOL_VERSION_UNSUPPORTED'),true)
  for(const value of [{},'<private data>','x'.repeat(500)])assert.equal(communicationCompatibility({communicationVersion:value}).hubVersion,null)
 })
+
+test('both current versions use semantic package versions and render with a V prefix',async()=>{
+ const {displayCommunicationVersion}=await import('../src/shared/communication-version.js')
+ assert.match(COMMUNICATION_VERSION,/^\d+\.\d+\.\d+$/)
+ assert.equal(displayCommunicationVersion(COMMUNICATION_VERSION),`V${COMMUNICATION_VERSION}`)
+ assert.equal(displayCommunicationVersion(HUB_VERSION),`V${HUB_VERSION}`)
+ assert.equal(displayCommunicationVersion(null),null)
+})

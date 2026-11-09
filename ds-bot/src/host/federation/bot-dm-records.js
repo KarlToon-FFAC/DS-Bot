@@ -6,15 +6,17 @@ function ownedBots(runtime) {
   const retired = (runtime.queue.retiredBots?.() ?? []).map(bot => [bot.principalId, bot.localRef])
   return new Map([...current, ...retired])
 }
-function botDm(info) {
-  return info?.kind === 'dm' && info.members?.length === 2 && info.members.every(person => person.kind === 'bot')
+function botDm(info, principalId, humanId) {
+  return info?.kind === 'dm' && info.members?.length === 2
+    && info.members.some(person => person.principalId === principalId && person.kind === 'bot')
+    && !info.members.some(person => person.principalId === humanId)
 }
 export function botDmRecords(runtime) {
   if (!runtime.everReconciled) return []
   const owned = ownedBots(runtime), records = new Map()
   for (const member of [...runtime.queue.memberships()].sort((a,b) => a.principalId.localeCompare(b.principalId))) {
     const info = runtime.conversations?.get(member.conversationId)
-    if (member.kind !== 'dm' || !owned.has(member.principalId) || !botDm(info) || records.has(member.conversationId)) continue
+    if (member.kind !== 'dm' || !owned.has(member.principalId) || !botDm(info, member.principalId, runtime.human.principalId) || records.has(member.conversationId)) continue
     records.set(member.conversationId, { ...member, info, archive: true, viewerBotId: owned.get(member.principalId),
       viewerPrincipalId: member.principalId, unread: 0, lastMessage: conversationSummary(runtime.queue.lastMessage(member.conversationId, member.principalId, member.membershipEpoch), info.members) })
   }
@@ -28,7 +30,7 @@ export function botDmContext(runtime, input) {
   const bot = { principalId: candidate.principalId }
   const member = runtime.member(bot.principalId, input.conversationId, input.membershipEpoch)
   const info = runtime.conversations.get(input.conversationId)
-  if (member.kind !== 'dm' || !botDm(info) || !info.members.some(person => person.principalId === bot.principalId)) fail('FORBIDDEN')
+  if (member.kind !== 'dm' || !botDm(info, bot.principalId, runtime.human.principalId) || !info.members.some(person => person.principalId === bot.principalId)) fail('FORBIDDEN')
   return { member, principalId: bot.principalId, info }
 }
 export async function participantProfile(runtime, input) {

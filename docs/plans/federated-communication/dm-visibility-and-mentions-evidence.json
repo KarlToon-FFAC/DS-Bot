@@ -1,0 +1,57 @@
+{
+  "date": "2026-11-09",
+  "version": "V0.2.7",
+  "status": "PASSED",
+  "environment": "Linux, Node 24.22, two isolated native DSH instances and local real Hub; deterministic Mock; no real model credentials or production endpoints",
+  "pluginTests": {
+    "total": 2048,
+    "passed": 2043,
+    "skipped": 5,
+    "failed": 0
+  },
+  "hubTests": {
+    "total": 196,
+    "passed": 196,
+    "failed": 0
+  },
+  "nativeSmoke": {
+    "passedSteps": 52,
+    "failedSteps": 0
+  },
+  "twoDshAcceptance": {
+    "status": "PASSED",
+    "model": "deterministic Mock",
+    "cases": [
+      "real-CLI-Human-to-remote-Bot-DM-is-visible-to-receiving-owner-without-Human-membership",
+      "receiving-owner-record-and-both-message-directions-survive-Host-restart",
+      "real-CLI-can-mention-current-group-member-outside-contact-directory",
+      "live-published-Bot-outside-group-remains-UNKNOWN_MENTION",
+      "real-CLI-distinguishes-retired-group-member-and-retired-never-member-from-unknown-mention"
+    ]
+  },
+  "gui": {
+    "status": "PASSED",
+    "viewports": [
+      {
+        "width": 1280,
+        "height": 900
+      },
+      {
+        "width": 390,
+        "height": 844
+      }
+    ],
+    "browserErrors": 0,
+    "checks": [
+      "remote-Human to local-Bot owner record has received message and no composer",
+      "plugin compatible mismatch and incompatible reasons visible with live state recovery",
+      "Hub version V0.2.7 visible at both sizes",
+      "personal remote approval setting persists ask",
+      "no narrow viewport horizontal page overflow"
+    ]
+  },
+  "lint": "passed with existing warnings",
+  "generatedClient": "fresh",
+  "windowsOnsite": "not run; F1 ACL and original F5 avatar report not certified fixed",
+  "cleanup": "all owned benches and topology processes stopped"
+}

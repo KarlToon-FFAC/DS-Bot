@@ -27,7 +27,7 @@ test('immediate Human mention refreshes once with the original actor and epoch, 
   const f = fixture(t)
   const result = await f.runtime.sendHumanWithRefresh(f.input)
   assert.equal(result.messageId, 'same-message')
-  assert.deepEqual(f.calls, [{ type: 'conversation.members', payload: { conversationId: 'group', principalId: f.actor.principalId, membershipEpoch: 'original' } }])
+  assert.deepEqual(f.calls, [{ type: 'conversation.members', payload: { conversationId: 'group', principalId: f.actor.principalId, membershipEpoch: 'original', checkPrincipalIds: [f.other.principalId] } }])
   const original = f.queue.intent('same-message').payload
   assert.deepEqual(original.mentions, [{ principalId: f.other.principalId }])
   assert.equal(original.membershipEpoch, 'original')
@@ -131,4 +131,38 @@ test('pending membership diagnostics describe synchronization rather than requir
   assert.match(error.message, /same request/)
   assert.match(error.nextActions.join(' '), /same message or operation ID/)
   assert.doesNotMatch(error.message, /connection to recover/)
+})
+
+test('a current group member outside the directory is mentionable, while a contact outside the group is not',async t=>{
+ const f=fixture(t)
+ f.runtime.contacts=[];f.runtime.conversations.set('group',f.fresh)
+ const result=await f.runtime.sendHumanWithRefresh(f.input)
+ assert.equal(result.status,'pending');assert.equal(f.calls.length,0)
+ assert.deepEqual(f.queue.intent(result.messageId).payload.mentions,[{principalId:f.other.principalId}])
+ const outsider={principalId:'bot:c:outside',kind:'bot',displayName:'Outside'}
+ f.runtime.contacts.push(outsider)
+ await assert.rejects(f.runtime.sendHumanWithRefresh({...f.input,messageId:'outside',mentions:[outsider.principalId]}),{code:'UNKNOWN_MENTION'})
+ assert.equal(f.queue.intent('outside'),null)
+})
+
+test('retired mention is diagnosed by the real Hub before enqueue even when the local conversation never knew it',async t=>{
+ const f=fixture(t),hub=new HubStore(':memory:');t.after(()=>hub.close())
+ const a=hub.connect('a','A',CAPABILITIES),b=hub.connect('b','B',CAPABILITIES)
+ const human=hub.register(a,{localId:f.actor.localId,kind:'human',displayName:'Actor'}).principalId
+ hub.register(b,{localId:'owner',kind:'human',displayName:'Owner'})
+ const retired=hub.register(b,{localId:'retired',kind:'bot',displayName:'Retired'}).principalId
+ const group=hub.createGroup(a,{operationId:randomUUID(),principalId:human,title:'Scoped check'}).conversationId
+ hub.syncPublication(b,{principalIds:[]})
+ f.queue.applyMemberships(hub.memberships(a))
+ const membership=f.queue.memberships().find(row=>row.conversationId===group)
+ const scope={conversationId:group,principalId:human,membershipEpoch:membership.membershipEpoch}
+ f.runtime.conversations=new Map([[group,hub.members(a,scope)]])
+ f.runtime.contacts=[]
+ const before=hub.db.prepare('SELECT seq FROM conversations WHERE id=?').get(group).seq
+ f.runtime.transport.request=async(type,payload)=>{f.calls.push({type,payload});assert.equal(type,'conversation.members');return hub.members(a,payload)}
+ await assert.rejects(f.runtime.sendHumanWithRefresh({...f.input,conversationId:group,membershipEpoch:membership.membershipEpoch,mentions:[retired]}),{code:'BOT_RETIRED'})
+ assert.equal(f.calls.length,1);assert.deepEqual(f.calls[0].payload.checkPrincipalIds,[retired])
+ assert.equal(f.queue.pendingOutbox().length,0)
+ assert.equal(hub.db.prepare('SELECT seq FROM conversations WHERE id=?').get(group).seq,before)
+ assert.throws(()=>hub.members(b,{...scope,principalId:`human:b:owner`,checkPrincipalIds:[retired]}),{code:'NOT_A_MEMBER'})
 })

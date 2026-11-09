@@ -488,20 +488,21 @@ export class CommunicationRuntime {
       ...(admitted.length ? { attachments:admitted } : {}),
       ...(updateForMessageId ? { updateForMessageId, updateRecipientPrincipalId } : {}),
       ...(inputUpdateIds ? { inputUpdateIds } : {}),
-      mentions: communicationMentions(text, contacts, mentions, { displayOnly: bot }),
+      mentions: communicationMentions(text, contacts, mentions, { displayOnly: bot, retired: info?.formerMembers ?? [] }),
       ...(bot ? { activationTargets: activationTargets.map(item => ({ principalId: typeof item === 'string' ? item : item.principalId })) } : {}),
       replyToMessageId, ...(responseToDeliveryId ? { responseToDeliveryId } : {}),
       ...(causationDeliveryId ? { causationDeliveryId } : {}),
       ...(localUserIntent ? { localUserIntent } : {}),
       membershipEpoch: membershipEpoch ?? this.member(principalId, conversationId).membershipEpoch }
   }
-  async withFreshTargets(principalId, conversationId, epoch, work, botModes = ['active']) {
+  async withFreshTargets(principalId, conversationId, epoch, work, botModes = ['active'], checkPrincipalIds) {
     try { return work() } catch (error) {
       if (!['UNKNOWN_MENTION', 'UNKNOWN_ACTIVATION_TARGET', 'AUTHORIZATION_PENDING'].includes(error.code)) throw error
       const member = this.member(principalId, conversationId, epoch)
       const originalEpoch = member.membershipEpoch, generation = this.transport.generation, socket = this.transport.socket
       if (!this.transport.connected) fail('COMMUNICATION_AUTHORIZATION_UNKNOWN')
-      const info = await this.transport.request('conversation.members', { conversationId, principalId, membershipEpoch: originalEpoch })
+      const info = await this.transport.request('conversation.members', { conversationId, principalId, membershipEpoch: originalEpoch,
+        ...(Array.isArray(checkPrincipalIds) && checkPrincipalIds.length && checkPrincipalIds.every(id => typeof id === 'string') ? { checkPrincipalIds: [...new Set(checkPrincipalIds)] } : {}) })
       if (this.closed || !this.transport.connected || this.transport.generation !== generation || this.transport.socket !== socket) fail('CONNECTION_LOST')
       const current = this.member(principalId, conversationId, originalEpoch)
       if (this.rt?.readOnly?.() !== undefined) fail('COMMUNICATION_READ_ONLY')
@@ -520,7 +521,7 @@ export class CommunicationRuntime {
   }
   sendHumanWithRefresh(input) {
     return CommunicationRuntime.prototype.withFreshTargets.call(this, this.human.principalId, input.conversationId, input.membershipEpoch,
-      () => this.sendHuman(input))
+      () => this.sendHuman(input), ['active'], input.mentions)
   }
   sendHuman(input) {
     if (typeof input.messageId !== 'string' || typeof input.clientCreatedAt !== 'string') fail('INVALID_REQUEST')
@@ -611,7 +612,10 @@ export class CommunicationRuntime {
     const contacts = info?.members ?? this.contacts
     const ids = input.allBots ? contacts.filter(item => item.kind === 'bot').map(item => item.principalId) : selected
     const targets = [...new Set(ids)].filter(id => id !== principalId).sort()
-    for (const id of targets) if (!contacts.some(item => item.principalId === id && (item.kind === 'bot' || id.startsWith('bot:')))) fail('UNKNOWN_ACTIVATION_TARGET')
+    for (const id of targets) {
+      if (info?.formerMembers?.some(person => person.principalId === id && person.retired)) fail('BOT_RETIRED')
+      if (!contacts.some(item => item.principalId === id && (item.kind === 'bot' || id.startsWith('bot:')))) fail('UNKNOWN_ACTIVATION_TARGET')
+    }
     return targets
   }
   stageHandoffWithRefresh(actor, input, exec) {

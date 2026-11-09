@@ -4,12 +4,12 @@ import { CommunicationRuntime } from '../src/host/federation/runtime.js'
 import { CommunicationQueue } from '../src/host/federation/queue-store.js'
 import { botDmRecords,botDmContext,participantProfile } from '../src/host/federation/bot-dm-records.js'
 
-function fixture(t) {
+function fixture(t, peer = {principalId:'bot:b:expert',kind:'bot',displayName:'Expert'}) {
  const queue=new CommunicationQueue(':memory:',{instanceId:'a'});t.after(()=>queue.close())
  const human=queue.localPrincipal('human','user','Owner'),bot=queue.localPrincipal('bot','worker','Worker')
  const membership={conversationId:'bot-dm',principalId:bot.principalId,membershipEpoch:'bot-epoch',joinSeq:1,watermark:1,kind:'dm',active:true}
  queue.applyMemberships({memberships:[membership],invites:[]})
- const info={kind:'dm',members:[{principalId:bot.principalId,kind:'bot',displayName:'Worker'},{principalId:'bot:b:expert',kind:'bot',displayName:'Expert'}]}
+ const info={kind:'dm',members:[{principalId:bot.principalId,kind:'bot',displayName:'Worker'},peer]}
  const runtime={queue,human,bots:new Map([['worker',bot]]),everReconciled:true,conversations:new Map([['bot-dm',info]]),rt:{botOf:id=>id==='worker'?{id}:null}}
  runtime.member=CommunicationRuntime.prototype.member.bind(runtime)
  runtime.history=CommunicationRuntime.prototype.history.bind(runtime)
@@ -29,10 +29,11 @@ test('Bot-to-Bot DMs have a dedicated local-owner record with exact Bot epoch an
  f.info.kind='group';assert.throws(()=>botDmContext(f.runtime,input),{code:'FORBIDDEN'})
  assert.deepEqual(botDmRecords(f.runtime),[])
 })
-test('Bot DM records cannot include Human DMs, foreign Bots, or a Bot removed from the local roster',t=>{
+test('Bot DM records exclude the local Human own chats, foreign Bots and an unretired Bot removed from the roster',t=>{
  const f=fixture(t)
- f.info.members[1].kind='human';assert.deepEqual(botDmRecords(f.runtime),[])
- f.info.members[1].kind='bot';f.runtime.bots=new Map();assert.deepEqual(botDmRecords(f.runtime),[])
+ const original=f.info.members
+ f.info.members=[f.human,{principalId:'human:b:other',kind:'human'}];assert.deepEqual(botDmRecords(f.runtime),[])
+ f.info.members=original;f.runtime.bots=new Map();assert.deepEqual(botDmRecords(f.runtime),[])
  f.runtime.bots=new Map([['worker',f.bot]]);f.runtime.rt.botOf=()=>null;assert.deepEqual(botDmRecords(f.runtime),[])
 })
 test('full member profile reads use the scoped actor and refuse targets outside the current conversation',async t=>{
@@ -44,4 +45,20 @@ test('full member profile reads use the scoped actor and refuse targets outside 
  assert.equal(result.publicProfile.headline,'Testing expert');assert.equal(calls[0],f.bot.principalId)
  assert.equal(calls[1].input.principalId,f.bot.principalId)
  await assert.rejects(participantProfile(f.runtime,{...input,targetPrincipalId:'bot:c:hidden'}),{code:'NOT_A_MEMBER'})
+})
+
+test('a remote Human DM to an owned Bot appears as an exact read-only owner record without adding the local Human',t=>{
+ const peer={principalId:'human:b:requester',kind:'human',displayName:'Remote requester'},f=fixture(t,peer)
+ const [record]=botDmRecords(f.runtime)
+ assert.equal(record.archive,true);assert.equal(record.viewerBotId,'worker')
+ assert.equal(record.info.members.length,2)
+ assert.ok(record.info.members.some(person=>person.principalId===peer.principalId))
+ assert.ok(!record.info.members.some(person=>person.principalId===f.human.principalId))
+ const input={conversationId:'bot-dm',localBotId:'worker',membershipEpoch:'bot-epoch'}
+ assert.equal(botDmContext(f.runtime,input).principalId,f.bot.principalId)
+ assert.equal(f.runtime.history(f.bot.principalId,input).events[0].message.author.principalId,peer.principalId)
+ assert.throws(()=>f.runtime.history(f.human.principalId,input),{code:'NOT_A_MEMBER'})
+ f.info.members[1]=f.human
+ assert.deepEqual(botDmRecords(f.runtime),[])
+ assert.throws(()=>botDmContext(f.runtime,input),{code:'FORBIDDEN'})
 })

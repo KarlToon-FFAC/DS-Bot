@@ -21689,8 +21689,132 @@ function listedOpener({ list, open, refresh, current }) {
   };
 }
 
+// package.json
+var package_default = {
+  name: "ds-bot",
+  version: "0.2.7",
+  description: "DS Bot: a team of long-lived Bots for DeepSeek Harness, with Main Bots, Bot-to-Bot messages and group chats",
+  keywords: [
+    "dsh-plugin",
+    "deepseek-harness",
+    "dsh",
+    "deepseek",
+    "bot",
+    "multi-agent",
+    "agents"
+  ],
+  homepage: "https://github.com/Fei2411/DS-Bot#readme",
+  bugs: {
+    url: "https://github.com/Fei2411/DS-Bot/issues"
+  },
+  repository: {
+    type: "git",
+    url: "git+https://github.com/Fei2411/DS-Bot.git",
+    directory: "ds-bot"
+  },
+  license: "Apache-2.0",
+  type: "module",
+  main: "index.js",
+  exports: {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./web-search": "./web-search.js",
+    "./package.json": "./package.json"
+  },
+  files: [
+    "index.js",
+    "src/host/",
+    "src/shared/",
+    "src/office/",
+    "client.js",
+    "office.js",
+    "web-search.js",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE",
+    "bin/",
+    "skills/"
+  ],
+  scripts: {
+    build: "node scripts/build-client.mjs",
+    test: 'node --import ./test/harness-resolve.mjs --test "test/*.test.js"',
+    lint: "node scripts/lint.mjs",
+    harness: "npm install --prefix dev/harness --legacy-peer-deps=false --no-package-lock --no-fund --no-audit",
+    check: "sh dev/check.sh"
+  },
+  peerDependencies: {
+    "@deepseek-ai/cordis": "*",
+    "@deepseek-ai/dsh-credentials": "*",
+    "@deepseek-ai/dsh-llm": "*",
+    "@deepseek-ai/dsh-scope": "*",
+    "@deepseek-ai/dsh-tools": "*",
+    "@deepseek-ai/dsh-web": "*",
+    "@deepseek-ai/dsh-session-format-catalog": "*",
+    "@deepseek-ai/dsh-session-log-export": "*",
+    "@deepseek-ai/dsh-session-format-v3-to-v4": "*",
+    "@deepseek-ai/dsh-storage": "*",
+    "@deepseek-ai/dsh-storage-json": "*",
+    "@deepseek-ai/dsh-storage-domain": "*",
+    "@deepseek-ai/dsh-workspace": "*",
+    "@deepseek-ai/dsh-session-projection-cache": "*",
+    "@deepseek-ai/dsh-user-approval": "*"
+  },
+  dsh: {
+    client: {
+      platform: "web"
+    },
+    bundle: {
+      patch: "./cordis.patch.yml"
+    }
+  },
+  devDependencies: {
+    "@xmldom/xmldom": "0.9.12",
+    esbuild: "0.28.2"
+  },
+  dependencies: {
+    "deep-view": "0.1.0",
+    ws: "8.22.1",
+    yaml: "2.9.1"
+  },
+  bin: {
+    "dsbot-remote": "./bin/dsbot-remote.mjs",
+    "dsbot-team": "./bin/dsbot-team.mjs",
+    "dsbot-reset": "./bin/dsbot-reset.mjs"
+  },
+  peerDependenciesMeta: {
+    "@deepseek-ai/dsh-session-format-catalog": {
+      optional: true
+    },
+    "@deepseek-ai/dsh-session-log-export": {
+      optional: true
+    },
+    "@deepseek-ai/dsh-session-format-v3-to-v4": {
+      optional: true
+    },
+    "@deepseek-ai/dsh-storage": {
+      optional: true
+    },
+    "@deepseek-ai/dsh-storage-json": {
+      optional: true
+    },
+    "@deepseek-ai/dsh-storage-domain": {
+      optional: true
+    },
+    "@deepseek-ai/dsh-workspace": {
+      optional: true
+    },
+    "@deepseek-ai/dsh-session-projection-cache": {
+      optional: true
+    },
+    "@deepseek-ai/dsh-user-approval": {
+      optional: true
+    }
+  }
+};
+
 // src/shared/communication-version.js
-var COMMUNICATION_VERSION = "2026.11.09.2";
+var COMMUNICATION_VERSION = package_default.version;
+var displayCommunicationVersion = (version) => /^\d+\.\d+\.\d+(?:[-+][a-zA-Z0-9.+-]+)?$/.test(version ?? "") ? `V${version}` : version;
 var incompatibilities = /* @__PURE__ */ new Set([
   "UNSUPPORTED_CAPABILITY",
   "PROTOCOL_VERSION_UNSUPPORTED",
@@ -21702,7 +21826,8 @@ var incompatibilities = /* @__PURE__ */ new Set([
 ]);
 var incompatibleCommunication = (code) => incompatibilities.has(code);
 function communicationCompatibility(welcome, code) {
-  const value = welcome?.communicationVersion;
+  const supplied = welcome?.communicationVersion;
+  const value = typeof supplied === "string" ? supplied.replace(/^[vV](?=\d)/, "") : supplied;
   const hubVersion = typeof value === "string" && /^[0-9][a-zA-Z0-9._+-]{0,63}$/.test(value) ? value : null;
   return {
     clientVersion: COMMUNICATION_VERSION,
@@ -25151,7 +25276,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
         "section",
         { className: "bt-comm-connection", "aria-label": t("Connection status") },
         (0, import_react69.createElement)("p", { className: "bt-comm-connection-label", role: "status", "data-connected": Boolean(state?.connected && !pollError) }, (0, import_react69.createElement)("span", { className: "bt-comm-dot", "aria-hidden": true }), t(connectionLabel)),
-        team.communicationEnabled && state ? (0, import_react69.createElement)("p", { className: "bt-comm-reference", "data-communication-versions": true }, t("Client"), ": ", compatibility.clientVersion, " · Hub: ", compatibility.hubVersion ?? t("Version not reported")) : null,
+        team.communicationEnabled && state ? (0, import_react69.createElement)("p", { className: "bt-comm-reference", "data-communication-versions": true }, t("Client"), ": ", displayCommunicationVersion(compatibility.clientVersion), " · Hub: ", displayCommunicationVersion(compatibility.hubVersion) ?? t("Version not reported")) : null,
         team.communicationEnabled && (versionBlocked || compatibility.status === "different") ? (0, import_react69.createElement)("p", { className: "bt-comm-reference", role: "status" }, t("Update the client and Hub to the same federation release. Saved conversations and queued messages are retained.")) : null,
         team.communicationEnabled && versionBlocked && state?.error ? (0, import_react69.createElement)("p", { className: "bt-comm-reference", role: "status" }, communicationFailure({ code: state.error })) : null,
         state ? (0, import_react69.createElement)("p", { className: "bt-comm-reference bt-comm-connection-details" }, `${state.instanceId} · ${t("Remote contacts")}: ${remoteCount}`) : null,

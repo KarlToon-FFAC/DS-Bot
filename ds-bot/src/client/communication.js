@@ -1,4 +1,4 @@
-import { communicationCompatibility, incompatibleCommunication } from '../shared/communication-version.js'
+import { communicationCompatibility, incompatibleCommunication, displayCommunicationVersion } from '../shared/communication-version.js'
 import { useMentionDismiss } from './communication-mentions.js'
 import { CommunicationActionDialog } from './communication-dialog.js'
 import { ParticipantInformation } from './communication-participant.js'
@@ -519,7 +519,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
       state ? h(CommunicationWorkApprovals, {key:scope,state,request,refresh}) : null,
       h('section', { className: 'bt-comm-connection', 'aria-label': t('Connection status') },
         h('p', { className: 'bt-comm-connection-label', role: 'status', 'data-connected': Boolean(state?.connected && !pollError) }, h('span', { className: 'bt-comm-dot', 'aria-hidden': true }), t(connectionLabel)),
-        team.communicationEnabled && state ? h('p', { className: 'bt-comm-reference', 'data-communication-versions': true }, t('Client'), ': ', compatibility.clientVersion, ' · Hub: ', compatibility.hubVersion ?? t('Version not reported')) : null,
+        team.communicationEnabled && state ? h('p', { className: 'bt-comm-reference', 'data-communication-versions': true }, t('Client'), ': ', displayCommunicationVersion(compatibility.clientVersion), ' · Hub: ', displayCommunicationVersion(compatibility.hubVersion) ?? t('Version not reported')) : null,
         team.communicationEnabled && (versionBlocked || compatibility.status === 'different') ? h('p', { className: 'bt-comm-reference', role: 'status' }, t('Update the client and Hub to the same federation release. Saved conversations and queued messages are retained.')) : null,
         team.communicationEnabled && versionBlocked && state?.error ? h('p', { className: 'bt-comm-reference', role: 'status' }, friendly({ code: state.error })) : null,
         state ? h('p', { className: 'bt-comm-reference bt-comm-connection-details' }, `${state.instanceId} · ${t('Remote contacts')}: ${remoteCount}`) : null,

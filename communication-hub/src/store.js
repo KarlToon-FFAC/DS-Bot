@@ -844,7 +844,12 @@ export class HubStore {
     this.check(auth)
     const members=this.db.prepare('SELECT m.*,c.title,c.kind,c.version,c.routing_mode,c.admin_bot,c.owner_id,c.closed,c.seq FROM memberships m JOIN principals p ON p.id=m.principal_id JOIN conversations c ON c.id=m.conversation_id WHERE p.instance_id=?').all(auth.instanceId)
     const invites=this.db.prepare('SELECT i.id inviteId,i.conversation_id conversationId,i.principal_id principalId,p.name principalName,i.inviter_id inviterPrincipalId,source.name inviterName,source.instance_id inviterInstanceId,a.address inviterIpAddress,c.title FROM invites i JOIN principals p ON p.id=i.principal_id JOIN principals source ON source.id=i.inviter_id LEFT JOIN instance_addresses a ON a.instance_id=source.instance_id JOIN conversations c ON c.id=i.conversation_id WHERE p.instance_id=? AND i.active=1').all(auth.instanceId)
-    return {memberships:members.map(m=>({conversationId:m.conversation_id,principalId:m.principal_id,membershipEpoch:m.epoch,joinSeq:m.join_seq,active:Boolean(m.active || this.db.prepare('SELECT 1 FROM retired_memberships WHERE conversation_id=? AND principal_id=? AND epoch=?').get(m.conversation_id,m.principal_id,m.epoch)),manager:Boolean(m.manager),role:m.role,speakingMode:m.speaking_mode,ownerPrincipalId:m.owner_id,dissolved:Boolean(m.closed),...(m.kind==='dm' && this.db.prepare('SELECT 1 FROM memberships dm JOIN principal_retirements r ON r.principal_id=dm.principal_id WHERE dm.conversation_id=?').get(m.conversation_id)?{retiredPeer:true}:{}),...(this.retirementOf(m.principal_id) ?? {}),title:m.title,kind:m.kind,membershipVersion:m.version,routingMode:m.routing_mode,adminBotPrincipalId:m.admin_bot,watermark:this.db.prepare('SELECT last_seq FROM retired_memberships WHERE conversation_id=? AND principal_id=? AND epoch=?').get(m.conversation_id,m.principal_id,m.epoch)?.last_seq ?? m.seq})),invites}
+    const readableArchive = member => {
+      if (!this.db.prepare('SELECT 1 FROM retired_memberships WHERE conversation_id=? AND principal_id=? AND epoch=?').get(member.conversation_id,member.principal_id,member.epoch)) return false
+      try { this.dmPolicy?.(member.conversation_id); return true }
+      catch (error) { if (error.code === 'CONTACT_REQUIRED') return false; throw error }
+    }
+    return {memberships:members.map(m=>({conversationId:m.conversation_id,principalId:m.principal_id,membershipEpoch:m.epoch,joinSeq:m.join_seq,active:Boolean(m.active || readableArchive(m)),manager:Boolean(m.manager),role:m.role,speakingMode:m.speaking_mode,ownerPrincipalId:m.owner_id,dissolved:Boolean(m.closed),...(m.kind==='dm' && this.db.prepare('SELECT 1 FROM memberships dm JOIN principal_retirements r ON r.principal_id=dm.principal_id WHERE dm.conversation_id=?').get(m.conversation_id)?{retiredPeer:true}:{}),...(this.retirementOf(m.principal_id) ?? {}),title:m.title,kind:m.kind,membershipVersion:m.version,routingMode:m.routing_mode,adminBotPrincipalId:m.admin_bot,watermark:this.db.prepare('SELECT last_seq FROM retired_memberships WHERE conversation_id=? AND principal_id=? AND epoch=?').get(m.conversation_id,m.principal_id,m.epoch)?.last_seq ?? m.seq})),invites}
   }
   sync(auth,input) {
     const member=this.member(auth,input.conversationId,input.principalId,input.membershipEpoch,true)
@@ -872,6 +877,11 @@ export class HubStore {
   members(auth,input) {
     const reader=this.member(auth,input.conversationId,input.principalId,input.membershipEpoch,true)
     this.dmPolicy?.(input.conversationId)
+    if(input.checkPrincipalIds!==undefined){
+      this.member(auth,input.conversationId,input.principalId,input.membershipEpoch)
+      requireThat(Array.isArray(input.checkPrincipalIds)&&input.checkPrincipalIds.length<=this.limits.maxMembers,'INVALID_REQUEST')
+      for(const id of input.checkPrincipalIds){identifier(id);requireThat(!this.retirementOf(id),'BOT_RETIRED')}
+    }
     const conversation=this.db.prepare('SELECT title,kind,version,routing_mode,admin_bot,owner_id FROM conversations WHERE id=?').get(input.conversationId)
     const result = {conversationId:input.conversationId,title:conversation.title,kind:conversation.kind,membershipVersion:conversation.version,routingMode:conversation.routing_mode,adminBotPrincipalId:conversation.admin_bot,ownerPrincipalId:conversation.owner_id,members:[],formerMembers:[]}
     const maxBytes = this.limits.maxEnvelopeBytes - responseBytes(result) + responseBytes([])

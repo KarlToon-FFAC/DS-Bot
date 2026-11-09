@@ -136,3 +136,21 @@ test('retired private history remains contact-scoped and cannot stall active rec
   assert.throws(()=>store.sync(a,{principalId:one,conversationId:dm,membershipEpoch:old.membershipEpoch,after:0}))
   assert.throws(()=>store.members(b,{principalId:two,conversationId:dm,membershipEpoch:store.memberships(b).memberships.find(member=>member.conversationId===dm).membershipEpoch}))
 })
+
+
+test('retiring a Bot after contact revocation cannot reactivate an unreadable DM archive',t=>{
+  const {store,a,b,A,B,one,two}=fixture(t),m=new HubManagement(store)
+  store.contactPolicy=(auth,actor,target)=>m.assertContact(auth,actor,target)
+  store.dmPolicy=id=>m.assertDm(id)
+  const request=m.requestContact(a,op({principalId:A,userCode:m.code(b,{principalId:B}).userCode,sharePublishedBots:true}))
+  m.respondContact(b,op({principalId:B,requestId:request.requestId,expectedVersion:1,sharePublishedBots:true}),'accept')
+  const dm=store.createDm(a,op({principalId:A,otherPrincipalId:two})).conversationId
+  m.revokeContact(a,op({principalId:A,otherHumanPrincipalId:B,expectedVersion:1}))
+  store.syncPublication(b,{principalIds:[]})
+  const archive=store.memberships(b).memberships.find(member=>member.conversationId===dm&&member.principalId===two)
+  assert.equal(archive.active,false)
+  assert.equal(archive.retired,true)
+  assert.throws(()=>store.sync(b,{principalId:two,conversationId:dm,membershipEpoch:archive.membershipEpoch,after:0}),{code:'CONTACT_REQUIRED'})
+  const group=store.createGroup(b,op({principalId:B,title:'Still synchronized'})).conversationId
+  assert.ok(store.memberships(b).memberships.some(member=>member.conversationId===group&&member.active))
+})
