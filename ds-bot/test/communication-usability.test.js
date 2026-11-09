@@ -668,7 +668,7 @@ test('Human and group rename send authenticated versioned requests and failed se
 
 test('automatic device setup stays available without the manual configuration guide', async () => {
   for (const enabled of [false, true]) {
-    await pane({ enabled, snapshot: state(), handle: async body => { if(body.endpoint==='memory-settings')return {localMemory:true};if(body.endpoint==='human-profile-info')return {principalId:'human:a:owner',publicProfile:{headline:'',summary:'',expertise:[],languages:[],version:0,updatedAt:null}};assert.equal(body.endpoint, 'onboarding-storage'); return { storage: { defaultProvider: 'owner-acl-plaintext', encryptedByDefault: false, agentIsolation: false }, enrollments: [] } } }, async ({ doc, dom, calls, click, panel }) => {
+    await pane({ enabled, snapshot: state(), handle: async body => { if(body.endpoint==='work-approval-settings')return {remoteWorkApproval:'inherit'};if(body.endpoint==='memory-settings')return {localMemory:true};if(body.endpoint==='human-profile-info')return {principalId:'human:a:owner',publicProfile:{headline:'',summary:'',expertise:[],languages:[],version:0,updatedAt:null}};assert.equal(body.endpoint, 'onboarding-storage'); return { storage: { defaultProvider: 'owner-acl-plaintext', encryptedByDefault: false, agentIsolation: false }, enrollments: [] } } }, async ({ doc, dom, calls, click, panel }) => {
       await click('Personal settings')
       await click('Join Hub')
       const setup = doc.querySelector('.bt-comm-modal[aria-label="Add a device"]')
@@ -679,11 +679,11 @@ test('automatic device setup stays available without the manual configuration gu
       assert.equal(setup.querySelector('[aria-label="Hub configuration example"]'), null)
       assert.equal(setup.querySelector('[aria-label="Device configuration example"]'), null)
       assert.doesNotMatch(setup.textContent, /Manual configuration guide|publishedBotIds|credentialEnv/)
-      assert.equal(calls.filter(call => !['state', 'onboarding-storage', 'memory-settings', 'human-profile-info', 'user-code', 'available-bots'].includes(call.endpoint)).length, 0, JSON.stringify(calls.map(call => call.endpoint)))
+      assert.equal(calls.filter(call => !['state', 'onboarding-storage', 'memory-settings', 'human-profile-info', 'user-code', 'available-bots', 'work-approval-settings'].includes(call.endpoint)).length, 0, JSON.stringify(calls.map(call => call.endpoint)))
       await act(async () => doc.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })))
       assert.equal(doc.querySelector('.bt-comm-modal'), null)
       assert.equal(panel.getSnapshot(), true)
-      assert.equal(calls.filter(call => !['state', 'onboarding-storage', 'memory-settings', 'human-profile-info', 'user-code', 'available-bots'].includes(call.endpoint)).length, 0, JSON.stringify(calls.map(call => call.endpoint)))
+      assert.equal(calls.filter(call => !['state', 'onboarding-storage', 'memory-settings', 'human-profile-info', 'user-code', 'available-bots', 'work-approval-settings'].includes(call.endpoint)).length, 0, JSON.stringify(calls.map(call => call.endpoint)))
     })
   }
 })
@@ -1328,12 +1328,13 @@ test('personal memory settings update and recover automatically without writing 
   await pane({ snapshot: state(), handle: async body => {
     if(body.endpoint==='user-code')return {userCode:'SYNTHETIC'}
     if(body.endpoint==='available-bots')return {bots:[],publishedBotIds:[]}
+    if(body.endpoint==='work-approval-settings')return {remoteWorkApproval:'inherit'}
     assert.equal(body.endpoint, 'memory-settings')
     if (fail) throw Object.assign(Error('Synthetic read failure'), { code: 'CONNECTION_LOST' })
     return { localMemory }
   } }, async ({ doc, click, calls, autoRefresh }) => {
     await click('Personal settings')
-    const field = () => doc.querySelector('.bt-comm-personal-settings input[type=checkbox]')
+    const field = () => [...doc.querySelectorAll('.bt-comm-personal-settings label')].find(node=>node.textContent.includes('Allow each Bot to use its own local memory')).querySelector('input')
     assert.equal(field().checked, true)
     localMemory = false; await autoRefresh()
     assert.equal(field().checked, false)
@@ -1543,5 +1544,28 @@ test('a private chat with a retired Bot stays readable and cannot display a send
   assert.match(doc.querySelector('.bt-comm-main').textContent,/Old private answer/)
   assert.match(doc.querySelector('.bt-comm-main').textContent,/This Bot identity no longer exists/)
   assert.equal(doc.querySelector('.bt-comm-main>footer'),null)
+ })
+})
+
+test('connection status names version incompatibility and the concrete upgrade reason instead of only Offline',async()=>{
+ for(const code of ['BOT_PUBLICATION_MIGRATION_REQUIRED','BOUNDED_COLLABORATION_REQUIRED','EXPLICIT_ACTIVATION_REQUIRED','UNSUPPORTED_CAPABILITY']){
+  await pane({snapshot:{...state(),connected:false,error:code}},async({doc})=>{
+   const connection=doc.querySelector('.bt-comm-connection')
+   assert.equal(connection.querySelector('.bt-comm-connection-label').textContent,'Client and Hub versions are incompatible')
+   assert.match(connection.textContent,new RegExp(code));assert.match(connection.textContent,/Update the client and Hub/)
+   assert.match(connection.textContent,/Version not reported/)
+  })
+ }
+})
+
+test('compatible version differences and subsequent matching versions update live without reconnect instructions for an outage',async()=>{
+ let snapshot={...state(),connected:true,compatibility:{clientVersion:'2026.11.09.2',hubVersion:'2026.11.01.1',status:'different'}}
+ await pane({getState:()=>snapshot},async({doc,autoRefresh})=>{
+  const connection=doc.querySelector('.bt-comm-connection')
+  assert.equal(connection.querySelector('.bt-comm-connection-label').textContent,'Connected to Hub · versions differ')
+  assert.match(connection.textContent,/2026\.11\.09\.2.*2026\.11\.01\.1/)
+  snapshot={...snapshot,compatibility:{...snapshot.compatibility,hubVersion:'2026.11.09.2',status:'matched'}}
+  await autoRefresh()
+  assert.equal(connection.querySelector('.bt-comm-connection-label').textContent,'Connected to Hub')
  })
 })

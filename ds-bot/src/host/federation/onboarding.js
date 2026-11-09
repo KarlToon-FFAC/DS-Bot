@@ -111,7 +111,7 @@ const checkedScope = record => {
   if (scope !== 'legacy' && scope !== namespace(record.hubId) && scope !== identityNamespace(record.hubId,record.publicKey)) fail('COMMUNICATION_CREDENTIAL_MISMATCH')
   return scope
 }
-const publicConfiguration = value => Object.fromEntries(['enabled','hubId','url','instanceId','credentialKey','credentialEnv','humanDisplayName','publishedBotIds','publicationGenerations','autoAcceptBotInvites','localMemory','pollMs','contextHistoryBytes','rotateTokens','maxPending'].filter(key=>value?.[key]!==undefined).map(key=>[key,value[key]]))
+const publicConfiguration = value => Object.fromEntries(['enabled','hubId','url','instanceId','credentialKey','credentialEnv','humanDisplayName','publishedBotIds','publicationGenerations','remoteWorkApproval','autoAcceptBotInvites','localMemory','pollMs','contextHistoryBytes','rotateTokens','maxPending'].filter(key=>value?.[key]!==undefined).map(key=>[key,value[key]]))
 const selection = value => JSON.stringify([value?.hubId??null,value?.url??null,value?.instanceId??null,value?.credentialKey??null])
 function checkChallenge(challenge, expected, now = Date.now()) {
   if (!challenge || challenge.hubId !== expected.hubId || challenge.purpose !== expected.purpose
@@ -270,6 +270,8 @@ export class CommunicationOnboarding {
     if (action === 'resume-hub') return this.resumeHub(input)
     if (action === 'leave-hub' || action === 'hub-leave-status') return this.leaveHub(input,action==='hub-leave-status')
     if (action === 'forget-hub') return this.forgetHub(input)
+    if (action === 'work-approval-settings') return { remoteWorkApproval: this.rt.config.communication?.remoteWorkApproval ?? 'inherit' }
+    if (action === 'set-work-approval') return this.setWorkApproval(input)
     if (action === 'update-hub-trust') return this.updateTrust(input)
     if (action === 'status' || action === 'cancel') return this.enrollment(action, input)
     if (action === 'storage') return this.storage(input)
@@ -318,6 +320,18 @@ export class CommunicationOnboarding {
       return { ...current, communication: { ...latest, publishedBotIds, ...(Object.keys(publicationGenerations).length ? { publicationGenerations } : {}) } }
     }))
     return { publishedBotIds: ids, reloadRequired: true }
+  }
+  async setWorkApproval(input) {
+    if (!['inherit','ask'].includes(input.remoteWorkApproval)) fail('INVALID_CONFIG')
+    const configured = this.rt.config.communication
+    if (!configured?.url) fail('COMMUNICATION_NOT_CONFIGURED')
+    const { editor, entry } = this.editor()
+    await phase('COMMUNICATION_CONFIG_WRITE_FAILED', () => editor.edit(entry, current => {
+      const latest = current.communication
+      if (!latest || ['url','instanceId','hubId','credentialKey','credentialEnv'].some(key => latest[key] !== configured[key])) fail('COMMUNICATION_PAIRING_CONFLICT')
+      return { ...current, communication: { ...latest, remoteWorkApproval: input.remoteWorkApproval } }
+    }))
+    return { remoteWorkApproval: input.remoteWorkApproval, reloadRequired: true }
   }
   async setMemorySettings(input) {
     if (typeof input.localMemory !== 'boolean') fail('INVALID_CONFIG')
@@ -610,8 +624,12 @@ export class CommunicationOnboarding {
         || latest.trust?.fingerprint !== record.trust?.fingerprint) fail('COMMUNICATION_PAIRING_CONFLICT')
       return { kind: 'grant', payload: { ...latest, version: latest.version === 3 ? 3 : 2, trust: hub.trust } }
     })
-    this.rt.communication?.transport?.socket?.close()
-    return safeStatus(checkedRecord(await credentials.readRecord(key), hub))
+    const transport = this.rt.communication?.transport
+    const recovery = transport?.reconnect && transport.url === hub.url && !this.rt.communication.closed
+      && (!this.rt.communication.settings?.hubId || this.rt.communication.settings.hubId === hub.hubId)
+      ? transport.reconnect({ pollMs: this.rt.config.communication?.pollMs ?? 500 })
+      : { reconnectRequested: false, restartRequired: Boolean(this.rt.config.communication?.enabled) }
+    return { ...safeStatus(checkedRecord(await credentials.readRecord(key), hub)), ...recovery }
   }
   async enrollment(purpose, input) {
     const hubId = input.hubId ?? this.rt.config.communication?.hubId

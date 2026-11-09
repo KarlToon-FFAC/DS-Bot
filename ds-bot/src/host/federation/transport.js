@@ -1,3 +1,4 @@
+import { communicationCompatibility } from '../../shared/communication-version.js'
 import { randomUUID } from 'node:crypto'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { ATTACHMENT_CAPABILITY } from '../../shared/communication-attachments.js'
@@ -92,6 +93,7 @@ export class CommunicationTransport {
     const generation = ++this.generation
     this.transition('connecting')
     this.welcome = null
+    this.compatibility = communicationCompatibility()
     let socket
     try {
       const credential = typeof this.credential === 'function' ? await this.credential() : this.credential
@@ -149,6 +151,7 @@ export class CommunicationTransport {
         ? await credential.authenticate(send, capabilities)
         : await send('hello', { instanceId: this.queue.instanceId, credential, capabilities })
       this.assertCurrent(generation, socket)
+      this.compatibility = communicationCompatibility(welcome)
       if (!welcome.capabilities?.includes('explicit-bot-activation')) throw errorWith('EXPLICIT_ACTIVATION_REQUIRED')
       if (welcome.protocol !== PROTOCOL || welcome.instanceId !== this.queue.instanceId || !CAPABILITIES.every(value => welcome.capabilities?.includes(value))) throw errorWith('UNSUPPORTED_CAPABILITY')
       if (!welcome.capabilities.includes(BOUNDED_COLLABORATION)) throw errorWith('BOUNDED_COLLABORATION_REQUIRED')
@@ -161,7 +164,7 @@ export class CommunicationTransport {
       this.assertCurrent(generation, socket)
       return welcome
     } catch (error) {
-      if (generation === this.generation) { this.transition(this.fenced ? 'fenced' : 'disconnected'); this.disconnect(socket) }
+      if (generation === this.generation) { this.compatibility = communicationCompatibility({ communicationVersion: this.compatibility?.hubVersion }, error.code); this.transition(this.fenced ? 'fenced' : 'disconnected'); this.disconnect(socket) }
       else socket?.close()
       throw error
     }
@@ -283,7 +286,7 @@ export class CommunicationTransport {
     }
   }
   diagnostics() {
-    return { state: this.state, generation: this.generation, connections: this.reconnects, invalidations: this.hints,
+    return { state: this.state, compatibility: this.compatibility, generation: this.generation, connections: this.reconnects, invalidations: this.hints,
       pendingRequests: this.requests.size, lastError: this.lastError, lastDisconnectedAt: this.lastDisconnectedAt,
       lastSynchronizedAt: this.lastSynchronizedAt ?? null, recentEvents: this.events.map(event => ({ ...event })) }
   }
@@ -327,6 +330,11 @@ export class CommunicationTransport {
     }
     this.iterate = () => { void iterate() }
     void iterate()
+  }
+  reconnect({ pollMs = 500 } = {}) {
+    this.stop()
+    this.start({ pollMs })
+    return { reconnectRequested: true, restartRequired: false }
   }
   stop() {
     this.running = false

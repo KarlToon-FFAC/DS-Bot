@@ -64,7 +64,8 @@
     "@deepseek-ai/dsh-storage-json": "*",
     "@deepseek-ai/dsh-storage-domain": "*",
     "@deepseek-ai/dsh-workspace": "*",
-    "@deepseek-ai/dsh-session-projection-cache": "*"
+    "@deepseek-ai/dsh-session-projection-cache": "*",
+    "@deepseek-ai/dsh-user-approval": "*"
   },
   "dsh": {
     "client": {
@@ -111,6 +112,9 @@
       "optional": true
     },
     "@deepseek-ai/dsh-session-projection-cache": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-user-approval": {
       "optional": true
     }
   }

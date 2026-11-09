@@ -55,7 +55,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $plugin 'dev/harness/node_modules/@d
 $communication = ''
 if ($env:DSBOT_COMMUNICATION_CONFIG) {
     $config = $env:DSBOT_COMMUNICATION_CONFIG | ConvertFrom-Json
-    $allowed = @('enabled','url','credentialEnv','publishedBotIds','humanDisplayName','instanceId','autoAcceptBotInvites','pollMs','contextHistoryBytes','rotateTokens')
+    $allowed = @('enabled','url','credentialEnv','publishedBotIds','remoteWorkApproval','humanDisplayName','instanceId','autoAcceptBotInvites','pollMs','contextHistoryBytes','rotateTokens')
     foreach ($property in $config.PSObject.Properties.Name) { if ($property -notin $allowed) { throw 'Unexpected public communication setting.' } }
     $uri = [Uri]$config.url
     if (-not $uri.IsLoopback -or $uri.Scheme -notin @('ws','wss') -or $uri.UserInfo -or $uri.Query -or $uri.Fragment) { throw 'The bench requires a credential-free loopback communication URL.' }

@@ -856,3 +856,22 @@ rate limits. Existing target-null rows show `unavailable` and cannot replay a fa
 pending ACK. Genuine exact retries preserve their receipt after code rotation.
 An old Hub reports CONTACT_CONSENT_UPGRADE_REQUIRED before these mutations.
 Private rejection masking and normal request expiry remain in force.
+
+
+### Remote work confirmation
+
+`work-approval-settings` reads the local owner's policy. The Human-only
+`set-work-approval {"remoteWorkApproval":"ask"}` enables a local confirmation
+before each remote file mutation or Shell command. `inherit` uses the Bot's
+existing approval policy. Wait for `reloadRequired` to clear after changing it.
+Only the local owner can answer the existing `answer-work-approval` card; remote
+messages and group roles cannot approve. A grant is for that one exact call and
+does not expand the native sandbox. An outside-workspace operation may still need
+a separately approved native escalation. Never switch the Bot preset to evade a
+denial. WORK_APPROVAL_REJECTED means the local Human rejected the call;
+WORK_APPROVAL_UNAVAILABLE/CANCELLED mean it did not execute.
+
+`ask` on a native preset does not automatically ask for every ordinary command.
+If an authorized task needs a wider sandbox, use only escalation parameters
+actually advertised by that native tool, with an exact justification. Do not
+promise automatic retry after an ordinary OS/sandbox denial.

@@ -116,3 +116,50 @@ test('revoked membership aborts owned native work and withdraws its local permis
   assert.equal(await running, 'cancelled')
   assert.deepEqual(cancelled, [f.agent.id]); assert.equal(f.runtime.workControllers.size, 0)
 })
+
+test('explicit remote confirmation asks before native effects, preserves exact arguments and distinguishes owner rejection',async()=>{
+ const f=fixture();f.runtime.settings={remoteWorkApproval:'ask'}
+ f.define('write');f.define('read');f.define('bash')
+ let answer,ask=0
+ f.runtime.ctx.get=name=>name==='approval'?{request:async request=>{ask++;assert.equal(request.agent,f.agent);assert.equal(request.toolName,'write');assert.equal(f.runtime.workCalls.get('remote:call').sourceMessageId,'input');return new Promise(resolve=>{answer=resolve})}}:undefined
+ await syncWorkTools(f.runtime,f.agent,f.bot)
+ const args={path:'approved.txt',content:'approved'}
+ const pending=f.registered.get('write').execute(args,{agent:f.agent,callId:'call'})
+ for(let n=0;n<10&&!answer;n++)await new Promise(resolve=>setTimeout(resolve,0))
+ assert.equal(ask,1);assert.equal(f.calls.length,0)
+ args.path='unapproved.txt';answer('allowed-once')
+ assert.equal(await pending,'work completed');assert.equal(f.calls[0].args.path,'approved.txt')
+ f.runtime.ctx.get=()=>({request:async()=> 'rejected'})
+ await assert.rejects(f.registered.get('write').execute({path:'no.txt'},{agent:f.agent,callId:'next'}),{code:'WORK_APPROVAL_REJECTED'})
+ assert.equal(f.calls.length,1)
+ await f.registered.get('read').execute({path:'read.txt'},{agent:f.agent,callId:'read'})
+ assert.equal(f.calls.length,2)
+ f.runtime.ctx.get=()=>undefined
+ await assert.rejects(f.registered.get('bash').execute({command:'echo denied'},{agent:f.agent,callId:'shell'}),{code:'WORK_APPROVAL_UNAVAILABLE'})
+ assert.equal(f.calls.length,2)
+})
+
+test('a one-shot confirmation cannot survive a membership revocation while the owner is deciding',async()=>{
+ const f=fixture();f.runtime.settings={remoteWorkApproval:'ask'};f.define('write')
+ let decide
+ f.runtime.ctx.get=()=>({request:()=>new Promise(resolve=>{decide=resolve})})
+ await syncWorkTools(f.runtime,f.agent,f.bot)
+ const result=f.registered.get('write').execute({file_path:'not-created.txt',content:'no'},{agent:f.agent,callId:'call'})
+ for(let n=0;n<10&&!decide;n++)await new Promise(resolve=>setTimeout(resolve,0))
+ f.runtime.authorize=async()=>{throw Object.assign(Error('revoked'),{code:'MEMBERSHIP_REVOKED'})}
+ decide('allowed-once')
+ await assert.rejects(result,{code:'MEMBERSHIP_REVOKED'});assert.equal(f.calls.length,0)
+ assert.equal(f.runtime.workCalls.size,0)
+})
+
+test('explicit confirmation exposes the full redacted command instead of approving a silently truncated script',async()=>{
+ const f=fixture();f.runtime.settings={remoteWorkApproval:'ask'};f.define('bash')
+ const command='echo '+ 'x'.repeat(2500) + '; echo visible-tail'
+ f.runtime.ctx.get=()=>({request:async()=>{
+  assert.equal(f.runtime.workCalls.get('remote:long').code,command)
+  return 'rejected'
+ }})
+ await syncWorkTools(f.runtime,f.agent,f.bot)
+ await assert.rejects(f.registered.get('bash').execute({command},{agent:f.agent,callId:'long'}),{code:'WORK_APPROVAL_REJECTED'})
+ assert.equal(f.calls.length,0)
+})

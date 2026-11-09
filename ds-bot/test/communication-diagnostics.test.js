@@ -222,3 +222,23 @@ test('diagnose never invents a standard endpoint when a legacy custom path was n
   assert.equal(value.hub.url, null)
   assert.doesNotMatch(JSON.stringify(value), /PRIVATE_CUSTOM_PATH/)
 })
+
+test('coalesced publication-generation changes are pending reload even when the selected Bot list is unchanged',async()=>{
+ const {rt,state}=fixture({enabled:true,publishedBotIds:['local-bot'],publicationGenerations:{'local-bot':'old'}})
+ rt.config.communication.publicationGenerations['local-bot']='withdrawn-then-republished'
+ const result=await diagnoseCommunication(rt,state)
+ assert.equal(result.configuration.reloadRequired,true)
+ assert.deepEqual(result.configuration.changedKeys,['publicationGenerations'])
+})
+
+test('Bot-scoped local API requests fail explicitly before using a not-yet-loaded publication',async()=>{
+ let route
+ const rt={config:{communication:{enabled:false,publishedBotIds:[]}},teamTools:[],ctx:{effect:fn=>fn(),connection:{fetch:{register:value=>{route=value;return ()=>{}}}}}}
+ install(rt)
+ rt.config.communication={...rt.config.communication,publishedBotIds:['new-bot']}
+ for(const endpoint of ['relationship-memory','save-relationship-memory','bot-dm-history']){
+  const response=await route.fetch(new Request('http://127.0.0.1/api/communication',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({endpoint,localBotId:'new-bot',conversationId:'conversation',membershipEpoch:'old'})}))
+  const result=await response.json()
+  assert.equal(result.ok,false);assert.equal(result.error.code,'COMMUNICATION_RELOAD_REQUIRED');assert.equal(result.error.reloadRequired,true)
+ }
+})

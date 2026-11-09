@@ -1,15 +1,19 @@
+import { CommunicationTransport } from '../src/host/federation/transport.js'
+import { CommunicationQueue } from '../src/host/federation/queue-store.js'
+import { HUB_CAPABILITIES, DEFAULT_LIMITS } from '../../communication-hub/src/protocol.js'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { createServer } from 'node:https'
 import { WebSocketServer } from 'ws'
-import { decodeHubCode, connectHubSocket, CommunicationOnboarding, communicationCredentialKey } from '../src/host/federation/onboarding.js'
+import { decodeHubCode, connectHubSocket, CommunicationOnboarding, communicationCredentialKey, communicationSocket } from '../src/host/federation/onboarding.js'
 import { signedHubCode } from '../../communication-hub/src/hub-code.js'
 import { caFixture, openssl } from './fixtures/hub-ca-fixture.mjs'
 import { hubTlsObservation } from '../src/host/federation/tls-observation.js'
 import { scopedTrust } from '../src/host/federation/hub-trust.js'
 
-async function server(tls, port = 0) {
+async function server(tls, port = 0, onSocket) {
   const http = createServer(tls), ws = new WebSocketServer({ server: http })
+  if (onSocket) ws.on('connection', onSocket)
   await new Promise((resolve, reject) => { http.once('error', reject); http.listen(port, '127.0.0.1', resolve) })
   return { port: http.address().port, url: `wss://127.0.0.1:${http.address().port}/communication`, async close() {
     for (const client of ws.clients) client.terminate()
@@ -88,4 +92,37 @@ test('trust update verifies Hub challenge before saving, retains device identity
     assert.equal(record.payload.privateKey,'synthetic-existing-private');assert.equal(result.instanceId,'instance');assert.equal(result.trustFingerprint,decoded.trustFingerprint)
     assert.equal(calls,2);assert.equal(result.credentialKey,communicationCredentialKey(hubId));assert.doesNotMatch(JSON.stringify(result),/privateKey|synthetic-existing-private/)
   } finally {f.close()}
+})
+
+
+test('updating scoped CA restarts a TLS-blocked transport in the same Host and retains local identity', {skip:!openssl,timeout:30000},async()=>{
+ const certs=caFixture();let live,transport,queue
+ const until=async check=>{for(let n=0;n<500;n++){if(check())return;await new Promise(resolve=>setTimeout(resolve,10))}assert.fail('TLS recovery timed out')}
+ try{
+  const a=certs.ca('old'),b=certs.ca('new'),oldLeaf=certs.leaf('old-leaf',a),newLeaf=certs.leaf('new-leaf',b),hubId='rotation-hub'
+  live=await server(newLeaf,0,socket=>socket.on('message',raw=>{
+   const frame=JSON.parse(raw.toString()),input=frame.payload
+   const value=frame.type==='memberships.list'?{memberships:[],invites:[]}:frame.type==='deliveries.pull'?[]:
+    frame.type==='enrollment.challenge'?{hubId,purpose:input.purpose,instanceId:input.instanceId,challengeId:'challenge',nonce:'abcdefghijklmnop',expiresAt:Date.now()+10000}:null
+   socket.send(JSON.stringify({protocol:'dsbot-communication/1',id:frame.id,ok:true,value}))
+  }))
+  const url=live.url,code=leaf=>signedHubCode(hubId,url,{caPem:leaf===oldLeaf?a.pem:b.pem,certificatePem:leaf.cert,privateKey:leaf.key})
+  const old=decodeHubCode(code(oldLeaf),{allowLoopback:true}),replacement=decodeHubCode(code(newLeaf),{allowLoopback:true})
+  let record={kind:'grant',payload:{type:'dsbot-communication-signing-key',version:2,hubId,url,publicKey:'synthetic-public',privateKey:'synthetic-private',instanceId:'instance',status:'approved',trust:old.trust}}
+  const rt={config:{communication:{enabled:true,hubId,url,instanceId:'instance',pollMs:10}},ctx:{credentials:{describeRecord:async()=>({configured:true,writable:true}),readRecord:async()=>structuredClone(record),modifyRecord:async(_key,mutate)=>{record=mutate(structuredClone(record))}}}}
+  queue=new CommunicationQueue(':memory:',{instanceId:'instance'});const identity=queue.localPrincipal('human','owner','Owner')
+  transport=new CommunicationTransport(queue,{url,credential:{socketFactory:()=>communicationSocket(rt,communicationCredentialKey(hubId),rt.config.communication,{allowLoopback:true}),
+   authenticate:async()=>({instanceId:'instance',protocol:'dsbot-communication/1',capabilities:HUB_CAPABILITIES,limits:DEFAULT_LIMITS})}})
+  rt.communication={transport}
+  transport.start({pollMs:10})
+  await until(()=>transport.state==='blocked');assert.equal(transport.lastError,'HUB_TLS_UNTRUSTED');assert.equal(transport.running,false)
+  const onboarding=new CommunicationOnboarding(rt,{allowLoopback:true})
+  const result=await onboarding.handle('update-hub-trust',{hubCode:code(newLeaf),confirmedHubId:hubId,confirmedUrl:url,confirmedTrustFingerprint:replacement.trustFingerprint},{human:true})
+  assert.equal(result.reconnectRequested,true);assert.equal(result.restartRequired,false)
+  await until(()=>transport.state==='ready')
+  assert.equal(transport.connected,true);assert.equal(transport.lastError,null)
+  assert.equal(queue.localPrincipal('human','owner','Owner').principalId,identity.principalId)
+  assert.equal(record.payload.privateKey,'synthetic-private');assert.equal(record.payload.publicKey,'synthetic-public')
+  await assert.rejects(connectHubSocket(url,{allowLoopback:true,hubId,trust:old.trust}),{code:'HUB_TLS_UNTRUSTED'})
+ }finally{const pending=[transport?.opening,transport?.pumping];transport?.stop();await Promise.allSettled(pending);queue?.close();await live?.close();certs.close()}
 })

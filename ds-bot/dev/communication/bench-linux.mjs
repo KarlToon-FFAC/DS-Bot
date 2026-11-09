@@ -47,7 +47,7 @@ export function benchEnvironment(environment,home,options,{mock=false}={}){
 export function benchOverlay(environment){
   let communication=''
   if(environment.DSBOT_COMMUNICATION_CONFIG){
-    const config=JSON.parse(environment.DSBOT_COMMUNICATION_CONFIG),allowed=['enabled','url','credentialEnv','publishedBotIds','humanDisplayName','instanceId','autoAcceptBotInvites','pollMs','contextHistoryBytes','rotateTokens']
+    const config=JSON.parse(environment.DSBOT_COMMUNICATION_CONFIG),allowed=['enabled','url','credentialEnv','publishedBotIds','remoteWorkApproval','humanDisplayName','instanceId','autoAcceptBotInvites','pollMs','contextHistoryBytes','rotateTokens']
     if(Object.keys(config).some(key=>!allowed.includes(key)))fail('INVALID_COMMUNICATION_CONFIG')
     const url=new URL(config.url)
     if(!['127.0.0.1','localhost','[::1]'].includes(url.hostname)||!['ws:','wss:'].includes(url.protocol)||url.username||url.password||url.search||url.hash)fail('INVALID_COMMUNICATION_URL')

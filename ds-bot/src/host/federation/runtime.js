@@ -34,6 +34,7 @@ export class CommunicationRuntime {
     if (settings.rotateTokens !== undefined && (!Number.isSafeInteger(settings.rotateTokens) || settings.rotateTokens <= 0)) fail('INVALID_CONFIG')
     if (!Number.isSafeInteger(settings.contextHistoryBytes ?? 131072) || (settings.contextHistoryBytes ?? 131072) < 1024
       || (settings.contextHistoryBytes ?? 131072) > 131072) fail('INVALID_CONFIG')
+    if (settings.remoteWorkApproval !== undefined && !['inherit','ask'].includes(settings.remoteWorkApproval)) fail('INVALID_CONFIG')
     if (settings.localMemory !== undefined && typeof settings.localMemory !== 'boolean') fail('INVALID_CONFIG')
     this.rt = rt
     this.ctx = rt.ctx
@@ -262,7 +263,7 @@ export class CommunicationRuntime {
     const member = this.queue.memberships().find(item => item.conversationId === binding.conversationId
       && item.principalId === binding.recipientPrincipalId && item.membershipEpoch === binding.membershipEpoch)
     return communicationPrompt(bot, binding, member, { ...(this.relationshipContexts?.get(binding.id) ?? this.conversations.get(binding.conversationId)),
-      localUserPrincipalId: this.human.principalId, workToolNames: this.workToolNames?.get(binding.id) ?? [], localMemory: this.localMemoryFor(binding), relationshipMemory: this.relationshipMemoryFor(binding) })
+      localUserPrincipalId: this.human.principalId, remoteWorkApproval: this.settings.remoteWorkApproval ?? 'inherit', workToolNames: this.workToolNames?.get(binding.id) ?? [], localMemory: this.localMemoryFor(binding), relationshipMemory: this.relationshipMemoryFor(binding) })
   }
   async relationshipContext(principalId, input) {
     if (!this.transport.connected) fail('COMMUNICATION_AUTHORIZATION_UNKNOWN')
@@ -654,7 +655,7 @@ export class CommunicationRuntime {
       hubUrl: this.settings.url, hubId: this.settings.hubId ?? this.transport.welcome?.hubId ?? null, queueScope:this.settings.queueScope??'legacy',
       attachmentsAvailable: this.transport.welcome?.capabilities?.includes(ATTACHMENT_CAPABILITY) === true,
       managementRevision: this.managementRevision ?? 0, transport: this.transport.diagnostics?.() ?? null,
-      managementUrl, managementAvailable: managementUrl !== null,
+      compatibility: this.transport.compatibility, managementUrl, managementAvailable: managementUrl !== null,
       lastConnectedAt: this.lastConnectedAt ?? null, error: this.transportError ?? this.lastError ?? null, avatarError: this.avatarError ?? null, contacts: this.contacts,
       limits: this.queue.limits, workApprovals: CommunicationRuntime.prototype.workApprovals.call(this),
       localBots: [...this.bots.values()].map(bot => ({ principalId: bot.principalId, displayName: this.rt.botOf(bot.localRef)?.name ?? bot.displayName })),

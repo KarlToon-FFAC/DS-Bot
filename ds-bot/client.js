@@ -84,6 +84,16 @@ var ZH = {
   "Public profile": "公开资料",
   "Hiding or deleting a published Bot permanently ends its remote identity. Old chats stay readable. Publishing it again creates a new identity that must rejoin groups.": "隐藏或删除已发布的 Bot 会永久结束它的对外身份，旧聊天记录仍可查阅。重新发布会创建新身份，需要重新加入群聊。",
   "Former Bots": "已退出的旧 Bot 身份",
+  "Client": "客户端",
+  "Version not reported": "未报告版本",
+  "Client and Hub versions are incompatible": "客户端与 Hub 版本不兼容",
+  "Connected to Hub · versions differ": "已连接 Hub · 两端版本不同",
+  "Update the client and Hub to the same federation release. Saved conversations and queued messages are retained.": "请将客户端与 Hub 更新到同一联邦版本。已保存的会话和待发消息会保留。",
+  "Hub trust updated. Reconnecting with the new CA.": "Hub 信任已更新，正在使用新 CA 重新连接。",
+  "Hub trust updated. Restart the host to use the new CA.": "Hub 信任已更新，请重启宿主以使用新 CA。",
+  "Remote work confirmation": "远程工作确认",
+  "Confirm every remote write or command": "每次远程写入或执行命令前由本机确认",
+  "Only this device can approve. Confirmation is one call only and does not expand the sandbox; a wider sandbox may need a separate escalation approval.": "只有本机可以批准，批准仅对本次调用有效，不会扩大沙箱范围；超出沙箱仍可能需要单独的提权审批。",
   "Bot no longer exists": "Bot 已不存在（旧身份）",
   "Identity ended": "身份结束时间",
   "This Bot identity no longer exists. This chat is read only. A re-published Bot must start a new chat.": "此 Bot 的对外身份已不存在，本会话仅供查阅。重新发布的 Bot 需要建立新会话。",
@@ -12297,6 +12307,7 @@ var communicationDescriptions = {
   AUTHORIZATION_PENDING: "Membership is still syncing. Wait briefly, then retry the same request.",
   HISTORY_GAP: "Some history is missing. Wait for synchronization before sending.",
   STALE_CONNECTION: "Another connection replaced this one. Close the duplicate instance and restart this one.",
+  PROTOCOL_VERSION_UNSUPPORTED: "The client and Hub use incompatible communication protocols. Update both components to the same federation release; do not reset conversation data.",
   UNSUPPORTED_CAPABILITY: "This device and the Hub use incompatible versions. Update them to the same revision.",
   BOUNDED_COLLABORATION_REQUIRED: "Upgrade the Hub to support bounded Bot collaboration. Your queued messages are retained.",
   EXPLICIT_ACTIVATION_REQUIRED: "Update this device and the Hub together: explicit Bot activation is required. Queued intents are retained.",
@@ -12319,6 +12330,15 @@ var communicationDescriptions = {
   COMMUNICATION_CONFIG_WRITE_FAILED: "The configuration save could not be confirmed. Refresh the published Bot selection before applying again.",
   TLS_REQUIRED: "This Hub address requires a secure connection. Ask the Hub owner for its trusted WSS address.",
   UNKNOWN_TOOL: "This tool is unavailable through the current call surface. Check current Session scope, configuration reload and native/PTC presentation. A registered tool may require the approved run_code SDK transport in PTC mode; never bypass scope or permissions.",
+  COMMUNICATION_RELOAD_REQUIRED: "The saved communication configuration has not loaded yet. Wait for the plugin reload, then refresh state and use the current Bot identity and membership epoch.",
+  AVATAR_REVISION_MISMATCH: "This avatar has changed or has no custom image. Refresh contacts and use its current imageRevision; a generated avatar has no image to download.",
+  INVALID_AVATAR: "The avatar image is invalid or unsupported. Refresh its current revision or choose a valid PNG, JPEG, WebP or GIF image.",
+  INVALID_AVATAR_RESPONSE: "The Hub returned an invalid avatar image or chunk. Refresh contacts and check that client and Hub are updated.",
+  INVALID_AVATAR_CHUNK: "The Hub rejected the avatar chunk request. Update the client and Hub to matching versions.",
+  INVALID_AVATAR_REVISION: "Use the current avatar imageRevision from contacts. A generated avatar has no downloadable image.",
+  WORK_APPROVAL_REJECTED: "The local owner rejected this remote work call. The tool was not executed.",
+  WORK_APPROVAL_CANCELLED: "This remote work approval was cancelled. The tool was not executed.",
+  WORK_APPROVAL_UNAVAILABLE: "Local approval is unavailable; remote writes and commands requiring confirmation cannot run.",
   BOT_RETIRED: "This remote Bot identity no longer exists. Re-publish the Bot and add its new identity to a new or existing conversation.",
   BOT_PUBLICATION_MIGRATION_REQUIRED: "Update and restart the Hub to support permanent Bot identity retirement before connecting this client.",
   BOT_NOT_PUBLISHED: "The executing local Bot is not published to this Hub. In Remote communication > Contacts > Published Bots, select this Bot and save. Wait for the configuration reload, then check diagnose before retrying. Publishing another Bot does not publish this one.",
@@ -12556,6 +12576,7 @@ function communicationError(error, { bot, reloadRequired = false } = {}) {
     nextActions: detail?.nextActions ?? [message, "Check communication_diagnose in your own local Bot chat or dsbot-remote diagnose through the authenticated local API before retrying."],
     docsHint: "dsbot-remote Skill: Outcomes and recovery; An uncertain join or certificate failure",
     ...phases.has(error?.phase) ? { phase: error.phase } : {},
+    ...code === "COMMUNICATION_RELOAD_REQUIRED" ? { reloadRequired: true } : {},
     ...code === "BOT_NOT_PUBLISHED" ? { reloadRequired, configurationChangeRequired: !reloadRequired, reloadRequiredAfterPublicationChange: true } : {},
     ...code === "BOT_NOT_PUBLISHED" && bot ? { subject: { kind: "local-bot", localBotId: bot.id, displayName: bot.name } } : {}
   };
@@ -12565,6 +12586,7 @@ function communicationError(error, { bot, reloadRequired = false } = {}) {
 var knownCommunicationFailure = (error) => Object.hasOwn(communicationDescriptions, error?.code ?? "");
 var communicationFailure = (error) => knownCommunicationFailure(error) ? t(communicationDescriptions[error.code]) + ` [${error.code}]` : t("The action could not be confirmed. Check current status before trying again.");
 var definitive = /* @__PURE__ */ new Set([
+  "COMMUNICATION_RELOAD_REQUIRED",
   "PROACTIVE_ROOT_CAPABILITY_REQUIRED",
   "PUBLIC_PROFILE_VERSION_CONFLICT",
   "PROFILE_VERSION_CONFLICT",
@@ -21667,6 +21689,29 @@ function listedOpener({ list, open, refresh, current }) {
   };
 }
 
+// src/shared/communication-version.js
+var COMMUNICATION_VERSION = "2026.11.09.2";
+var incompatibilities = /* @__PURE__ */ new Set([
+  "UNSUPPORTED_CAPABILITY",
+  "PROTOCOL_VERSION_UNSUPPORTED",
+  "EXPLICIT_ACTIVATION_REQUIRED",
+  "BOUNDED_COLLABORATION_REQUIRED",
+  "BOT_PUBLICATION_MIGRATION_REQUIRED",
+  "PROACTIVE_ROOT_CAPABILITY_REQUIRED",
+  "SCHEMA_VERSION_UNSUPPORTED"
+]);
+var incompatibleCommunication = (code) => incompatibilities.has(code);
+function communicationCompatibility(welcome, code) {
+  const value = welcome?.communicationVersion;
+  const hubVersion = typeof value === "string" && /^[0-9][a-zA-Z0-9._+-]{0,63}$/.test(value) ? value : null;
+  return {
+    clientVersion: COMMUNICATION_VERSION,
+    hubVersion,
+    status: incompatibleCommunication(code) ? "incompatible" : !hubVersion ? "unknown" : hubVersion === COMMUNICATION_VERSION ? "matched" : "different",
+    ...incompatibleCommunication(code) ? { code } : {}
+  };
+}
+
 // src/client/communication-mentions.js
 var import_react54 = require("react");
 function useMentionDismiss(input, open, dismiss) {
@@ -22795,6 +22840,7 @@ function AddDevice({ request, displayName = "Human", revision }) {
       (0, import_react60.createElement)("p", null, (0, import_react60.createElement)("code", null, item.hubId), " · ", statusLabel(item.status)),
       (0, import_react60.createElement)("p", { className: "bt-comm-reference" }, item.url),
       item.requestId ? (0, import_react60.createElement)("p", { className: "bt-comm-reference" }, t("Request ID"), ": ", (0, import_react60.createElement)("code", null, item.requestId)) : null,
+      item.restartRequired ? (0, import_react60.createElement)("p", { role: "status" }, t("Hub trust updated. Restart the host to use the new CA.")) : item.reconnectRequested ? (0, import_react60.createElement)("p", { role: "status" }, t("Hub trust updated. Reconnecting with the new CA.")) : null,
       item.departed ? (0, import_react60.createElement)("p", { role: "status" }, t("Access revoked. History is retained; this device cannot resume.")) : item.paused ? (0, import_react60.createElement)("p", { role: "status" }, t("Paused. Identity, trust and Hub history are retained separately.")) : item.status === "approved" ? (0, import_react60.createElement)("p", { role: "status" }, t("Saved approval. This is not a live connection check. The device configuration is saved through the app; current connection status is shown separately.")) : null,
       item.status === "approved" && !item.departed ? (0, import_react60.createElement)("button", { type: "button", disabled: busy, onClick: () => setLifecycle({ kind: "leave", item }) }, t("Leave this Hub")) : null,
       (0, import_react60.createElement)("button", { type: "button", disabled: busy, onClick: () => {
@@ -22892,13 +22938,14 @@ function OwnRemoteProfile({ request, operation, revision, bots = [] }) {
     const token = generation.current, order = ++loadOrder.current;
     const results = await Promise.allSettled([
       request({ endpoint: "user-code" }),
-      request({ endpoint: "available-bots" })
+      request({ endpoint: "available-bots" }),
+      request({ endpoint: "work-approval-settings" })
     ]);
     if (token !== generation.current || order !== loadOrder.current) return;
-    const [ownCode, available2] = results.map((result) => result.status === "fulfilled" ? result.value : null);
+    const [ownCode, available2, workApproval] = results.map((result) => result.status === "fulfilled" ? result.value : null);
     if (ownCode) setCode(ownCode.userCode);
     if (available2 && !publicationDirty.current) setPublished(available2.publishedBotIds ?? []);
-    setData((previous) => ({ available: available2 ?? previous?.available ?? { bots: [], publishedBotIds: [] } }));
+    setData((previous) => ({ available: available2 ?? previous?.available ?? { bots: [], publishedBotIds: [] }, workApproval: ["inherit", "ask"].includes(workApproval?.remoteWorkApproval) ? workApproval.remoteWorkApproval : previous?.workApproval ?? null }));
     const failed = results.find((result) => result.status === "rejected");
     if (failed) throw failed.reason;
   };
@@ -22946,6 +22993,12 @@ function OwnRemoteProfile({ request, operation, revision, bots = [] }) {
     { className: "bt-comm-own-profile" },
     liveError ? (0, import_react60.createElement)("p", { className: "bt-comm-reference", role: "status" }, t("Status may be out of date."), " ", liveError) : null,
     error ? (0, import_react60.createElement)("p", { className: "bt-comm-error", role: "alert" }, error) : null,
+    (0, import_react60.createElement)("h3", null, t("Remote work confirmation")),
+    (0, import_react60.createElement)("label", { className: "bt-comm-check" }, (0, import_react60.createElement)("input", { type: "checkbox", "aria-label": t("Confirm every remote write or command"), checked: data?.workApproval === "ask", disabled: busy || data?.workApproval == null, onChange: (event) => {
+      const remoteWorkApproval = event.target.checked ? "ask" : "inherit";
+      void run2(() => operation("set-work-approval", { remoteWorkApproval }));
+    } }), t("Confirm every remote write or command")),
+    (0, import_react60.createElement)("p", { className: "bt-comm-reference" }, t("Only this device can approve. Confirmation is one call only and does not expand the sandbox; a wider sandbox may need a separate escalation approval.")),
     (0, import_react60.createElement)("h3", null, t("Your user code")),
     (0, import_react60.createElement)("p", { className: "bt-comm-user-code", tabIndex: 0 }, code || t("Loading…")),
     (0, import_react60.createElement)("p", { className: "bt-comm-reference" }, t("Share this code with the person you want to add. Contacts can reach your published Bots.")),
@@ -24053,6 +24106,7 @@ var communicationCSS = `
 .bt-comm-connection{border:0;background:none;padding:0 4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .bt-comm-connection-label{flex:1;font-size:11px;color:var(--bt-ink-2);font-weight:400}
 .bt-comm-connection-details{display:none}
+.bt-comm-connection>[data-communication-versions],.bt-comm-connection>[role=status]{flex-basis:100%;min-width:0}
 .bt-comm-connection>button{padding:2px 6px;min-height:24px;margin:0;border:0;background:none;color:var(--bt-ink-2);font-size:11px}
 .bt-comm-start-actions>button{display:inline-flex;justify-content:center;align-items:center;gap:5px}
 .bt-comm-nav>.bt-comm-start-actions>button{border:0;background:none;font-size:12px;min-height:36px;padding:6px}
@@ -24989,7 +25043,9 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
     setNewMenuOpen(true);
   };
   const connectionBlocked = state?.error && !["CONNECTION_LOST", "REQUEST_TIMEOUT", "STORAGE_UNAVAILABLE", "BACKPRESSURE", "HISTORY_GAP"].includes(state.error);
-  const connectionLabel = !team.communicationEnabled ? "Not configured" : pollError ? "Offline" : !state ? "Connecting…" : state.connected ? "Connected to Hub" : connectionBlocked ? "Offline" : "Reconnecting to Hub";
+  const compatibility = state?.compatibility ?? communicationCompatibility(null, state?.error);
+  const versionBlocked = incompatibleCommunication(state?.error) || compatibility.status === "incompatible";
+  const connectionLabel = !team.communicationEnabled ? "Not configured" : versionBlocked ? "Client and Hub versions are incompatible" : pollError ? "Offline" : !state ? "Connecting…" : state.connected ? compatibility.status === "different" ? "Connected to Hub · versions differ" : "Connected to Hub" : connectionBlocked ? "Offline" : "Reconnecting to Hub";
   const roleLabel = (role) => role === "owner" ? "Group owner" : role === "admin" ? "Group admin" : "Group member";
   const avatar = (id, name) => {
     const contact = contacts.find((person) => person.principalId === id);
@@ -25095,6 +25151,9 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
         "section",
         { className: "bt-comm-connection", "aria-label": t("Connection status") },
         (0, import_react69.createElement)("p", { className: "bt-comm-connection-label", role: "status", "data-connected": Boolean(state?.connected && !pollError) }, (0, import_react69.createElement)("span", { className: "bt-comm-dot", "aria-hidden": true }), t(connectionLabel)),
+        team.communicationEnabled && state ? (0, import_react69.createElement)("p", { className: "bt-comm-reference", "data-communication-versions": true }, t("Client"), ": ", compatibility.clientVersion, " · Hub: ", compatibility.hubVersion ?? t("Version not reported")) : null,
+        team.communicationEnabled && (versionBlocked || compatibility.status === "different") ? (0, import_react69.createElement)("p", { className: "bt-comm-reference", role: "status" }, t("Update the client and Hub to the same federation release. Saved conversations and queued messages are retained.")) : null,
+        team.communicationEnabled && versionBlocked && state?.error ? (0, import_react69.createElement)("p", { className: "bt-comm-reference", role: "status" }, communicationFailure({ code: state.error })) : null,
         state ? (0, import_react69.createElement)("p", { className: "bt-comm-reference bt-comm-connection-details" }, `${state.instanceId} · ${t("Remote contacts")}: ${remoteCount}`) : null,
         pollError ? (0, import_react69.createElement)("p", { className: "bt-comm-reference", role: "status" }, t("Status may be out of date."), " ", pollError) : null,
         team.communicationEnabled && !state?.connected && !connectionBlocked ? (0, import_react69.createElement)("p", { className: "bt-comm-reference" }, t("Queued messages send automatically when the connection returns.")) : null,

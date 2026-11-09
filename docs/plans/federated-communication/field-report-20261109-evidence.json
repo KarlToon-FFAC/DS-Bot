@@ -1,0 +1,75 @@
+{
+  "verifiedOn": "2026-11-09",
+  "baseCommit": "297e66ecfd8ec593b8a38180e0124011c318c0fb",
+  "federationRelease": "2026.11.09.2",
+  "model": "deterministic Mock only; no production identity, Hub or credentials",
+  "plugin": {
+    "total": 2042,
+    "passed": 2037,
+    "skipped": 5,
+    "failed": 0
+  },
+  "hub": {
+    "passed": 195,
+    "failed": 0
+  },
+  "smoke": {
+    "passed": 52,
+    "ownedBenchStopped": true
+  },
+  "wssTrustRecovery": {
+    "passed": true,
+    "scope": "real TLS and transport in one process with protocol/credential fixtures, not a production Hub or a DSH CA-rotation deployment",
+    "checks": [
+      "old CA blocks and stops retries",
+      "confirmed new CA restarts same transport",
+      "queue and principal identity preserved",
+      "old CA still fails",
+      "stale-connection fencing cannot be cleared by reconnect"
+    ]
+  },
+  "realTwoDshCli": {
+    "status": "PASSED",
+    "model": "deterministic Mock",
+    "cases": [
+      "real-CLI-downloads-an-authorized-remote-custom-avatar",
+      "real-CLI-downloads-a-published-remote-Bot-custom-avatar",
+      "stale-avatar-revision-retains-specific-diagnostic-instead-of-COMMUNICATION_UNAVAILABLE",
+      "generated-avatar-without-custom-image-is-explicitly-unavailable",
+      "real-Hub-and-client-report-matching-federation-release-in-live-state",
+      "avatar-and-version-diagnostics-preserve-real-two-DSH-Mock-collaboration"
+    ]
+  },
+  "realTwoDshRemoteConfirmation": {
+    "status": "PASSED",
+    "model": "deterministic Mock",
+    "cases": [
+      "danger-full-access-remote-reject-before-native-effects-without-changing-local-Bot-permission",
+      "danger-full-access-remote-allow-before-native-effects-without-changing-local-Bot-permission"
+    ]
+  },
+  "chromium": {
+    "passed": true,
+    "desktop": [
+      1280,
+      900
+    ],
+    "mobile": [
+      390,
+      844
+    ],
+    "fixtures": "synthetic state with production components/styles",
+    "checks": [
+      "incompatible version reason/upgrade action",
+      "compatible version differences",
+      "live matching-version recovery",
+      "local remote-work confirmation setting"
+    ],
+    "pageErrors": 0
+  },
+  "remaining": [
+    "Windows native sandbox automatic denial-to-escalation is an upstream DSH change",
+    "D4 original task/report/rejection not supplied; no truth/provenance change claimed",
+    "valid remote Human and Bot avatar reads passed; the reported universal valid-image failure is not reproduced"
+  ]
+}

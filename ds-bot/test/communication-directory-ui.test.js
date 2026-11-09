@@ -325,6 +325,7 @@ test('live contact hints refresh incoming decisions without discarding unsaved p
   await ui(async ({ exports: api, doc, render, edit }) => {
     let status = 'pending', reads = 0
     const request = async body => {
+      if (body.endpoint === 'work-approval-settings') return {remoteWorkApproval:'inherit'}
       if (body.endpoint === 'user-code') return { userCode: 'SYNTHETIC' }
       if (body.endpoint === 'available-bots') return { bots: [{ id: 'one', name: 'One' }, { id: 'two', name: 'Two' }], publishedBotIds: ['one'] }
       if (body.endpoint === 'contact-requests') { reads++; return [{ requestId: 'incoming', direction: 'incoming', status, senderName: 'Synthetic person', version: 1 }] }
@@ -350,6 +351,7 @@ test('contact refresh failure preserves the last confirmed relations and marks t
   await ui(async ({ exports: api, doc, render }) => {
     let fail = false
     const request = async body => {
+      if (body.endpoint === 'work-approval-settings') return {remoteWorkApproval:'inherit'}
       if (body.endpoint === 'user-code') return { userCode: 'SYNTHETIC' }
       if (body.endpoint === 'available-bots') return { bots: [], publishedBotIds: [] }
       if (body.endpoint === 'contact-requests') return []
@@ -416,6 +418,7 @@ test('late contact snapshot cannot resurrect a relation removed while automatic 
     let removed = false, reads = 0, release
     const relation = { active: true, otherHumanPrincipalId: 'human:b:synthetic', version: 1, botPrincipalIds: [] }
     const request = async body => {
+      if (body.endpoint === 'work-approval-settings') return {remoteWorkApproval:'inherit'}
       if (body.endpoint === 'user-code') return { userCode: 'SYNTHETIC' }
       if (body.endpoint === 'available-bots') return { bots: [], publishedBotIds: [] }
       if (body.endpoint === 'contact-requests') return []
@@ -468,6 +471,7 @@ test('publication edits freeze their expected base across live changes and prese
   await ui(async ({ exports: api, doc, render, click }) => {
     let canonical = ['one'], availableReads = 0
     const mutations = [], request = async body => {
+      if (body.endpoint === 'work-approval-settings') return {remoteWorkApproval:'inherit'}
       if (body.endpoint === 'user-code') return { userCode: 'SYNTHETIC' }
       if (body.endpoint === 'contact-requests' || body.endpoint === 'contact-relations') return []
       assert.equal(body.endpoint, 'available-bots'); availableReads++
@@ -508,6 +512,7 @@ test('an old accepted contact ACK never overwrites a newer canonical cancelled r
   await ui(async ({ exports: api, doc, render, click }) => {
     let canonical = 'pending'
     const request = async body => {
+      if (body.endpoint === 'work-approval-settings') return {remoteWorkApproval:'inherit'}
       if (body.endpoint === 'user-code') return { userCode: 'SYNTHETIC' }
       if (body.endpoint === 'available-bots') return { bots: [], publishedBotIds: [] }
       if (body.endpoint === 'contact-relations') return []
@@ -538,7 +543,7 @@ test('personal profile owns user code rotation and publication editing while Con
     assert.equal(doc.querySelector('[aria-label="Public languages"]'),null)
     await click('Rotate user code');assert.equal(mutations.length,0);await click('Confirm code rotation')
     assert.equal(mutations[0].endpoint,'rotate-user-code')
-    assert.ok(calls.every(endpoint=>['user-code','available-bots'].includes(endpoint)))
+    assert.ok(calls.every(endpoint=>['user-code','available-bots','work-approval-settings'].includes(endpoint)))
     const contacts=[{principalId:'human:a:owner',kind:'human',homeInstanceId:'a',displayName:'Me'}, {principalId:'bot:a:local',kind:'bot',displayName:'Local'}, {principalId:'human:b:buddy',kind:'human',homeInstanceId:'b',displayName:'Buddy'}, {principalId:'bot:b:remote',kind:'bot',ownerPrincipalId:'human:b:buddy',homeInstanceId:'b',displayName:'Remote'}]
     await render(React.createElement(api.ContactDirectory,{contacts,humanPrincipalId:'human:a:owner',instanceId:'a',request:async()=>({})}))
     await act(async()=>doc.querySelector('[aria-label="Published Bots"]').click())
@@ -605,4 +610,17 @@ test('legacy empty contact scopes are visible and only the local side is repaire
     assert.doesNotMatch(card.textContent, /Your contact scope shares no Bots/)
     assert.match(card.textContent, /This contact shares no Bots/)
   })
+})
+
+test('the local profile saves explicit per-call remote work confirmation without changing published Bots',async()=>{
+ await ui(async({exports:api,doc,render})=>{
+  let remoteWorkApproval='inherit';const mutations=[]
+  const request=async body=>body.endpoint==='work-approval-settings'?{remoteWorkApproval}:body.endpoint==='available-bots'?{bots:[],publishedBotIds:[]}:{userCode:'SYNTHETIC'}
+  await render(React.createElement(api.OwnRemoteProfile,{request,operation:async(endpoint,input)=>{mutations.push({endpoint,...input});remoteWorkApproval=input.remoteWorkApproval;return {reloadRequired:true}}}))
+  const field=()=>doc.querySelector('[aria-label="Confirm every remote write or command"]')
+  assert.equal(field().checked,false)
+  await act(async()=>field().click())
+  assert.deepEqual(mutations,[{endpoint:'set-work-approval',remoteWorkApproval:'ask'}]);assert.equal(field().checked,true)
+  assert.match(doc.body.textContent,/does not expand the sandbox/)
+ })
 })

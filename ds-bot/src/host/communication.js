@@ -65,6 +65,7 @@ export function install(rt) {
   }
   const execute = work => async (args, exec) => {
     try {
+      if (communicationReloadRequired(rt, appliedSettings)) fail('COMMUNICATION_RELOAD_REQUIRED')
       const comm = await ensure(), communicationBinding = comm.owners.get(exec.agent?.id)
       if (exec.name === 'list_contacts' && !communicationBinding && !comm.bots.has(rt.selfOf(exec.agent?.id))) {
         await localManagementAuthority(rt, exec)
@@ -213,7 +214,7 @@ export function install(rt) {
           return Response.json({ ok: true, value: await diagnoseCommunication(rt, diagnosticState()) })
         }
         const enrollmentActions = { 'decode-hub-code': 'decode-hub-code', 'join-hub': 'join', 'hub-join-status': 'status', 'cancel-hub-join': 'cancel', 'onboarding-storage': 'storage',
-          'memory-settings': 'memory-settings', 'set-memory-settings': 'set-memory-settings', 'available-bots': 'available-bots', 'publish-bots': 'publish-bots', 'update-hub-trust': 'update-hub-trust',
+          'work-approval-settings':'work-approval-settings','set-work-approval':'set-work-approval', 'memory-settings': 'memory-settings', 'set-memory-settings': 'set-memory-settings', 'available-bots': 'available-bots', 'publish-bots': 'publish-bots', 'update-hub-trust': 'update-hub-trust',
           'disconnect-hub':'disconnect-hub','switch-hub':'switch-hub','resume-hub':'resume-hub',
           'leave-hub':'leave-hub','hub-leave-status':'hub-leave-status','forget-hub':'forget-hub',
           'user-code': 'user-code', 'rotate-user-code': 'rotate-user-code', 'request-contact': 'contact-request', 'contact-requests': 'contact-requests',
@@ -221,7 +222,7 @@ export function install(rt) {
         if (Object.hasOwn(enrollmentActions, body.endpoint)) {
           const action = enrollmentActions[body.endpoint]
           if (action === 'available-bots') await rt.load()
-          if (!['decode-hub-code','storage','available-bots','memory-settings'].includes(action)) {
+          if (!['decode-hub-code','storage','available-bots','memory-settings','work-approval-settings'].includes(action)) {
             await rt.load(); await rt.refresh()
             if (rt.readOnly?.() !== undefined) fail('COMMUNICATION_READ_ONLY')
           }
@@ -232,6 +233,7 @@ export function install(rt) {
         }
         if (body.endpoint === 'state' && !settings.enabled) return Response.json({ ok: true, value: { enabled: false, connected: false, reloadRequired: communicationReloadRequired(rt, appliedSettings), listState: 'disabled', conversations: [], contacts: [], invites: [], outbox: [] } })
         if (body.endpoint === 'state' && startupError && startupError !== 'COMMUNICATION_READ_ONLY') return Response.json({ ok: true, value: { enabled: true, connected: false, error: communicationError({ code: startupError }).code, errorDetails: communicationError({ code: startupError }), reloadRequired: communicationReloadRequired(rt, appliedSettings), listState: 'not-started', conversations: [], contacts: [], invites: [], outbox: [] } })
+        if (body.localBotId !== undefined && communicationReloadRequired(rt, appliedSettings)) fail('COMMUNICATION_RELOAD_REQUIRED')
         const comm = await ensure()
         let value
         switch (body.endpoint) {

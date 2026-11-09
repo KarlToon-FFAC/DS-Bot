@@ -238,6 +238,7 @@ export const communicationCSS = `
 .bt-comm-connection{border:0;background:none;padding:0 4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .bt-comm-connection-label{flex:1;font-size:11px;color:var(--bt-ink-2);font-weight:400}
 .bt-comm-connection-details{display:none}
+.bt-comm-connection>[data-communication-versions],.bt-comm-connection>[role=status]{flex-basis:100%;min-width:0}
 .bt-comm-connection>button{padding:2px 6px;min-height:24px;margin:0;border:0;background:none;color:var(--bt-ink-2);font-size:11px}
 .bt-comm-start-actions>button{display:inline-flex;justify-content:center;align-items:center;gap:5px}
 .bt-comm-nav>.bt-comm-start-actions>button{border:0;background:none;font-size:12px;min-height:36px;padding:6px}

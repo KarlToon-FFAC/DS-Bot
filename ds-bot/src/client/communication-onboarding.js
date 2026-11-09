@@ -167,6 +167,7 @@ export function AddDevice({ request, displayName = 'Human', revision }) {
         h('button',{type:'button',disabled:busy||!resumeConfirmed.legacy,onClick:()=>{void run(async token=>{await request({endpoint:'resume-hub',confirmedUrl:selectedHub.url,confirmResume:true,...(selectedHub.hubId?{hubId:selectedHub.hubId}:{})});setResumeConfirmed({});await refreshStorage(token)})}},t('Resume this Hub')))):null,
     enrollments.map(item => h('section', { key: item.hubId, className: 'bt-comm-address' }, h('p', null, h('code', null, item.hubId), ' · ', statusLabel(item.status)), h('p', { className: 'bt-comm-reference' }, item.url),
       item.requestId ? h('p', { className: 'bt-comm-reference' }, t('Request ID'), ': ', h('code', null, item.requestId)) : null,
+      item.restartRequired ? h('p',{role:'status'},t('Hub trust updated. Restart the host to use the new CA.')) : item.reconnectRequested ? h('p',{role:'status'},t('Hub trust updated. Reconnecting with the new CA.')) : null,
       item.departed?h('p',{role:'status'},t('Access revoked. History is retained; this device cannot resume.')):item.paused?h('p',{role:'status'},t('Paused. Identity, trust and Hub history are retained separately.')):item.status === 'approved' ? h('p', { role: 'status' }, t('Saved approval. This is not a live connection check. The device configuration is saved through the app; current connection status is shown separately.')) : null,
       item.status==='approved'&&!item.departed?h('button',{type:'button',disabled:busy,onClick:()=>setLifecycle({kind:'leave',item})},t('Leave this Hub')):null,
       h('button',{type:'button',disabled:busy,onClick:()=>{setDeleteHistory(false);setLifecycle({kind:'forget',item})}},t('Forget this Hub')),
@@ -208,13 +209,13 @@ export function OwnRemoteProfile({ request, operation, revision, bots = [] }) {
   const load = async () => {
     const token = generation.current, order = ++loadOrder.current
     const results = await Promise.allSettled([
-      request({ endpoint: 'user-code' }), request({ endpoint: 'available-bots' }),
+      request({ endpoint: 'user-code' }), request({ endpoint: 'available-bots' }), request({ endpoint: 'work-approval-settings' }),
     ])
     if (token !== generation.current || order !== loadOrder.current) return
-    const [ownCode, available] = results.map(result => result.status === 'fulfilled' ? result.value : null)
+    const [ownCode, available, workApproval] = results.map(result => result.status === 'fulfilled' ? result.value : null)
     if (ownCode) setCode(ownCode.userCode)
     if (available && !publicationDirty.current) setPublished(available.publishedBotIds ?? [])
-    setData(previous => ({ available: available ?? previous?.available ?? { bots: [], publishedBotIds: [] } }))
+    setData(previous => ({ available: available ?? previous?.available ?? { bots: [], publishedBotIds: [] }, workApproval: ['inherit','ask'].includes(workApproval?.remoteWorkApproval) ? workApproval.remoteWorkApproval : previous?.workApproval ?? null }))
     const failed = results.find(result => result.status === 'rejected')
     if (failed) throw failed.reason
   }
@@ -241,6 +242,9 @@ export function OwnRemoteProfile({ request, operation, revision, bots = [] }) {
   return h('div', { className: 'bt-comm-own-profile' },
     liveError ? h('p', { className: 'bt-comm-reference', role: 'status' }, t('Status may be out of date.'), ' ', liveError) : null,
     error ? h('p', { className: 'bt-comm-error', role: 'alert' }, error) : null,
+    h('h3', null, t('Remote work confirmation')),
+    h('label', { className: 'bt-comm-check' }, h('input', { type: 'checkbox', 'aria-label': t('Confirm every remote write or command'), checked: data?.workApproval === 'ask', disabled: busy || data?.workApproval == null, onChange: event => { const remoteWorkApproval = event.target.checked ? 'ask' : 'inherit'; void run(() => operation('set-work-approval', { remoteWorkApproval })) } }), t('Confirm every remote write or command')),
+    h('p', { className: 'bt-comm-reference' }, t('Only this device can approve. Confirmation is one call only and does not expand the sandbox; a wider sandbox may need a separate escalation approval.')),
     h('h3', null, t('Your user code')), h('p', { className: 'bt-comm-user-code', tabIndex: 0 }, code || t('Loading…')),
     h('p', { className: 'bt-comm-reference' }, t('Share this code with the person you want to add. Contacts can reach your published Bots.')),
     h('button', { type: 'button', disabled: busy || !code, onClick: () => setConfirm('rotate') }, t('Rotate user code')),

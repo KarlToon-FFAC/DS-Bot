@@ -1,3 +1,4 @@
+import { COMMUNICATION_VERSION } from './version.js'
 import { retireBot } from './bot-retirement.js'
 import { DatabaseSync } from 'node:sqlite'
 import { randomUUID } from 'node:crypto'
@@ -113,7 +114,7 @@ export class HubStore {
       this.db.prepare('INSERT INTO instance_features VALUES (?,?) ON CONFLICT(instance_id) DO UPDATE SET attachments=excluded.attachments').run(instanceId, Number(capabilities.includes(ATTACHMENT_CAPABILITY)))
       if(!capabilities.includes(ATTACHMENT_CAPABILITY))requireThat(!this.db.prepare("SELECT 1 FROM memberships m JOIN messages msg ON msg.conversation_id=m.conversation_id JOIN principals p ON p.id=m.principal_id WHERE p.instance_id=? AND m.active=1 AND msg.seq>=m.join_seq AND json_array_length(msg.body,'$.attachments')>0 LIMIT 1").get(instanceId),'ATTACHMENT_CAPABILITY_REQUIRED')
       return { instanceId, epoch: this.db.prepare('SELECT epoch FROM instances WHERE id=?').get(instanceId).epoch,
-        protocol: PROTOCOL, capabilities: HUB_CAPABILITIES, limits: this.limits }
+        protocol: PROTOCOL, communicationVersion: COMMUNICATION_VERSION, capabilities: HUB_CAPABILITIES, limits: this.limits }
     })
   }
   configurePeer(instanceId,label,revision=1) {

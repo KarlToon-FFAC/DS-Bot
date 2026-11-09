@@ -4,9 +4,9 @@ import { hubTlsObservation } from './tls-observation.js'
 import { output } from '../tools.js'
 import { communicationError } from '../../shared/communication-diagnostics.js'
 
-const configKeys = ['enabled', 'hubId', 'url', 'instanceId', 'credentialKey', 'credentialEnv', 'publishedBotIds', 'localMemory', 'pollMs', 'contextHistoryBytes', 'rotateTokens', 'maxPending', 'autoAcceptBotInvites']
+const configKeys = ['enabled', 'hubId', 'url', 'instanceId', 'credentialKey', 'credentialEnv', 'publishedBotIds', 'publicationGenerations', 'remoteWorkApproval', 'localMemory', 'pollMs', 'contextHistoryBytes', 'rotateTokens', 'maxPending', 'autoAcceptBotInvites']
 export const loadedCommunicationSettings = settings => Object.fromEntries(configKeys.map(key => [key,
-  Array.isArray(settings[key]) ? [...settings[key]] : settings[key]]))
+  Array.isArray(settings[key]) ? [...settings[key]] : settings[key] && typeof settings[key] === 'object' ? { ...settings[key] } : settings[key]]))
 const safeId = value => typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value) ? value : null
 const safeUrl = value => {
   try {

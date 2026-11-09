@@ -156,3 +156,14 @@ test('only locally observed connection loss is branded, never a Hub error with i
   await assert.rejects(local, error => error.code === 'CONNECTION_LOST' && isLocalConnectionFailure(error))
   client.stop()
 })
+
+test('an explicit reconnect cannot remove a stale-connection fencing decision',async()=>{
+ const {client}=fixture()
+ client.fenced=true
+ const result=client.reconnect({pollMs:10})
+ assert.equal(result.reconnectRequested,true)
+ await new Promise(resolve=>setTimeout(resolve,0))
+ assert.equal(client.fenced,true);assert.equal(client.connected,false);assert.equal(client.running,false)
+ assert.equal(client.lastError,'STALE_CONNECTION')
+ client.stop()
+})

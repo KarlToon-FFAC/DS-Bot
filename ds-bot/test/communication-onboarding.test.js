@@ -450,3 +450,15 @@ test('offline withdrawal and re-publication retain a changed generation even whe
   await f.onboarding.handle('publish-bots',{localBotIds:[]},human)
   assert.notEqual(f.rt.config.communication.publicationGenerations.worker,generation)
 })
+
+test('remote confirmation is an explicit local-owner setting and does not change Bot sandbox permissions',async()=>{
+ const f=fixture({current:{communication:{...hub,instanceId:'instance'}}})
+ assert.deepEqual(await f.onboarding.handle('work-approval-settings',{},human),{remoteWorkApproval:'inherit'})
+ await assert.rejects(f.onboarding.handle('set-work-approval',{remoteWorkApproval:'ask'},{human:false}),{code:'HUMAN_REQUIRED'})
+ await assert.rejects(f.onboarding.handle('set-work-approval',{remoteWorkApproval:'allow-all'},human),{code:'INVALID_CONFIG'})
+ assert.deepEqual(await f.onboarding.handle('set-work-approval',{remoteWorkApproval:'ask'},human),{remoteWorkApproval:'ask',reloadRequired:true})
+ assert.equal(f.rt.config.communication.remoteWorkApproval,'ask')
+ assert.equal(f.configWrites.length,1)
+ await f.onboarding.handle('set-work-approval',{remoteWorkApproval:'inherit'},human)
+ assert.equal(f.rt.config.communication.remoteWorkApproval,'inherit')
+})

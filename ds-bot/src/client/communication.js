@@ -1,3 +1,4 @@
+import { communicationCompatibility, incompatibleCommunication } from '../shared/communication-version.js'
 import { useMentionDismiss } from './communication-mentions.js'
 import { CommunicationActionDialog } from './communication-dialog.js'
 import { ParticipantInformation } from './communication-participant.js'
@@ -461,7 +462,9 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
   const collapseSidebar = value => { setSidebarHidden(value); save(SIDEBAR_HIDDEN, value) }
   const startMenu = () => { collapseSidebar(false); setBrowse(true); setNewMenuOpen(true) }
   const connectionBlocked = state?.error && !['CONNECTION_LOST','REQUEST_TIMEOUT','STORAGE_UNAVAILABLE','BACKPRESSURE','HISTORY_GAP'].includes(state.error)
-  const connectionLabel = !team.communicationEnabled ? 'Not configured' : pollError ? 'Offline' : !state ? 'Connecting…' : state.connected ? 'Connected to Hub' : connectionBlocked ? 'Offline' : 'Reconnecting to Hub'
+  const compatibility = state?.compatibility ?? communicationCompatibility(null, state?.error)
+  const versionBlocked = incompatibleCommunication(state?.error) || compatibility.status === 'incompatible'
+  const connectionLabel = !team.communicationEnabled ? 'Not configured' : versionBlocked ? 'Client and Hub versions are incompatible' : pollError ? 'Offline' : !state ? 'Connecting…' : state.connected ? compatibility.status === 'different' ? 'Connected to Hub · versions differ' : 'Connected to Hub' : connectionBlocked ? 'Offline' : 'Reconnecting to Hub'
   const roleLabel = role => role === 'owner' ? 'Group owner' : role === 'admin' ? 'Group admin' : 'Group member'
   const avatar = (id, name) => {
     const contact = contacts.find(person => person.principalId === id)
@@ -516,6 +519,9 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
       state ? h(CommunicationWorkApprovals, {key:scope,state,request,refresh}) : null,
       h('section', { className: 'bt-comm-connection', 'aria-label': t('Connection status') },
         h('p', { className: 'bt-comm-connection-label', role: 'status', 'data-connected': Boolean(state?.connected && !pollError) }, h('span', { className: 'bt-comm-dot', 'aria-hidden': true }), t(connectionLabel)),
+        team.communicationEnabled && state ? h('p', { className: 'bt-comm-reference', 'data-communication-versions': true }, t('Client'), ': ', compatibility.clientVersion, ' · Hub: ', compatibility.hubVersion ?? t('Version not reported')) : null,
+        team.communicationEnabled && (versionBlocked || compatibility.status === 'different') ? h('p', { className: 'bt-comm-reference', role: 'status' }, t('Update the client and Hub to the same federation release. Saved conversations and queued messages are retained.')) : null,
+        team.communicationEnabled && versionBlocked && state?.error ? h('p', { className: 'bt-comm-reference', role: 'status' }, friendly({ code: state.error })) : null,
         state ? h('p', { className: 'bt-comm-reference bt-comm-connection-details' }, `${state.instanceId} · ${t('Remote contacts')}: ${remoteCount}`) : null,
         pollError ? h('p', { className: 'bt-comm-reference', role: 'status' }, t('Status may be out of date.'), ' ', pollError) : null,
         team.communicationEnabled && !state?.connected && !connectionBlocked ? h('p', { className: 'bt-comm-reference' }, t('Queued messages send automatically when the connection returns.')) : null,
