@@ -1,3 +1,4 @@
+import { publicationReloadRequired } from './federation/publication-state.js'
 import { botDmContext, participantProfile } from './federation/bot-dm-records.js'
 import { federationResetStatus } from './federation/reset.js'
 import { defineTool } from '@deepseek-ai/dsh-tools'
@@ -7,7 +8,7 @@ import { assertConversationToolScope } from './federation/tool-scope.js'
 import { communicationPreset, hasCommunicationPreset } from './federation/session-scope.js'
 import { profileHuman, profileHumanInfo, readHumanProfileInfo, readPrincipalAvatar } from './federation/avatars.js'
 import { communicationError } from '../shared/communication-diagnostics.js'
-import { communicationDiagnoseTool, diagnoseCommunication, loadedCommunicationSettings, communicationAvailabilityPrompt, communicationReloadRequired } from './federation/diagnostics.js'
+import { communicationDiagnoseTool, diagnoseCommunication, loadedCommunicationSettings, communicationAvailabilityPrompt, communicationReloadRequired, communicationReloadState } from './federation/diagnostics.js'
 import { legacyCredential } from './federation/legacy-credential.js'
 import { normalizeAttachments,attachmentMetadata } from '../shared/communication-attachments.js'
 import { RELATIONSHIP_TOPICS } from './federation/relationship-memory.js'
@@ -65,6 +66,7 @@ export function install(rt) {
   }
   const execute = work => async (args, exec) => {
     try {
+      if (publicationReloadRequired(rt, appliedSettings)) fail('PUBLICATION_RELOAD_REQUIRED')
       if (communicationReloadRequired(rt, appliedSettings)) fail('COMMUNICATION_RELOAD_REQUIRED')
       const comm = await ensure(), communicationBinding = comm.owners.get(exec.agent?.id)
       if (exec.name === 'list_contacts' && !communicationBinding && !comm.bots.has(rt.selfOf(exec.agent?.id))) {
@@ -231,13 +233,14 @@ export function install(rt) {
           const result = await (await enrollment()).handle(action, input, { human: true })
           return Response.json({ ok: true, value: result })
         }
-        if (body.endpoint === 'state' && !settings.enabled) return Response.json({ ok: true, value: { enabled: false, connected: false, reloadRequired: communicationReloadRequired(rt, appliedSettings), listState: 'disabled', conversations: [], contacts: [], invites: [], outbox: [] } })
-        if (body.endpoint === 'state' && startupError && startupError !== 'COMMUNICATION_READ_ONLY') return Response.json({ ok: true, value: { enabled: true, connected: false, error: communicationError({ code: startupError }).code, errorDetails: communicationError({ code: startupError }), reloadRequired: communicationReloadRequired(rt, appliedSettings), listState: 'not-started', conversations: [], contacts: [], invites: [], outbox: [] } })
+        if (body.endpoint === 'state' && !settings.enabled) return Response.json({ ok: true, value: { enabled: false, connected: false, ...communicationReloadState(rt, appliedSettings), listState: 'disabled', conversations: [], contacts: [], invites: [], outbox: [] } })
+        if (body.endpoint === 'state' && startupError && startupError !== 'COMMUNICATION_READ_ONLY') return Response.json({ ok: true, value: { enabled: true, connected: false, error: communicationError({ code: startupError }).code, errorDetails: communicationError({ code: startupError }), ...communicationReloadState(rt, appliedSettings), listState: 'not-started', conversations: [], contacts: [], invites: [], outbox: [] } })
+        if (body.localBotId !== undefined && publicationReloadRequired(rt, appliedSettings)) fail('PUBLICATION_RELOAD_REQUIRED')
         if (body.localBotId !== undefined && communicationReloadRequired(rt, appliedSettings)) fail('COMMUNICATION_RELOAD_REQUIRED')
         const comm = await ensure()
         let value
         switch (body.endpoint) {
-          case 'state': value = { ...comm.snapshot(), reloadRequired: communicationReloadRequired(rt, appliedSettings) }; break
+          case 'state': value = { ...comm.snapshot(), ...communicationReloadState(rt, appliedSettings) }; break
           case 'set-conversation-archived': value = comm.setConversationArchived(body); break
           case 'answer-work-approval': value = await comm.answerWorkApproval(body); break
           case 'relationship-memory':

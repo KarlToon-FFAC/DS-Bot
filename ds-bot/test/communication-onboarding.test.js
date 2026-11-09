@@ -324,7 +324,7 @@ test('Human publication lists only local Bot metadata and updates the exact sele
   assert.equal(JSON.stringify(available).includes('private prompt'), false)
   assert.equal(JSON.stringify(available).includes('private image bytes'), false)
   const result = await f.onboarding.handle('publish-bots', { localBotIds: ['bot-two'] }, human)
-  assert.deepEqual(result, { publishedBotIds: ['bot-two'], reloadRequired: true })
+  assert.deepEqual(result, { publishedBotIds: ['bot-two'], reloadRequired: true, reloadReason: 'publication', publicationStatus: 'saved-pending-reload' })
   assert.equal(f.configWrites.length, 1)
   assert.deepEqual(f.configWrites[0], { untouched: 'local', communication: { enabled: true, ...hub, instanceId: 'instance', credentialKey: 'reference',
     humanDisplayName: 'Person', publishedBotIds: ['bot-two'], pollMs: 555, publicationGenerations: { 'bot-one': f.configWrites[0].communication.publicationGenerations['bot-one'] } } })

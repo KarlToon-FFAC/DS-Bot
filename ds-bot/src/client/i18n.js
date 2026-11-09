@@ -54,6 +54,7 @@ const ZH = {
   "Version not reported": "未报告版本",
   "The client and Hub use incompatible communication protocols. Update the component that lacks the required protocol; conversation data does not need a reset.": "客户端与 Hub 的通信协议不兼容，请更新不支持所需协议的一端，无需重置对话数据。",
   "Explicit Bot activation is required. Update the component missing that capability. Queued intents are retained.": "通信需要显式激活 Bot 的能力，请更新缺少该能力的一端，待发操作会保留。",
+  "Bot publication was saved but has not loaded into this runtime. Wait for the host reload, then use the current Bot identity and membership epoch.": "Bot 发布配置已保存，但尚未加载到当前运行实例。请等待宿主重载，再使用当前 Bot 身份和成员资格版本。",
   "Client update required to connect": "请更新客户端后连接",
   "Update the client to use this Hub. Its required protocol or capabilities are not supported.": "请更新客户端后使用此 Hub，当前客户端不支持 Hub 要求的协议或能力。",
   "Update the Hub to support this client’s required protocol and capabilities.": "请更新 Hub，以支持当前客户端要求的协议和能力。",

@@ -1,3 +1,4 @@
+import { recordPublicationSave } from './publication-state.js'
 import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, sign, randomUUID } from 'node:crypto'
 import { lookup } from 'node:dns/promises'
 import { BlockList, isIP } from 'node:net'
@@ -305,6 +306,7 @@ export class CommunicationOnboarding {
     if (!editor?.entries || !editor?.edit) fail('CONFIG_EDITOR_UNAVAILABLE')
     const entries = editor.entries().filter(entry => entry.options?.name === 'ds-bot')
     if (entries.length !== 1) fail('CONFIG_ENTRY_UNAVAILABLE')
+    let savedPublication
     await phase('COMMUNICATION_CONFIG_WRITE_FAILED', () => editor.edit(entries[0], current => {
       guard?.()
       const latest = current.communication
@@ -317,9 +319,11 @@ export class CommunicationOnboarding {
       const publicationGenerations = { ...latest.publicationGenerations }
       // Record withdrawal in the config transaction even when reloads coalesce.
       for (const id of latest.publishedBotIds ?? []) if (!publishedBotIds.includes(id)) publicationGenerations[id] = randomUUID()
-      return { ...current, communication: { ...latest, publishedBotIds, ...(Object.keys(publicationGenerations).length ? { publicationGenerations } : {}) } }
+      savedPublication = { ...latest, publishedBotIds, ...(Object.keys(publicationGenerations).length ? { publicationGenerations } : {}) }
+      return { ...current, communication: savedPublication }
     }))
-    return { publishedBotIds: ids, reloadRequired: true }
+    if (savedPublication) recordPublicationSave(this.rt, savedPublication)
+    return { publishedBotIds: ids, reloadRequired: true, reloadReason: 'publication', publicationStatus: 'saved-pending-reload' }
   }
   async setWorkApproval(input) {
     if (!['inherit','ask'].includes(input.remoteWorkApproval)) fail('INVALID_CONFIG')

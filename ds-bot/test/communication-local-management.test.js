@@ -200,7 +200,7 @@ test('contact management preserves conflict codes and top-level retry IDs throug
 test('publication approval names the exact list, preserves existing Bots, reports reload and rejects concurrent changes', async () => {
   const f = fixture()
   const saved = await f.call('publish_communication_bots', { localBotIds: ['worker', 'shared'] })
-  assert.deepEqual(saved, { publishedBotIds: ['worker', 'shared'], reloadRequired: true })
+  assert.deepEqual(saved, { publishedBotIds: ['worker', 'shared'], reloadRequired: true, reloadReason: 'publication', publicationStatus: 'saved-pending-reload' })
   assert.match(f.approvals[0].reason, /Unpublished worker/); assert.match(f.approvals[0].reason, /Shared Bot/)
   assert.equal(f.calls.length, 0, 'saving local configuration is not proof of Hub publication')
   const withdrawn = await f.call('publish_communication_bots', { localBotIds: [] })

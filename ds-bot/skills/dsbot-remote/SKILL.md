@@ -67,8 +67,11 @@ Bot's own identity and retain all Hub membership and speaking checks.
 To change publication, first read `list_communication_bots` and use exact local
 IDs. `publish_communication_bots` replaces the full list, so retain Bots the user
 did not ask to withdraw. An empty list withdraws all. A successful save with
-`reloadRequired:true` confirms local settings only; normal host reload reconciles
-publication with the Hub. Creating/editing local Bots uses the existing
+`reloadRequired:true`, `reloadReason:"publication"` and
+`publicationStatus:"saved-pending-reload"` confirms a local save only; normal
+host reload reconciles publication with the Hub. `PUBLICATION_RELOAD_REQUIRED`
+on a Bot-scoped call means that save has not taken effect yet. Wait and inspect
+`state`/`diagnose`; do not mistake it for `BOT_NOT_PUBLISHED` or resubmit publication. Creating/editing local Bots uses the existing
 `create_bot`/`update_bot` tools with unchanged Main Bot/self-management permissions.
 These management tools do not join Hubs, change trust, impersonate senders or give
 remote participants control of the local team.
@@ -484,7 +487,8 @@ trust, select a firewall rule or authorize a device by itself.
    Its `bots` have local IDs/name/role/private metadata and `publishedBotIds`
    identifies current publication. Send `publish-bots {localBotIds:[...]}` with
    only explicitly selected eligible IDs; `[]` publishes none. Honor
-   `reloadRequired:true`, then recheck `state`. Publication alone grants no contact
+   `reloadRequired:true` and `reloadReason:"publication"`; wait until
+   `state.reloadRequired` is false before Bot-scoped calls. Publication alone grants no contact
    consent, group membership or private-file access.
 4. Exchange `user-code` privately between Humans. `rotate-user-code` invalidates
    the previous code; preserve its generated operation ID for uncertain retries.
@@ -750,8 +754,9 @@ work around this boundary.
 3. A write response with `reloadRequired: true` means the returned setting must
    take effect through the host's supported configuration reload. Recheck the
    new loaded runtime before acting. Diagnostic `configuration.reloadRequired`
-   detects a known difference between current in-memory and loaded settings; a
-   false value does **not** prove an external file, launcher or other process
+   detects a known difference between current in-memory and loaded settings, and
+   a confirmed publication save even when the editor leaves memory unchanged.
+   `reloadReason:"publication"` identifies that case. A false value does **not** prove an external file, launcher or other process
    reloaded. Environment changes need an actual host process restart.
 4. `environment` reports presence metadata only. A legacy credential may have
    been consumed into a host-only process lease and removed from child
@@ -875,3 +880,20 @@ WORK_APPROVAL_UNAVAILABLE/CANCELLED mean it did not execute.
 If an authorized task needs a wider sandbox, use only escalation parameters
 actually advertised by that native tool, with an exact justification. Do not
 promise automatic retry after an ordinary OS/sandbox denial.
+
+
+### Mention validation evidence
+
+Mentions require exact **current conversation members**; the local contact
+directory is not the group roster. A shared contact outside the group cannot be
+mentioned into it. A current group member can be mentioned even if its owner has
+not shared that Bot through the contact relation. Revoked/departed membership does
+not become current because the identity remains in old chat history.
+
+For `UNKNOWN_MENTION`, CLI errors retain safe `mentionValidation` metadata when
+available. `source: "hub"` means an authorization-only member preflight rejected
+the target; `source: "refreshed-conversation"` means local validation rejected it
+after an authorized roster refresh. The latter can include the membership version,
+member/request counts and unresolved principal IDs. An unsent `message.publish`
+does not imply there was no read-only Hub preflight. Error metadata never includes
+raw exception text, message bodies, credentials or arbitrary upstream fields.

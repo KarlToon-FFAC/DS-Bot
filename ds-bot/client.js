@@ -88,6 +88,7 @@ var ZH = {
   "Version not reported": "未报告版本",
   "The client and Hub use incompatible communication protocols. Update the component that lacks the required protocol; conversation data does not need a reset.": "客户端与 Hub 的通信协议不兼容，请更新不支持所需协议的一端，无需重置对话数据。",
   "Explicit Bot activation is required. Update the component missing that capability. Queued intents are retained.": "通信需要显式激活 Bot 的能力，请更新缺少该能力的一端，待发操作会保留。",
+  "Bot publication was saved but has not loaded into this runtime. Wait for the host reload, then use the current Bot identity and membership epoch.": "Bot 发布配置已保存，但尚未加载到当前运行实例。请等待宿主重载，再使用当前 Bot 身份和成员资格版本。",
   "Client update required to connect": "请更新客户端后连接",
   "Update the client to use this Hub. Its required protocol or capabilities are not supported.": "请更新客户端后使用此 Hub，当前客户端不支持 Hub 要求的协议或能力。",
   "Update the Hub to support this client’s required protocol and capabilities.": "请更新 Hub，以支持当前客户端要求的协议和能力。",
@@ -12343,6 +12344,7 @@ var communicationDescriptions = {
   COMMUNICATION_CONFIG_WRITE_FAILED: "The configuration save could not be confirmed. Refresh the published Bot selection before applying again.",
   TLS_REQUIRED: "This Hub address requires a secure connection. Ask the Hub owner for its trusted WSS address.",
   UNKNOWN_TOOL: "This tool is unavailable through the current call surface. Check current Session scope, configuration reload and native/PTC presentation. A registered tool may require the approved run_code SDK transport in PTC mode; never bypass scope or permissions.",
+  PUBLICATION_RELOAD_REQUIRED: "Bot publication was saved but has not loaded into this runtime. Wait for the host reload, then use the current Bot identity and membership epoch.",
   COMMUNICATION_RELOAD_REQUIRED: "The saved communication configuration has not loaded yet. Wait for the plugin reload, then refresh state and use the current Bot identity and membership epoch.",
   AVATAR_REVISION_MISMATCH: "This avatar has changed or has no custom image. Refresh contacts and use its current imageRevision; a generated avatar has no image to download.",
   INVALID_AVATAR: "The avatar image is invalid or unsupported. Refresh its current revision or choose a valid PNG, JPEG, WebP or GIF image.",
@@ -12589,6 +12591,13 @@ function communicationError(error, { bot, reloadRequired = false } = {}) {
     nextActions: detail?.nextActions ?? [message, "Check communication_diagnose in your own local Bot chat or dsbot-remote diagnose through the authenticated local API before retrying."],
     docsHint: "dsbot-remote Skill: Outcomes and recovery; An uncertain join or certificate failure",
     ...phases.has(error?.phase) ? { phase: error.phase } : {},
+    ...code === "UNKNOWN_MENTION" && ["hub", "refreshed-conversation"].includes(error?.mentionValidation?.source) ? { mentionValidation: {
+      source: error.mentionValidation.source,
+      policy: "conversation-members",
+      ...Object.fromEntries(["membershipVersion", "requestedCount", "memberCount"].filter((key) => Number.isSafeInteger(error.mentionValidation[key]) && error.mentionValidation[key] >= 0).map((key) => [key, error.mentionValidation[key]])),
+      ...Array.isArray(error.mentionValidation.unresolvedPrincipalIds) ? { unresolvedPrincipalIds: error.mentionValidation.unresolvedPrincipalIds.filter((id) => typeof id === "string" && /^(human|bot):[^\s:]{1,100}:[^\s:]{1,100}$/.test(id)).slice(0, 64) } : {}
+    } } : {},
+    ...code === "PUBLICATION_RELOAD_REQUIRED" ? { reloadRequired: true, reloadReason: "publication", publicationStatus: "saved-pending-reload" } : {},
     ...code === "COMMUNICATION_RELOAD_REQUIRED" ? { reloadRequired: true } : {},
     ...code === "BOT_NOT_PUBLISHED" ? { reloadRequired, configurationChangeRequired: !reloadRequired, reloadRequiredAfterPublicationChange: true } : {},
     ...code === "BOT_NOT_PUBLISHED" && bot ? { subject: { kind: "local-bot", localBotId: bot.id, displayName: bot.name } } : {}
@@ -12599,6 +12608,7 @@ function communicationError(error, { bot, reloadRequired = false } = {}) {
 var knownCommunicationFailure = (error) => Object.hasOwn(communicationDescriptions, error?.code ?? "");
 var communicationFailure = (error) => knownCommunicationFailure(error) ? t(communicationDescriptions[error.code]) + ` [${error.code}]` : t("The action could not be confirmed. Check current status before trying again.");
 var definitive = /* @__PURE__ */ new Set([
+  "PUBLICATION_RELOAD_REQUIRED",
   "COMMUNICATION_RELOAD_REQUIRED",
   "PROACTIVE_ROOT_CAPABILITY_REQUIRED",
   "PUBLIC_PROFILE_VERSION_CONFLICT",

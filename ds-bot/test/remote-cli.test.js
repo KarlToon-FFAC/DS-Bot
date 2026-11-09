@@ -387,3 +387,17 @@ test('help describes native Bot ids and the string-to-object mention boundary be
  assert.match(JSON.parse(help('bot-dm-history')).operations['bot-dm-history'].fieldDescriptions.localBotId,/Not a global/)
  assert.match(JSON.parse(help('send')).operations.send.fieldDescriptions.mentions,/protocol \{principalId\}/)
 })
+
+test('CLI preserves safe publication-reload and mention-origin diagnostics without echoing upstream exception text',async t=>{
+ for(const code of ['PUBLICATION_RELOAD_REQUIRED','UNKNOWN_MENTION']){
+  const url=await mock(t,(_req,res)=>res.end(JSON.stringify({ok:false,error:{code,message:'PRIVATE_UPSTREAM_EXCEPTION',details:{credential:'PRIVATE_UPSTREAM_SECRET'},mentionValidation:{source:'hub',policy:'PRIVATE_UPSTREAM_POLICY',extra:'PRIVATE_UPSTREAM_SECRET'}}})))
+  const stdout=capture(),stderr=capture()
+  const exit=await main(['send','--json'],{DSBOT_REMOTE_URL:url,DSBOT_REMOTE_COOKIE:'human=synthetic'},Readable.from([JSON.stringify(requests.send)]),stdout,stderr)
+  assert.equal(exit,4)
+  const value=JSON.parse(stderr.value)
+  assert.equal(value.error.code,code);assert.ok(value.error.message)
+  if(code==='PUBLICATION_RELOAD_REQUIRED'){assert.equal(value.error.reloadRequired,true);assert.equal(value.error.reloadReason,'publication')}
+  else assert.deepEqual(value.error.mentionValidation,{source:'hub',policy:'conversation-members'})
+  assert.doesNotMatch(stderr.value,/PRIVATE_UPSTREAM/)
+ }
+})

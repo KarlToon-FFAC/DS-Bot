@@ -154,3 +154,28 @@ test('retiring a Bot after contact revocation cannot reactivate an unreadable DM
   const group=store.createGroup(b,op({principalId:B,title:'Still synchronized'})).conversationId
   assert.ok(store.memberships(b).memberships.some(member=>member.conversationId===group&&member.active))
 })
+
+test('mention preflight checks the current group roster independently of the contact directory and preserves retired precedence',t=>{
+ const {store,a,b,A,B,one,two,add}=fixture(t),management=new HubManagement(store)
+ store.contactPolicy=(auth,actor,target)=>management.assertContact(auth,actor,target)
+ store.dmPolicy=id=>management.assertDm(id)
+ store.directoryFilter=(auth,rows,id)=>management.filterDirectory(auth,rows,id)
+ const request=management.requestContact(a,op({principalId:A,userCode:management.code(b,{principalId:B}).userCode,botPrincipalIds:[one]}))
+ management.respondContact(b,op({principalId:B,requestId:request.requestId,expectedVersion:1,botPrincipalIds:[two]}),'accept')
+ const extra=add(b,'GroupOnly','bot'),outside=add(b,'Outside','bot')
+ const group=store.createGroup(a,op({principalId:A,title:'Only group authorization'})).conversationId
+ store.invite(a,op({principalId:A,conversationId:group,inviteePrincipalId:two}))
+ let owner=store.memberships(a).memberships.find(row=>row.conversationId===group)
+ store.policy(a,op({principalId:A,conversationId:group,targetPrincipalId:B,role:'admin',expectedVersion:owner.membershipVersion}))
+ store.invite(b,op({principalId:B,conversationId:group,inviteePrincipalId:extra}))
+ assert.equal(store.contacts(a,{principalId:A}).some(person=>person.principalId===extra),false)
+ owner=store.memberships(a).memberships.find(row=>row.conversationId===group)
+ const scope={principalId:A,conversationId:group,membershipEpoch:owner.membershipEpoch}
+ const before=store.db.prepare('SELECT seq FROM conversations WHERE id=?').get(group).seq
+ assert.ok(store.members(a,{...scope,checkPrincipalIds:[extra]}).members.some(person=>person.principalId===extra))
+ assert.throws(()=>store.members(a,{...scope,checkPrincipalIds:[outside]}),{code:'UNKNOWN_MENTION'})
+ assert.throws(()=>store.members(b,{...scope,principalId:two,membershipEpoch:'wrong-epoch',checkPrincipalIds:[extra]}),{code:'MEMBERSHIP_REVOKED'})
+ assert.equal(store.db.prepare('SELECT seq FROM conversations WHERE id=?').get(group).seq,before)
+ store.syncPublication(b,{principalIds:[two,extra]})
+ assert.throws(()=>store.members(a,{...scope,checkPrincipalIds:['bot:b:missing',outside]}),{code:'BOT_RETIRED'})
+})

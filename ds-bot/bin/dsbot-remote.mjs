@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { communicationError } from '../src/shared/communication-diagnostics.js'
 import { COMMUNICATION_VERSION } from '../src/shared/communication-version.js'
 import { readFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
@@ -90,7 +91,7 @@ const required = {
   'forget-hub':['hubId','confirmedUrl','confirmForget','deleteLocalHistory'],
 }
 const projections = new Set(['contacts', 'conversations', 'invites', 'outbox'])
-const fail = (code, exitCode = 2, request) => { throw Object.assign(new Error(code), { code, exitCode, request }) }
+const fail = (code, exitCode = 2, request, publicError) => { throw Object.assign(new Error(code), { code, exitCode, request, publicError }) }
 const object = value => value && typeof value === 'object' && !Array.isArray(value)
 const validValue = (type, value) => {
   if(type === 'message-text')return typeof value==='string'
@@ -194,7 +195,7 @@ export function prepare(operation, input = {}) {
 
 const fieldDescriptions = {
   localBotId: 'Exact native Bot id from available-bots.bots[].id, often session-<id>. Not a global bot:<instance>:<id>, a name, or another/current remote Session id.',
-  localBotIds: 'Native Bot ids from available-bots.bots[].id (often session-<id>); never global bot:<instance>:<id> principal ids. After publishing, wait for state.reloadRequired=false and current membership before Bot-scoped operations.',
+  localBotIds: 'Native Bot ids from available-bots.bots[].id (often session-<id>); never global bot:<instance>:<id> principal ids. A successful publication save reports reloadReason:publication and publicationStatus:saved-pending-reload. Wait for state.reloadRequired=false and current membership before Bot-scoped operations; pending calls return PUBLICATION_RELOAD_REQUIRED.',
   mentions: 'CLI/API accepts an array of exact principal-id strings. The host normalizes these to protocol {principalId} objects and validates current conversation membership, including group members outside your contact directory.',
 }
 const describeOperation = (name, fields) => ({ fields, required: required[name] ?? [],
@@ -256,7 +257,9 @@ export async function execute(prepared, { url, cookie, fetchImpl = fetch, timeou
   }
   if (!result.ok) {
     const code = /^[A-Z][A-Z0-9_]{0,100}$/.test(result.error?.code ?? '') ? result.error.code : 'API_REJECTED'
-    fail(code, ['CONNECTION_LOST', 'REQUEST_TIMEOUT', 'STORAGE_UNAVAILABLE', 'BACKPRESSURE', 'STALE_CONNECTION'].includes(code) ? 5 : 4, request)
+    const detail = ['PUBLICATION_RELOAD_REQUIRED','COMMUNICATION_RELOAD_REQUIRED','BOT_NOT_PUBLISHED','UNKNOWN_MENTION'].includes(code)
+      ? communicationError({ code, mentionValidation: result.error?.mentionValidation }, { reloadRequired: result.error?.reloadRequired === true }) : undefined
+    fail(code, ['CONNECTION_LOST', 'REQUEST_TIMEOUT', 'STORAGE_UNAVAILABLE', 'BACKPRESSURE', 'STALE_CONNECTION'].includes(code) ? 5 : 4, request, detail)
   }
   let value = result.value
   if (projections.has(operation)) {
@@ -295,7 +298,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, stdi
     write(stdout, await execute(prepare(operation, input), { url: env.DSBOT_REMOTE_URL ?? config.url, cookie }))
     return 0
   } catch (error) {
-    write(stderr, { ok: false, error: { code: error.code ?? 'CLI_FAILURE' }, ...(error.request ? { request: error.request } : {}) })
+    write(stderr, { ok: false, error: { code: error.code ?? 'CLI_FAILURE', ...error.publicError }, ...(error.request ? { request: error.request } : {}) })
     return error.exitCode ?? 2
   }
 }

@@ -1,3 +1,4 @@
+import { pendingPublication, publicationKeys, publicationReloadRequired } from './publication-state.js'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { parseCredentialKey } from '@deepseek-ai/dsh-credentials'
 import { hubTlsObservation } from './tls-observation.js'
@@ -20,7 +21,8 @@ const currentBot = (rt, sessionId) => {
   if (!botId || !rt.botOf(botId) || rt.groupOwners?.has(sessionId) || rt.communication?.owners?.has(sessionId)) return undefined
   return rt.botOf(botId)
 }
-export const communicationReloadRequired = (rt, applied) => configKeys.some(key => JSON.stringify(rt.config.communication?.[key]) !== JSON.stringify(applied[key]))
+export const communicationReloadRequired = (rt, applied) => publicationReloadRequired(rt, applied) || configKeys.some(key => JSON.stringify(rt.config.communication?.[key]) !== JSON.stringify(applied[key]))
+export const communicationReloadState = (rt, applied) => ({ reloadRequired: communicationReloadRequired(rt, applied), reloadReason: publicationReloadRequired(rt, applied) ? 'publication' : communicationReloadRequired(rt, applied) ? 'configuration' : null })
 const currentError = (state, comm) => state.startupError ?? comm?.transportError ?? comm?.lastError ?? null
 const conversationCount = queue => typeof queue?.memberships === 'function' ? new Set(queue.memberships().map(member => member.conversationId)).size : null
 const count = (value, fn) => typeof value?.[fn] === 'function' ? value[fn]().length : null
@@ -30,7 +32,8 @@ export async function diagnoseCommunication(rt, state, { sessionId, agent } = {}
   const comm = state.runtime, applied = state.settings, configured = rt.config.communication ?? {}
   const connected = comm?.transport?.connected === true, reconciled = comm?.everReconciled === true
   const errorCode = currentError(state, comm), error = errorCode ? communicationError({ code: errorCode }) : null
-  const changedKeys = configKeys.filter(key => JSON.stringify(configured[key]) !== JSON.stringify(applied[key]))
+  const pending = pendingPublication(rt, applied)
+  const changedKeys = configKeys.filter(key => JSON.stringify((pending && publicationKeys.includes(key) ? pending : configured)[key]) !== JSON.stringify(applied[key]))
   const bot = currentBot(rt, sessionId)
   const publishedIds = [...(comm?.bots?.keys() ?? applied.publishedBotIds ?? [])].filter(id => rt.botOf?.(id))
   const credentialEnv = applied.credentialEnv ?? 'DSBOT_COMMUNICATION_CREDENTIAL'
@@ -64,11 +67,11 @@ export async function diagnoseCommunication(rt, state, { sessionId, agent } = {}
   return {
     enabled: applied.enabled === true, connected, runtimeStarted: Boolean(comm),
     hub: { hubId: safeId(applied.hubId ?? comm?.transport?.welcome?.hubId), url: safeUrl(applied.url), instanceId: safeId(comm?.queue?.instanceId ?? applied.instanceId) },
-    configuration: { source: 'loaded-plugin-configuration', reloadRequired: changedKeys.length > 0, changedKeys,
-      savedConfiguration: 'not-inspected', lastReloadAt: null, why: changedKeys.length ? 'Current in-memory settings differ from the loaded communication runtime. Wait for the supported host reload and recheck.' : 'No difference is known in this plugin instance. This does not prove that a disk edit, launcher environment or a different process has reloaded.' },
+    configuration: { source: 'loaded-plugin-configuration', ...communicationReloadState(rt, applied), changedKeys,
+      savedConfiguration: pending ? 'publication-save-confirmed' : 'not-inspected', lastReloadAt: null, why: pending ? 'A publication save is confirmed, but this runtime still uses the previous publication settings. Wait for the host reload and recheck.' : changedKeys.length ? 'Current in-memory settings differ from the loaded communication runtime. Wait for the supported host reload and recheck.' : 'No difference is known in this plugin instance. This does not prove that a disk edit, launcher environment or a different process has reloaded.' },
     publication: { localBotIds: publishedIds, executingBot: bot ? { localBotId: bot.id, displayName: bot.name, published: publishedIds.includes(bot.id) } : null,
-      hubAcknowledgedAt: comm?.publicationSyncedAt ?? null,
-      state: comm?.publicationSyncedAt ? connected ? 'acknowledged-on-connection' : 'last-acknowledgement-cached' : 'not-confirmed',
+      ...(pending ? { pendingLocalBotIds: pending.publishedBotIds } : {}), hubAcknowledgedAt: comm?.publicationSyncedAt ?? null,
+      state: pending ? 'saved-pending-reload' : comm?.publicationSyncedAt ? connected ? 'acknowledged-on-connection' : 'last-acknowledgement-cached' : 'not-confirmed',
       why: 'Loaded publication enables a Bot identity; it does not grant contact consent, group membership or execution privileges. A previous Hub acknowledgement is not proof of current remote visibility.' },
     tools: { diagnose: 'local-own-chat-only', communication: applied.enabled ? 'enabled-with-identity-and-membership-checks' : 'not-registered',
       expectedNames: applied.enabled ? definitions : [], registeredNames,

@@ -1,0 +1,42 @@
+{
+  "date": "2026-11-09",
+  "status": "PASSED",
+  "currentVersion": "V0.2.8 (unchanged)",
+  "pendingRelease": "V0.2.9; wait for explicit user instruction",
+  "pluginTests": {
+    "total": 2059,
+    "passed": 2054,
+    "skipped": 5,
+    "failed": 0
+  },
+  "hubTests": {
+    "total": 199,
+    "passed": 199,
+    "failed": 0
+  },
+  "nativeDshMockSmoke": {
+    "passedSteps": 52,
+    "failedSteps": 0
+  },
+  "twoNativeDshCliAcceptance": {
+    "status": "PASSED",
+    "model": "deterministic Mock",
+    "cases": [
+      "real-CLI-publication-save-has-explicit-pending-publication-receipt",
+      "pending-Bot-scope-is-distinguished-from-unpublished-and-native-ConfigEditor-reload-completes",
+      "real-CLI-mentions-a-current-group-Bot-never-present-in-the-senders-contact-directory",
+      "live-unshared-outsider-is-denied-by-Hub-membership-with-safe-CLI-origin-details",
+      "Bot-scoped-private-history-archiving-and-relationship-memory-work-after-native-publication-reload",
+      "group-only-mention-authorization-and-published-configuration-survive-native-Host-restart",
+      "retired-member-and-retired-never-member-retain-BOT_RETIRED-after-partial-scope-publication"
+    ]
+  },
+  "saveOnlyPendingWindow": "verified with public ConfigEditor fixture retaining old runtime options; native automatic reload timing is not held artificially",
+  "fieldF6Correction": "reported target was not a current group member and was not in contacts; UNKNOWN_MENTION was appropriate",
+  "realF6Topology": "explicit contact scope includes only first Bot; second Bot is subsequently published and added to the group, stays outside sender contacts, receives mention and produces Mock reply before and after Host restart",
+  "safeCliDiagnostics": "known local descriptions and allowlisted reload/mention source fields; upstream exception text and arbitrary fields are excluded",
+  "lint": "passed with existing warnings",
+  "generatedClient": "fresh",
+  "isolation": "owned local test profiles and Loopback Hub, deterministic Mock only; no production network or real model keys",
+  "cleanup": "all owned acceptance, smoke, Mock and Hub processes stopped"
+}

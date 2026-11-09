@@ -5,7 +5,7 @@ import { recordHubTls } from '../src/host/federation/tls-observation.js'
 import { communicationError } from '../src/shared/communication-diagnostics.js'
 import { diagnoseCommunication, communicationDiagnoseTool, communicationAvailabilityPrompt, loadedCommunicationSettings } from '../src/host/federation/diagnostics.js'
 import { legacyCredential } from '../src/host/federation/legacy-credential.js'
-import { connectHubSocket } from '../src/host/federation/onboarding.js'
+import { CommunicationOnboarding, connectHubSocket } from '../src/host/federation/onboarding.js'
 import { install } from '../src/host/communication.js'
 import { CommunicationRuntime } from '../src/host/federation/runtime.js'
 import { CommunicationTransport } from '../src/host/federation/transport.js'
@@ -239,6 +239,56 @@ test('Bot-scoped local API requests fail explicitly before using a not-yet-loade
  for(const endpoint of ['relationship-memory','save-relationship-memory','bot-dm-history']){
   const response=await route.fetch(new Request('http://127.0.0.1/api/communication',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({endpoint,localBotId:'new-bot',conversationId:'conversation',membershipEpoch:'old'})}))
   const result=await response.json()
-  assert.equal(result.ok,false);assert.equal(result.error.code,'COMMUNICATION_RELOAD_REQUIRED');assert.equal(result.error.reloadRequired,true)
+  assert.equal(result.ok,false);assert.equal(result.error.code,'PUBLICATION_RELOAD_REQUIRED');assert.equal(result.error.reloadRequired,true)
  }
+})
+
+
+test('a saved-only publication edit blocks every Bot-scoped API until actual runtime reload, even when memory options stay unchanged',async()=>{
+ let route
+ const communication={enabled:false,hubId:'hub-a',url:'wss://synthetic.example.test/communication',instanceId:'a',publishedBotIds:[]}
+ let saved={communication:structuredClone(communication)}
+ const worker={id:'worker',name:'Worker'}
+ const rt={config:{communication:structuredClone(communication)},state:{bots:{worker}},botOf:id=>id==='worker'?worker:undefined,teamTools:[],ctx:{effect:fn=>fn(),configEditor:{
+  entries:()=>[{options:{name:'ds-bot'}}],edit:async(_entry,change)=>{saved=change(structuredClone(saved))}},connection:{fetch:{register:value=>{route=value;return ()=>{}}}}}}
+ const applied=loadedCommunicationSettings(rt.config.communication)
+ install(rt)
+ const result=await new CommunicationOnboarding(rt).handle('publish-bots',{localBotIds:['worker']},{human:true})
+ assert.equal(result.reloadReason,'publication');assert.equal(result.publicationStatus,'saved-pending-reload')
+ assert.deepEqual(rt.config.communication.publishedBotIds,[],'public editor saved without mutating loaded options')
+ const call=async body=>(await route.fetch(new Request('http://127.0.0.1/api/communication',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}))).json()
+ for(const endpoint of ['relationship-memory','save-relationship-memory','forget-relationship-memory','bot-dm-history','bot-dm-reference','set-conversation-archived']){
+  const denied=await call({endpoint,localBotId:'worker',conversationId:'old',membershipEpoch:'old'})
+  assert.equal(denied.error.code,'PUBLICATION_RELOAD_REQUIRED',endpoint)
+  assert.equal(denied.error.reloadReason,'publication');assert.equal(denied.error.reloadRequired,true)
+ }
+ const state=(await call({endpoint:'state'})).value
+ assert.equal(state.reloadRequired,true);assert.equal(state.reloadReason,'publication')
+ const diagnostic=await diagnoseCommunication(rt,{settings:applied,toolNames:[]})
+ assert.deepEqual(diagnostic.configuration.changedKeys,['publishedBotIds'])
+ assert.equal(diagnostic.publication.state,'saved-pending-reload')
+ rt.config=saved;install(rt)
+ const loaded=(await call({endpoint:'state'})).value
+ assert.equal(loaded.reloadRequired,false);assert.equal(loaded.reloadReason,null)
+})
+
+test('failed publication writes do not manufacture a pending save receipt',async()=>{
+ const worker={id:'worker',name:'Worker'},rt={config:{communication:{enabled:true,url:'wss://synthetic.example.test/communication',instanceId:'a',publishedBotIds:[]}},state:{bots:{worker}},botOf:()=>worker,ctx:{configEditor:{entries:()=>[{options:{name:'ds-bot'}}],edit:async(_entry,change)=>{change(structuredClone(rt.config));throw Object.assign(new Error('private storage error'),{code:'STORAGE_UNAVAILABLE'})}}}}
+ await assert.rejects(new CommunicationOnboarding(rt).handle('publish-bots',{localBotIds:['worker']},{human:true}),{code:'STORAGE_UNAVAILABLE'})
+ assert.equal(rt.pendingCommunicationPublication,undefined)
+})
+
+test('saved-only hide and republish remains pending even when the original Bot selection returns',async()=>{
+ const {recordPublicationSave,publicationReloadRequired,pendingPublication}=await import('../src/host/federation/publication-state.js')
+ const applied={hubId:'one',url:'wss://one.example.test/communication',instanceId:'a',publishedBotIds:['worker']}
+ const rt={config:{communication:structuredClone(applied)}}
+ recordPublicationSave(rt,{...applied,publishedBotIds:[],publicationGenerations:{worker:'new-lifetime'}})
+ recordPublicationSave(rt,{...applied,publicationGenerations:{worker:'new-lifetime'}})
+ assert.equal(publicationReloadRequired(rt,applied),true)
+ assert.equal(pendingPublication(rt,applied).publicationGenerations.worker,'new-lifetime')
+ const loaded={...applied,publicationGenerations:{worker:'new-lifetime'}}
+ rt.config.communication=loaded
+ assert.equal(publicationReloadRequired(rt,loaded),false)
+ rt.config.communication={...applied,hubId:'two',url:'wss://two.example.test/communication'}
+ assert.equal(publicationReloadRequired(rt,applied),false,'a pending receipt cannot cross a Hub selection')
 })

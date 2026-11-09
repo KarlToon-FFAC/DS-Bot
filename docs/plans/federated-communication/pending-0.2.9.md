@@ -24,3 +24,15 @@ incompatible-version diagnostics, with zero browser errors. No real credentials,
 production Hub or user DSH profile was used.
 
 [Compact connection screenshot](screenshots/compact-connection-pending-0.2.9-mobile.png).
+
+## Implemented: F4 publication receipt and F6 validation evidence
+
+Publication saves now have `reloadReason:publication` and
+`publicationStatus:saved-pending-reload`; a saved-only editor change causes
+Bot-scoped calls to return `PUBLICATION_RELOAD_REQUIRED` until actually loaded.
+CLI retains safe publication and mention-origin diagnostics instead of only a code.
+A true current group member never shared through contacts is verified with two
+native DSH instances and a real Mock reply; the user's corrected revoked/nonmember
+case correctly remains `UNKNOWN_MENTION`. Hub mention preflight explicitly checks
+current membership with retired-identity precedence. See
+[F4/F6 follow-up](f4-f6-followup-20261109.md) for the exact evidence and boundaries.

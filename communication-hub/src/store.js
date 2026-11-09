@@ -881,6 +881,7 @@ export class HubStore {
       this.member(auth,input.conversationId,input.principalId,input.membershipEpoch)
       requireThat(Array.isArray(input.checkPrincipalIds)&&input.checkPrincipalIds.length<=this.limits.maxMembers,'INVALID_REQUEST')
       for(const id of input.checkPrincipalIds){identifier(id);requireThat(!this.retirementOf(id),'BOT_RETIRED')}
+      for(const id of input.checkPrincipalIds)requireThat(this.db.prepare('SELECT 1 FROM memberships WHERE conversation_id=? AND principal_id=? AND active=1').get(input.conversationId,id),'UNKNOWN_MENTION')
     }
     const conversation=this.db.prepare('SELECT title,kind,version,routing_mode,admin_bot,owner_id FROM conversations WHERE id=?').get(input.conversationId)
     const result = {conversationId:input.conversationId,title:conversation.title,kind:conversation.kind,membershipVersion:conversation.version,routingMode:conversation.routing_mode,adminBotPrincipalId:conversation.admin_bot,ownerPrincipalId:conversation.owner_id,members:[],formerMembers:[]}

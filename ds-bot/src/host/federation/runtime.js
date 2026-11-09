@@ -501,8 +501,14 @@ export class CommunicationRuntime {
       const member = this.member(principalId, conversationId, epoch)
       const originalEpoch = member.membershipEpoch, generation = this.transport.generation, socket = this.transport.socket
       if (!this.transport.connected) fail('COMMUNICATION_AUTHORIZATION_UNKNOWN')
-      const info = await this.transport.request('conversation.members', { conversationId, principalId, membershipEpoch: originalEpoch,
-        ...(Array.isArray(checkPrincipalIds) && checkPrincipalIds.length && checkPrincipalIds.every(id => typeof id === 'string') ? { checkPrincipalIds: [...new Set(checkPrincipalIds)] } : {}) })
+      let info
+      try {
+        info = await this.transport.request('conversation.members', { conversationId, principalId, membershipEpoch: originalEpoch,
+          ...(Array.isArray(checkPrincipalIds) && checkPrincipalIds.length && checkPrincipalIds.every(id => typeof id === 'string') ? { checkPrincipalIds: [...new Set(checkPrincipalIds)] } : {}) })
+      } catch (error) {
+        if (error.code === 'UNKNOWN_MENTION') error.mentionValidation = { source: 'hub', policy: 'conversation-members' }
+        throw error
+      }
       if (this.closed || !this.transport.connected || this.transport.generation !== generation || this.transport.socket !== socket) fail('CONNECTION_LOST')
       const current = this.member(principalId, conversationId, originalEpoch)
       if (this.rt?.readOnly?.() !== undefined) fail('COMMUNICATION_READ_ONLY')
@@ -516,7 +522,13 @@ export class CommunicationRuntime {
       this.profileRefreshedAt ??= new Map()
       this.profileRefreshedAt.set(conversationId, Date.now())
       // Only local validation is retried. No RPC mutation or committed outbox is replayed.
-      return work()
+      try { return work() }
+      catch (error) {
+        if (error.code === 'UNKNOWN_MENTION') error.mentionValidation = { source: 'refreshed-conversation', policy: 'conversation-members', membershipVersion: info.membershipVersion,
+          requestedCount: Array.isArray(checkPrincipalIds) ? checkPrincipalIds.length : 0, memberCount: info.members.length,
+          unresolvedPrincipalIds: (checkPrincipalIds ?? []).filter(id => typeof id === 'string' && /^(human|bot):[^\s:]{1,100}:[^\s:]{1,100}$/.test(id) && !info.members.some(person => person.principalId === id)).slice(0,64) }
+        throw error
+      }
     }
   }
   sendHumanWithRefresh(input) {
