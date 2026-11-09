@@ -11,6 +11,9 @@ const contextSources = new Set(['agent-instructions', 'working-directory', 'runt
 // Publication grants a remote identity, not permission to help the local owner.
 // Derive delegation from the host journal, never a tool argument or quoted text.
 export async function localManagementAuthority(rt, exec) {
+  if (rt.remoteHubFeatureEnabled?.() === false) fail('REMOTE_HUB_DISABLED')
+  if (rt.remoteHubFeatureSettings?.().withdrawalPending) fail('REMOTE_HUB_WITHDRAWAL_PENDING')
+  if (rt.remoteHubFeatureSettings?.().reloadRequired) fail('REMOTE_HUB_RELOAD_REQUIRED')
   const sessionId = exec.agent?.id, botId = rt.chatOwners?.get(sessionId)
   if (!botId || !rt.botOf(botId) || rt.groupOwners?.has(sessionId) || rt.communication?.owners?.has(sessionId)) fail('LOCAL_USER_SESSION_REQUIRED')
   if (!exec.callId) fail('TOOL_SOURCE_UNKNOWN')

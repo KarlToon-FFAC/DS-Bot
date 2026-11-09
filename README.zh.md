@@ -18,6 +18,12 @@ DS-Bot 新生成的自身 Skill 和项目 AGENTS.md 学习建议通过校验后�
 权限、配置、CLI、兼容与恢复边界见 [Hub 指南](communication-hub/README.md)
 及内置的 [操作与 Bot Skill](ds-bot/skills/dsbot-remote/SKILL.md)。
 
+V0.3.0 新增 **设置 → 通用 → 启用远程 Hub**。新安装默认关闭；已有配置中
+已经加入或配置 Hub 的默认开启，显式关闭后不会再自动打开。只有开启时才显示
+远程通信入口。关闭前须确认：本机在当前 Hub 发布的所有 Bot 将被隐藏，旧远程
+身份和群成员资格永久失效；本地 Bot 和历史记录保留。Hub 离线时会后台重试隐藏。
+重新开启不会自动发布 Bot，须手动以新身份发布并重新加群。
+
 本地 Bot 即使尚未发布，也能在自己的本地私聊中，按用户要求查看和管理远程
 联系人、发布选定 Bot。宿主校验直接来自本地用户的请求，远程消息不能授予
 这项权限；联系人变更和发布还须对具体动作进行原生审批。
@@ -26,7 +32,7 @@ DS-Bot 新生成的自身 Skill 和项目 AGENTS.md 学习建议通过校验后�
 
 [English](README.md) | 中文
 
-![版本](https://img.shields.io/badge/版本-v0.2_预览-blue) ![DSH](https://img.shields.io/badge/DSH-0.2.1--rc.4-4D6BFE) ![许可](https://img.shields.io/badge/许可-Apache_2.0-green)
+![版本](https://img.shields.io/badge/版本-V0.3.0-blue) ![DSH](https://img.shields.io/badge/DSH-0.2.1--rc.4-4D6BFE) ![许可](https://img.shields.io/badge/许可-Apache_2.0-green)
 
 DS Bot 是一个基于 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（简称 dsh）的 bot 插件，插件将 dsh 改造为 bot 形式。你可以与自己创建的 bot 交流、工作。
 

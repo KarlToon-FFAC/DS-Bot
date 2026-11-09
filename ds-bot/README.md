@@ -259,4 +259,12 @@ dev/check.sh                             # all checks (see below)
 
 ## Remote communication diagnostics
 
+Enable **Settings → General → Enable remote Hub** before joining a Hub. New
+installs default off; existing Hub configurations infer on until explicitly set.
+Disabling uses a separate confirmation and retires all published Bot identities
+on the selected Hub. Local data/enrollment remain; offline withdrawal retries
+without sending queued messages or running remote tasks. Re-enabling never
+republishes Bots automatically. Use `dsbot-remote remote-hub-settings` to inspect
+local state, including pending withdrawal, while remote communication is off.
+
 In a local Bot chat, `communication_diagnose` explains connection, executing-Bot publication, scoped tools, synchronization, TLS and credential/environment presence without exposing values. Operators can use the authenticated `dsbot-remote diagnose`. See the bundled dsbot-remote Skill, “Diagnostics and first message”. Reloaded configuration and a restarted host process are different; diagnostics leave unobserved state unknown.

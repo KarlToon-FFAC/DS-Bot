@@ -4,7 +4,7 @@ import { test } from 'node:test'
 import { verify, generateKeyPairSync } from 'node:crypto'
 import { EventEmitter } from 'node:events'
 import { Context } from '@deepseek-ai/cordis'
-import { CommunicationOnboarding, communicationAuthentication, communicationCredentialKey, communicationStorageStatus,
+import { CommunicationOnboarding, communicationAuthentication, communicationCredentialKey, communicationStorageStatus, communicationSocket, completeCommunicationWithdrawal,
   connectHubSocket, decodeHubCode, enrollmentSigningText, openEnrollmentSocket, validateHubUrl } from '../src/host/federation/onboarding.js'
 
 const hub = { hubId: 'hub-isolated-test', url: 'wss://192.168.1.20:3190/communication' }
@@ -265,6 +265,33 @@ test('login authenticates with a freshly resolved bound record and never returns
   assert.equal(JSON.stringify(f.calls).includes('PRIVATE KEY'), false)
   await f.rt.ctx.credentials.modifyRecord(f.key, current => ({ ...current, payload: { ...current.payload, instanceId: 'changed-instance' } }))
   await assert.rejects(authenticate(socket.request, []), { code: 'COMMUNICATION_CREDENTIAL_MISMATCH' })
+  socket.close()
+})
+
+test('paused signing credentials authenticate only for a scoped pending withdrawal and keep normal login paused', async () => {
+  const f = fixture({ responseStatus: 'approved' })
+  await f.onboarding.handle('join', joinInput, human)
+  await f.rt.ctx.credentials.modifyRecord(f.key, current => ({...current,payload:{...current.payload,paused:true}}))
+  const selected = {...hub,instanceId:'isolated-instance'}, socket = await f.connect()
+  const ordinary = communicationAuthentication(f.rt,f.key,selected)
+  const withdrawal = communicationAuthentication(f.rt,f.key,selected,{withdrawalOnly:true})
+  const before = f.calls.length
+  await assert.rejects(ordinary(socket.request,[]),{code:'HUB_PAUSED'})
+  await assert.rejects(withdrawal(socket.request,[]),{code:'REMOTE_HUB_WITHDRAWAL_PENDING'})
+  await assert.rejects(communicationSocket(f.rt,f.key,selected),{code:'HUB_PAUSED'})
+  await assert.rejects(communicationSocket(f.rt,f.key,selected,{withdrawalOnly:true}),{code:'REMOTE_HUB_WITHDRAWAL_PENDING'})
+  await assert.rejects(completeCommunicationWithdrawal(f.rt,f.key,selected),{code:'REMOTE_HUB_WITHDRAWAL_PENDING'})
+  assert.equal(f.calls.length,before,'no challenge/proof without the pending same-Hub authority')
+  f.rt.remoteHubCanWithdraw = candidate => candidate.hubId === selected.hubId && candidate.instanceId === selected.instanceId
+  assert.equal((await withdrawal(socket.request,['text'])).instanceId,'isolated-instance')
+  await f.rt.ctx.credentials.modifyRecord(f.key,current=>({...current,payload:{...current.payload,savedConfiguration:{...selected,publishedBotIds:['old']}}}))
+  await completeCommunicationWithdrawal(f.rt,f.key,{...selected,publicationGenerations:{old:'retired'}})
+  assert.deepEqual(f.records.get(f.key).payload.savedConfiguration.publishedBotIds,[])
+  assert.equal(f.records.get(f.key).payload.savedConfiguration.publicationGenerations.old,'retired')
+  f.rt.remoteHubCanWithdraw = () => false
+  await assert.rejects(withdrawal(socket.request,[]),{code:'REMOTE_HUB_WITHDRAWAL_PENDING'})
+  await assert.rejects(ordinary(socket.request,[]),{code:'HUB_PAUSED'})
+  assert.equal(f.records.get(f.key).payload.paused,true,'cleanup does not resume the saved enrollment')
   socket.close()
 })
 

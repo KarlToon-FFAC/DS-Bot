@@ -5,7 +5,7 @@ import { hubTlsObservation } from './tls-observation.js'
 import { output } from '../tools.js'
 import { communicationError } from '../../shared/communication-diagnostics.js'
 
-const configKeys = ['enabled', 'hubId', 'url', 'instanceId', 'credentialKey', 'credentialEnv', 'publishedBotIds', 'publicationGenerations', 'remoteWorkApproval', 'localMemory', 'pollMs', 'contextHistoryBytes', 'rotateTokens', 'maxPending', 'autoAcceptBotInvites']
+const configKeys = ['enabled', 'hubId', 'url', 'instanceId', 'credentialKey', 'credentialEnv', 'publishedBotIds', 'publicationGenerations', 'remoteHubWithdrawalPending','remoteHubWithdrawalId', 'remoteWorkApproval', 'localMemory', 'pollMs', 'contextHistoryBytes', 'rotateTokens', 'maxPending', 'autoAcceptBotInvites']
 export const loadedCommunicationSettings = settings => Object.fromEntries(configKeys.map(key => [key,
   Array.isArray(settings[key]) ? [...settings[key]] : settings[key] && typeof settings[key] === 'object' ? { ...settings[key] } : settings[key]]))
 const safeId = value => typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value) ? value : null
@@ -29,13 +29,15 @@ const count = (value, fn) => typeof value?.[fn] === 'function' ? value[fn]().len
 
 // A local metadata snapshot, never a connection attempt, environment dump or credential read.
 export async function diagnoseCommunication(rt, state, { sessionId, agent } = {}) {
-  const comm = state.runtime, applied = state.settings, configured = rt.config.communication ?? {}
+  const applied = state.settings, configured = rt.config.communication ?? {}, feature = rt.remoteHubFeatureSettings?.()
+  const enabled = applied.enabled === true && feature?.enabled !== false
+  const comm = enabled && !state.runtime?.closed ? state.runtime : null
   const connected = comm?.transport?.connected === true, reconciled = comm?.everReconciled === true
-  const errorCode = currentError(state, comm), error = errorCode ? communicationError({ code: errorCode }) : null
+  const errorCode = feature?.enabled === false ? 'REMOTE_HUB_DISABLED' : feature?.withdrawalPending ? 'REMOTE_HUB_WITHDRAWAL_PENDING' : currentError(state, comm), error = errorCode ? communicationError({ code: errorCode }) : null
   const pending = pendingPublication(rt, applied)
   const changedKeys = configKeys.filter(key => JSON.stringify((pending && publicationKeys.includes(key) ? pending : configured)[key]) !== JSON.stringify(applied[key]))
   const bot = currentBot(rt, sessionId)
-  const publishedIds = [...(comm?.bots?.keys() ?? applied.publishedBotIds ?? [])].filter(id => rt.botOf?.(id))
+  const publishedIds = [...(enabled ? comm?.bots?.keys() ?? applied.publishedBotIds ?? [] : [])].filter(id => rt.botOf?.(id))
   const credentialEnv = applied.credentialEnv ?? 'DSBOT_COMMUNICATION_CREDENTIAL'
   const envName = /^DSBOT_COMMUNICATION_[A-Z0-9_]+$/.test(credentialEnv) ? credentialEnv : null
   let credential = { mode: applied.credentialKey ? 'signing-record' : 'legacy-environment', configured: Boolean(applied.credentialKey || applied.credentialEnv || state.credentialObserved || state.legacy?.status().available),
@@ -52,7 +54,7 @@ export async function diagnoseCommunication(rt, state, { sessionId, agent } = {}
   }
   const listsKnown = Boolean(comm?.transport?.lastSynchronizedAt)
   const listStatus = knownCount => ({ count: listsKnown ? knownCount : null,
-    state: !applied.enabled ? 'disabled' : !comm ? 'not-started' : !listsKnown ? 'not-synchronized' : connected ? 'authorized-snapshot' : 'cached-snapshot',
+    state: !enabled ? 'disabled' : !comm ? 'not-started' : !listsKnown ? 'not-synchronized' : connected ? 'authorized-snapshot' : 'cached-snapshot',
     why: !listsKnown ? 'No completed initial synchronization is known. An empty local list does not prove absence on the Hub.'
       : connected ? 'Counts describe the last locally synchronized authorized view, not every Hub identity.' : 'The last synchronized view may be stale while disconnected.' })
   const tlsObservation = hubTlsObservation(comm?.transport?.socket)
@@ -65,7 +67,7 @@ export async function diagnoseCommunication(rt, state, { sessionId, agent } = {}
     } catch {}
   }
   return {
-    enabled: applied.enabled === true, connected, runtimeStarted: Boolean(comm),
+    remoteHub: feature ?? null, enabled, connected, runtimeStarted: Boolean(comm),
     hub: { hubId: safeId(applied.hubId ?? comm?.transport?.welcome?.hubId), url: safeUrl(applied.url), instanceId: safeId(comm?.queue?.instanceId ?? applied.instanceId) },
     configuration: { source: 'loaded-plugin-configuration', ...communicationReloadState(rt, applied), changedKeys,
       savedConfiguration: pending ? 'publication-save-confirmed' : 'not-inspected', lastReloadAt: null, why: pending ? 'A publication save is confirmed, but this runtime still uses the previous publication settings. Wait for the host reload and recheck.' : changedKeys.length ? 'Current in-memory settings differ from the loaded communication runtime. Wait for the supported host reload and recheck.' : 'No difference is known in this plugin instance. This does not prove that a disk edit, launcher environment or a different process has reloaded.' },
@@ -73,10 +75,10 @@ export async function diagnoseCommunication(rt, state, { sessionId, agent } = {}
       ...(pending ? { pendingLocalBotIds: pending.publishedBotIds } : {}), hubAcknowledgedAt: comm?.publicationSyncedAt ?? null,
       state: pending ? 'saved-pending-reload' : comm?.publicationSyncedAt ? connected ? 'acknowledged-on-connection' : 'last-acknowledgement-cached' : 'not-confirmed',
       why: 'Loaded publication enables a Bot identity; it does not grant contact consent, group membership or execution privileges. A previous Hub acknowledgement is not proof of current remote visibility.' },
-    tools: { diagnose: 'local-own-chat-only', communication: applied.enabled ? 'enabled-with-identity-and-membership-checks' : 'not-registered',
-      expectedNames: applied.enabled ? definitions : [], registeredNames,
+    tools: { diagnose: 'local-own-chat-only', communication: enabled ? 'enabled-with-identity-and-membership-checks' : 'not-registered',
+      expectedNames: enabled ? definitions : [], registeredNames,
       remoteWork: 'Owning Bot directory and permission preset; only native file/search/Shell tools visible in its local scope are reused. No local team, credential or other-chat tools are imported.',
-      missingExpectedNames: registeredNames ? (applied.enabled ? definitions : []).filter(name => !registeredNames.includes(name)) : null,
+      missingExpectedNames: registeredNames ? (enabled ? definitions : []).filter(name => !registeredNames.includes(name)) : null,
       actualServedNames: null, scopeRefresh: rt.teamToolScopeStatus?.(sessionId) ?? null,
       why: 'Tools are scoped to each Session and may be filtered by its preset or host. The registry is not proof of model-facing presentation: PTC mode accepts only run_code as a native call and can reject direct calls to registered tools as UNKNOWN_TOOL. Configuration reload replaces plugin scopes. Only currently advertised tools are callable; diagnostics cannot prove a model saw a schema. Remote Sessions deliberately exclude local management and execution.',
       nextActions: ['If a tool is absent or reported unknown, inspect the current tool list, run diagnose in your own local Bot chat and refresh after reload. Never bypass the isolated remote preset or fall back to Human credentials for a Bot send.'] },
@@ -119,7 +121,7 @@ export function communicationDiagnoseTool(rt, getState) {
 export function communicationAvailabilityPrompt(rt, state, context) {
   const bot = currentBot(rt, context?.agent?.id)
   if (!bot) return ''
-  const enabled = state.settings.enabled === true
-  const published = state.runtime ? state.runtime.bots.has(bot.id) : (state.settings.publishedBotIds ?? []).includes(bot.id)
-  return `Remote communication availability: enabled=${enabled}, this Bot published=${published}, connected=${state.runtime?.transport.connected === true}. communication_diagnose is a read-only local own-chat tool even when disabled or unpublished. Communication send/read tools ${enabled ? 'remain gated by executing identity, connection and membership' : 'are not registered while disabled'}. This host’s remote work Sessions can reuse the published Bot’s local directory, permission preset and available native file/search/Shell tools. They do not automatically inherit its MCP, secret, local-team or other-chat tools. Other peers may run a different version. Do not assume a remote Bot is communication-only or work-enabled; inspect its actual tools and permissions before promising execution. A configuration reload may replace tool scopes. Follow the current native/PTC tool presentation; in PTC mode, a direct native call to a registered tool may be UNKNOWN_TOOL. Never call a name missing from the current tool list. If a tool disappears or is unknown, report that limitation, run communication_diagnose when available and recheck after reload. Do not retry through execution tools, Human credentials or a weaker remote preset.`
+  const enabled = rt.remoteHubFeatureEnabled?.() !== false && state.settings.enabled === true
+  const published = enabled && (state.runtime ? state.runtime.bots.has(bot.id) : (state.settings.publishedBotIds ?? []).includes(bot.id))
+  return `Remote communication availability: enabled=${enabled}, this Bot published=${published}, connected=${enabled && state.runtime?.transport.connected === true}. communication_diagnose is a read-only local own-chat tool even when disabled or unpublished. Communication send/read tools ${enabled ? 'remain gated by executing identity, connection and membership' : 'are not registered while disabled'}. This host’s remote work Sessions can reuse the published Bot’s local directory, permission preset and available native file/search/Shell tools. They do not automatically inherit its MCP, secret, local-team or other-chat tools. Other peers may run a different version. Do not assume a remote Bot is communication-only or work-enabled; inspect its actual tools and permissions before promising execution. A configuration reload may replace tool scopes. Follow the current native/PTC tool presentation; in PTC mode, a direct native call to a registered tool may be UNKNOWN_TOOL. Never call a name missing from the current tool list. If a tool disappears or is unknown, report that limitation, run communication_diagnose when available and recheck after reload. Do not retry through execution tools, Human credentials or a weaker remote preset.`
 }

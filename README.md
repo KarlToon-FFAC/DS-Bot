@@ -22,6 +22,14 @@ total per message. See the [Hub guide](communication-hub/README.md) and packaged
 [operator/Bot Skill](ds-bot/skills/dsbot-remote/SKILL.md) for permissions, setup,
 CLI commands, compatibility and recovery limits.
 
+V0.3.0 adds **Settings → General → Enable remote Hub**. It defaults off on a
+new install; an existing joined/configured Hub stays enabled unless explicitly
+disabled. The Remote communication entry appears only while enabled. Disabling
+requires confirmation and hides all this device's published Bots on the selected
+Hub, permanently retiring their remote identities and group memberships. Local
+Bots and history stay intact. Offline withdrawal retries in the background;
+re-enabling requires explicitly publishing Bots with fresh identities.
+
 Local Bots can help their owner inspect and manage Remote contacts and publish
 selected Bots from their own local chat, even before they are published. The host
 checks a direct local-user request; Remote messages cannot grant this authority.
@@ -31,7 +39,7 @@ identity. Local Bot roles and all Hub membership/permission checks stay unchange
 
 English | [中文](README.zh.md)
 
-![version](https://img.shields.io/badge/version-v0.2_preview-blue) ![DSH](https://img.shields.io/badge/DSH-0.2.1--rc.4-4D6BFE) ![license](https://img.shields.io/badge/license-Apache_2.0-green)
+![version](https://img.shields.io/badge/version-V0.3.0-blue) ![DSH](https://img.shields.io/badge/DSH-0.2.1--rc.4-4D6BFE) ![license](https://img.shields.io/badge/license-Apache_2.0-green)
 
 DS Bot is a bot plugin for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH). It turns DSH into bots. You create your own bots, then talk and work with them.
 

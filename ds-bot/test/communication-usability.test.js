@@ -25,7 +25,7 @@ async function pane({ enabled = true, snapshot, storage = {}, localStored = {}, 
     require: id => id === 'react' ? React : id === 'react-dom' ? harness('react-dom') : { MarkdownText },
     window: dom.window, document: dom.window.document, navigator:dom.window.navigator, sessionStorage: dom.window.sessionStorage, localStorage: dom.window.localStorage,
     setTimeout, clearTimeout, crypto: cryptoSource, URL, AbortSignal, requestAnimationFrame: dom.window.requestAnimationFrame, cancelAnimationFrame: dom.window.cancelAnimationFrame })
-  const panel = createSource(true), roster = createSource({ communicationEnabled: enabled, ready: true }), surface = createSource({ mode: 'bot' }), calls = []
+  const panel = createSource(true), roster = createSource({ remoteHubEnabled: true, communicationEnabled: enabled, ready: true }), surface = createSource({ mode: 'bot' }), calls = []
   const request = async body => {
     calls.push(body)
     if (body.endpoint === 'state') return getState ? getState() : { ...snapshot, conversations: snapshot.conversations?.map(item => ({ ...item })) }

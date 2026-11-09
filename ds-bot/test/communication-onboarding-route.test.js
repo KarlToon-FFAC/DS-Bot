@@ -35,7 +35,7 @@ test('unconfigured instances expose only authenticated Human setup routes withou
 
 test('enrollment HTTP diagnostics expose only safe failure phase and never an underlying service message', async () => {
   let route
-  const rt = { config: {}, teamTools: [], load: async () => {}, refresh: async () => {}, ctx: {
+  const rt = { config: {remoteHubEnabled:true}, teamTools: [], load: async () => {}, refresh: async () => {}, ctx: {
     credentials: { readRecord: async () => { throw Error('DO_NOT_DISPLAY_SERVICE_DETAILS') }, modifyRecord: async () => {}, describeRecord: async () => ({ writable: true }) },
     effect: fn => fn(), connection: { fetch: { register: value => { route = value; return () => {} } } },
   } }
@@ -50,7 +50,7 @@ test('enrollment HTTP diagnostics expose only safe failure phase and never an un
 
 test('contact HTTP failures retain exact conflict codes for UI refresh without exposing unknown exception details', async () => {
   let route, code
-  const rt = { config: {}, teamTools: [], load: async () => { throw Object.assign(new Error('PRIVATE_EXCEPTION_MESSAGE'), { code }) }, refresh: async () => {},
+  const rt = { config: {remoteHubEnabled:true}, teamTools: [], load: async () => { throw Object.assign(new Error('PRIVATE_EXCEPTION_MESSAGE'), { code }) }, refresh: async () => {},
     ctx: { effect: fn => fn(), connection: { fetch: { register: value => { route = value; return () => {} } } } } }
   install(rt)
   for (const expected of ['CONTACT_VERSION_CONFLICT', 'OPERATION_ID_CONFLICT', 'COMMUNICATION_UNAVAILABLE']) {

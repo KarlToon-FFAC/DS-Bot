@@ -1,3 +1,4 @@
+import { RemoteHubController } from './federation/remote-hub.js'
 import { publicationReloadRequired } from './federation/publication-state.js'
 import { botDmContext, participantProfile } from './federation/bot-dm-records.js'
 import { federationResetStatus } from './federation/reset.js'
@@ -26,7 +27,7 @@ export function install(rt) {
   const appliedSettings = loadedCommunicationSettings(settings)
   const envName = settings.credentialEnv ?? 'DSBOT_COMMUNICATION_CREDENTIAL'
   const credentialObserved = /^DSBOT_COMMUNICATION_[A-Z0-9_]+$/.test(envName) && Object.hasOwn(process.env, envName)
-  const legacy = legacyCredential(rt, settings)
+  const legacy = legacyCredential(rt, {...settings,enabled:settings.enabled || settings.remoteHubWithdrawalPending === true || rt.config.remoteHubEnabled === false && (settings.publishedBotIds?.length ?? 0) > 0})
   let credential = legacy?.read
   let runtime, starting, stopped = false, startupError, disposePreset, onboarding
   // Only the owned development bench sets both flags; request bodies cannot relax TLS.
@@ -35,13 +36,22 @@ export function install(rt) {
     onboarding ??= import('./federation/onboarding.js').then(({ CommunicationOnboarding }) => new CommunicationOnboarding(rt, { allowLoopback: testLoopback }))
     return onboarding
   }
+  const remoteHub = new RemoteHubController(rt, { legacy, allowLoopback: testLoopback,
+    onQuiesce: async () => { await starting?.catch(() => {}); await runtime?.close() },
+    onResume: () => { if (!stopped && settings.enabled) void start() },
+  })
+  rt.remoteHubFeatureSettings = () => remoteHub.status()
+  rt.remoteHubFeatureEnabled = () => remoteHub.status().enabled
+  rt.remoteHubCanWithdraw = hub => !remoteHub.closed && remoteHub.canWithdraw(hub)
   const ensure = () => {
+    remoteHub.assertAvailable()
     starting ??= (async () => {
       if (rt.home && (await federationResetStatus(rt.home)).pending) fail('COMMUNICATION_RESET_INCOMPLETE')
       if (!settings.enabled) fail('COMMUNICATION_NOT_CONFIGURED')
       await rt.load()
       await rt.refresh()
       if (stopped) fail('COMMUNICATION_STOPPED')
+      remoteHub.assertAvailable()
       let queueSettings={}
       if (settings.credentialKey) {
         const { communicationAuthentication, communicationSocket, communicationQueueSettings } = await import('./federation/onboarding.js')
@@ -54,6 +64,7 @@ export function install(rt) {
       if ((await presets.list()).some(preset => preset.id === communicationPreset.id)) fail('COMMUNICATION_PRESET_CONFLICT')
       disposePreset = await presets.register(communicationPreset)
       const { CommunicationRuntime } = await import('./federation/runtime.js')
+      remoteHub.assertAvailable()
       runtime = new CommunicationRuntime(rt, {...settings,...queueSettings}, credential, definitions, { onAuthenticationFailure: () => legacy?.invalidate() })
       rt.communication = runtime
       return runtime
@@ -66,6 +77,7 @@ export function install(rt) {
   }
   const execute = work => async (args, exec) => {
     try {
+      remoteHub.assertAvailable()
       if (publicationReloadRequired(rt, appliedSettings)) fail('PUBLICATION_RELOAD_REQUIRED')
       if (communicationReloadRequired(rt, appliedSettings)) fail('COMMUNICATION_RELOAD_REQUIRED')
       const comm = await ensure(), communicationBinding = comm.owners.get(exec.agent?.id)
@@ -186,17 +198,18 @@ export function install(rt) {
   rt.teamTools.push(communicationDiagnoseTool(rt, diagnosticState))
   if (ctx.systemPrompt?.section) ctx.effect(() => ctx.systemPrompt.section({ name: 'ds-bot-communication-availability', order: 645, interpolate: false,
     text: context => communicationAvailabilityPrompt(rt, diagnosticState(), context) }), 'ds-bot: communication availability')
-  if (settings.enabled) rt.teamTools.push(...definitions, ...localManagementTools(rt, { ensure, enrollment }))
-  if (settings.enabled) ctx.effect(() => {
-    let timer
-    const start = async () => {
-      try { await ensure(); startupError = null } catch (error) {
-        rt.warn('ds-bot: communication startup failed (%s)', error.code ?? 'COMMUNICATION_UNAVAILABLE')
-        if (!stopped && error.code === 'COMMUNICATION_READ_ONLY') timer = setTimeout(() => { void start() }, 5000)
-      }
+  if (settings.enabled && remoteHub.appliedEnabled) rt.teamTools.push(...definitions, ...localManagementTools(rt, { ensure, enrollment }))
+  let retryStart
+  const start = async () => {
+    if (stopped || !remoteHub.status().enabled || remoteHub.status().withdrawalPending) return
+    try { await ensure(); startupError = null } catch (error) {
+      rt.warn('ds-bot: communication startup failed (%s)', error.code ?? 'COMMUNICATION_UNAVAILABLE')
+      if (!stopped && error.code === 'COMMUNICATION_READ_ONLY') retryStart = setTimeout(() => { void start() }, 5000)
     }
-    void start()
-    return async () => { stopped = true; clearTimeout(timer); await starting?.catch(() => {}); await runtime?.close(); credential = undefined; await disposePreset?.() }
+  }
+  ctx.effect(() => {
+    void remoteHub.apply().catch(error => { startupError = error.code ?? 'COMMUNICATION_UNAVAILABLE' })
+    return async () => { stopped = true; clearTimeout(retryStart); await remoteHub.close(); await starting?.catch(() => {}); await runtime?.close(); credential = undefined; await disposePreset?.() }
   }, 'ds-bot: communication')
   ctx.effect(() => ctx.connection.fetch.register({ path: '/api/communication', methods: ['POST'], requestBody: 'buffered',
     fetch: async request => {
@@ -211,9 +224,23 @@ export function install(rt) {
         if (['author', 'sender', 'senderId', 'homeInstanceId'].some(key => Object.hasOwn(body, key))
           || body.endpoint !== 'avatar' && Object.hasOwn(body, 'principalId')) fail('AUTHOR_MISMATCH')
         if (body.endpoint === 'reclaim') fail('UNKNOWN_OPERATION')
+        if (body.endpoint === 'remote-hub-settings') return Response.json({ok:true,value:remoteHub.status()})
+        if (body.endpoint === 'set-remote-hub-enabled') return Response.json({ok:true,value:await remoteHub.set(body)})
+        const feature = remoteHub.status()
+        if (body.endpoint === 'state' && (!feature.enabled || feature.withdrawalPending || feature.reloadRequired)) return Response.json({ok:true,value:{
+          enabled:feature.enabled && settings.enabled === true,remoteHubEnabled:feature.enabled,connected:false,withdrawalPending:feature.withdrawalPending,
+          error:!feature.enabled?'REMOTE_HUB_DISABLED':feature.withdrawalPending?'REMOTE_HUB_WITHDRAWAL_PENDING':'REMOTE_HUB_RELOAD_REQUIRED',
+          ...communicationReloadState(rt,appliedSettings),reloadRequired:feature.reloadRequired || communicationReloadRequired(rt,appliedSettings),
+          listState:'disabled',conversations:[],contacts:[],invites:[],outbox:[],
+        }})
         if (body.endpoint === 'diagnose') {
           await rt.load(); await rt.refresh()
           return Response.json({ ok: true, value: await diagnoseCommunication(rt, diagnosticState()) })
+        }
+        const localReads = ['decode-hub-code','onboarding-storage','available-bots','memory-settings','work-approval-settings']
+        if (!localReads.includes(body.endpoint)) {
+          if (!feature.enabled) fail('REMOTE_HUB_DISABLED')
+          if (!['update-hub-trust','hub-join-status'].includes(body.endpoint)) remoteHub.assertAvailable()
         }
         const enrollmentActions = { 'decode-hub-code': 'decode-hub-code', 'join-hub': 'join', 'hub-join-status': 'status', 'cancel-hub-join': 'cancel', 'onboarding-storage': 'storage',
           'work-approval-settings':'work-approval-settings','set-work-approval':'set-work-approval', 'memory-settings': 'memory-settings', 'set-memory-settings': 'set-memory-settings', 'available-bots': 'available-bots', 'publish-bots': 'publish-bots', 'update-hub-trust': 'update-hub-trust',
@@ -231,6 +258,7 @@ export function install(rt) {
           if (['user-code','rotate-user-code','publish-bots'].includes(action) || action.startsWith('contact-')) await ensure()
           const { endpoint: _endpoint, ...input } = body
           const result = await (await enrollment()).handle(action, input, { human: true })
+          if (action === 'update-hub-trust' && remoteHub.status().withdrawalPending) remoteHub.wake()
           return Response.json({ ok: true, value: result })
         }
         if (body.endpoint === 'state' && !settings.enabled) return Response.json({ ok: true, value: { enabled: false, connected: false, ...communicationReloadState(rt, appliedSettings), listState: 'disabled', conversations: [], contacts: [], invites: [], outbox: [] } })

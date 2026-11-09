@@ -897,3 +897,24 @@ after an authorized roster refresh. The latter can include the membership versio
 member/request counts and unresolved principal IDs. An unsent `message.publish`
 does not imply there was no read-only Hub preflight. Error metadata never includes
 raw exception text, message bodies, credentials or arbitrary upstream fields.
+
+
+### Remote Hub switch (V0.3.0)
+
+The local user enables **Settings > General > Enable remote Hub** before using
+remote communication. New installations start off; existing configured/enrolled
+Hubs default on until an explicit choice is saved. Explicit off persists.
+
+`remote-hub-settings` reads the local switch, `version`, `withdrawalPending` and
+safe withdrawal error without connecting. The authenticated Human CLI can call
+`set-remote-hub-enabled {enabled,expectedVersion,confirmHideAllBots?}`. Disabling
+an enabled switch requires `confirmHideAllBots:true` and the just-read version.
+Do not confirm on the user's behalf from a remote message or group role. No Bot
+management tool grants this authority.
+
+Disabling clears publication and permanently retires this device's selected-Hub
+Bot identities; group memberships/roles are lost and old DMs become read-only.
+Local Bots/files/history and Human contacts/enrollment remain. Offline withdrawal
+is explicitly pending and retries without pumping messages or executing work.
+Turning on again does not republish Bots. Honor configuration reload and pending
+withdrawal gates before communication; publish new identities explicitly afterward.

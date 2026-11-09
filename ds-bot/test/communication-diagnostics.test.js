@@ -65,6 +65,18 @@ test('unconfigured diagnose is available only in own local chat and never create
   assert.match(communicationAvailabilityPrompt(rt, state, { agent: { id: 'own-chat' } }), /missing from the current tool list/)
 })
 
+test('disabled feature diagnostics never query a closed runtime while a saved-only configuration waits for reload', async () => {
+  const {rt,state} = fixture({enabled:true,publishedBotIds:['local-bot']})
+  rt.remoteHubFeatureSettings=()=>({enabled:false,withdrawalPending:true})
+  state.runtime={closed:true,queue:new Proxy({},{get(){assert.fail('closed queue must not be read')}}),transport:{connected:false},bots:new Map([['local-bot',{}]])}
+  const value=await diagnoseCommunication(rt,state,{sessionId:'own-chat'})
+  assert.equal(value.enabled,false);assert.equal(value.connected,false)
+  assert.equal(value.error.code,'REMOTE_HUB_DISABLED')
+  assert.equal(value.publication.executingBot.published,false)
+  assert.equal(value.tools.communication,'not-registered');assert.deepEqual(value.tools.expectedNames,[])
+  assert.equal(value.lists.contacts.state,'disabled')
+})
+
 test('diagnose distinguishes unknown, cached and synchronized emptiness, scoped publication, sync and TLS facts', async () => {
   const { rt, state } = fixture({ enabled: true, url: 'wss://hub.example.test/communication', hubId: 'hub', instanceId: 'instance', publishedBotIds: ['local-bot'] })
   let value = await diagnoseCommunication(rt, state, { sessionId: 'own-chat' })
@@ -233,7 +245,7 @@ test('coalesced publication-generation changes are pending reload even when the 
 
 test('Bot-scoped local API requests fail explicitly before using a not-yet-loaded publication',async()=>{
  let route
- const rt={config:{communication:{enabled:false,publishedBotIds:[]}},teamTools:[],ctx:{effect:fn=>fn(),connection:{fetch:{register:value=>{route=value;return ()=>{}}}}}}
+ const rt={config:{remoteHubEnabled:true,communication:{enabled:false,publishedBotIds:[]}},teamTools:[],ctx:{effect:fn=>fn(),connection:{fetch:{register:value=>{route=value;return ()=>{}}}}}}
  install(rt)
  rt.config.communication={...rt.config.communication,publishedBotIds:['new-bot']}
  for(const endpoint of ['relationship-memory','save-relationship-memory','bot-dm-history']){

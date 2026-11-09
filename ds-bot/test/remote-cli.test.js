@@ -10,6 +10,7 @@ import { prepare, execute, main, help } from '../bin/dsbot-remote.mjs'
 import { install, remotePackagePaths } from '../src/host/prompt.js'
 
 const requests = {
+  'remote-hub-settings': {}, 'set-remote-hub-enabled': {enabled:true,expectedVersion:'version'},
   'work-approval-settings': {}, 'set-work-approval': {remoteWorkApproval:'ask'},
   'use-published-contact-bots': {otherHumanPrincipalId:'human:b:owner',expectedVersion:1},
   'set-conversation-archived':{conversationId:'private',membershipEpoch:'epoch',archived:true,expectedScope:'synthetic-local-scope'},

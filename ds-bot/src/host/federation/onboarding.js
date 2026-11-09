@@ -112,7 +112,7 @@ const checkedScope = record => {
   if (scope !== 'legacy' && scope !== namespace(record.hubId) && scope !== identityNamespace(record.hubId,record.publicKey)) fail('COMMUNICATION_CREDENTIAL_MISMATCH')
   return scope
 }
-const publicConfiguration = value => Object.fromEntries(['enabled','hubId','url','instanceId','credentialKey','credentialEnv','humanDisplayName','publishedBotIds','publicationGenerations','remoteWorkApproval','autoAcceptBotInvites','localMemory','pollMs','contextHistoryBytes','rotateTokens','maxPending'].filter(key=>value?.[key]!==undefined).map(key=>[key,value[key]]))
+const publicConfiguration = value => Object.fromEntries(['enabled','hubId','url','instanceId','credentialKey','credentialEnv','humanDisplayName','publishedBotIds','publicationGenerations','remoteHubWithdrawalPending','remoteHubWithdrawalId','remoteWorkApproval','autoAcceptBotInvites','localMemory','pollMs','contextHistoryBytes','rotateTokens','maxPending'].filter(key=>value?.[key]!==undefined).map(key=>[key,value[key]]))
 const selection = value => JSON.stringify([value?.hubId??null,value?.url??null,value?.instanceId??null,value?.credentialKey??null])
 function checkChallenge(challenge, expected, now = Date.now()) {
   if (!challenge || challenge.hubId !== expected.hubId || challenge.purpose !== expected.purpose
@@ -134,12 +134,13 @@ function signature(record, challenge) {
   } catch { fail('COMMUNICATION_CREDENTIAL_MISMATCH') }
 }
 
-export function communicationAuthentication(rtOrCtx, key, hub) {
+export function communicationAuthentication(rtOrCtx, key, hub, { withdrawalOnly = false } = {}) {
   const ctx = contextOf(rtOrCtx)
   if (key !== communicationCredentialKey(hub.hubId)) fail('COMMUNICATION_CREDENTIAL_MISMATCH')
   return async (send, capabilities) => {
     const record = checkedRecord(await credentialsOf(ctx).readRecord(parseCredentialKey(key)), hub, { instanceId: hub.instanceId })
-    if (record.paused) fail('HUB_PAUSED')
+    if (withdrawalOnly && rtOrCtx.remoteHubCanWithdraw?.(hub) !== true) fail('REMOTE_HUB_WITHDRAWAL_PENDING')
+    if (record.paused && !withdrawalOnly) fail('HUB_PAUSED')
     if (record.status !== 'approved' || !identifier(hub.instanceId)) fail('COMMUNICATION_NOT_APPROVED')
     const challenge = checkChallenge(await send('enrollment.challenge', { purpose: 'login', instanceId: hub.instanceId, publicKey: record.publicKey }),
       { hubId: hub.hubId, purpose: 'login', instanceId: hub.instanceId })
@@ -150,8 +151,20 @@ export function communicationAuthentication(rtOrCtx, key, hub) {
 export async function communicationSocket(rtOrCtx, key, hub, options = {}) {
   if (key !== communicationCredentialKey(hub.hubId)) fail('COMMUNICATION_CREDENTIAL_MISMATCH')
   const record = checkedRecord(await credentialsOf(contextOf(rtOrCtx)).readRecord(parseCredentialKey(key)), hub, { instanceId: hub.instanceId })
-  if (record.paused) fail('HUB_PAUSED')
-  return connectHubSocket(hub.url, { ...options, hubId: hub.hubId, trust: record.trust })
+  const {withdrawalOnly = false, ...socketOptions} = options
+  if (withdrawalOnly && rtOrCtx.remoteHubCanWithdraw?.(hub) !== true) fail('REMOTE_HUB_WITHDRAWAL_PENDING')
+  if (record.paused && !withdrawalOnly) fail('HUB_PAUSED')
+  return connectHubSocket(hub.url, { ...socketOptions, hubId: hub.hubId, trust: record.trust })
+}
+export async function completeCommunicationWithdrawal(rt, key, hub) {
+  if (key !== communicationCredentialKey(hub.hubId)) fail('COMMUNICATION_CREDENTIAL_MISMATCH')
+  await credentialsOf(contextOf(rt)).modifyRecord(parseCredentialKey(key), current => {
+    if (rt.remoteHubCanWithdraw?.(hub) !== true) fail('REMOTE_HUB_WITHDRAWAL_PENDING')
+    const record = checkedRecord(current, hub, {instanceId:hub.instanceId})
+    return {kind:'grant',payload:{...record,savedConfiguration:{...publicConfiguration(record.savedConfiguration ?? hub),
+      publishedBotIds:[],publicationGenerations:{...record.savedConfiguration?.publicationGenerations,...hub.publicationGenerations},
+      remoteHubWithdrawalPending:false,remoteHubWithdrawalId:hub.remoteHubWithdrawalId}}}
+  })
 }
 export async function communicationQueueSettings(rt, key, hub) {
   if(typeof rt.home!=='string')fail('COMMUNICATION_STORAGE_UNAVAILABLE')

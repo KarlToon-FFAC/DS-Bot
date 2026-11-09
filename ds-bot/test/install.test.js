@@ -101,6 +101,7 @@ test('apply registers listeners and effects in a fixed order', (t) => {
     'effect ds-bot: live feed',
     'effect ds-bot: communication availability',
     'prompt ds-bot-communication-availability 645',
+    'effect ds-bot: communication',
     'effect ds-bot: communication channel',
     'route POST /api/communication',
     'effect ds-bot: api route',

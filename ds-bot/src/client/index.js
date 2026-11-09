@@ -46,7 +46,7 @@ import { MEMBER_CSS, MemberDock } from './member-status.js'
 import { USER_MESSAGE_CSS, UserMessageCell, canDrawUserMessages } from './user-message.js'
 import { noticeApprovals } from './approval-notices.js'
 import { listedOpener } from './open-listed.js'
-import { installCommunication } from './communication.js'
+import { installCommunication, communicationRequest } from './communication.js'
 
 export const inject = ['sessions', 'uiWorkspace', 'uiConversation', 'slots', 'theme', 'layout']
 
@@ -712,6 +712,8 @@ export function apply(ctx) {
   const browserHolds = browsers?.holds ?? createSource({})
   const communication = installCommunication(ctx, { roster, surface })
   actions.openCommunication = communication.open
+  actions.remoteHubSettings = () => communicationRequest({endpoint:'remote-hub-settings'})
+  actions.setRemoteHubEnabled = input => after(communicationRequest({endpoint:'set-remote-hub-enabled',...input}))
   const face = () => ({ actions, hooks: { roster, ui, activity, work, memoryNews, registry, turnClock, live, cards, heldCards, browserPages, browserTabs, browserHolds, surface, update, frame, sidebarPref } })
   ctx.effect(() => noticeApprovals({
     work,

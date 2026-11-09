@@ -1,3 +1,4 @@
+import { RemoteHubSetting } from './remote-hub-settings.js'
 import { createElement as h, useCallback, useEffect, useRef, useState } from 'react'
 import { ACCENT_INKS, INKS } from './inks.js'
 import { isMainOf } from './sources.js'
@@ -109,6 +110,7 @@ function GeneralPage({ roster, actions, run }) {
     actions.setSurface ? h(SetSection, { key: 'mode', title: t('Mode') },
       h(SetRow, { label: t('Classic Agent mode') },
         h('button', { type: 'button', className: 'bt-soft bt-soft-sm', onClick: () => actions.setSurface('agent') }, t('Switch')))) : null,
+    actions.remoteHubSettings && actions.setRemoteHubEnabled ? h(RemoteHubSetting,{key:'remote-hub',roster,actions}) : null,
     h(LocationsSection, { key: 'places', actions, run }),
   ]
 }

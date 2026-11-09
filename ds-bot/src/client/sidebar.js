@@ -1,3 +1,4 @@
+import { remoteHubVisible } from '../shared/remote-hub.js'
 import { createElement as h, Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { FishLogo } from './dsh-primitives.js'
@@ -582,7 +583,7 @@ export function TeamSidebar(props) {
           ? h(RoomRow, { key: entry.item.id, ...rowProps, room: entry.item, marked: markedUnread[entry.item.id] === true })
           : h(AgentRow, { key: entry.item.id, ...rowProps, agent: entry.item, marked: markedUnread[entry.item.id] === true })))),
     h('div', { className: 'bt-side-bottom' },
-      h('button', { type: 'button', className: wideContent ? 'bt-soft bt-remote-entry' : 'bt-round bt-remote-entry', onClick: actions.openCommunication, 'aria-label': t('Remote communication'), title: t('Remote communication') }, wideContent ? t('Remote communication') : '↔'),
+      remoteHubVisible(roster) ? h('button', { type: 'button', className: wideContent ? 'bt-soft bt-remote-entry' : 'bt-round bt-remote-entry', onClick: actions.openCommunication, 'aria-label': t('Remote communication'), title: t('Remote communication') }, wideContent ? t('Remote communication') : '↔') : null,
       foot))
   return h(Fragment, null,
     h(TitleToggle, { hidden: mode === 'hidden', onToggle }),

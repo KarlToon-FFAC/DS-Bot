@@ -1,3 +1,4 @@
+import { remoteHubEnabled } from '../shared/remote-hub.js'
 // Client channel: the team view the browser renders, and the POST /api/bot endpoints.
 import { randomUUID } from 'node:crypto'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
@@ -90,7 +91,10 @@ export function install(rt) {
   // turn there runs; the approvals waiting; per Bot, who it waits for to hand back work;
   // and per Session, when its running turn began.
   const live = () => ({
-    communicationEnabled: rt.config.communication?.enabled === true,
+    remoteHubEnabled: rt.remoteHubFeatureEnabled?.() ?? remoteHubEnabled(rt.config),
+    remoteHubWithdrawalPending: rt.remoteHubFeatureSettings?.().withdrawalPending ?? false,
+    remoteHubWithdrawalError: rt.remoteHubFeatureSettings?.().withdrawalError ?? null,
+    communicationEnabled: (rt.remoteHubFeatureEnabled?.() ?? remoteHubEnabled(rt.config)) && rt.config.communication?.enabled === true,
     communicationHubId: rt.config.communication?.hubId ?? null,
     activity: rt.activityView(),
     work: { bots: rt.workView(), rooms: rt.roomWorkView(), approvals: rt.approvalsView(), waiting: rt.waitingView?.() ?? {}, turns: rt.turnsView?.() ?? {}, steered: rt.steeredView?.() ?? {} },

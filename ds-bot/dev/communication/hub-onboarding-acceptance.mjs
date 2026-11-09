@@ -120,6 +120,9 @@ async function minimum(){
     assert.equal(existsSync(join(peer.home,'bot/communication.sqlite')),false,'no legacy queue before SDK enrollment')
     peer.botId=(await peer.client.request('/api/bot',{endpoint:'state'})).mainBotId
     await peer.client.request('/api/bot',{endpoint:'update-bot',payload:{id:peer.botId,model:'deepseek-official/deepseek-v4-pro'}})
+    const feature=await api(peer,'remote-hub-settings');assert.equal(feature.enabled,false)
+    await api(peer,'set-remote-hub-enabled',{enabled:true,expectedVersion:feature.version})
+    await until(async()=>{const state=await api(peer,'remote-hub-settings');return state.enabled&&!state.reloadRequired},'explicit remote Hub opt-in reload')
     stage(`${peer.id}: decode Hub code`)
     const decoded=await api(peer,'decode-hub-code',{hubCode:info.code})
     assert.equal(decoded.hubId,info.hubId)
@@ -256,6 +259,26 @@ async function full(){
   assert.deepEqual((await stats()).deliveries.filter(delivery=>delivery.message_id===remaining.messageId&&delivery.ai).map(delivery=>delivery.recipient_id),[b.bot])
   record('unpublish-really-hides-directory-Bot-without-replacing-member-identity-or-all-routing',{remainingBotMessageId:remaining.messageId})
 }
+async function remoteSwitch(){
+  const [a,b]=topology.peers
+  for(const peer of topology.peers){await api(peer,'publish-bots',{localBotIds:[peer.botId]});await until(async()=>(await connected(peer)).localBots.length===1,'signed Bot publication')}
+  await consent()
+  await api(a,'disconnect-hub',{hubId:(await api(a,'state')).hubId})
+  await until(async()=>!(await api(a,'state')).enabled,'signed enrollment is paused')
+  let feature=await api(a,'remote-hub-settings')
+  await api(a,'set-remote-hub-enabled',{enabled:false,expectedVersion:feature.version,confirmHideAllBots:true})
+  await until(async()=>{const state=await api(a,'remote-hub-settings');return !state.enabled&&!state.withdrawalPending},'paused signed enrollment withdraws through scoped CA')
+  await until(async()=>!(await api(b,'state')).contacts.some(contact=>contact.principalId===a.bot),'signed withdrawal removes remote directory Bot')
+  await topology.bench(a,'stop');await topology.bench(a,'start');await reconnectClient(a)
+  await until(async()=>!(await api(a,'remote-hub-settings')).withdrawalPending,'completion journal reload without normal connection')
+  feature=await api(a,'remote-hub-settings');assert.equal(feature.enabled,false)
+  await api(a,'set-remote-hub-enabled',{enabled:true,expectedVersion:feature.version})
+  await until(async()=>!(await api(a,'remote-hub-settings')).reloadRequired,'re-enable reload')
+  const info=await(await fetch(origin+'/hub-info')).json()
+  await api(a,'resume-hub',{hubId:info.hubId,confirmedUrl:(await api(a,'decode-hub-code',{hubCode:info.code})).url,confirmResume:true})
+  assert.equal((await connected(a)).localBots.length,0,'resume cannot restore withdrawn publications')
+  record('remote-switch-paused-signed-SDK-enrollment-scoped-CA-withdrawal-restart-and-empty-publication-resume')
+}
 async function peerLook(peer,payload){return peer.client.request('/api/bot',{endpoint:'update-bot',payload:{id:peer.botId,...payload}})}
 async function holdForBrowser(){
   clearTimeout(deadline)
@@ -284,7 +307,8 @@ async function holdForBrowser(){
 }
 try{
   await minimum()
-  if(!enrollOnly)await full()
+  if(process.argv.includes('--remote-hub-switch'))await remoteSwitch()
+  else if(!enrollOnly)await full()
   evidence.status='PASS'
   if(liveForBrowser)await holdForBrowser()
 }catch(error){evidence.status='FAIL';evidence.error=error.message;console.error(error.message);process.exitCode=1}

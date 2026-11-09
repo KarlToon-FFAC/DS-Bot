@@ -1046,6 +1046,7 @@ export class CommunicationRuntime {
     this.closed = true
     const work = [...(this.workControllers?.values() ?? [])]
     for (const {controller} of work) controller.abort()
+    for (const sessionId of this.owners.keys()) this.rt.cancelApprovals?.(sessionId)
     const opening = this.transport.opening, pumping = this.transport.pumping
     this.transport.stop()
     await opening?.catch(() => {})
@@ -1054,7 +1055,6 @@ export class CommunicationRuntime {
     await this.workEvents?.catch(() => {})
     await Promise.allSettled(work.map(entry => entry.done))
     this.transport.credential = undefined
-    for (const sessionId of this.owners.keys()) this.rt.cancelApprovals?.(sessionId)
     for (const dispose of this.disposers.reverse()) if (typeof dispose === 'function') dispose()
     this.queue.close()
   }

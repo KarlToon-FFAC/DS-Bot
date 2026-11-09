@@ -9,6 +9,8 @@ import { normalizeAttachments } from '../src/shared/communication-attachments.js
 
 const text = 'string', integer = 'integer'
 const schemas = {
+  'remote-hub-settings': {},
+  'set-remote-hub-enabled': {enabled:'boolean',expectedVersion:text,confirmHideAllBots:'boolean'},
   state: {}, diagnose: {}, contacts: {}, conversations: {}, invites: {}, outbox: {},
   members: { conversationId: text },
   thread: { conversationId: text, messageId: text, after: integer, limit: integer, watermark: integer, membershipEpoch: text },
@@ -65,6 +67,7 @@ const schemas = {
   'forget-relationship-memory': { localBotId: text, conversationId: text, membershipEpoch: text, id: 'sha256' },
 }
 const required = {
+  'set-remote-hub-enabled':['enabled','expectedVersion'],
   'set-work-approval':['remoteWorkApproval'],
   'bot-dm-history':['conversationId','localBotId','membershipEpoch'],
   'bot-dm-reference':['conversationId','localBotId','membershipEpoch','messageId'],

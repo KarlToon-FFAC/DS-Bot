@@ -1,3 +1,4 @@
+import { remoteHubVisible } from '../shared/remote-hub.js'
 import { communicationCompatibility, incompatibleCommunication, displayCommunicationVersion, communicationReleaseRelation } from '../shared/communication-version.js'
 import { useMentionDismiss } from './communication-mentions.js'
 import { CommunicationActionDialog } from './communication-dialog.js'
@@ -183,10 +184,11 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
   const team = useSyncExternalStore(roster.subscribe, roster.getSnapshot)
   const mode = useSyncExternalStore(surface.subscribe, surface.getSnapshot)
   const open = useSyncExternalStore(panel.subscribe, panel.getSnapshot)
-  const visible = open && mode.mode === 'bot'
+  const featureEnabled = remoteHubVisible(team)
+  const visible = open && mode.mode === 'bot' && featureEnabled
   const [shown, closing] = useLinger(visible, 160)
   const [receivedState, setState] = useState(null), [error, setError] = useState(''), [busy, setBusy] = useState(false)
-  const stateScope = `${Boolean(team.communicationEnabled)}:${team.communicationHubId ?? ''}`, currentStateScope = useRef(stateScope), stateOrder = useRef(0)
+  const stateScope = `${featureEnabled}:${Boolean(team.communicationEnabled)}:${team.communicationHubId ?? ''}`, currentStateScope = useRef(stateScope), stateOrder = useRef(0)
   if (currentStateScope.current !== stateScope) { currentStateScope.current = stateScope; stateOrder.current += 1 }
   const state = !team.communicationEnabled || team.communicationHubId && receivedState?.hubId !== team.communicationHubId ? null : receivedState
   const [pollError, setPollError] = useState(''), [syncError, setSyncError] = useState(null)
@@ -261,10 +263,11 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
     }
   }
   useEffect(() => {
-    if (!team.communicationEnabled) { setState(null); setPollError(''); return undefined }
+    if (!featureEnabled || !team.communicationEnabled) { setState(null); setPollError(''); return undefined }
     const live = liveRefresh(refresh, { intervalMs: 750 })
     return () => { stateOrder.current += 1; live.stop() }
-  }, [team.communicationEnabled, team.communicationHubId, request])
+  }, [featureEnabled, team.communicationEnabled, team.communicationHubId, request])
+  useEffect(() => { if (!featureEnabled) { panel.set(false); save(OPEN,false) } }, [featureEnabled])
   useEffect(() => {
     if (!state?.connected || !state.humanPrincipalId) { setContactRequests(null); return undefined }
     let current = true
@@ -668,5 +671,5 @@ export function installCommunication(ctx, { roster, surface }) {
   }, 'ds-bot: communication styles')
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({ name: 'shell.overlay', id: 'bot-communication', order: 52 },
     () => h(CommunicationSurface, { roster, surface, panel })))
-  return { open: () => { save(OPEN, true); panel.set(true) } }
+  return { open: () => { if (!remoteHubVisible(roster.getSnapshot())) return false; save(OPEN, true); panel.set(true); return true } }
 }

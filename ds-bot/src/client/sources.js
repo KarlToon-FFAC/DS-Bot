@@ -21,7 +21,7 @@ export function updateLiveRoster(roster, value) {
   const current = roster.getSnapshot()
   if (!current.ready) return
   const changed = {}
-  for (const [key, fallback] of Object.entries({ connectors: [], capabilityStatuses: {}, learning: {}, btwCards: {}, sideChats: {}, communicationEnabled: false, communicationHubId: null })) {
+  for (const [key, fallback] of Object.entries({ connectors: [], capabilityStatuses: {}, learning: {}, btwCards: {}, sideChats: {}, remoteHubEnabled: false, remoteHubWithdrawalPending: false, remoteHubWithdrawalError: null, communicationEnabled: false, communicationHubId: null })) {
     if (value[key] !== undefined && JSON.stringify(value[key]) !== JSON.stringify(current[key] ?? fallback)) changed[key] = value[key]
   }
   if (Object.keys(changed).length) roster.set({ ...current, ...changed })

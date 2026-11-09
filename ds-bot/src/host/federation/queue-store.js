@@ -58,6 +58,10 @@ export class CommunicationQueue {
     this.limits = JSON.parse(this.db.prepare('SELECT value FROM metadata WHERE key=?').get('limits')?.value ?? '{"maxTextBytes":65536,"maxEnvelopeBytes":131072}')
   }
   close() { this.authorized = false; this.db.close() }
+  remoteHubWithdrawalComplete(id) { return this.db.prepare('SELECT value FROM metadata WHERE key=?').get('remote-hub-withdrawal')?.value === id }
+  completeRemoteHubWithdrawal(id) {
+    this.db.prepare('INSERT INTO metadata VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run('remote-hub-withdrawal', id)
+  }
   archivedConversations() {
     return this.db.prepare('SELECT conversation_id FROM archived_conversations ORDER BY conversation_id').all().map(row => row.conversation_id)
   }
