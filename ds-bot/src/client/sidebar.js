@@ -583,7 +583,7 @@ export function TeamSidebar(props) {
           ? h(RoomRow, { key: entry.item.id, ...rowProps, room: entry.item, marked: markedUnread[entry.item.id] === true })
           : h(AgentRow, { key: entry.item.id, ...rowProps, agent: entry.item, marked: markedUnread[entry.item.id] === true })))),
     h('div', { className: 'bt-side-bottom' },
-      remoteHubVisible(roster) ? h('button', { type: 'button', className: wideContent ? 'bt-soft bt-remote-entry' : 'bt-round bt-remote-entry', onClick: actions.openCommunication, 'aria-label': t('Remote communication'), title: t('Remote communication') }, wideContent ? t('Remote communication') : '↔') : null,
+      remoteHubVisible(roster) ? h('button', { type: 'button', className: wideContent ? 'bt-soft bt-remote-entry' : 'bt-round bt-remote-entry', onClick: actions.openCommunication, 'aria-label': roster.remoteUnreadCount > 0 ? t('Remote communication, {count} unread messages', {count:roster.remoteUnreadCount}) : t('Remote communication'), title: t('Remote communication') }, wideContent ? t('Remote communication') : '↔', roster.remoteUnreadCount > 0 ? h('span', {className:'bt-remote-unread','aria-hidden':true}, roster.remoteUnreadCount > 99 ? '99+' : roster.remoteUnreadCount) : null) : null,
       foot))
   return h(Fragment, null,
     h(TitleToggle, { hidden: mode === 'hidden', onToggle }),
@@ -948,6 +948,7 @@ export function BrandName() {
 // FooterAccount only shows when the seat went to no one. The shell's footer classes
 // are CSS-module names, so they match on their stems.
 export const SIDEBAR_CSS = `
+.bt-remote-entry{position:relative}.bt-remote-unread{margin-left:auto;min-width:20px;padding:1px 6px;border-radius:999px;background:var(--bt-accent);color:var(--bt-accent-ink);font-size:11px;line-height:18px;font-variant-numeric:tabular-nums}.bt-round.bt-remote-entry .bt-remote-unread{position:absolute;right:-8px;top:-6px;margin:0}
 .bt-confirm{width:260px;max-width:72vw;padding:10px 12px 12px;display:flex;flex-direction:column;gap:10px}
 .bt-confirm-text{margin:0;font-size:13px;line-height:19px;color:var(--bt-ink-2)}
 .bt-confirm-error{margin:0;font-size:12px;line-height:17px;color:var(--bt-danger);overflow-wrap:anywhere}

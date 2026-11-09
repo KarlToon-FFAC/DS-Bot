@@ -15,6 +15,7 @@ const requests = {
   'use-published-contact-bots': {otherHumanPrincipalId:'human:b:owner',expectedVersion:1},
   'set-conversation-archived':{conversationId:'private',membershipEpoch:'epoch',archived:true,expectedScope:'synthetic-local-scope'},
   'bot-dm-history':{conversationId:'private',localBotId:'worker',membershipEpoch:'epoch',limit:10},
+  'bot-dm-read':{conversationId:'private',localBotId:'worker',membershipEpoch:'epoch',seq:1},
   'bot-dm-reference':{conversationId:'private',localBotId:'worker',membershipEpoch:'epoch',messageId:'one'},
   'participant-profile':{conversationId:'group',membershipEpoch:'epoch',targetPrincipalId:'bot:b:expert'},
   'answer-work-approval': {id:'approval-test',choice:'reject',expectedScope:'local-scope'},

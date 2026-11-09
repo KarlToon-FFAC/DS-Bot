@@ -96,6 +96,7 @@ export function install(rt) {
     remoteHubWithdrawalError: rt.remoteHubFeatureSettings?.().withdrawalError ?? null,
     communicationEnabled: (rt.remoteHubFeatureEnabled?.() ?? remoteHubEnabled(rt.config)) && rt.config.communication?.enabled === true,
     communicationHubId: rt.config.communication?.hubId ?? null,
+    remoteUnreadCount: (rt.remoteHubFeatureEnabled?.() ?? remoteHubEnabled(rt.config)) ? rt.communication?.unreadCount?.() ?? 0 : 0,
     activity: rt.activityView(),
     work: { bots: rt.workView(), rooms: rt.roomWorkView(), approvals: rt.approvalsView(), waiting: rt.waitingView?.() ?? {}, turns: rt.turnsView?.() ?? {}, steered: rt.steeredView?.() ?? {} },
     memoryNews: rt.memoryNews(),

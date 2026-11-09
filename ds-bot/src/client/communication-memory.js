@@ -29,7 +29,7 @@ export function CommunicationMemory({ request, revision }) {
     } catch (failure) { if (token === generation.current) setError(communicationFailure(failure)) }
     finally { working.current = false; if (token === generation.current) setBusy(false) }
   }
-  return h('section', null, h('h3', null, t('Local memory in remote conversations')),
+  return h('details', {className:'bt-comm-contact-section bt-comm-profile-section'}, h('summary', null, t('Local memory in remote conversations')),
     h('label', { className: 'bt-comm-check' }, h('input', { type: 'checkbox', checked: value === true, disabled: value === null || busy,
       onChange: event => { void save(event.target.checked) } }), t('Allow each Bot to use its own local memory')),
     h('p', null, t('Enabled by default for this Hub. Selected entries from each Bot’s own main memory are sent to its configured model service. Replies may share relevant facts with everyone in the conversation. Other chats, topic files and other Bots’ memory are not included.')),

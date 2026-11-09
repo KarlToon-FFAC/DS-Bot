@@ -336,6 +336,17 @@ export class CommunicationQueue {
       }
     })
   }
+  botDmReadKey(conversationId, principalId, epoch) { return `bot-dm-read:${JSON.stringify([conversationId,principalId,epoch])}` }
+  botDmUnread(conversationId, principalId, epoch) {
+    const member = this.member(conversationId, principalId, epoch)
+    const read = Number(this.db.prepare('SELECT value FROM metadata WHERE key=?').get(this.botDmReadKey(conversationId,principalId,epoch))?.value ?? member.join_seq - 1)
+    return this.db.prepare("SELECT count(*) count FROM events WHERE conversation_id=? AND principal_id=? AND epoch=? AND seq>? AND seq>=? AND seq<=? AND json_extract(body,'$.type')='message'").get(conversationId,principalId,epoch,read,member.join_seq,this.cursor(conversationId,principalId,epoch)).count
+  }
+  markBotDmRead(conversationId, principalId, epoch, seq) {
+    const member = this.member(conversationId,principalId,epoch)
+    requireValue(Number.isSafeInteger(seq) && seq >= member.join_seq - 1 && seq <= this.cursor(conversationId,principalId,epoch), 'HISTORY_GAP')
+    this.db.prepare('INSERT INTO metadata VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=CAST(max(CAST(metadata.value AS INTEGER),CAST(excluded.value AS INTEGER)) AS TEXT)').run(this.botDmReadKey(conversationId,principalId,epoch),String(seq))
+  }
   unread(conversationId, principalId, epoch) {
     this.member(conversationId, principalId, epoch)
     const read = this.db.prepare('SELECT read_seq FROM view_watermarks WHERE conversation_id=? AND principal_id=? AND epoch=?').get(conversationId, principalId, epoch)?.read_seq ?? 0

@@ -810,6 +810,8 @@ for replay and older saved requests, rather than a required new-group step.
 
 The local Human GUI has a separate **Bot private chats** section. Its persistent
 records use the actual local Bot's DM membership, not a fabricated Human member.
+`bot-dm-read` marks only this local owner’s inspection through `{conversationId,localBotId,membershipEpoch,seq}`. It creates no Human or Bot delivery receipts and never accepts AI input. Unread badges exclude archived private chats from the main entry total; archive rows retain their individual counts.
+
 `bot-dm-history` requires `{conversationId,localBotId,membershipEpoch}`; optional
 `before`, `after` and `limit` page the same authorized record. `bot-dm-reference`
 also requires `messageId`. These are read-only owner inspection operations; they

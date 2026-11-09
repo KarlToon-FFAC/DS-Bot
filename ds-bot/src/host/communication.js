@@ -277,6 +277,7 @@ export function install(rt) {
           case 'update-handoff': value = comm.sendUpdate(comm.human,body,body.messageId); break
           case 'participant-profile': value = await participantProfile(comm, body); break
           case 'bot-dm-history': { const context = botDmContext(comm, body); value = comm.history(context.principalId, body); break }
+          case 'bot-dm-read': { const context = botDmContext(comm, body); comm.queue.markBotDmRead(body.conversationId,context.principalId,context.member.membershipEpoch,body.seq); value = {status:'ownerViewed',conversationId:body.conversationId,seq:body.seq}; break }
           case 'bot-dm-reference': { const context = botDmContext(comm, body); value = comm.queue.reference(body.conversationId, context.principalId, context.member.membershipEpoch, body.messageId); break }
           case 'history': value = comm.history(comm.human.principalId, body); break
           case 'thread': value = comm.thread(comm.human.principalId, body); break

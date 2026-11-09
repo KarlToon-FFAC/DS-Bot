@@ -1046,7 +1046,7 @@ test('group and private rows use authorized member avatars, two-line summaries, 
     assert.equal(rows[0].querySelector('.bt-comm-conversation-preview').textContent, 'Chief: Ready for review')
     assert.deepEqual([...rows[0].querySelectorAll('[data-avatar-id]')].map(node => node.dataset.avatarId), group.info.members.map(person => person.principalId))
     assert.equal(rows[0].getAttribute('aria-label'), 'Shared group, Chief: Ready for review, 4 Unread', 'the button accessible name includes summary and exact unread count')
-    assert.equal(rows[0].querySelector('.bt-comm-unread').textContent, '', 'the visible unread indicator is a dot')
+    assert.equal(rows[0].querySelector('.bt-comm-unread').textContent, '4', 'the visible badge shows the unread message count')
     assert.equal(rows[1].querySelector('.bt-comm-conversation-name').textContent, 'Peer')
     assert.equal(rows[1].querySelector('.bt-comm-conversation-preview').textContent, 'Hello across devices')
     assert.deepEqual([...rows[1].querySelectorAll('[data-avatar-id]')].map(node => node.dataset.avatarId), [other.principalId])
@@ -1627,5 +1627,49 @@ test('older client releases show an advisory while connected, and a required upd
   await autoRefresh()
   assert.equal(connection().querySelector('.bt-comm-connection-label').textContent,'Client update required to connect')
   assert.match(connection().textContent,/required protocol or capabilities are not supported/)
+ })
+})
+
+test('every personal-settings category folds independently and preserves a profile draft without saving',async()=>{
+ await pane({snapshot:{...state(),conversations:[membership]},handle:async body=>body.endpoint==='human-profile-info'?{principalId:'human:a:owner',publicProfile:{version:0}}:{}},async({doc,click,edit,calls})=>{
+  await click('Personal settings')
+  const sections=[...doc.querySelectorAll('.bt-comm-personal-settings .bt-comm-profile-section')]
+  assert.deepEqual(sections.map(node=>node.querySelector(':scope>summary').textContent),['Your profile','Device identity','Remote work confirmation','Your user code','Published Bots','Local memory in remote conversations','Hub connection'])
+  assert.ok(sections.every(node=>!node.open))
+  const profile=sections[0],input=profile.querySelector('[aria-label="Human name"]')
+  await act(async()=>profile.querySelector('summary').click());await edit(input,'Unsaved profile draft')
+  await act(async()=>profile.querySelector('summary').click());assert.equal(profile.open,false)
+  await act(async()=>profile.querySelector('summary').click());assert.equal(input.value,'Unsaved profile draft')
+  assert.ok(!calls.some(call=>['profile-human','profile-human-info','publish-bots'].includes(call.endpoint)))
+ })
+})
+
+test('clicking a group message avatar inspects the exact member and restores focus without sending',async()=>{
+ const bot={principalId:'bot:b:tester',displayName:'Tester',kind:'bot',ownerPrincipalId:'human:b:buddy'},owner={principalId:'human:b:buddy',displayName:'Buddy',kind:'human'}
+ const events=[{type:'message',conversationSeq:1,serverAcceptedAt:'2026-11-09T00:00:00Z',message:{messageId:'avatar-source',author:bot,content:{text:'Testing result'},mentions:[]}}]
+ await pane({snapshot:{...state(),conversations:[{...membership,info:{members:[...membership.info.members,owner,bot]}}]},history:events,handle:async body=>body.endpoint==='participant-profile'?{principalId:bot.principalId,publicProfile:{version:1,headline:'Testing specialist',summary:'Reproduce and investigate failures',expertise:['Regression testing']}}:{}},async({doc,click,calls})=>{
+  await click('Shared group')
+  const trigger=doc.querySelector('article[data-message-id="avatar-source"] button.bt-comm-avatar-button')
+  await act(async()=>trigger.click())
+  const details=doc.querySelector('[aria-label="Participant information"]')
+  assert.match(details.textContent,/Buddy/);assert.match(details.textContent,/Regression testing/)
+  const request=calls.find(call=>call.endpoint==='participant-profile')
+  assert.equal(request.targetPrincipalId,bot.principalId);assert.equal(request.membershipEpoch,'epoch')
+  assert.equal(calls.some(call=>call.endpoint==='send'),false)
+  await click('Close dialog');assert.ok(doc.activeElement===trigger,'focus returns to the message avatar')
+ })
+})
+
+test('new messages behind personal settings stay unread until the current conversation is visible again',async()=>{
+ let watermark=1
+ const events=()=>Array.from({length:watermark},(_,index)=>({type:'message',conversationSeq:index+1,serverAcceptedAt:'2026-11-09T00:00:00Z',message:{messageId:'read-'+index,author:membership.info.members[0],content:{text:'Message '+index},mentions:[]}}))
+ await pane({getState:()=>({...state(),conversations:[{...membership,watermark}]}),history:events},async({dom,doc,click,calls,autoRefresh})=>{
+  Object.defineProperty(doc,'hasFocus',{value:()=>true,configurable:true})
+  await click('Shared group');await act(async()=>dom.window.dispatchEvent(new dom.window.Event('focus')))
+  assert.ok(calls.some(call=>call.endpoint==='read'&&call.seq===1))
+  await click('Personal settings');watermark=2;await autoRefresh()
+  assert.equal(calls.some(call=>call.endpoint==='read'&&call.seq===2),false)
+  await click('Close dialog')
+  assert.ok(calls.some(call=>call.endpoint==='read'&&call.seq===2&&call.membershipEpoch==='epoch'))
  })
 })

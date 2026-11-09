@@ -33,5 +33,5 @@ export function ConversationRow({ conversation, humanId, labels, selected, reque
     title: `${name}\n${conversation.conversationId}`, 'data-conversation-id': conversation.conversationId, onClick: () => onChoose(conversation.conversationId) },
     h(ConversationAvatar, { conversation, humanId, request }),
     h('span', { className: 'bt-row-body bt-comm-conversation-body' }, h('span', { className: 'bt-row-name bt-comm-conversation-name' }, name), h('span', { className: 'bt-row-preview bt-comm-conversation-preview', title: summary }, summary)),
-    conversation.unread > 0 ? h('span', { className: 'bt-comm-unread', 'aria-hidden': true }) : null)
+    conversation.unread > 0 ? h('span', { className: 'bt-comm-unread', 'aria-hidden': true }, conversation.unread > 99 ? '99+' : conversation.unread) : null)
 }

@@ -660,9 +660,16 @@ export class CommunicationRuntime {
     return this.transport.request('conversation.members', { conversationId: input.conversationId, principalId, membershipEpoch: member.membershipEpoch })
   }
   markRead(input) {
-    const member = this.member(this.human.principalId, input.conversationId)
+    const member = this.member(this.human.principalId, input.conversationId, input.membershipEpoch)
     this.queue.markView(input.conversationId, this.human.principalId, member.membershipEpoch, input.seq, { humanRead: true })
     return { status: 'humanRead', conversationId: input.conversationId, seq: input.seq }
+  }
+  unreadCount() {
+    if (this.closed || !this.everReconciled) return 0
+    const archived = new Set(this.queue.archivedConversations())
+    return this.queue.memberships().filter(member => member.principalId === this.human.principalId && !archived.has(member.conversationId))
+      .reduce((total,member) => total + this.queue.unread(member.conversationId,member.principalId,member.membershipEpoch),0)
+      + botDmRecords(this).filter(member => !archived.has(member.conversationId)).reduce((total,member) => total + member.unread,0)
   }
   snapshot() {
     const memberships = this.everReconciled ? this.queue.memberships().filter(member => member.principalId === this.human.principalId) : []

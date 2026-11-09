@@ -18,7 +18,7 @@ export function botDmRecords(runtime) {
     const info = runtime.conversations?.get(member.conversationId)
     if (member.kind !== 'dm' || !owned.has(member.principalId) || !botDm(info, member.principalId, runtime.human.principalId) || records.has(member.conversationId)) continue
     records.set(member.conversationId, { ...member, info, archive: true, viewerBotId: owned.get(member.principalId),
-      viewerPrincipalId: member.principalId, unread: 0, lastMessage: conversationSummary(runtime.queue.lastMessage(member.conversationId, member.principalId, member.membershipEpoch), info.members) })
+      viewerPrincipalId: member.principalId, unread: runtime.queue.botDmUnread(member.conversationId,member.principalId,member.membershipEpoch), lastMessage: conversationSummary(runtime.queue.lastMessage(member.conversationId, member.principalId, member.membershipEpoch), info.members) })
   }
   return [...records.values()]
 }
