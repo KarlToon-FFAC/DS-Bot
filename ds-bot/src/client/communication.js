@@ -478,7 +478,9 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
   const clientOlder = communicationReleaseRelation(compatibility.clientVersion, compatibility.hubVersion) === 'client-older'
   const updateClient = versionBlocked && (compatibility.updateTarget === 'client' || compatibility.updateTarget !== 'hub' && clientOlder)
   const versionNotice = versionBlocked ? updateClient ? 'Update the client to use this Hub. Its required protocol or capabilities are not supported.' : compatibility.updateTarget === 'hub' ? 'Update the Hub to support this client’s required protocol and capabilities.' : 'Update the client or Hub to compatible protocol and capability versions.' : clientOlder ? 'A newer client release is available. Update the client; communication remains available with compatible protocols and capabilities.' : 'The release versions differ. Communication remains available with compatible protocols and capabilities.'
-  const connectionLabel = !team.communicationEnabled ? 'Not configured' : versionBlocked ? updateClient ? 'Client update required to connect' : 'Client and Hub versions are incompatible' : pollError ? 'Offline' : !state ? 'Connecting…' : state.connected ? compatibility.status === 'different' ? 'Connected to Hub · versions differ' : 'Connected to Hub' : connectionBlocked ? 'Offline' : 'Reconnecting to Hub'
+  const connectionLabel = !team.communicationEnabled ? 'Not configured' : versionBlocked ? updateClient ? 'Client update required to connect' : 'Client and Hub versions are incompatible' : pollError ? 'Offline' : !state ? 'Connecting…' : state.connected ? 'Connected to Hub' : connectionBlocked ? 'Offline' : 'Reconnecting to Hub'
+  const compactConnection = Boolean(state?.connected && !pollError && !versionBlocked)
+  const versionDetails = `${t('Client')}: ${displayCommunicationVersion(compatibility.clientVersion) ?? t('Version not reported')} · Hub: ${displayCommunicationVersion(compatibility.hubVersion) ?? t('Version not reported')}`
   const roleLabel = role => role === 'owner' ? 'Group owner' : role === 'admin' ? 'Group admin' : 'Group member'
   const avatar = (id, name) => {
     const contact = contacts.find(person => person.principalId === id)
@@ -531,10 +533,11 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
       h('div', { className: 'bt-comm-nav-scroll' },
       member ? btn('Back to conversation', () => setBrowse(false), { className: 'bt-comm-mobile' }) : null,
       state ? h(CommunicationWorkApprovals, {key:scope,state,request,refresh}) : null,
-      h('section', { className: 'bt-comm-connection', 'aria-label': t('Connection status') },
-        h('p', { className: 'bt-comm-connection-label', role: 'status', 'data-connected': Boolean(state?.connected && !pollError) }, h('span', { className: 'bt-comm-dot', 'aria-hidden': true }), t(connectionLabel)),
-        team.communicationEnabled && state ? h('p', { className: 'bt-comm-reference', 'data-communication-versions': true }, t('Client'), ': ', displayCommunicationVersion(compatibility.clientVersion), ' · Hub: ', displayCommunicationVersion(compatibility.hubVersion) ?? t('Version not reported')) : null,
-        team.communicationEnabled && (versionBlocked || compatibility.status === 'different') ? h('p', { className: 'bt-comm-reference', role: 'status' }, t(versionNotice)) : null,
+      h('section', { className: 'bt-comm-connection', 'aria-label': t('Connection status'), 'data-compact': compactConnection },
+        h('div', { className: 'bt-comm-connection-line', title: `${t(connectionLabel)} · ${versionDetails}${compatibility.status === 'different' ? ` · ${t(versionNotice)}` : ''}`, 'aria-description': compactConnection && compatibility.status === 'different' ? t(versionNotice) : undefined },
+          h('p', { className: 'bt-comm-connection-label', role: 'status', 'data-connected': Boolean(state?.connected && !pollError) }, h('span', { className: 'bt-comm-dot', 'aria-hidden': true }), t(connectionLabel)),
+          team.communicationEnabled && state ? h('span', { className: 'bt-comm-reference', 'data-communication-versions': true, 'aria-label': versionDetails }, displayCommunicationVersion(compatibility.clientVersion), ' / ', displayCommunicationVersion(compatibility.hubVersion) ?? t('Version not reported'), compactConnection && clientOlder ? ' ↑' : '') : null),
+        team.communicationEnabled && !compactConnection && (versionBlocked || compatibility.status === 'different') ? h('p', { className: 'bt-comm-reference', role: 'status' }, t(versionNotice)) : null,
         team.communicationEnabled && versionBlocked && state?.error ? h('p', { className: 'bt-comm-reference', role: 'status' }, friendly({ code: state.error })) : null,
         state ? h('p', { className: 'bt-comm-reference bt-comm-connection-details' }, `${state.instanceId} · ${t('Remote contacts')}: ${remoteCount}`) : null,
         pollError ? h('p', { className: 'bt-comm-reference', role: 'status' }, t('Status may be out of date.'), ' ', pollError) : null,

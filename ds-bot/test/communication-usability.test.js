@@ -1565,8 +1565,12 @@ test('compatible version differences and subsequent matching versions update liv
  let snapshot={...state(),connected:true,compatibility:{clientVersion:'0.2.7',hubVersion:'0.2.6',status:'different'}}
  await pane({getState:()=>snapshot},async({doc,autoRefresh})=>{
   const connection=doc.querySelector('.bt-comm-connection')
-  assert.equal(connection.querySelector('.bt-comm-connection-label').textContent,'Connected to Hub · versions differ')
+  assert.equal(connection.querySelector('.bt-comm-connection-label').textContent,'Connected to Hub')
   assert.match(connection.textContent,/V0\.2\.7.*V0\.2\.6/)
+  assert.equal(connection.dataset.compact,'true')
+  assert.equal(connection.querySelectorAll('.bt-comm-connection-line').length,1)
+  assert.equal(connection.querySelector(':scope>p[role=status]'),null)
+  assert.match(connection.querySelector('.bt-comm-connection-line').title,/protocols and capabilities/)
   snapshot={...snapshot,compatibility:{...snapshot.compatibility,hubVersion:'0.2.7',status:'matched'}}
   await autoRefresh()
   assert.equal(connection.querySelector('.bt-comm-connection-label').textContent,'Connected to Hub')
@@ -1613,9 +1617,9 @@ test('older client releases show an advisory while connected, and a required upd
  let snapshot={...state(),compatibility:{clientVersion:'0.2.7',hubVersion:'0.2.8',status:'different'}}
  await pane({getState:()=>snapshot},async({doc,autoRefresh})=>{
   const connection=()=>doc.querySelector('.bt-comm-connection')
-  assert.match(connection().textContent,/newer client release is available/)
-  assert.match(connection().textContent,/communication remains available/)
-  assert.equal(connection().querySelector('.bt-comm-connection-label').textContent,'Connected to Hub · versions differ')
+  assert.match(connection().querySelector('.bt-comm-connection-line').title,/newer client release is available/)
+  assert.match(connection().querySelector('.bt-comm-connection-line').getAttribute('aria-description'),/communication remains available/)
+  assert.equal(connection().querySelector('.bt-comm-connection-label').textContent,'Connected to Hub')
   snapshot={...snapshot,connected:false,error:'HUB_CONNECTION_REFUSED'}
   await autoRefresh()
   assert.doesNotMatch(connection().textContent,/Client update required to connect/)

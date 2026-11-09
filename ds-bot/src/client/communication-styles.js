@@ -241,6 +241,11 @@ export const communicationCSS = `
 .bt-comm-frame .bt-comm-back{padding:6px 8px;border-radius:10px;background:var(--bt-hover);text-align:center}
 .bt-comm-connection{border:0;background:none;padding:0 4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .bt-comm-connection-label{flex:1;font-size:11px;color:var(--bt-ink-2);font-weight:400}
+.bt-comm-connection-line{width:100%;min-width:0;display:flex;align-items:center;gap:6px}
+.bt-comm-connection-line>.bt-comm-connection-label{min-width:0;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:none}
+.bt-comm-connection-line>[data-communication-versions]{min-width:0;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--bt-ink-2)}
+.bt-comm-connection[data-compact=true]{flex-wrap:nowrap;min-height:20px}
+.bt-comm-connection[data-compact=false]>.bt-comm-connection-line{flex-wrap:wrap}
 .bt-comm-connection-details{display:none}
 .bt-comm-connection>[data-communication-versions],.bt-comm-connection>[role=status]{flex-basis:100%;min-width:0}
 .bt-comm-connection>button{padding:2px 6px;min-height:24px;margin:0;border:0;background:none;color:var(--bt-ink-2);font-size:11px}
