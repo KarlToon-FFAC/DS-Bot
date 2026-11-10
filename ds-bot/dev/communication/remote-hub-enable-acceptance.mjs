@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import { spawn } from 'node:child_process'
-import { writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { benchClient, repo } from './bench-client.mjs'
 import { until } from './local-topology.mjs'
@@ -38,26 +38,24 @@ try {
   await enable(api)
   assert.equal((await ready(api)).configured, false)
   record('fresh profile enables locally without any Hub, enrollment, Bot publication or connection')
+  const preview = await api({endpoint:'remote-hub-settings'})
+  await api({endpoint:'set-remote-hub-enabled', enabled:false, expectedVersion:preview.version, confirmHideAllBots:true})
   await bench('stop')
 
-  // Reset only this owned profile's test flag before testing startup precedence.
-  writeFileSync(join(home, 'profiles/communication-test/cordis.patch.yml'), '- id: bot\n  config:\n    checkRatio: 0.45\n')
+  const patch = join(home, 'profiles/communication-test/cordis.patch.yml'), original = readFileSync(patch, 'utf8')
   await bench('start', false)
   api = await connect()
-  await assert.rejects(enable(api), {code:'CONFIG_EDIT_OVERLAID'})
   assert.equal((await api({endpoint:'remote-hub-settings'})).enabled, false)
-  record('a real command-line Bot config overlay is identified as a local save rejection and stays off')
+  assert.equal((await enable(api)).reloadRequired, false)
+  await ready(api)
+  assert.equal(readFileSync(patch, 'utf8'), original)
+  record('fresh setup enables immediately under a real Bot config overlay without writing the DSH profile')
   await bench('stop')
 
-  await bench('start')
-  api = await connect()
-  await enable(api)
-  await ready(api)
-  await bench('stop')
-  await bench('start')
+  await bench('start', false)
   api = await connect()
   assert.equal((await ready(api)).configured, false)
-  record('removing the conflicting startup overlay allows enabling, and the setting survives Host restart')
+  record('the enabled setup entry survives Host restart with the same startup overlay and no Hub')
   evidence.status = 'PASS'
 } catch (error) {
   evidence.status = 'FAIL'; evidence.error = error.code ?? error.message

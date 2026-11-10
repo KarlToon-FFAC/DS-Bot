@@ -14,7 +14,7 @@ const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms))
 const until=async predicate=>{for(let n=0;n<400;n++){const value=await predicate();if(value)return value;await wait(10)}assert.fail('condition timed out')}
 function fixture(config={}){
  let saved=structuredClone(config),readonly,mutate,writes=0,quiesced=0
- const rt={config:structuredClone(config),load:async()=>{},refresh:async()=>{},readOnly:()=>readonly,ctx:{configEditor:{entries:()=>[{options:{name:'ds-bot'}}],edit:async(_entry,change)=>{mutate?.(saved);saved=change(structuredClone(saved));writes++}}}}
+ const rt={config:structuredClone(config),state:{prefs:{}},save:async()=>{},load:async()=>{},refresh:async()=>{},readOnly:()=>readonly,ctx:{configEditor:{entries:()=>[{options:{name:'ds-bot'}}],edit:async(_entry,change)=>{mutate?.(saved);saved=change(structuredClone(saved));writes++}}}}
  const controller=new RemoteHubController(rt,{onQuiesce:async()=>{quiesced++}})
  controller.wake=()=>{}
  rt.remoteHubFeatureSettings=()=>controller.status();rt.remoteHubFeatureEnabled=()=>controller.status().enabled
@@ -62,12 +62,13 @@ test('saved-only editor disable immediately fences the Host, clears publication 
  await f.controller.close()
 })
 
-test('fresh enable exposes setup after reload without inventing enrollment or publication',async()=>{
+test('fresh enable persists local setup immediately without editing the DSH profile or inventing enrollment/publication',async()=>{
  const f=fixture({})
  const result=await f.controller.set({enabled:true,expectedVersion:f.controller.status().version})
- assert.equal(result.enabled,true);assert.equal(result.withdrawalPending,false);assert.equal(result.reloadRequired,true)
- assert.equal(f.saved.remoteHubEnabled,true);assert.equal(f.saved.communication,undefined)
- assert.throws(()=>f.controller.assertAvailable(),{code:'REMOTE_HUB_RELOAD_REQUIRED'})
+ assert.equal(result.enabled,true);assert.equal(result.withdrawalPending,false);assert.equal(result.reloadRequired,false)
+ assert.equal(f.saved.remoteHubEnabled,undefined);assert.equal(f.saved.communication,undefined)
+ assert.equal(f.rt.state.prefs.remoteHubSetupEnabled,true);assert.equal(f.writes,0)
+ assert.doesNotThrow(()=>f.controller.assertAvailable())
  await f.controller.close()
 })
 
@@ -142,7 +143,7 @@ for(const offline of [false,true])test(`minimal withdrawal ${offline?'survives o
  }finally{await controller?.close();await restarted?.close();if(controller?.running)await controller.running;await hub?.close();rmSync(home,{recursive:true,force:true})}
 })
 
-test('fresh-install HTTP enable identifies local ConfigEditor rejections without contacting a Hub or changing the setting', async () => {
+test('configured Hub HTTP enable identifies local ConfigEditor rejections without contacting a Hub or changing the setting', async () => {
  const failures = [
   ['Configuration for "sensitive-entry" is overridden by a home patch or command-line overlay', 'CONFIG_EDIT_OVERLAID'],
   ['Configuration entry changed during reload', 'CONFIG_EDIT_ENTRY_CHANGED'],
@@ -151,7 +152,7 @@ test('fresh-install HTTP enable identifies local ConfigEditor rejections without
   ['PRIVATE_FILESYSTEM_DETAIL', 'COMMUNICATION_CONFIG_WRITE_FAILED'],
  ]
  for (const [message, expected] of failures) {
-  const f = fixture({}), effects = []
+  const f = fixture({remoteHubEnabled:false,communication:{enabled:false,url:'wss://synthetic.example.test/communication',instanceId:'a',publishedBotIds:[]}}), effects = []
   let route
   f.rt.teamTools = []
   Object.assign(f.rt.ctx, {effect: work => { const dispose = work(); if (typeof dispose === 'function') effects.push(dispose) },
@@ -171,4 +172,69 @@ test('fresh-install HTTP enable identifies local ConfigEditor rejections without
    assert.equal(f.rt.communication, undefined)
   } finally { for (const dispose of effects.reverse()) await dispose(); await f.controller.close() }
  }
+})
+
+test('fresh setup succeeds without a ConfigEditor and stays unavailable until the local save commits', async () => {
+ const f = fixture({})
+ delete f.rt.ctx.configEditor
+ let release
+ f.rt.save = async options => { assert.equal(options.required, true); await new Promise(resolve => { release = resolve }) }
+ const promise = f.controller.set({enabled:true,expectedVersion:f.controller.status().version})
+ await until(() => release)
+ assert.equal(f.controller.status().enabled, false)
+ assert.throws(() => f.controller.assertAvailable(), {code:'REMOTE_HUB_DISABLED'})
+ release()
+ assert.equal((await promise).enabled, true)
+ assert.equal(f.controller.status().reloadRequired, false)
+ assert.doesNotThrow(() => f.controller.assertAvailable())
+ const restarted = new RemoteHubController({...f.rt, state:structuredClone(f.rt.state)})
+ assert.equal(restarted.status().enabled, true)
+ assert.doesNotThrow(() => restarted.assertAvailable())
+ await restarted.close(); await f.controller.close()
+})
+
+test('fresh setup refuses failed saves, stale versions and read-only hosts without enabling or touching profile configuration', async () => {
+ const f = fixture({}), version = f.controller.status().version
+ f.rt.save = async () => { throw Error('PRIVATE_LOCAL_SAVE_FAILURE') }
+ await assert.rejects(f.controller.set({enabled:true,expectedVersion:version}), {code:'COMMUNICATION_CONFIG_WRITE_FAILED'})
+ assert.equal(f.controller.status().enabled, false)
+ assert.equal(f.rt.state.prefs.remoteHubSetupEnabled, undefined)
+ await assert.rejects(f.controller.set({enabled:true,expectedVersion:'stale'}), {code:'REMOTE_HUB_SETTINGS_CHANGED'})
+ f.setReadonly('other writer')
+ await assert.rejects(f.controller.set({enabled:true,expectedVersion:version}), {code:'COMMUNICATION_READ_ONLY'})
+ assert.equal(f.writes, 0)
+ await f.controller.close()
+})
+
+test('a fresh setup preference cannot override an explicit configured Hub disable or skip withdrawal', async () => {
+ const f = fixture({...configured(),remoteHubEnabled:false})
+ f.rt.state.prefs.remoteHubSetupEnabled = true
+ assert.equal(f.controller.status().enabled, false)
+ assert.equal(f.controller.status().withdrawalPending, true)
+ assert.throws(() => f.controller.assertAvailable(), {code:'REMOTE_HUB_DISABLED'})
+ await f.controller.close()
+})
+
+test('a cold setup API loads the persisted opt-in before enforcing remote entry gates', async () => {
+ let route, loaded = false
+ const rt = {config:{},state:{prefs:{}},teamTools:[],load:async () => {
+  if (!loaded) { loaded = true; rt.state.prefs.remoteHubSetupEnabled = true }
+ },refresh:async()=>{},ctx:{effect:work=>work(),connection:{fetch:{register:value=>{route=value;return()=>{}}}}}}
+ install(rt)
+ const call = async body => (await route.fetch(new Request('http://127.0.0.1/api/communication',{method:'POST',body:JSON.stringify(body)}))).json()
+ const state = await call({endpoint:'state'})
+ assert.equal(state.ok, true)
+ assert.equal(state.value.error, undefined, 'the persisted setup opt-in must not be reported disabled on the first request')
+ assert.equal((await call({endpoint:'join-hub',hubCode:'invalid'})).error.code, 'INVALID_HUB_CODE')
+ assert.equal(rt.communication, undefined)
+})
+
+test('a fresh profile with an explicit initial off default can still opt in locally', async () => {
+ const f = fixture({remoteHubEnabled:false})
+ f.rt.ctx.configEditor.edit = () => assert.fail('an unconfigured initial flag must not require profile rewriting')
+ assert.equal(f.controller.status().enabled, false)
+ assert.equal((await f.controller.set({enabled:true,expectedVersion:f.controller.status().version})).enabled, true)
+ assert.equal(f.saved.remoteHubEnabled, false)
+ assert.doesNotThrow(() => f.controller.assertAvailable())
+ await f.controller.close()
 })

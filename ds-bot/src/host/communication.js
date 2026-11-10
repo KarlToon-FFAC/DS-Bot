@@ -43,6 +43,7 @@ export function install(rt) {
   rt.remoteHubFeatureSettings = () => remoteHub.status()
   rt.remoteHubFeatureEnabled = () => remoteHub.status().enabled
   rt.remoteHubCanWithdraw = hub => !remoteHub.closed && remoteHub.canWithdraw(hub)
+  rt.serializeRemoteHubSetup = work => remoteHub.exclusive(work)
   const ensure = () => {
     remoteHub.assertAvailable()
     starting ??= (async () => {
@@ -224,8 +225,13 @@ export function install(rt) {
         if (['author', 'sender', 'senderId', 'homeInstanceId'].some(key => Object.hasOwn(body, key))
           || body.endpoint !== 'avatar' && Object.hasOwn(body, 'principalId')) fail('AUTHOR_MISMATCH')
         if (body.endpoint === 'reclaim') fail('UNKNOWN_OPERATION')
-        if (body.endpoint === 'remote-hub-settings') return Response.json({ok:true,value:remoteHub.status()})
+        if (body.endpoint === 'remote-hub-settings') {
+          await rt.load(); await rt.refresh()
+          return Response.json({ok:true,value:remoteHub.status()})
+        }
         if (body.endpoint === 'set-remote-hub-enabled') return Response.json({ok:true,value:await remoteHub.set(body)})
+        const localReads = ['decode-hub-code','onboarding-storage','available-bots','memory-settings','work-approval-settings']
+        if (remoteHub.localSetup() && body.endpoint !== 'diagnose' && !localReads.includes(body.endpoint)) { await rt.load(); await rt.refresh() }
         const feature = remoteHub.status()
         if (body.endpoint === 'state' && (!feature.enabled || feature.withdrawalPending || feature.reloadRequired)) return Response.json({ok:true,value:{
           enabled:feature.enabled && settings.enabled === true,remoteHubEnabled:feature.enabled,connected:false,withdrawalPending:feature.withdrawalPending,
@@ -237,7 +243,6 @@ export function install(rt) {
           await rt.load(); await rt.refresh()
           return Response.json({ ok: true, value: await diagnoseCommunication(rt, diagnosticState()) })
         }
-        const localReads = ['decode-hub-code','onboarding-storage','available-bots','memory-settings','work-approval-settings']
         if (!localReads.includes(body.endpoint)) {
           if (!feature.enabled) fail('REMOTE_HUB_DISABLED')
           if (!['update-hub-trust','hub-join-status'].includes(body.endpoint)) remoteHub.assertAvailable()

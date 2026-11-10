@@ -10,6 +10,7 @@ import { recordHubTls } from './tls-observation.js'
 import { scopedTrust, verifyHubCode } from './hub-trust.js'
 import { communicationCapabilities } from './transport.js'
 import { configFailureCode } from './config-errors.js'
+import { remoteHubConfigured } from '../../shared/remote-hub.js'
 
 const PROTOCOL = 'dsbot-communication/1'
 const RECORD_TYPE = 'dsbot-communication-signing-key'
@@ -457,12 +458,13 @@ export class CommunicationOnboarding {
     const saved=record.savedConfiguration?publicConfiguration(record.savedConfiguration):{}
     if(saved.url&&saved.url!==hub.url||saved.hubId&&saved.hubId!==hubId||saved.credentialKey&&saved.credentialKey!==key)fail('COMMUNICATION_CREDENTIAL_MISMATCH')
     delete saved.credentialEnv
-    await phase('COMMUNICATION_CONFIG_WRITE_FAILED',()=>editor.edit(entry,current=>{
+    await (this.rt.serializeRemoteHubSetup ?? (work => work()))(() => phase('COMMUNICATION_CONFIG_WRITE_FAILED',()=>editor.edit(entry,current=>{
       if(selection(current.communication)!==expected)fail('HUB_SELECTION_CHANGED')
-      return {...current,communication:{...saved,enabled:false,hubId,url:hub.url,credentialKey:key,
+      const optedIn = remoteHubConfigured(current) ? undefined : this.rt.state?.prefs?.remoteHubSetupEnabled
+      return {...current,...(typeof optedIn === 'boolean' ? {remoteHubEnabled:optedIn,remoteHubProfileManaged:true} : {}),communication:{...saved,enabled:false,hubId,url:hub.url,credentialKey:key,
         ...(record.instanceId?{instanceId:record.instanceId}:{}),humanDisplayName:saved.humanDisplayName??record.displayName,
         publishedBotIds:(saved.publishedBotIds??[]).filter(id=>!this.rt.botOf||this.rt.botOf(id))}}
-    }))
+    })))
     return {...safeStatus(record),paused:true,selected:true,queueScope:scope}
   }
   async resumeHub(input) {
@@ -681,12 +683,13 @@ export class CommunicationOnboarding {
     if (!editor?.entries || !editor?.edit) fail('CONFIG_EDITOR_UNAVAILABLE')
     const entries = editor.entries().filter(entry => entry.options?.name === 'ds-bot')
     if (entries.length !== 1) fail('CONFIG_ENTRY_UNAVAILABLE')
-    await phase('COMMUNICATION_CONFIG_WRITE_FAILED', () => editor.edit(entries[0], current => {
+    await (this.rt.serializeRemoteHubSetup ?? (work => work()))(() => phase('COMMUNICATION_CONFIG_WRITE_FAILED', () => editor.edit(entries[0], current => {
       this.conflict(hub, instanceId, current)
-      return { ...current, communication: { ...current.communication, enabled: true, hubId: hub.hubId, url: hub.url, instanceId,
+      const optedIn = remoteHubConfigured(current) ? undefined : this.rt.state?.prefs?.remoteHubSetupEnabled
+      return { ...current, ...(typeof optedIn === 'boolean' ? {remoteHubEnabled:optedIn,remoteHubProfileManaged:true} : {}), communication: { ...current.communication, enabled: true, hubId: hub.hubId, url: hub.url, instanceId,
         credentialKey: key, humanDisplayName: current.communication?.humanDisplayName ?? displayName,
         publishedBotIds: current.communication?.publishedBotIds ?? [] } }
-    }))
+    })))
   }
   async contact(action, input, guard) {
     guard?.()

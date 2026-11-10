@@ -20,7 +20,19 @@ chats, potential interruption of remote work, and the need to republish new
 identities and explicitly add them again. Local Bots, files and local chat history
 are retained; Human enrollment/contact/history data are not reset.
 
-A public ConfigEditor transaction saves the explicit switch, empties publication,
+Before a Hub is configured, the switch is a DS Bot local preference saved through
+the team's required, writer-locked state save. It takes effect immediately without
+ConfigEditor or a DSH reload. A failed save restores the old value, and setup is
+not authorized while the save is pending. This applies only with no active Hub,
+no retained published Bot list and no pending withdrawal. Startup configuration
+overrides therefore cannot prevent a fresh user from exposing the setup UI.
+State requests load this preference before applying feature gates after restart.
+An approved first enrollment or selection promotes an enabled setup preference
+to the explicit profile flag through the normal public configuration transaction.
+Once a Hub is configured the local setup preference is ignored, so it cannot
+revive an explicitly disabled Hub or bypass withdrawal.
+
+For an existing Hub, a public ConfigEditor transaction saves the explicit switch, empties publication,
 rotates withdrawal generations and records a durable pending withdrawal. The
 running Host immediately fences remote use and closes its normal runtime. A
 minimal cleanup connection authenticates only to withdraw publication; it never

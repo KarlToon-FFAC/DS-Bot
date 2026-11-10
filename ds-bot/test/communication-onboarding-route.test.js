@@ -25,12 +25,12 @@ test('unconfigured instances expose only authenticated Human setup routes withou
   assert.equal(decoded.ok, true)
   assert.equal(decoded.value.url, url)
   assert.equal(decoded.value.hubId, hubId)
-  assert.equal(loaded, 0)
+  assert.equal(loaded, 1, 'state loads persisted local opt-in; decoding itself does not load or enroll')
   const forged = await call({ endpoint: 'join-hub', principalId: 'human:other:user', hubCode })
   assert.equal(forged.error.code, 'AUTHOR_MISMATCH')
   const relax = await call({ endpoint: 'decode-hub-code', hubCode, allowLoopback: true })
   assert.equal(relax.error.code, 'AUTHOR_MISMATCH')
-  assert.equal(loaded, 0)
+  assert.equal(loaded, 1)
 })
 
 test('enrollment HTTP diagnostics expose only safe failure phase and never an underlying service message', async () => {

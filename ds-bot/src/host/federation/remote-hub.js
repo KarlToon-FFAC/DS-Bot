@@ -21,14 +21,24 @@ export class RemoteHubController {
     this.onQuiesce = onQuiesce; this.onResume = onResume; this.tail = Promise.resolve()
     this.appliedEnabled = remoteHubEnabled(rt.config); this.closed = false; this.failures = 0
   }
-  config() { return this.savedConfig ?? this.rt.config }
+  localSetup(config = this.rt.config) {
+    // Before enrollment this only exposes setup. It does not change a DSH
+    // deployment setting or authorize a connection, publication, or model turn.
+    return config.remoteHubProfileManaged !== true && config.communication?.enabled !== true && !remoteHubConfigured(config)
+      && !(config.communication?.publishedBotIds?.length) && !config.communication?.remoteHubWithdrawalPending
+  }
+  config() {
+    if (this.savedConfig) return this.savedConfig
+    const config = this.rt.config, enabled = this.setupSaving ? this.setupPrevious : this.rt.state?.prefs?.remoteHubSetupEnabled
+    return this.localSetup(config) && typeof enabled === 'boolean' ? { ...config, remoteHubEnabled: enabled } : config
+  }
   status() {
     const config = this.config()
     return { enabled: remoteHubEnabled(config), configured: remoteHubConfigured(config), version: version(config),
       inferredFromExistingHub: config.remoteHubEnabled === undefined && remoteHubConfigured(config),
       publishedBotCount: config.communication?.publishedBotIds?.length ?? 0,
       withdrawalPending: this.completedWithdrawal !== withdrawalId(config.communication) && (config.communication?.remoteHubWithdrawalPending === true || !remoteHubEnabled(config) && remoteHubConfigured(config) && (config.communication?.publishedBotIds?.length ?? 0) > 0),
-      withdrawalError: this.error ?? null, reloadRequired: Boolean(this.savedConfig) || remoteHubEnabled(config) !== this.appliedEnabled }
+      withdrawalError: this.error ?? null, reloadRequired: Boolean(this.savedConfig) || !this.localSetup() && remoteHubEnabled(config) !== this.appliedEnabled }
   }
   canWithdraw(hub) {
     const current = this.config().communication
@@ -43,16 +53,40 @@ export class RemoteHubController {
     return { editor, entry: entries[0] }
   }
   set(input) {
-    const next = this.tail.catch(() => {}).then(() => this.change(input))
+    return this.exclusive(() => this.change(input))
+  }
+  exclusive(work) {
+    const next = this.tail.catch(() => {}).then(() => {
+      if (this.closed) fail('COMMUNICATION_STOPPED')
+      return work()
+    })
     this.tail = next; return next
   }
   async change(input) {
     if (Object.keys(input).some(key => !['endpoint','enabled','expectedVersion','confirmHideAllBots'].includes(key))) fail('INVALID_REQUEST')
     if (typeof input.enabled !== 'boolean' || typeof input.expectedVersion !== 'string') fail('INVALID_REQUEST')
     await this.rt.load(); await this.rt.refresh()
+    if (this.closed) fail('COMMUNICATION_STOPPED')
     if (this.rt.readOnly?.() !== undefined) fail('COMMUNICATION_READ_ONLY')
     if (input.expectedVersion !== this.status().version) fail('REMOTE_HUB_SETTINGS_CHANGED')
     if (this.status().enabled && !input.enabled && input.confirmHideAllBots !== true) fail('REMOTE_HUB_DISABLE_CONFIRMATION_REQUIRED')
+    if (this.localSetup()) {
+      if (!this.rt.state?.prefs || typeof this.rt.save !== 'function') fail('COMMUNICATION_CONFIG_WRITE_FAILED')
+      const prefs = this.rt.state.prefs, previous = prefs.remoteHubSetupEnabled
+      this.setupSaving = true; this.setupPrevious = previous
+      prefs.remoteHubSetupEnabled = input.enabled
+      try { await this.rt.save({ required: true }) }
+      catch (cause) {
+        if (this.rt.state.prefs === prefs && prefs.remoteHubSetupEnabled === input.enabled) {
+          if (previous === undefined) delete prefs.remoteHubSetupEnabled
+          else prefs.remoteHubSetupEnabled = previous
+        }
+        throw Object.assign(new Error('COMMUNICATION_CONFIG_WRITE_FAILED', { cause }), { code: 'COMMUNICATION_CONFIG_WRITE_FAILED', phase: 'COMMUNICATION_CONFIG_WRITE_FAILED' })
+      } finally { this.setupSaving = false; this.setupPrevious = undefined }
+      this.appliedEnabled = input.enabled
+      await this.apply()
+      return this.status()
+    }
     const {editor,entry} = this.editor()
     let saved
     try { await editor.edit(entry, current => {
@@ -86,7 +120,7 @@ export class RemoteHubController {
     const status = this.status()
     if (!status.enabled) fail('REMOTE_HUB_DISABLED')
     if (status.withdrawalPending) fail('REMOTE_HUB_WITHDRAWAL_PENDING')
-    if (!this.appliedEnabled || this.savedConfig) fail('REMOTE_HUB_RELOAD_REQUIRED')
+    if (!this.localSetup() && !this.appliedEnabled || this.savedConfig) fail('REMOTE_HUB_RELOAD_REQUIRED')
   }
   async apply() {
     if (this.closed) return

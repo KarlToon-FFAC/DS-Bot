@@ -489,3 +489,49 @@ test('remote confirmation is an explicit local-owner setting and does not change
  await f.onboarding.handle('set-work-approval',{remoteWorkApproval:'inherit'},human)
  assert.equal(f.rt.config.communication.remoteWorkApproval,'inherit')
 })
+
+test('approved first enrollment promotes the local setup opt-in to an explicit profile flag without reviving it after a later disable', async () => {
+ const f = fixture({current:{remoteHubEnabled:false},responseStatus:'approved'})
+ f.rt.state = {prefs:{remoteHubSetupEnabled:true}}
+ await f.onboarding.handle('join', joinInput, human)
+ assert.equal(f.rt.config.remoteHubEnabled, true)
+ assert.equal(f.rt.config.remoteHubProfileManaged, true)
+ f.rt.config.remoteHubEnabled = false
+ assert.equal(f.rt.config.communication.enabled, true)
+ const {RemoteHubController} = await import('../src/host/federation/remote-hub.js')
+ const controller = new RemoteHubController(f.rt)
+ assert.equal(controller.status().enabled, false)
+ delete f.rt.config.communication
+ assert.equal(controller.status().enabled, false, 'removing Hub data must not revive a stale setup preference')
+ await controller.close()
+})
+
+test('late first approval is serialized behind a pending local disable and cannot turn the feature back on', async () => {
+ const f = fixture({responseStatus:'approved'})
+ f.rt.state = {prefs:{remoteHubSetupEnabled:true}}
+ f.rt.load = async () => {}; f.rt.refresh = async () => {}
+ let release
+ f.rt.save = () => new Promise(resolve => { release = resolve })
+ const {RemoteHubController} = await import('../src/host/federation/remote-hub.js')
+ const controller = new RemoteHubController(f.rt)
+ f.rt.serializeRemoteHubSetup = work => controller.exclusive(work)
+ const disabling = controller.set({enabled:false,expectedVersion:controller.status().version,confirmHideAllBots:true})
+ while (!release) await new Promise(resolve => setTimeout(resolve, 1))
+ const approval = f.onboarding.configure(hub, 'isolated-instance', f.key, 'Device')
+ await new Promise(resolve => setTimeout(resolve, 5))
+ assert.equal(f.configWrites.length, 0)
+ release()
+ assert.equal((await disabling).enabled, false)
+ await approval
+ assert.equal(f.rt.config.remoteHubEnabled, false)
+ assert.equal(controller.status().enabled, false)
+ await controller.close()
+})
+
+test('a stale setup opt-out cannot disable a configured Hub when the owner explicitly resumes it', async () => {
+ const f = fixture({current:{remoteHubEnabled:true,communication:{...hub,enabled:false,instanceId:'isolated-instance'}}})
+ f.rt.state = {prefs:{remoteHubSetupEnabled:false}}
+ await f.onboarding.configure(hub, 'isolated-instance', f.key, 'Device')
+ assert.equal(f.rt.config.remoteHubEnabled, true)
+ assert.equal(f.rt.config.communication.enabled, true)
+})
