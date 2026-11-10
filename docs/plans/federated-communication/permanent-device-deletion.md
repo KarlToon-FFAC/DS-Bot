@@ -107,3 +107,13 @@ Visual QA uses a managed static preview with synthetic state only. It must be
 reported separately from DOM/unit/socket coverage. Local Chromium startup was
 blocked by this execution environment’s AF_UNIX restriction; no real browser
 profile or user data was used.
+
+## Public-profile cleanup and compact UI (2026-11-10)
+
+Deletion now also removes `principal_public_profiles` for the exact Human/Bots
+before their principals. Previously those FK children could roll back the entire
+transaction, making an offline/reset client appear impossible to remove.
+Administrator authority does not depend on that client's retained local keys.
+Devices now use compact paged rows and a Manage dialog, with separate exact-impact
+confirmation. See [reset cleanup and density](hub-device-reset-and-density.md)
+for real-Hub browser evidence and current validation.

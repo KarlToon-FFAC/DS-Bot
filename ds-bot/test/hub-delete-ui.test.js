@@ -3,85 +3,106 @@ import { test } from 'node:test'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { managementPage, managementScript } from '../../communication-hub/src/management-ui.js'
-
 const { JSDOM } = createRequire(join(process.env.DSH_HARNESS, 'package.json'))('jsdom')
 const tick = () => new Promise(resolve => setTimeout(resolve, 0))
-
 function fixture(t) {
-  const dom = new JSDOM(managementPage, { url: 'http://127.0.0.1:3190/admin/', runScripts: 'outside-only' })
-  t.after(() => dom.window.close())
-  const { window } = dom, calls = [], confirmations = []
-  Object.defineProperty(window.document, 'visibilityState', { value: 'hidden' })
-  let approve = false, release, pending = false
-  const state = { requests: [], instances: [
-    { instanceId: 'device-a', label: '<Untrusted device>', trusted: 1, pairingRevision: 1, nameVersion: 0, ownedSharedGroups: [{ conversationId: 'shared-one', title: '<Shared group>', version: 7 }] },
-    { instanceId: 'device-b', label: 'Unrelated device', trusted: 0, revision: 2, pairingRevision: 2, nameVersion: 0, ownedSharedGroups: [] },
-  ] }
-  window.fetch = async (url, options) => {
-    const action = url.split('/').at(-1), input = JSON.parse(options.body)
-    if (action === 'session') return { ok: true, json: async () => ({ ok: true, csrf: 'synthetic-csrf' }) }
-    calls.push({ action, input })
-    if (action === 'delete') {
-      if (pending) await new Promise(resolve => { release = resolve })
-      state.instances = state.instances.filter(instance => instance.instanceId !== input.instanceId)
-    }
-    return { ok: true, json: async () => ({ ok: true, value: state, revision: 'synthetic' }) }
+ const dom = new JSDOM(managementPage, {url:'http://127.0.0.1:3190/admin/',runScripts:'outside-only'})
+ t.after(() => dom.window.close())
+ const {window} = dom, calls = []
+ Object.defineProperty(window.document,'visibilityState',{value:'hidden'})
+ let release, pending = false, failure
+ const state = {requests:[],instances:[
+  {instanceId:'device-a',label:'<Untrusted device>',trusted:1,pairingRevision:1,nameVersion:0,connected:false,ownedSharedGroups:[{conversationId:'shared-one',title:'<Shared group>',version:7}]},
+  {instanceId:'device-b',label:'Unrelated device',trusted:0,revision:2,pairingRevision:2,nameVersion:0,connected:false,ownedSharedGroups:[]},
+ ]}
+ window.fetch = async (url,options) => {
+  const action = url.split('/').at(-1), input = JSON.parse(options.body)
+  if (action === 'session') return {ok:true,json:async()=>({ok:true,csrf:'synthetic'})}
+  calls.push({action,input})
+  if (action === 'delete') {
+   if (pending) await new Promise(resolve=>{release=resolve})
+   if (failure) return {ok:false,json:async()=>({ok:false,error:{code:failure}})}
+   state.instances = state.instances.filter(i=>i.instanceId!==input.instanceId)
   }
-  window.AbortSignal = AbortSignal
-  window.confirm = text => { confirmations.push(text); return approve }
-  window.eval(managementScript)
-  const render = () => window.render(state)
-  render()
-  return { window, calls, state, confirmations, render, approve: () => { approve = true }, defer: () => { pending = true }, release: () => release() }
+  return {ok:true,json:async()=>({ok:true,value:state,revision:'synthetic'})}
+ }
+ window.AbortSignal=AbortSignal
+ window.confirm=()=>assert.fail('complex device operations must use their own dialog')
+ window.eval(managementScript)
+ const render=()=>window.render(state); render()
+ const open = async (id='device-a') => {
+  window.document.querySelector('[data-instance-id="'+id+'"] button').click(); await tick()
+ }
+ const action = async name => {
+  const b=[...window.document.querySelectorAll('#device-details button')].find(b=>b.textContent===name);assert.ok(b);b.click();await tick()
+ }
+ return {window,calls,state,render,open,action,defer:()=>{pending=true},release:()=>release(),fail:code=>{failure=code}}
 }
 
-test('administrator delete UI distinguishes revoke, escapes untrusted names, lists exact group impact and cancels without mutation', async t => {
-  const f = fixture(t), { document } = f.window
-  const row = document.querySelector('#instances article')
-  assert.match(row.textContent, /<Untrusted device>/)
-  assert.equal(row.querySelector('untrusted'), null)
-  assert.ok([...row.querySelectorAll('button')].some(button => button.textContent === 'Revoke access'))
-  const button = [...row.querySelectorAll('button')].find(button => button.textContent === 'Delete device permanently')
-  button.click(); await tick()
-  assert.equal(f.calls.some(call => call.action === 'delete'), false)
-  assert.match(f.confirmations[0], /Device: "<Untrusted device>"\nInstance ID: device-a\n/)
-  assert.match(f.confirmations[0], /This cannot be undone/)
-  assert.match(f.confirmations[0], /Groups to close:\n<Shared group> \(shared-one\)/)
-  assert.match(f.confirmations[0], /without assigning a new owner/)
-  assert.equal(document.querySelectorAll('#instances article').length, 2)
-  assert.equal(button.disabled, false)
+test('compact device rows keep editing and deletion in separate dialogs with exact escaped impact and cancel without mutation',async t=>{
+ const f=fixture(t),d=f.window.document
+ assert.equal(d.querySelector('#instances input'),null)
+ assert.equal(d.querySelectorAll('#instances article').length,2)
+ assert.equal(d.querySelector('#device-dialog').open,false)
+ await f.open(); await f.action('Delete device permanently')
+ assert.equal(d.querySelector('#device-confirm').open,true)
+ const body=d.querySelector('#device-confirm-body').textContent
+ assert.match(body,/<Untrusted device>.*device-a/)
+ assert.match(body,/This cannot be undone/)
+ assert.match(body,/<Shared group>shared-one/)
+ assert.match(body,/without assigning a new owner/)
+ assert.equal(d.querySelector('untrusted'),null)
+ d.querySelector('#device-confirm-cancel').click(); await tick()
+ assert.equal(f.calls.some(c=>c.action==='delete'),false)
+ assert.equal(d.querySelector('#device-confirm').open,false)
 })
 
-test('administrator delete sends observed versions once, reconciles exact row and removes repair after permanent deletion', async t => {
-  const f = fixture(t), { document } = f.window
-  f.approve(); f.defer()
-  const row = document.querySelector('#instances article')
-  const button = [...row.querySelectorAll('button')].find(button => button.textContent === 'Delete device permanently')
-  button.click(); button.click(); await tick()
-  assert.equal(f.calls.filter(call => call.action === 'delete').length, 1)
-  assert.equal(button.disabled, true)
-  assert.deepEqual(f.calls.find(call => call.action === 'delete').input, { instanceId: 'device-a', expectedPairingRevision: 1, expectedNameVersion: 0, ownedSharedGroups: [{ conversationId: 'shared-one', version: 7 }], confirmDelete: true })
-  f.release(); for(let i=0;i<30&&button.disabled;i++) await tick()
-  assert.equal(document.querySelectorAll('#instances article').length, 1, document.querySelector('#error').textContent)
-  assert.match(document.querySelector('#instances article').textContent, /Unrelated device/)
-  assert.ok([...document.querySelectorAll('#instances button')].some(button => button.textContent === 'Repair original device'))
-  f.state.instances = []; f.render()
-  assert.equal(document.querySelector('#instances').textContent, 'No enrolled devices.')
-  assert.equal([...document.querySelectorAll('#instances button')].some(button => button.textContent === 'Repair original device'), false)
+test('delete sends observed versions once and removes only the selected row after an acknowledged admin mutation',async t=>{
+ const f=fixture(t),d=f.window.document;f.defer()
+ await f.open(); await f.action('Delete device permanently')
+ const submit=d.querySelector('#device-confirm-submit');submit.click();submit.click();await tick()
+ assert.equal(f.calls.filter(c=>c.action==='delete').length,1)
+ assert.equal(submit.disabled,true)
+ assert.deepEqual(f.calls.find(c=>c.action==='delete').input,{instanceId:'device-a',expectedPairingRevision:1,expectedNameVersion:0,ownedSharedGroups:[{conversationId:'shared-one',version:7}],confirmDelete:true})
+ f.release();for(let i=0;i<20&&d.querySelector('#device-confirm').open;i++)await tick()
+ assert.equal(d.querySelectorAll('#instances article').length,1)
+ assert.match(d.querySelector('#instances').textContent,/Unrelated device/)
+ await f.open('device-b')
+ assert.ok([...d.querySelectorAll('#device-details button')].some(b=>b.textContent==='Repair original device'))
 })
 
+test('same-name confirmations identify the exact instance and stale live impact disables confirmation before mutation',async t=>{
+ const f=fixture(t),d=f.window.document
+ for(const i of f.state.instances)i.label='Duplicate name';f.render()
+ await f.open('device-b');await f.action('Delete device permanently')
+ const body=d.querySelector('#device-confirm-body').textContent
+ assert.match(body,/device-b/);assert.doesNotMatch(body,/device-a|shared-one/)
+ f.state.instances[1].pairingRevision++;f.render()
+ assert.equal(d.querySelector('#device-confirm-submit').disabled,true)
+ assert.match(d.querySelector('#device-confirm-error').textContent,/changed/)
+ d.querySelector('#device-confirm-submit').click();await tick()
+ assert.equal(f.calls.some(c=>c.action==='delete'),false)
+})
 
-test('same-name device deletion confirmation identifies the exact selected instance and its own affected groups', async t => {
-  const f = fixture(t), { document } = f.window
-  for (const instance of f.state.instances) instance.label = 'Duplicate device name'
-  f.render()
-  const row = [...document.querySelectorAll('#instances article')].find(item => item.dataset.instanceId === 'device-b')
-  const button = [...row.querySelectorAll('button')].find(item => item.textContent === 'Delete device permanently')
-  button.click(); await tick()
-  assert.match(f.confirmations[0], /Device: "Duplicate device name"\nInstance ID: device-b\n/)
-  assert.match(f.confirmations[0], /No shared groups will be closed/)
-  assert.equal(f.confirmations[0].includes('shared-one'), false)
-  assert.equal(f.confirmations[0].includes('device-a'), false)
-  assert.equal(f.calls.some(call => call.action === 'delete'), false)
-  assert.equal(document.querySelectorAll('#instances article').length, 2)
+test('uncertain deletion keeps the device visible, displays its error in the dialog and cannot resend automatically',async t=>{
+ const f=fixture(t),d=f.window.document;f.fail('REQUEST_FAILED')
+ await f.open();await f.action('Delete device permanently')
+ d.querySelector('#device-confirm-submit').click();for(let i=0;i<5;i++)await tick()
+ assert.equal(d.querySelectorAll('#instances article').length,2)
+ assert.match(d.querySelector('#device-confirm-error').textContent,/REQUEST_FAILED.*review current state/)
+ assert.equal(d.querySelector('#device-confirm-submit').disabled,true)
+ assert.equal(f.calls.filter(c=>c.action==='delete').length,1)
+})
+
+test('device search, status filter and bounded pages preserve details and render only 25 compact rows',async t=>{
+ const f=fixture(t),d=f.window.document
+ f.state.instances=Array.from({length:63},(_,n)=>({instanceId:'id-'+n,label:'Device '+n,trusted:n%2,connected:n%3===0,pairingRevision:1,nameVersion:0,ownedSharedGroups:[]}));f.render()
+ assert.equal(d.querySelectorAll('#instances article').length,25)
+ d.querySelector('#device-next').click();assert.match(d.querySelector('#device-page').textContent,/Page 2/)
+ const search=d.querySelector('#device-search');search.value='id-62';search.dispatchEvent(new f.window.Event('input'))
+ assert.equal(d.querySelectorAll('#instances article').length,1)
+ assert.match(d.querySelector('#instances').textContent,/Device 62/)
+ search.value='';search.dispatchEvent(new f.window.Event('input'))
+ const filter=d.querySelector('#device-filter');filter.value='revoked';filter.dispatchEvent(new f.window.Event('change'))
+ assert.match(d.querySelector('#device-count').textContent,/32 \/ 63/)
 })

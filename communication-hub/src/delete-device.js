@@ -87,7 +87,7 @@ export function deleteDevice(management, input) {
     }
     for (const principalId of principalIds) {
       for (const column of ['principal_id', 'inviter_id']) drop('invites', column, principalId)
-      for (const table of ['retired_memberships', 'principal_retirements', 'memberships', 'cursors', 'principal_preferences', 'principal_profiles', 'principal_publication', 'principal_avatar', 'avatar_uploads', 'hub_user_codes']) drop(table, 'principal_id', principalId)
+      for (const table of ['retired_memberships', 'principal_retirements', 'memberships', 'cursors', 'principal_preferences', 'principal_profiles', 'principal_public_profiles', 'principal_publication', 'principal_avatar', 'avatar_uploads', 'hub_user_codes']) drop(table, 'principal_id', principalId)
       for (const column of ['sender', 'target']) drop('hub_contact_requests', column, principalId)
       for (const column of ['left_id', 'right_id']) drop('hub_contacts', column, principalId)
       drop('input_updates', 'recipient_id', principalId)

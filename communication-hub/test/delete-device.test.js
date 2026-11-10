@@ -45,6 +45,9 @@ function consent(m, a, b) {
 test('permanent device deletion removes identities, private history, contact state, FK children, operation results and audit subjects', t => {
   const { store, m, a, b, c } = fixture(t), { db } = store
   const bot = store.register(a.auth, { localId: 'bot', kind: 'bot', displayName: 'Synthetic Bot' }).principalId
+  for (const principalId of [a.principalId, bot]) store.updatePublicProfile(a.auth, op({principalId,expectedVersion:0,profile:{headline:'Published specialist',summary:'Synthetic public profile',expertise:['testing']}}))
+  store.updatePublicProfile(b.auth, op({principalId:b.principalId,expectedVersion:0,profile:{headline:'Keep this profile'}}))
+  const retainedProfile = store.publicProfileOf(b.principalId)
   const privateGroup = store.createGroup(a.auth, op({ principalId: a.principalId, title: 'Device-only group' })).conversationId
   const privateMessage = message(store, a, privateGroup)
   consent(m, a, b)
@@ -79,11 +82,12 @@ test('permanent device deletion removes identities, private history, contact sta
   assert.equal(m.instances().length, 2); assert.equal(m.joins().some(r => r.requestId === a.requestId), false)
   assert.equal(m.challenges.has(authChallenge.challengeId), false)
   assert.equal(m.challenges.has(statusChallenge.challengeId), false)
-  for (const table of ['instances', 'principals', 'hub_enrolled_peers', 'instance_features', 'instance_addresses', 'hub_instance_names', 'principal_preferences', 'principal_profiles', 'principal_publication', 'principal_avatar', 'avatar_uploads', 'hub_user_codes', 'hub_contacts', 'hub_contact_requests', 'memberships', 'cursors', 'invites', 'messages', 'events', 'deliveries', 'responses', 'input_updates', 'message_causality', 'causal_roots', 'bot_dispatches', 'operations', 'hub_management_operations', 'hub_admin_audit']) {
+  for (const table of ['instances', 'principals', 'hub_enrolled_peers', 'instance_features', 'instance_addresses', 'hub_instance_names', 'principal_preferences', 'principal_profiles', 'principal_public_profiles', 'principal_publication', 'principal_avatar', 'avatar_uploads', 'hub_user_codes', 'hub_contacts', 'hub_contact_requests', 'memberships', 'cursors', 'invites', 'messages', 'events', 'deliveries', 'responses', 'input_updates', 'message_causality', 'causal_roots', 'bot_dispatches', 'operations', 'hub_management_operations', 'hub_admin_audit']) {
     const rows = JSON.stringify(db.prepare(`SELECT * FROM ${table}`).all())
     for (const id of [a.auth.instanceId, a.principalId, bot, privateGroup, dm, privateMessage.messageId, dmMessage.messageId, dmDelivery.id]) assert.equal(rows.includes(id), false, `${table} retained ${id}`)
   }
   assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), [])
+  assert.deepEqual(store.publicProfileOf(b.principalId), retainedProfile)
   assert.equal(db.prepare('SELECT 1 FROM invites WHERE id=?').get(invitation.inviteId), undefined)
   assert.equal(db.prepare('SELECT 1 FROM operations WHERE id=?').get(invitationInput.operationId), undefined)
   assert.throws(() => store.invite(c.auth, invitationInput), { code: 'UNKNOWN_PRINCIPAL' })

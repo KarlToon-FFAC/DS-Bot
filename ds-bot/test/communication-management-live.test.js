@@ -31,6 +31,7 @@ test('Hub admin applies change hints automatically, preserves name drafts/focus/
     await drain()
     assert.equal(doc.getElementById('content').hidden, false)
     assert.equal(doc.getElementById('refresh'), null)
+    doc.querySelector('#instances .device-manage').click(); await drain()
     const input = doc.querySelector('[aria-label="Instance name (one)"]')
     input.value = 'Unsaved draft'; input.focus()
     value.instances[0] = { ...value.instances[0], label: 'External name', nameVersion: 1, connected: false }; revision = 'synthetic:2'
