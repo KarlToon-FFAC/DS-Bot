@@ -2,8 +2,10 @@ export const COMMUNICATION_PRESET = 'ds-bot-communication'
 export const communicationPreset = { id: COMMUNICATION_PRESET, name: 'Federated communication', plugins: [
   { name: '@deepseek-ai/dsh-persona', config: { prefix: 'You are a Bot in an isolated federated communication Session.', suffix: '', complete: false, includeRuntimeContext: false } },
 ] }
+// Required SDK providers vary by host. Recognize the snapshot envelope and drop
+// the whole message; no runtime-context section is admitted as a remote task.
 export const isCommunicationContext = source => source?.kind === 'runtime-context' && source.form === 'snapshot'
-  && Array.isArray(source.sections) && source.sections.every(section => section.name === 'working-directory:current')
+  && Array.isArray(source.sections) && source.sections.every(section => section && typeof section.name === 'string' && section.name.length > 0)
 
 const fail = code => { throw Object.assign(new Error(code), { code }) }
 

@@ -14,6 +14,8 @@ export function apply(ctx) {
   const root = process.env.DSH_HOME
   if (!root || !process.env.DSBOT_COMMUNICATION_PROBE) throw new Error('Probe requires an isolated bench')
   const stateFile = join(root, 'communication-probe.json')
+  let contextFixture
+  const contextDisposers = []
   const holds = new Map()
   const checkpoints = new Map()
   let productionHold
@@ -60,14 +62,39 @@ export function apply(ctx) {
       hold.reject = reject
     })
   }
-  ctx.on('agent/pre-step', async ({ agent }, next) => {
+  ctx.on('system-prompt/assemble', async (assembly, context, next) => {
+    const value = await next()
+    if (contextFixture && context?.agent && ctx.get('agentPresets').composedPreset(context.agent.ctx) === 'ds-bot-communication') {
+      contextFixture.observedNames = [...new Set([...contextFixture.observedNames,
+        ...[...(assembly.contexts ?? []), ...(value.contexts ?? [])].map(section => section.name)])]
+    }
+    return value
+  })
+  ctx.on('agent/pre-step', async ({ agent, messages }, next) => {
     await holdAt(agent, 'before-admission')
-    return next()
+    const decision = await next()
+    if (contextFixture?.legacyGateOnce && ctx.get('agentPresets').composedPreset(agent.ctx) === 'ds-bot-communication'
+      && contextFixture.observedNames.length >= 5) {
+      contextFixture.legacyGateOnce = false
+      contextFixture.legacyThrown = true
+      const canonical = [...messages, ...(decision.messages ?? [])].find(message => message.source?.kind === 'ds-bot-communication')?.source
+      if (canonical) {
+        // Only this isolated fixture emulates the old gate's durable quarantine.
+        const db = new DatabaseSync(join(root, 'bot/communication.sqlite'))
+        try {
+          contextFixture.quarantineSeen = Number(db.prepare("UPDATE inbox SET ai_state='injection_unknown',mapping=? WHERE delivery_id=? AND principal_id=? AND epoch=? AND ai=1 AND revoked=0")
+            .run(JSON.stringify({ reason: 'COMMUNICATION_INPUT_SOURCE_UNKNOWN' }), canonical.deliveryId, canonical.recipientPrincipalId, canonical.membershipEpoch).changes) === 1
+        } finally { db.close() }
+      }
+      throw Object.assign(Error('synthetic old source gate'), { code: 'COMMUNICATION_INPUT_SOURCE_UNKNOWN' })
+    }
+    return decision
   })
   ctx.on('agent/turn-stopping', async ({ agent }) => {
     await holdAt(agent, 'after-output')
   })
   ctx.on('dispose', () => {
+    for (const dispose of contextDisposers) dispose()
     for (const hold of holds.values()) hold.release?.()
     holds.clear()
   })
@@ -100,6 +127,18 @@ export function apply(ctx) {
     return result.agent
   }
   async function handle(body) {
+    if (body.operation === 'production-runtime-context') {
+      if (!contextFixture) {
+        contextFixture = { legacyGateOnce: body.legacyGateOnce === true, observedNames: [], quarantineSeen: false }
+        for (const label of ['sandbox', 'approval', 'team', 'host', 'ui']) {
+          contextDisposers.push(ctx.get('systemPrompt').context({ name: 'probe:required-context:' + label, order: 800, required: true, interpolate: false,
+            text: context => context?.agent && ctx.get('agentPresets').composedPreset(context.agent.ctx) === 'ds-bot-communication'
+              ? 'Synthetic required operational policy: ' + label : '' }))
+        }
+        contextDisposers.push(ctx.get('systemPrompt').context({ name: 'probe:private-context', order: 900, interpolate: false, text: 'NATIVE_CONTEXT_CANARY_private' }))
+      }
+      return { ...contextFixture }
+    }
     const value = await state()
     if (body.operation === 'production-hold') {
       if (['before-admission', 'after-output'].includes(body.point)) productionHold = { point: body.point, conversationId: body.conversationId }

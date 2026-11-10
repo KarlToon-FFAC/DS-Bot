@@ -817,7 +817,13 @@ export class CommunicationRuntime {
       ...history, 'Current author and message metadata:', format(delivery.event), 'Current message:', delivery.event.message.content.text].filter(Boolean).join('\n')
   }
   async consume(delivery) {
-    if (delivery.mapping?.reason === 'COMMUNICATION_INPUT_SOURCE_UNKNOWN') fail('COMMUNICATION_INPUT_SOURCE_UNKNOWN')
+    const rechecking = delivery.mapping?.reason === 'COMMUNICATION_INPUT_SOURCE_UNKNOWN'
+    if (rechecking) {
+      // Re-evaluate once after reload through normal provenance and exclusive
+      // writer recovery. Never blindly clear a quarantine or duplicate admission.
+      this.sourceRechecks ??= new Set()
+      if (this.sourceRechecks.has(delivery.deliveryId)) fail('COMMUNICATION_INPUT_SOURCE_UNKNOWN')
+    }
     const principal = [...this.bots.values()].find(bot => bot.principalId === delivery.recipientPrincipalId)
     const bot = principal && this.rt.botOf(principal.localRef)
     if (!bot) fail('RECIPIENT_UNAVAILABLE')
@@ -832,13 +838,19 @@ export class CommunicationRuntime {
     if (input.status === 'admitted') {
       this.queue.aiState(delivery.deliveryId, 'accepted', { sessionId: input.sessionId, messageId: input.messageId, seq: input.seq })
       this.queue.contextApplied(binding.id, delivery.event.conversationSeq)
+      if ((rechecking || this.sourceRechecks?.has(delivery.deliveryId)) && this.errors?.get(binding.id) === 'COMMUNICATION_INPUT_SOURCE_UNKNOWN') this.errors.delete(binding.id)
       return
     }
     if (input.status === 'canceled') { this.errors.set(binding.id, 'INPUT_CANCELED'); return }
     if (input.status === 'queued') {
-      if (agent.status === 'idle' && !this.attempted.has(delivery.deliveryId)) {
+      if (agent.status === 'idle' && (rechecking || !this.attempted.has(delivery.deliveryId))) {
         this.attempted.add(delivery.deliveryId)
-        await resumePendingInput(this.ctx, binding, source, createUserMessage, AbortSignal.timeout(15000))
+        if (rechecking) {
+          this.sourceRechecks.add(delivery.deliveryId)
+          this.queue.aiState(delivery.deliveryId, 'injecting')
+        }
+        const resumed = await resumePendingInput(this.ctx, binding, source, createUserMessage, AbortSignal.timeout(15000))
+        if (rechecking && !resumed.resumed) this.attempted.delete(delivery.deliveryId)
       }
       return
     }
@@ -869,6 +881,7 @@ export class CommunicationRuntime {
       // Admission can yield. Recheck authoritative membership before injection.
       await this.authorize(binding)
     }
+    if (rechecking) this.sourceRechecks.add(delivery.deliveryId)
     this.queue.aiState(delivery.deliveryId, 'injecting')
     this.attempted.add(delivery.deliveryId)
     agent.followup(createUserMessage({ source, content }))
@@ -1038,6 +1051,7 @@ export class CommunicationRuntime {
     }
     const seen = new Set(), injectionFailed = new Set()
     for (const delivery of this.queue.pendingAi()) {
+      if (delivery.mapping?.reason === 'COMMUNICATION_INPUT_SOURCE_UNKNOWN' && this.sourceRechecks?.has(delivery.deliveryId)) continue
       const key = JSON.stringify([delivery.conversationId, delivery.recipientPrincipalId, delivery.membershipEpoch])
       if (seen.has(key)) continue
       seen.add(key)

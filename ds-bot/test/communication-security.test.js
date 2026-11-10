@@ -13,13 +13,13 @@ const queue = value => ({ db: { prepare: () => ({ get: id => id === 'delivery' ?
 test('only exact canonical inbox provenance enters a federated model; inherited filesystem notices are excluded', () => {
   const good = { source, content: [{ type: 'text', text: 'synthetic' }] }
   const inherited = ['agent-instructions','working-directory'].map(kind => ({ source: { kind }, content: [{ type: 'text', text: 'private inherited canary' }] }))
-  inherited.push({ source: { kind: 'runtime-context', form: 'snapshot', sections: [{ name: 'working-directory:current', text: 'isolated workspace' }] } })
+  inherited.push({ source: { kind: 'runtime-context', form: 'snapshot', sections: [{ name: 'working-directory:current', text: 'isolated workspace' }] } },{source:{kind:'runtime-context',form:'snapshot',sections:[{name:'private-memory',text:'private inherited canary'}]}})
   assert.deepEqual(communicationInputs(queue(delivery), binding, [good, ...inherited]), [good])
   for (const changed of [{ membershipEpoch: 'old' }, { recipientPrincipalId: 'bot:a:other' }, { conversationId: 'private' }, { ai: false }]) {
     assert.throws(() => sourceDelivery(queue({ ...delivery, ...changed }), binding, source), { code: 'COMMUNICATION_INPUT_SOURCE_UNKNOWN' })
   }
   for (const bad of [undefined, { kind: 'user' }, { ...source, deliveryId: 'unknown' }, { ...source, membershipEpoch: 'old' },
-    { kind: 'runtime-context', form: 'snapshot', sections: [{ name: 'private-memory', text: 'canary' }] }]) {
+    ...[undefined,null,{},[null],[{}],[{name:3}],[{name:''}]].map(sections=>({kind:'runtime-context',form:'snapshot',sections})),{kind:'runtime-context',form:'notice',sections:[{name:'working-directory:current'}]}]) {
     assert.throws(() => communicationInputs(queue(delivery), binding, [{ source: bad }]), { code: 'COMMUNICATION_INPUT_SOURCE_UNKNOWN' })
   }
   assert.equal(sourceDelivery(queue(delivery), binding, { kind: 'ds-bot-communication-recovery', conversationId: 'group', forDeliveryId: 'delivery', forMessageId: 'message' }).messageId, 'message')
@@ -157,4 +157,56 @@ test('memory text cannot register local tools or bypass the execution allowlist'
   assert.deepEqual(assembled.tools.map(tool => tool.name), ['read_communication_history'])
   assert.deepEqual(registered, ['read_communication_history'])
   await assert.rejects(hooks.get('tools/execute')({ name: 'read_file' }, () => assert.fail('must not execute')), { code: 'COMMUNICATION_TOOL_NOT_ALLOWED' })
+})
+
+const mixedRuntimeContext = {kind:'runtime-context',form:'snapshot',sections:['working-directory:current','sandbox:policy','approval:policy','team:identity','runtime:host','ui:source'].map(name=>({name,text:'PRIVATE HOST CONTEXT CANARY'}))}
+test('required multi-section runtime snapshots are excluded before middleware and cannot poison a canonical Bot input',()=>{
+ const good={source,content:[{type:'text',text:'canonical task'}]},context={source:mixedRuntimeContext,content:[{type:'text',text:'PRIVATE HOST CONTEXT CANARY'}]}
+ assert.deepEqual(communicationInputs(queue(delivery),binding,[context,good]),[good])
+})
+test('output attribution ignores a mixed host snapshot but still requires the exact canonical input',()=>{
+ const events=[{seq:1,type:'turn/start',data:{turn:1}},{seq:2,type:'user/message',data:{source:mixedRuntimeContext}},{seq:3,type:'user/message',data:{source}},{seq:4,type:'assistant/message',data:{turn:1,message:{id:'mixed-final',content:[{type:'text',text:'canonical result'}]}}},{seq:5,type:'turn/end',data:{turn:1,reason:{kind:'completed'}}}]
+ assert.equal(completedOutputs([{sessionId:'mixed-session',events}],binding)[0].inputSource.deliveryId,source.deliveryId)
+ assert.throws(()=>completedOutputs([{sessionId:'mixed-session',events:events.filter(event=>event.seq!==3)}],binding),{code:'COMMUNICATION_OUTPUT_SOURCE_UNKNOWN'})
+})
+
+test('previous source-rejected delivery gets one normal exclusive-writer recovery attempt without clearing its quarantine blindly',async()=>{
+ const states=[],inputs=[],agent={id:'remote',status:'idle',session:{},followup:message=>inputs.push(message)}
+ const runtime={queue:{binding:()=>({...binding,sessionIds:['remote']}),aiState:(...args)=>states.push(args)},bots:new Map([['local',{principalId:binding.recipientPrincipalId,localRef:'local'}]]),rt:{botOf:()=>({id:'local'})},ctx:{parallel:async()=>{},sessions:{flush:async()=>{}},sessionController:{inspect:async()=>({events:[]}),resolveAgent:async()=>({agent})}},ensureSession:async()=>agent,authorize:async()=>{},source:()=>source,inputText:()=> 'canonical task',attempted:new Set()}
+ const blocked={...delivery,event:{conversationSeq:1,message:{content:{text:'canonical task'}}},mapping:{reason:'COMMUNICATION_INPUT_SOURCE_UNKNOWN'}}
+ await CommunicationRuntime.prototype.consume.call(runtime,blocked)
+ assert.equal(inputs.length,1);assert.equal(inputs[0].source.deliveryId,source.deliveryId)
+ assert.deepEqual(states.map(item=>item[1]),['injecting'])
+ await assert.rejects(CommunicationRuntime.prototype.consume.call(runtime,blocked),{code:'COMMUNICATION_INPUT_SOURCE_UNKNOWN'})
+ assert.equal(inputs.length,1,'a persistent source failure cannot repeatedly inject the same input')
+})
+test('a still-quarantined head does not prevent a later same-Bot canonical delivery from being examined',async()=>{
+ const seen=[],blocked={...delivery,mapping:{reason:'COMMUNICATION_INPUT_SOURCE_UNKNOWN'}},fresh={...delivery,deliveryId:'next'}
+ const runtime={closed:false,rt:{readOnly:()=>undefined},queue:{bindings:()=>[],pendingAi:()=>[blocked,fresh],maxPending:100},cancelRevoked:async()=>{},sourceRechecks:new Set([blocked.deliveryId]),consume:async item=>seen.push(item.deliveryId)}
+ await CommunicationRuntime.prototype.process.call(runtime)
+ assert.deepEqual(seen,['next'])
+})
+
+test('a verified queued source-rejected input is resumed once using host recovery metadata, never copied',async()=>{
+ const states=[],notices=[],message={id:'pending-message',source,content:[{type:'text',text:'canonical task'}]},events=[{seq:1,type:'agent/inbox/spliced',data:{target:'next-turn',start:0,removedCount:0,inserted:[message]}}]
+ const agent={id:'remote',status:'idle',session:{},inbox:{nextTurn:[message],nextStep:[]},steer:notice=>notices.push(notice)}
+ const runtime={queue:{binding:()=>({...binding,sessionIds:['remote']}),aiState:(...args)=>states.push(args)},bots:new Map([['local',{principalId:binding.recipientPrincipalId,localRef:'local'}]]),rt:{botOf:()=>({id:'local'})},ctx:{parallel:async()=>{},sessions:{flush:async()=>{}},sessionController:{inspect:async()=>({events}),resolveAgent:async()=>({agent})}},ensureSession:async()=>agent,authorize:async()=>{},source:()=>source,attempted:new Set([delivery.deliveryId])}
+ await CommunicationRuntime.prototype.consume.call(runtime,{...delivery,mapping:{reason:'COMMUNICATION_INPUT_SOURCE_UNKNOWN'}})
+ assert.equal(notices.length,1);assert.equal(notices[0].source.kind,'ds-bot-communication-recovery');assert.equal(notices[0].source.forDeliveryId,source.deliveryId)
+ assert.deepEqual(agent.inbox.nextTurn,[message]);assert.deepEqual(states.map(item=>item[1]),['injecting'])
+})
+
+test('a source recheck does not spend its one attempt on transient authorization failure or a busy queued Session', async () => {
+  const message = { id: 'queued', source }, events = [{ seq: 1, type: 'agent/inbox/spliced', data: { target: 'next-turn', start: 0, removedCount: 0, inserted: [message] } }]
+  const agent = { id: 'remote', status: 'running', session: {}, inbox: { nextTurn: [message], nextStep: [] } }
+  let unavailable = true
+  const runtime = { queue: { binding: () => ({ ...binding, sessionIds: ['remote'] }) }, bots: new Map([['local', { principalId: binding.recipientPrincipalId, localRef: 'local' }]]), rt: { botOf: () => ({ id: 'local' }) },
+    ctx: { parallel: async () => {}, sessionController: { inspect: async () => ({ events }) } }, ensureSession: async () => agent,
+    authorize: async () => { if (unavailable) throw Object.assign(Error('offline'), { code: 'CONNECTION_LOST' }) }, source: () => source }
+  const blocked = { ...delivery, mapping: { reason: 'COMMUNICATION_INPUT_SOURCE_UNKNOWN' } }
+  await assert.rejects(CommunicationRuntime.prototype.consume.call(runtime, blocked), { code: 'CONNECTION_LOST' })
+  assert.equal(runtime.sourceRechecks.size, 0)
+  unavailable = false
+  await CommunicationRuntime.prototype.consume.call(runtime, blocked)
+  assert.equal(runtime.sourceRechecks.size, 0)
 })
