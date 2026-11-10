@@ -14,7 +14,7 @@ export function invitationGroups(invites = []) {
   return [...groups.values()]
 }
 
-export function GroupBotChoices({ contacts, humanId, instanceId, selected, onChange, request, single = false }) {
+export function GroupBotChoices({ contacts, humanId, instanceId, selected, onChange, request, single = false, disabled = false, disabledIds = [] }) {
   const { people, otherBots } = contactDirectory(contacts, [], humanId, instanceId)
   const local = contacts.filter(person => person.kind === 'bot' && (humanId && person.ownerPrincipalId === humanId || instanceId && (person.homeInstanceId === instanceId || person.principalId.startsWith(`bot:${instanceId}:`))))
   const self = contacts.find(person => person.principalId === humanId) ?? { principalId: humanId, displayName: t('You'), kind: 'human' }
@@ -24,7 +24,7 @@ export function GroupBotChoices({ contacts, humanId, instanceId, selected, onCha
     h('div', { className: 'bt-comm-group-contact-heading' }, person.principalId ? h(CommunicationAvatar, { person, request, size: 24 }) : null,
       h('strong', null, person.displayName), h('span', { className: 'bt-comm-reference' }, person.ipAddress ?? t('Address unavailable'))),
     bots.map(bot => h('label', { key: bot.principalId, className: 'bt-comm-check' },
-      h('input', { type: single ? 'radio' : 'checkbox', name: single ? 'invite-group-bot' : undefined, 'aria-label': `${t('Invite')} ${bot.displayName}`, checked: selected.includes(bot.principalId), onChange: event => onChange(event.target.checked ? single ? [bot.principalId] : [...selected, bot.principalId] : selected.filter(id => id !== bot.principalId)) }),
+      h('input', { type: single ? 'radio' : 'checkbox', name: single ? 'invite-group-bot' : undefined, disabled:disabled || disabledIds.includes(bot.principalId), 'aria-label': `${t('Invite')} ${bot.displayName}`, checked: selected.includes(bot.principalId), onChange: event => onChange(event.target.checked ? single ? [bot.principalId] : [...selected, bot.principalId] : selected.filter(id => id !== bot.principalId)) }),
       h(CommunicationAvatar, { person: bot, request, size: 24 }), h('span', { className: 'bt-comm-choice-name' }, bot.displayName))))),
     h('p', { className: 'bt-comm-reference' }, t('Selected Bots and their owners join the group immediately.')))
 }

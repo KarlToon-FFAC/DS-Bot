@@ -1458,7 +1458,7 @@ test('group members are compact contact rows with nested Bots and invitation/rem
  const extra={...bot,principalId:'bot:b:extra',displayName:'Extra'}
  const snapshot={...state(),contacts:[buddy,bot,extra],conversations:[{...membership,info:{members:[...membership.info.members,buddy,bot]}}]}
  let finish
- await pane({snapshot,handle:body=>body.endpoint==='invite'?new Promise(resolve=>{finish=resolve}):{}},async({doc,click,calls})=>{
+ await pane({snapshot,handle:body=>body.endpoint==='invite'?new Promise(resolve=>{finish=resolve}):body.endpoint==='members'?{members:snapshot.conversations[0].info.members,membershipVersion:1}:{}},async({doc,click,calls})=>{
   await click('Shared group');await click('View conversation details')
   const group=doc.querySelector('[role="complementary"][aria-label="Group members and receiving rules"]')
   assert.ok(doc.querySelector('.bt-comm-main').contains(group))
@@ -1699,5 +1699,88 @@ test('late history-search results cannot overwrite a newer query or render recei
   assert.doesNotMatch(doc.querySelector('.bt-comm-history-results').textContent,/STALE OLD RESULT/)
   assert.equal(doc.querySelector('.bt-comm-history-results img'),null)
   assert.equal(calls.some(item=>['send','publish-bots'].includes(item.endpoint)),false)
+ })
+})
+
+function inviteFixture(){
+ const owner={principalId:'human:b:buddy',displayName:'Buddy',kind:'human',homeInstanceId:'b'}
+ const one={principalId:'bot:b:one',displayName:'One',kind:'bot',ownerPrincipalId:owner.principalId,homeInstanceId:'b'},two={...one,principalId:'bot:b:two',displayName:'Two'}
+ const snapshot={...state(),contacts:[owner,one,two],conversations:[{...membership,info:{members:[...membership.info.members]}}]}
+ const canonical=()=>({members:snapshot.conversations[0].info.members,membershipVersion:snapshot.conversations[0].membershipVersion})
+ const join=id=>{const row=snapshot.conversations[0],addition=[owner,[one,two].find(bot=>bot.principalId===id)].filter(person=>!row.info.members.some(existing=>existing.principalId===person.principalId));snapshot.conversations=[{...row,membershipVersion:row.membershipVersion+addition.length,info:{...row.info,members:[...row.info.members,...addition]}}]}
+ return {owner,one,two,snapshot,canonical,join}
+}
+
+test('existing group invitation selects multiple Bots and refreshes the exact version between automatic owner joins',async()=>{
+ const f=inviteFixture(),invited=[]
+ await pane({snapshot:f.snapshot,getState:()=>f.snapshot,handle:async body=>{
+  if(body.endpoint==='members')return f.canonical()
+  if(body.endpoint==='invite'){assert.equal(body.expectedVersion,f.canonical().membershipVersion);invited.push(body);f.join(body.inviteePrincipalId);return {joined:true}}
+  return {}
+ }},async({doc,click})=>{
+  await click('Shared group');await click('View conversation details');await click('Invite participant')
+  const dialog=doc.querySelector('dialog[aria-label="Invite participant"]')
+  assert.equal(dialog.querySelectorAll('input[type=checkbox]').length,2);assert.equal(dialog.querySelectorAll('input[type=radio]').length,0)
+  await act(async()=>dialog.querySelector('[aria-label="Invite One"]').click());await act(async()=>dialog.querySelector('[aria-label="Invite Two"]').click())
+  assert.match(dialog.textContent,/Selected Bots: 2/)
+  await click('Invite')
+  assert.deepEqual(invited.map(body=>body.inviteePrincipalId),[f.one.principalId,f.two.principalId]);assert.deepEqual(invited.map(body=>body.expectedVersion),[1,3])
+  assert.equal(f.canonical().members.filter(person=>person.principalId===f.owner.principalId).length,1)
+  assert.equal(f.canonical().members.length,4)
+ })
+})
+
+test('partial multi-invite keeps only failed selections and never invites successful Bots again',async()=>{
+ const f=inviteFixture(),invited=[];let reject=true
+ await pane({snapshot:f.snapshot,getState:()=>f.snapshot,handle:async body=>{
+  if(body.endpoint==='members')return f.canonical()
+  if(body.endpoint==='invite'){invited.push(body);if(reject&&body.inviteePrincipalId===f.two.principalId)throw Object.assign(Error('private details'),{code:'BOT_RETIRED'});f.join(body.inviteePrincipalId);return {joined:true}}
+  return {}
+ }},async({doc,click})=>{
+  await click('Shared group');await click('View conversation details');await click('Invite participant')
+  const dialog=()=>doc.querySelector('dialog[aria-label="Invite participant"]')
+  await act(async()=>dialog().querySelector('[aria-label="Invite One"]').click());await act(async()=>dialog().querySelector('[aria-label="Invite Two"]').click());await click('Invite')
+  assert.ok(dialog());assert.match(dialog().textContent,/One · Joined/);assert.match(dialog().textContent,/Two · Could not join/)
+  assert.doesNotMatch(dialog().textContent,/private details/);assert.equal(dialog().querySelector('[aria-label="Invite Two"]').checked,true)
+  reject=false;await click('Invite')
+  assert.deepEqual(invited.map(body=>body.inviteePrincipalId),[f.one.principalId,f.two.principalId,f.two.principalId])
+ })
+})
+
+test('an uncertain invitation pauses the batch and survives remount with its original operation ID and version',async()=>{
+ const f=inviteFixture(),invited=[];let first=true
+ await pane({snapshot:f.snapshot,getState:()=>f.snapshot,handle:async body=>{
+  if(body.endpoint==='members')return f.canonical()
+  if(body.endpoint==='invite'){invited.push(body);if(first){first=false;f.join(body.inviteePrincipalId);throw Object.assign(Error('lost acknowledgement'),{code:'REQUEST_TIMEOUT'})}if(!f.canonical().members.some(person=>person.principalId===body.inviteePrincipalId))f.join(body.inviteePrincipalId);return {joined:true}}
+  return {}
+ }},async({doc,click,remount})=>{
+  await click('Shared group');await click('View conversation details');await click('Invite participant')
+  const dialog=()=>doc.querySelector('dialog[aria-label="Invite participant"]')
+  await act(async()=>dialog().querySelector('[aria-label="Invite One"]').click());await act(async()=>dialog().querySelector('[aria-label="Invite Two"]').click());await click('Invite')
+  assert.equal(invited.length,1);assert.match(dialog().textContent,/not confirmed/)
+  await click('Cancel');await remount();await click('View conversation details');await click('Invite participant')
+  assert.match(dialog().textContent,/One · Not confirmed/)
+  await act(async()=>dialog().querySelector('[aria-label="Invite Two"]').click());await click('Invite')
+  assert.equal(invited.length,3);assert.equal(invited[0].operationId,invited[1].operationId);assert.equal(invited[1].expectedVersion,1);assert.equal(invited[2].expectedVersion,3)
+ })
+})
+
+test('group capacity rejection is definitive, stops the batch, and leaves the selection editable for a fresh retry',async()=>{
+ const f=inviteFixture(),invited=[];let full=true
+ const {communicationError}=await import('../src/shared/communication-diagnostics.js')
+ assert.equal(communicationError({code:'MEMBER_LIMIT'}).code,'MEMBER_LIMIT')
+ await pane({snapshot:f.snapshot,getState:()=>f.snapshot,handle:async body=>{
+  if(body.endpoint==='members')return f.canonical()
+  if(body.endpoint==='invite'){invited.push(body);if(full)throw Object.assign(Error('capacity'),{code:'MEMBER_LIMIT'});f.join(body.inviteePrincipalId);return {joined:true}}
+  return {}
+ }},async({doc,click})=>{
+  await click('Shared group');await click('View conversation details');await click('Invite participant')
+  const dialog=()=>doc.querySelector('dialog[aria-label="Invite participant"]')
+  await act(async()=>dialog().querySelector('[aria-label="Invite One"]').click());await act(async()=>dialog().querySelector('[aria-label="Invite Two"]').click());await click('Invite')
+  assert.equal(invited.length,1);assert.equal(f.canonical().members.length,1)
+  assert.equal(dialog().querySelector('[aria-label="Invite One"]').disabled,false)
+  assert.match(dialog().textContent,/member limit/)
+  full=false;await click('Invite')
+  assert.equal(invited.length,3);assert.notEqual(invited[0].operationId,invited[1].operationId)
  })
 })

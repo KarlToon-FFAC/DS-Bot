@@ -1,3 +1,4 @@
+import {GroupInviteDialog} from './communication-invite.js'
 import {CommunicationHistorySearch} from './communication-history-search.js'
 import {useCommunicationHistory} from './communication-history.js'
 import {CommunicationResizeHandle,useCommunicationWidths} from './communication-resize.js'
@@ -84,10 +85,10 @@ function ReferenceQuote({ conversationId, membershipEpoch, messageId, request, l
       h('span', { className: 'bt-comm-quote-text' }, referenceExcerpt(source.content.text))) : t(unavailable ? 'Earlier message unavailable' : 'Loading reference…'))
 }
 
-function GroupSettings({ member, contacts, operation, pendingSettings, operationPending, busy, humanId, btn, personLabel, chooseContact, request, onInspect, columnWidth, onColumnWidth }) {
+function GroupSettings({ member, contacts, operation, pendingSettings, pendingInvites, operationPending, busy, humanId, btn, personLabel, chooseContact, request, onInspect, columnWidth, onColumnWidth }) {
   const [open, setOpen] = useState(false), [base, setBase] = useState(null), [draft, setDraft] = useState(null)
   const [saving, setSaving] = useState(false), [failure, setFailure] = useState(''), [pending, setPending] = useState(null)
-  const [invite, setInvite] = useState(''), [newOwner, setNewOwner] = useState(''), [action, setAction] = useState(null)
+  const [newOwner, setNewOwner] = useState(''), [action, setAction] = useState(null)
   const generation = useRef(0), revision = useRef(0), summary = useRef(null)
   useEffect(() => () => { generation.current += 1 }, [])
   useEffect(() => { if (pending && !pendingSettings(member.conversationId)) setPending(null) }, [operationPending, member.membershipVersion])
@@ -139,7 +140,7 @@ function GroupSettings({ member, contacts, operation, pendingSettings, operation
         canManage && person.role!=='owner' && (isOwner || person.role==='member') && person.principalId!==humanId ? btn('Remove from group',()=>setAction({kind:'remove',target:person}),{className:'bt-comm-member-icon bt-comm-danger',title:t('Remove from group'),children:h(CloseIcon)}) : null,
         btn('View participant profile',event=>onInspect([person.principalId],event.currentTarget),{className:'bt-comm-member-icon',title:t('View participant profile'),children:'›'})))
   }
-  const settingsActions = h('div', {className:'bt-comm-operation-buttons'},canManage?btn('Invite participant',()=>{setInvite('');setAction({kind:'invite'})},{disabled:busy||saving}):null,
+  const settingsActions = h('div', {className:'bt-comm-operation-buttons'},canManage?btn('Invite participant',()=>setAction({kind:'invite'}),{disabled:busy||saving}):null,
     canManage?h('button',{type:'button',onClick:()=>{void saveSettings()},disabled:saving||!dirty&&!pending,'data-dirty':dirty,'aria-label':t('Save group settings')},t('Save')):null,
     h('button',{type:'button',onClick:close,'aria-label':t('Close member settings')},t('Close')))
   return h('details', { id: 'bt-comm-members', className: 'bt-comm-members', open },
@@ -167,16 +168,16 @@ function GroupSettings({ member, contacts, operation, pendingSettings, operation
       isOwner ? btn('Transfer ownership', () => { setNewOwner(''); setAction({ kind: 'transfer' }) }, {disabled:busy}) : null,
       btn('Leave group', () => setAction({kind:'leave'}), { disabled: busy || isOwner, title: isOwner ? t('Transfer ownership before leaving') : undefined }),
       isOwner ? btn('End group for everyone', () => setAction({kind:'dissolve'}), {className:'bt-comm-danger',disabled:busy}) : null,
-      h(CommunicationActionDialog, { open: Boolean(action),
-        title: action?.kind === 'invite' ? 'Invite participant' : action?.kind === 'transfer' ? 'Transfer ownership' : action?.kind === 'remove' ? 'Remove from group' : action?.kind === 'leave' ? 'Leave group' : 'End group for everyone',
-        onClose: () => setAction(null), danger: !['invite','transfer'].includes(action?.kind),
-        disabled: busy || action?.kind === 'invite' && !invite || action?.kind === 'transfer' && !newOwner,
-        confirmLabel: action?.kind === 'invite' ? 'Invite' : action?.kind === 'transfer' ? 'Confirm ownership transfer' : action?.kind === 'leave' ? 'Confirm leaving group' : action?.kind === 'remove' ? 'Confirm member removal' : 'Confirm ending group for everyone',
-        onConfirm: () => operation(action.kind === 'invite' ? 'invite' : action.kind === 'transfer' ? 'transfer' : action.kind === 'dissolve' ? 'dissolve' : 'remove', {
+      h(GroupInviteDialog,{open:action?.kind==='invite',onClose:()=>setAction(null),member,contacts,humanId,request,operation,pendingInvites,busy}),
+      h(CommunicationActionDialog, { open: Boolean(action)&&action.kind!=='invite',
+        title: action?.kind === 'transfer' ? 'Transfer ownership' : action?.kind === 'remove' ? 'Remove from group' : action?.kind === 'leave' ? 'Leave group' : 'End group for everyone',
+        onClose: () => setAction(null), danger: action?.kind!=='transfer',
+        disabled: busy || action?.kind === 'transfer' && !newOwner,
+        confirmLabel: action?.kind === 'transfer' ? 'Confirm ownership transfer' : action?.kind === 'leave' ? 'Confirm leaving group' : action?.kind === 'remove' ? 'Confirm member removal' : 'Confirm ending group for everyone',
+        onConfirm: () => operation(action.kind === 'transfer' ? 'transfer' : action.kind === 'dissolve' ? 'dissolve' : 'remove', {
           conversationId: member.conversationId, membershipEpoch: member.membershipEpoch, expectedVersion: member.membershipVersion,
-          ...(action.kind === 'invite' ? {inviteePrincipalId:invite} : action.kind === 'transfer' ? {targetPrincipalId:newOwner} : action.kind === 'remove' ? {targetPrincipalId:action.target.principalId} : {}) }) },
+          ...(action.kind === 'transfer' ? {targetPrincipalId:newOwner} : action.kind === 'remove' ? {targetPrincipalId:action.target.principalId} : {}) }) },
         h('p', null, member.title),
-        action?.kind === 'invite' ? h(GroupBotChoices,{contacts:contacts.filter(contact=>contact.kind==='human' || !members.some(person=>person.principalId===contact.principalId)),humanId,instanceId:contacts.find(person=>person.principalId===humanId)?.homeInstanceId,selected:invite?[invite]:[],onChange:ids=>setInvite(ids[0]??''),request,single:true}) : null,
         action?.kind === 'transfer' ? chooseContact('Transfer ownership to', newOwner, setNewOwner, members.filter(person => person.principalId !== humanId)) : null,
         action?.kind === 'transfer' ? h('p', null, t('The selected member will become the group owner.')) : null,
         action?.kind === 'remove' ? h('p', null, personLabel(action.target), ' · ', t('Removing a contact also removes their Bots from this group.')) : null,
@@ -633,6 +634,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
         h('p', { className: 'bt-comm-reference' }, t('Local chats stay separate from communication conversations.'))) : null,
       member?.archive ? h('p', { className: 'bt-comm-reference bt-comm-archive-notice', role: 'status' }, t('Read-only record of your Bot’s private conversation.')) : null,
       member?.kind === 'group' ? h(GroupSettings, { columnWidth:shownRightWidth,onColumnWidth:changeColumnWidth,key: `${scope}:${selected}:${member.membershipEpoch}`, member, contacts, labels, operation, operationPending, act, busy, humanId: state.humanPrincipalId, btn, personLabel, chooseContact, request, onInspect:(ids,trigger)=>{setInspectedIds(ids);showPanel('participant',trigger)},
+        pendingInvites:()=>[...operationIds.current.keys()].flatMap(key=>{const [instanceId,endpoint,values]=JSON.parse(key);return instanceId===scope&&endpoint==='invite'&&values.conversationId===selected&&values.membershipEpoch===member.membershipEpoch?[values]:[]}),
         pendingSettings: id => [...operationIds.current.keys()].map(item => JSON.parse(item)).find(([instanceId, endpoint, values]) => instanceId === scope && endpoint === 'save-settings' && values.conversationId === id)?.[2] ?? null }) : null,
       h('div', { ref: log, className: 'bt-comm-log', role: 'log', 'aria-label': t('Communication messages'), onScroll: event => {
         const element = event.currentTarget; autoScroll.current = !referenced && !pendingJump.current && element.scrollHeight - element.scrollTop - element.clientHeight < 80
