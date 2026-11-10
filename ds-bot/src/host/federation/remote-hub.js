@@ -4,6 +4,8 @@ import { remoteHubConfigured, remoteHubEnabled } from '../../shared/remote-hub.j
 import { CommunicationQueue } from './queue-store.js'
 import { CommunicationTransport } from './transport.js'
 import { recordPublicationSave } from './publication-state.js'
+import { configFailureCode } from './config-errors.js'
+import { communicationError } from '../../shared/communication-diagnostics.js'
 
 const fail = code => { throw Object.assign(new Error(code), { code }) }
 const scope = hub => JSON.stringify(['hubId','url','instanceId','credentialKey','credentialEnv','dataPath'].map(key => hub?.[key]))
@@ -53,7 +55,7 @@ export class RemoteHubController {
     if (this.status().enabled && !input.enabled && input.confirmHideAllBots !== true) fail('REMOTE_HUB_DISABLE_CONFIRMATION_REQUIRED')
     const {editor,entry} = this.editor()
     let saved
-    await editor.edit(entry, current => {
+    try { await editor.edit(entry, current => {
       if (this.closed) fail('COMMUNICATION_STOPPED')
       if (this.rt.readOnly?.() !== undefined) fail('COMMUNICATION_READ_ONLY')
       if (version(current) !== input.expectedVersion) fail('REMOTE_HUB_SETTINGS_CHANGED')
@@ -69,7 +71,11 @@ export class RemoteHubController {
         saved.communication = {...current.communication, remoteHubWithdrawalPending:false}
       }
       return saved
-    })
+    }) } catch (cause) {
+      const known = communicationError(cause).code
+      const code = known === 'COMMUNICATION_UNAVAILABLE' ? configFailureCode(cause) : known
+      throw Object.assign(new Error(code, { cause }), { code, phase: 'COMMUNICATION_CONFIG_WRITE_FAILED' })
+    }
     if (!saved) fail('CONFIG_ENTRY_UNAVAILABLE')
     this.savedConfig = saved
     if (!input.enabled && saved.communication) recordPublicationSave(this.rt, saved.communication)

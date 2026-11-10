@@ -141,3 +141,34 @@ for(const offline of [false,true])test(`minimal withdrawal ${offline?'survives o
   assert.deepEqual(f.saved.communication.publishedBotIds,[])
  }finally{await controller?.close();await restarted?.close();if(controller?.running)await controller.running;await hub?.close();rmSync(home,{recursive:true,force:true})}
 })
+
+test('fresh-install HTTP enable identifies local ConfigEditor rejections without contacting a Hub or changing the setting', async () => {
+ const failures = [
+  ['Configuration for "sensitive-entry" is overridden by a home patch or command-line overlay', 'CONFIG_EDIT_OVERLAID'],
+  ['Configuration entry changed during reload', 'CONFIG_EDIT_ENTRY_CHANGED'],
+  ['Configuration plugin is no longer active', 'CONFIG_EDIT_NOT_ACTIVE'],
+  ['Profile patch must be a YAML sequence', 'CONFIG_EDIT_INVALID_DOCUMENT'],
+  ['PRIVATE_FILESYSTEM_DETAIL', 'COMMUNICATION_CONFIG_WRITE_FAILED'],
+ ]
+ for (const [message, expected] of failures) {
+  const f = fixture({}), effects = []
+  let route
+  f.rt.teamTools = []
+  Object.assign(f.rt.ctx, {effect: work => { const dispose = work(); if (typeof dispose === 'function') effects.push(dispose) },
+   connection: {fetch: {register: value => { route = value; return () => {} }}}})
+  f.rt.ctx.configEditor.edit = async () => { throw Error(message) }
+  install(f.rt)
+  const call = async body => (await route.fetch(new Request('http://127.0.0.1/api/communication', {method:'POST', body:JSON.stringify(body)}))).json()
+  try {
+   const preview = (await call({endpoint:'remote-hub-settings'})).value
+   const result = await call({endpoint:'set-remote-hub-enabled', enabled:true, expectedVersion:preview.version})
+   assert.equal(result.ok, false)
+   assert.equal(result.error.code, expected)
+   assert.equal(result.error.phase, 'COMMUNICATION_CONFIG_WRITE_FAILED')
+   assert.doesNotMatch(JSON.stringify(result), /sensitive-entry|PRIVATE_FILESYSTEM_DETAIL/)
+   assert.equal((await call({endpoint:'remote-hub-settings'})).value.enabled, false)
+   assert.equal(f.writes, 0)
+   assert.equal(f.rt.communication, undefined)
+  } finally { for (const dispose of effects.reverse()) await dispose(); await f.controller.close() }
+ }
+})

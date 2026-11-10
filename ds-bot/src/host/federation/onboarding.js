@@ -9,6 +9,7 @@ import { credentialKey, parseCredentialKey } from '@deepseek-ai/dsh-credentials'
 import { recordHubTls } from './tls-observation.js'
 import { scopedTrust, verifyHubCode } from './hub-trust.js'
 import { communicationCapabilities } from './transport.js'
+import { configFailureCode } from './config-errors.js'
 
 const PROTOCOL = 'dsbot-communication/1'
 const RECORD_TYPE = 'dsbot-communication-signing-key'
@@ -16,14 +17,6 @@ const PREFIX = 'dsbot-hub:2:'
 const MAX_CHALLENGE_MS = 65000
 const statuses = new Set(['pending', 'approved', 'rejected', 'cancelled', 'expired'])
 const fail = code => { throw Object.assign(new Error(code), { code }) }
-const configFailureCode = cause => {
-  const message = typeof cause?.message === 'string' ? cause.message : ''
-  if (/^Configuration for "[^"\r\n]+" is overridden by a home patch or command-line overlay$/.test(message)) return 'CONFIG_EDIT_OVERLAID'
-  if (['Configuration entry is no longer available', 'Configuration entry changed during reload'].includes(message)) return 'CONFIG_EDIT_ENTRY_CHANGED'
-  if (message === 'Configuration plugin is no longer active') return 'CONFIG_EDIT_NOT_ACTIVE'
-  if (message === 'Profile patch must be a YAML sequence') return 'CONFIG_EDIT_INVALID_DOCUMENT'
-  return 'COMMUNICATION_CONFIG_WRITE_FAILED'
-}
 const phase = async (code, work) => {
   try { return await work() }
   catch (cause) {

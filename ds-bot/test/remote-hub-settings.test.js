@@ -18,7 +18,7 @@ async function view({enabled=true,readonly=false,reject=false}={},check){
  const model={enabled,version:'preview-version',withdrawalPending:false},writes=[],closed=[]
  const actions={remoteHubSettings:async()=>({...model}),setRemoteHubEnabled:async input=>{
   writes.push(input)
-  if(reject)throw Object.assign(Error('PRIVATE_EXCEPTION'),{code:'REMOTE_HUB_SETTINGS_CHANGED'})
+  if(reject)throw Object.assign(Error('PRIVATE_EXCEPTION'),{code:typeof reject==='string'?reject:'REMOTE_HUB_SETTINGS_CHANGED'})
   Object.assign(model,{enabled:input.enabled,version:'saved-version',withdrawalPending:!input.enabled,reloadRequired:true});return {...model}
  },folders:async()=>({team:null}),setPrefs:async()=>{},closeSettings:()=>closed.push(true),openSettings(){}}
  const roster={remoteHubEnabled:enabled,readOnly:readonly?'Other Host':null,prefs:{},bots:[],rooms:[],mainBotIds:[],byId:{},roomsById:{}}
@@ -78,5 +78,17 @@ test('a stale-setting denial preserves the enabled state and confirmation withou
 test('read-only team cannot toggle remote Hub from General settings',async()=>{
  await view({readonly:true},async({button,click,writes})=>{
   assert.equal(button('Enable remote Hub').disabled,true);await click('Enable remote Hub');assert.equal(writes.length,0)
+ })
+})
+
+
+test('a local config overlay rejection explains how to enable without waiting for a nonexistent Hub connection', async () => {
+ await view({enabled:false,reject:'CONFIG_EDIT_OVERLAID'}, async ({doc,button,click}) => {
+  await click('Enable remote Hub')
+  const text = doc.querySelector('[role=alert]').textContent
+  assert.match(text, /CONFIG_EDIT_OVERLAID/)
+  assert.match(text, /active profile's cordis.patch.yml/)
+  assert.doesNotMatch(text, /PRIVATE_EXCEPTION|Wait for connection/)
+  assert.equal(button('Enable remote Hub').getAttribute('aria-checked'), 'false')
  })
 })
