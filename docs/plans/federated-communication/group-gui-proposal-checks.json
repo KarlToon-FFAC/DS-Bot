@@ -1,0 +1,19 @@
+{
+  "scope": "design_prototype_only",
+  "productRuntimeTested": false,
+  "hubOrModelConnected": false,
+  "checks": [
+    "member-profile-and-work-status-separate",
+    "three-main-views",
+    "reply-quote-and-root-context",
+    "topic-task-run-single-dialog-navigation",
+    "draft-preserved",
+    "cancel-preview-does-not-change-state",
+    "escape-back-and-close",
+    "390-768-1440-responsive"
+  ],
+  "errors": [],
+  "requestsMade": 1,
+  "source": "group-gui-proposal.html",
+  "sourceSha256": "d754aa4eddb435fc6af006aba812c2bb60a138208020920220f4a5377ea91450"
+}
