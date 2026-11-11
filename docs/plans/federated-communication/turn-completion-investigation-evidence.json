@@ -137,5 +137,39 @@
       },
       "defectReproduced": true
     }
-  ]
+  ],
+  "followup": {
+    "baseline": "ffb5183",
+    "productionChanges": [
+      "Place explicit remote reply/decline rules first in remote system prompt, with registered tool names and JSON argument examples.",
+      "Explain remote publication boundary in local Bot team prompt; retain local delivery semantics.",
+      "Align current tool descriptions and packaged CLI skill."
+    ],
+    "designOnly": [
+      "complete_communication_turn, immutable draft references and bounded completion reminder",
+      "Unified task outcomes, durable per-generation waiters and output-specific destination policies",
+      "Per-output mirror authorization and replay/ack contract"
+    ],
+    "checks": {
+      "plugin": {
+        "tests": 2119,
+        "passed": 2114,
+        "skipped": 5,
+        "failed": 0
+      },
+      "nativeMockSmoke": 52,
+      "twoNativeDshMockDialogue": 4,
+      "localCollaborationTargetedTests": 98,
+      "lint": "passed with existing warnings",
+      "generatedClient": "fresh"
+    },
+    "localGroupProbe": {
+      "scenario": "quick_no_tool_result",
+      "resultVisible": true,
+      "callerRuns": 1,
+      "callerResumed": false,
+      "environment": "Production group runtime with existing synthetic fixture; no production data or real-model call."
+    },
+    "cleanup": "Owned smoke and dual-host acceptance processes stopped; checked test ports have no listeners."
+  }
 }
