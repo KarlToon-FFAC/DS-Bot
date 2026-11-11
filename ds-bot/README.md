@@ -2,6 +2,13 @@
 
 The DS Bot plugin for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh). It turns dsh into a team of long-lived Bots that talk to you, to each other and in group chats. See the [project page](../README.md) for an overview, install steps and screenshots.
 
+Remote group receiving rules support one or more default Bots. Open the group
+sidebar, choose **Plain messages go to selected Bots**, select current published
+Bots in **Choose receiving Bots**, confirm, then Save. Unmentioned Human messages
+reach every selected Bot; targeted mentions/replies retain their recipients. Bot
+answers never wake this default list. Multiple selection requires an updated Hub;
+the existing single-Bot rule remains compatible with older Hubs.
+
 > Early release (v0.1). Features, tools and the saved data format can still change.
 
 Tested with dsh `0.2.1-rc.4` (Web) and `0.2.0-rc.2` (Web and Desktop).

@@ -816,7 +816,7 @@ test('one dirty Save atomically submits the drawer draft and closing discards un
   await pane({ snapshot, handle: async body => {
     assert.equal(body.endpoint, 'save-settings')
     const current = snapshot.conversations[0]
-    snapshot.conversations = [{ ...current, title: body.title, routingMode: body.routing.mode, adminBotPrincipalId: body.routing.adminBotPrincipalId, membershipVersion: 2, info: { members: current.info.members.map(person => person.principalId === bot.principalId ? { ...person, ...body.policies[0] } : person) } }]
+    snapshot.conversations = [{ ...current, title: body.title, routingMode: body.routing.mode, defaultBotPrincipalIds: body.routing.defaultBotPrincipalIds, membershipVersion: 2, info: { members: current.info.members.map(person => person.principalId === bot.principalId ? { ...person, ...body.policies[0] } : person) } }]
     return { updated: true, conversationId: 'group', membershipVersion: 2 }
   } }, async ({ doc, click, edit, calls, button }) => {
     await click('Shared group')
@@ -827,9 +827,9 @@ test('one dirty Save atomically submits the drawer draft and closing discards un
     await edit(doc.querySelector('input[aria-label="Group name"]'), 'Atomic title')
     await edit(doc.querySelector('[data-principal-id="bot:a:one"] select[aria-label="Speaking permission"]'), 'active')
     await edit(doc.querySelector('select[aria-label="Receiving rule"]'), 'admin')
-    const reply = [...doc.querySelectorAll('.bt-comm-participant-picker')].find(node => node.querySelector('summary').textContent.startsWith('Default reply Bot'))
-    await act(async () => reply.querySelector('summary').click())
-    await act(async () => reply.querySelector('button').click())
+    await click('Choose receiving Bots')
+    await act(async () => doc.querySelector('input[data-receiving-bot]').click())
+    await click('Use selected Bots')
     assert.equal(save().dataset.dirty, 'true')
     assert.equal(calls.some(call => ['policy', 'routing', 'configure-group'].includes(call.endpoint)), false)
     await click('Save')
@@ -837,7 +837,7 @@ test('one dirty Save atomically submits the drawer draft and closing discards un
     assert.equal(sent.title, 'Atomic title')
     assert.equal(sent.expectedVersion, 1)
     assert.equal(sent.membershipEpoch, 'epoch')
-    assert.equal(sent.routing.adminBotPrincipalId, bot.principalId)
+    assert.deepEqual(Array.from(sent.routing.defaultBotPrincipalIds),[bot.principalId])
     assert.equal(sent.policies[0].speakingMode, 'active')
     assert.equal(save().disabled, true)
     await edit(doc.querySelector('input[aria-label="Group name"]'), 'Discard me')
@@ -1782,5 +1782,58 @@ test('group capacity rejection is definitive, stops the batch, and leaves the se
   assert.match(dialog().textContent,/member limit/)
   full=false;await click('Invite')
   assert.equal(invited.length,3);assert.notEqual(invited[0].operationId,invited[1].operationId)
+ })
+})
+
+test('default receiving Bots use a separate multi-select dialog; Cancel preserves selection and one Save commits the list',async()=>{
+ const snapshot=state();snapshot.multipleDefaultBotsAvailable=true
+ const a={principalId:'bot:a:first',displayName:'First',kind:'bot',role:'member',speakingMode:'passive',ownerPrincipalId:'human:a:owner',published:true}
+ const owner={principalId:'human:b:owner',displayName:'Buddy',kind:'human',role:'member',speakingMode:'readOnly'}
+ const b={...a,principalId:'bot:b:second',displayName:'Second',ownerPrincipalId:owner.principalId}
+ snapshot.contacts=[owner,b]
+ snapshot.conversations=[{...membership,routingMode:'admin',adminBotPrincipalId:a.principalId,info:{members:[...membership.info.members,a,owner,b]}}]
+ await pane({snapshot,handle:async body=>{
+  assert.equal(body.endpoint,'save-settings')
+  snapshot.conversations=[{...snapshot.conversations[0],defaultBotPrincipalIds:body.routing.defaultBotPrincipalIds,membershipVersion:2}]
+  return{updated:true,membershipVersion:2,conversationId:'group'}
+ }},async({doc,click,calls})=>{
+  await click('Shared group');await act(async()=>doc.querySelector('.bt-comm-members summary').click())
+  await click('Choose receiving Bots')
+  let dialog=doc.querySelector('dialog[open]');assert.match(dialog.textContent,/Buddy/)
+  assert.equal(dialog.querySelector('[data-receiving-bot="bot:a:first"]').checked,true)
+  await act(async()=>dialog.querySelector('[data-receiving-bot="bot:b:second"]').click())
+  await click('Cancel')
+  assert.equal(doc.querySelector('[aria-label="Save group settings"]').disabled,true)
+  await click('Choose receiving Bots');dialog=doc.querySelector('dialog[open]:not([data-closing=true])')
+  assert.equal(dialog.querySelector('[data-receiving-bot="bot:b:second"]').checked,false)
+  await act(async()=>dialog.querySelector('[data-receiving-bot="bot:b:second"]').click())
+  await click('Use selected Bots')
+  assert.equal(calls.filter(c=>c.endpoint==='save-settings').length,0)
+  assert.match(doc.querySelector('[aria-label="Default receiving Bots"]').textContent,/First.*Second/)
+  await click('Save')
+  const saves=calls.filter(c=>c.endpoint==='save-settings')
+  assert.equal(saves.length,1);assert.deepEqual(Array.from(saves[0].routing.defaultBotPrincipalIds),[a.principalId,b.principalId])
+  assert.equal(saves[0].expectedVersion,1)
+ })
+})
+
+test('old Hub allows a single default but explains and blocks multi-selection; disabled default mode cannot save an empty list',async()=>{
+ const snapshot=state()
+ const bots=['one','two'].map(id=>({principalId:'bot:a:'+id,displayName:id,kind:'bot',role:'member',speakingMode:'passive',ownerPrincipalId:'human:a:owner'}))
+ snapshot.conversations=[{...membership,info:{members:[...membership.info.members,...bots]}}]
+ await pane({snapshot},async({doc,click,edit,calls,button})=>{
+  await click('Shared group');await act(async()=>doc.querySelector('.bt-comm-members summary').click())
+  await edit(doc.querySelector('select[aria-label="Receiving rule"]'),'admin')
+  assert.equal(doc.querySelector('[aria-label="Save group settings"]').disabled,true)
+  await click('Choose receiving Bots')
+  const dialog=doc.querySelector('dialog[open]:not([data-closing=true])')
+  for(const input of dialog.querySelectorAll('[data-receiving-bot]'))await act(async()=>input.click())
+  assert.match(dialog.textContent,/Update the Hub to select more than one Bot/)
+  assert.equal(button('Use selected Bots').disabled,true)
+  await act(async()=>dialog.querySelector('[data-receiving-bot="bot:a:one"]').click())
+  assert.equal(button('Use selected Bots').disabled,false)
+  await click('Use selected Bots')
+  assert.equal(doc.querySelector('[aria-label="Save group settings"]').disabled,false)
+  assert.equal(calls.some(c=>c.endpoint==='save-settings'),false)
  })
 })

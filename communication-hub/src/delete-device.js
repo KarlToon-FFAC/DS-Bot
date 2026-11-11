@@ -1,3 +1,4 @@
+import { removeGroupReceivers } from './group-routing.js'
 import { createHash } from 'node:crypto'
 import { identifier, requireThat } from './protocol.js'
 
@@ -76,14 +77,15 @@ export function deleteDevice(management, input) {
         db.prepare('UPDATE memberships SET active=0 WHERE conversation_id=?').run(conversation.id)
         db.prepare('UPDATE deliveries SET revoked=1 WHERE message_id IN (SELECT id FROM messages WHERE conversation_id=?) AND ai_accepted=0').run(conversation.id)
         db.prepare('UPDATE invites SET active=0 WHERE conversation_id=?').run(conversation.id)
-        db.prepare("UPDATE conversations SET closed=1,admin_bot=NULL,routing_mode='mentionsOnly' WHERE id=?").run(conversation.id)
+        db.prepare("UPDATE conversations SET closed=1,admin_bot=NULL,default_bots='[]',routing_mode='mentionsOnly' WHERE id=?").run(conversation.id)
         store.event(conversation.id, 'conversation.dissolved', { reason: 'ownerDeviceDeleted' })
       }
-      db.prepare("UPDATE conversations SET version=version+1,owner_id=CASE WHEN owner_id IN (SELECT id FROM principals WHERE instance_id=?) THEN NULL ELSE owner_id END,routing_mode=CASE WHEN admin_bot IN (SELECT id FROM principals WHERE instance_id=?) THEN 'mentionsOnly' ELSE routing_mode END,admin_bot=CASE WHEN admin_bot IN (SELECT id FROM principals WHERE instance_id=?) THEN NULL ELSE admin_bot END WHERE id=?").run(id, id, id, conversation.id)
+      db.prepare('UPDATE conversations SET version=version+1,owner_id=CASE WHEN owner_id IN (SELECT id FROM principals WHERE instance_id=?) THEN NULL ELSE owner_id END WHERE id=?').run(id, conversation.id)
+      const routing = removeGroupReceivers(store,conversation.id,principalIds)
       for (const member of db.prepare('SELECT * FROM memberships WHERE conversation_id=? AND principal_id IN (SELECT id FROM principals WHERE instance_id=?)').all(conversation.id, id)) {
         store.event(conversation.id, 'membership.removed', { principalId: member.principal_id, membershipEpoch: member.epoch, reason: 'deviceDeleted' })
       }
-      if (principals.has(conversation.admin_bot)) store.event(conversation.id, 'routing.changed', { mode: 'mentionsOnly', adminBotPrincipalId: null, reason: 'deviceDeleted' })
+      if (routing) store.event(conversation.id, 'routing.changed', { ...routing, reason: 'deviceDeleted' })
     }
     for (const principalId of principalIds) {
       for (const column of ['principal_id', 'inviter_id']) drop('invites', column, principalId)

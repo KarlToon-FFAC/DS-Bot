@@ -1,4 +1,5 @@
 import {GroupInviteDialog} from './communication-invite.js'
+import {ReceivingBotsDialog} from './communication-receivers.js'
 import {CommunicationHistorySearch} from './communication-history-search.js'
 import {useCommunicationHistory} from './communication-history.js'
 import {CommunicationResizeHandle,useCommunicationWidths} from './communication-resize.js'
@@ -85,7 +86,7 @@ function ReferenceQuote({ conversationId, membershipEpoch, messageId, request, l
       h('span', { className: 'bt-comm-quote-text' }, referenceExcerpt(source.content.text))) : t(unavailable ? 'Earlier message unavailable' : 'Loading reference…'))
 }
 
-function GroupSettings({ member, contacts, operation, pendingSettings, pendingInvites, operationPending, busy, humanId, btn, personLabel, chooseContact, request, onInspect, columnWidth, onColumnWidth }) {
+function GroupSettings({ member, contacts, operation, pendingSettings, pendingInvites, operationPending, busy, humanId, btn, personLabel, chooseContact, request, onInspect, columnWidth, onColumnWidth, multipleAvailable }) {
   const [open, setOpen] = useState(false), [base, setBase] = useState(null), [draft, setDraft] = useState(null)
   const [saving, setSaving] = useState(false), [failure, setFailure] = useState(''), [pending, setPending] = useState(null)
   const [newOwner, setNewOwner] = useState(''), [action, setAction] = useState(null)
@@ -126,6 +127,8 @@ function GroupSettings({ member, contacts, operation, pendingSettings, pendingIn
     } finally { if (token === generation.current) setSaving(false) }
   }
   const values = draft ?? groupSettingsValues(member)
+  const receivingIds = values.routing.defaultBotPrincipalIds
+  const invalidRouting = values.routing.mode === 'admin' && !receivingIds.length
   const roleLabel = role => role === 'owner' ? 'Group owner' : role === 'admin' ? 'Group admin' : 'Group member'
   const memberRow = person => {
         const editable = isOwner || member.role === 'admin' && person.role === 'member'
@@ -141,7 +144,7 @@ function GroupSettings({ member, contacts, operation, pendingSettings, pendingIn
         btn('View participant profile',event=>onInspect([person.principalId],event.currentTarget),{className:'bt-comm-member-icon',title:t('View participant profile'),children:'›'})))
   }
   const settingsActions = h('div', {className:'bt-comm-operation-buttons'},canManage?btn('Invite participant',()=>setAction({kind:'invite'}),{disabled:busy||saving}):null,
-    canManage?h('button',{type:'button',onClick:()=>{void saveSettings()},disabled:saving||!dirty&&!pending,'data-dirty':dirty,'aria-label':t('Save group settings')},t('Save')):null,
+    canManage?h('button',{type:'button',onClick:()=>{void saveSettings()},disabled:saving||!dirty&&!pending||invalidRouting&&!pending,'data-dirty':dirty,'aria-label':t('Save group settings')},t('Save')):null,
     h('button',{type:'button',onClick:close,'aria-label':t('Close member settings')},t('Close')))
   return h('details', { id: 'bt-comm-members', className: 'bt-comm-members', open },
     h('summary', { ref: summary, tabIndex: open ? 0 : -1, onClick: event => { event.preventDefault(); if (open) close(); else begin() } }, t('Group members and receiving rules')),
@@ -162,14 +165,17 @@ function GroupSettings({ member, contacts, operation, pendingSettings, pendingIn
       member.info?.formerMembers?.length ? h('details', null, h('summary', null, t('Former Bots')), member.info.formerMembers.map(person => btn(person.displayName, event => onInspect([person.principalId], event.currentTarget), { key: person.principalId, children: personLabel(person) }))) : null,
       h('p', { className: 'bt-comm-reference' }, t('Both Bot modes can explicitly reply to their current input or finish without a reply. Final prose stays local. Reply-only Bots cannot initiate messages. Active Bots may also initiate with tools. Explicit follow-ups stay within the server’s finite delegation limit.')),
       canManage ? h(Fragment, null,
-        h('label', { className: 'bt-comm-field' }, t('Receiving rule'), h('select', { value: values.routing.mode, onChange: event => edit({ routing: { mode: event.target.value, adminBotPrincipalId: event.target.value === 'admin' ? values.routing.adminBotPrincipalId : null } }), 'aria-label': t('Receiving rule') },
-          h('option', { value: 'mentionsOnly' }, t('Mentions only')), h('option', { value: 'admin' }, t('Plain messages go to one Bot')))),
-        values.routing.mode === 'admin' ? chooseContact('Default reply Bot', values.routing.adminBotPrincipalId ?? '', id => edit({ routing: { mode: 'admin', adminBotPrincipalId: id } }), members.filter(person => person.kind === 'bot')) : null) : h('p', null, t(member.routingMode === 'admin' ? 'Plain messages go to one Bot' : 'Mentions only')),
+        h('label', { className: 'bt-comm-field' }, t('Receiving rule'), h('select', { value: values.routing.mode, onChange: event => edit({ routing: { mode: event.target.value, defaultBotPrincipalIds: event.target.value === 'admin' ? receivingIds : [] } }), 'aria-label': t('Receiving rule') },
+          h('option', { value: 'mentionsOnly' }, t('Mentions only')), h('option', { value: 'admin' }, t('Plain messages go to selected Bots')))),
+        values.routing.mode === 'admin' ? btn('Choose receiving Bots',()=>setAction({kind:'receivers'}),{disabled:busy||saving}) : null,
+        invalidRouting ? h('p',{role:'status'},t('Choose at least one receiving Bot before saving.')) : null) : h('p', null, t(member.routingMode === 'admin' ? 'Plain messages go to selected Bots' : 'Mentions only')),
+      values.routing.mode === 'admin' && receivingIds.length ? h('p',{className:'bt-comm-reference','aria-label':t('Default receiving Bots')},receivingIds.map(id=>members.find(person=>person.principalId===id)?.displayName ?? id).join(', ')) : null,
       isOwner ? btn('Transfer ownership', () => { setNewOwner(''); setAction({ kind: 'transfer' }) }, {disabled:busy}) : null,
       btn('Leave group', () => setAction({kind:'leave'}), { disabled: busy || isOwner, title: isOwner ? t('Transfer ownership before leaving') : undefined }),
       isOwner ? btn('End group for everyone', () => setAction({kind:'dissolve'}), {className:'bt-comm-danger',disabled:busy}) : null,
       h(GroupInviteDialog,{open:action?.kind==='invite',onClose:()=>setAction(null),member,contacts,humanId,request,operation,pendingInvites,busy}),
-      h(CommunicationActionDialog, { open: Boolean(action)&&action.kind!=='invite',
+      h(ReceivingBotsDialog,{open:action?.kind==='receivers',onClose:()=>setAction(null),members,contacts,selected:receivingIds,request,multipleAvailable,onConfirm:ids=>edit({routing:{mode:'admin',defaultBotPrincipalIds:ids}})}),
+      h(CommunicationActionDialog, { open: Boolean(action)&&!['invite','receivers'].includes(action.kind),
         title: action?.kind === 'transfer' ? 'Transfer ownership' : action?.kind === 'remove' ? 'Remove from group' : action?.kind === 'leave' ? 'Leave group' : 'End group for everyone',
         onClose: () => setAction(null), danger: action?.kind!=='transfer',
         disabled: busy || action?.kind === 'transfer' && !newOwner,
@@ -633,7 +639,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
         team.communicationEnabled ? btn('New…',startMenu,{className:'bt-comm-primary'}) : null,
         h('p', { className: 'bt-comm-reference' }, t('Local chats stay separate from communication conversations.'))) : null,
       member?.archive ? h('p', { className: 'bt-comm-reference bt-comm-archive-notice', role: 'status' }, t('Read-only record of your Bot’s private conversation.')) : null,
-      member?.kind === 'group' ? h(GroupSettings, { columnWidth:shownRightWidth,onColumnWidth:changeColumnWidth,key: `${scope}:${selected}:${member.membershipEpoch}`, member, contacts, labels, operation, operationPending, act, busy, humanId: state.humanPrincipalId, btn, personLabel, chooseContact, request, onInspect:(ids,trigger)=>{setInspectedIds(ids);showPanel('participant',trigger)},
+      member?.kind === 'group' ? h(GroupSettings, { columnWidth:shownRightWidth,onColumnWidth:changeColumnWidth,multipleAvailable:state.multipleDefaultBotsAvailable===true,key: `${scope}:${selected}:${member.membershipEpoch}`, member, contacts, labels, operation, operationPending, act, busy, humanId: state.humanPrincipalId, btn, personLabel, chooseContact, request, onInspect:(ids,trigger)=>{setInspectedIds(ids);showPanel('participant',trigger)},
         pendingInvites:()=>[...operationIds.current.keys()].flatMap(key=>{const [instanceId,endpoint,values]=JSON.parse(key);return instanceId===scope&&endpoint==='invite'&&values.conversationId===selected&&values.membershipEpoch===member.membershipEpoch?[values]:[]}),
         pendingSettings: id => [...operationIds.current.keys()].map(item => JSON.parse(item)).find(([instanceId, endpoint, values]) => instanceId === scope && endpoint === 'save-settings' && values.conversationId === id)?.[2] ?? null }) : null,
       h('div', { ref: log, className: 'bt-comm-log', role: 'log', 'aria-label': t('Communication messages'), onScroll: event => {

@@ -103,6 +103,8 @@ export const communicationDescriptions = {
   SCHEMA_VERSION_UNSUPPORTED: 'The stored communication database requires a different application version. Preserve the data and check the matching Hub/client versions.',
   ERR_UNKNOWN_BUILTIN_MODULE: 'This runtime lacks a required Node built-in module. Use the supported Node and DSH versions.',
   EXPLICIT_REPLY_CAPABILITY_REQUIRED: 'This Hub lacks explicit Bot dialogue support. Update the Hub to send Bot messages safely; local final text remains private.',
+  INVALID_ADMIN: 'Choose current published group Bots for the default receiving list.',
+  MULTI_BOT_ROUTING_REQUIRED: 'This Hub does not support multiple default receiving Bots. Update the Hub to select more than one Bot.',
   LEGACY_AUTO_EXPORT_QUARANTINED: 'An older automatic final reply was quarantined during upgrade and will not be sent. Review it locally before any explicit send.',
   CONFIG_EDITOR_UNAVAILABLE: "This DSH version has no supported configuration editor. Check the installed DSH version.",
   CONFIG_ENTRY_UNAVAILABLE: "The active DS Bot configuration entry could not be identified. Check the loaded profile and plugin.",

@@ -288,7 +288,7 @@ translated. Read live help for complete optional fields and use current versions
 | accept | accept | Accept invitation | accept_communication_invite |
 | remove | remove | Remove member | remove_communication_member |
 | leave | remove (no target) | Leave group | leave_communication_group |
-| routing | routing | Default reply Bot / mentions only | set_communication_receiving_rule |
+| routing | routing | Default receiving Bots / mentions only | set_communication_receiving_rule |
 | policy | policy | Member role / speaking mode | set_communication_member_policy |
 | transfer | transfer | Transfer ownership | transfer_communication_ownership |
 | dissolve | dissolve | End group for everyone | end_communication_group |
@@ -384,8 +384,9 @@ Human mentions notify people; exact Bot mentions dispatch only authorized curren
 recipients. `@all` means the current conversation's Bots, never Humans or every
 published contact. It respects membership, speaking policy and dispatch limits;
 code/quoted text is not an activation request. Use exact principal IDs in
-`mentions` for disambiguation. A default reply Bot answers plain messages; its
-assignment grants no management power and applies to plain Human messages.
+`mentions` for disambiguation. The default receiving Bots receive unmentioned Human messages; their
+assignment grants no management power. Several selected Bots can each choose whether to answer
+the same Human input, while their untargeted answers never activate each other.
 
 Active Bots explicitly address current member Bots using send_contact_message
 activationTargets exact IDs or allBots=true. The explicit mentions tool argument
@@ -952,3 +953,27 @@ membership/ownership changes. Archived private chats remain searchable. No other
 Bot's cache, pre-join history or data beyond the contiguous sync cursor is read.
 Search never sends messages or receipts. Results cover locally synchronized
 canonical history only; an empty result does not prove absence on the Hub.
+
+## Multiple default receiving Bots
+
+GUI: open a remote group → Group members and receiving rules → choose Plain
+messages go to selected Bots → Choose receiving Bots. The separate dialog groups
+current published Bots under their contacts. Confirm the selection, then use the
+sidebar Save. Cancel keeps the existing draft. Only the group owner/admin can
+change the rule. A default receiving assignment is not a management role.
+
+CLI `routing` accepts `{conversationId, mode:"admin", defaultBotPrincipalIds:[…]}`;
+`save-settings` accepts the same fields under `routing` with expectedVersion. The
+Bot tools `set_communication_receiving_rule` and `save_communication_group_settings`
+accept this list too. Use exact current group Bot principal IDs. Canonical
+`members`/`state` expose defaultBotPrincipalIds. The legacy adminBotPrincipalId
+remains a singleton alternative; do not combine it with a multi-selection.
+
+Unmentioned Human messages activate every selected eligible Bot. Explicit @ and
+direct replies keep their exact targets. Bot messages still require explicit
+activation targets and are never broadcast through the default list. Existing
+causal budgets apply. Mentions only clears the list. Removed, hidden, retired or
+revoked Bots are pruned without changing the other selected receivers; a newly
+published identity is never automatically restored. Multiple defaults require
+Hub capability multi-bot-default-receivers. MULTI_BOT_ROUTING_REQUIRED means
+upgrade the Hub; singleton configuration still works on older compatible Hubs.

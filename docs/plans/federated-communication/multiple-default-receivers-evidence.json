@@ -1,0 +1,30 @@
+{
+  "status": "PASS",
+  "branch": "chore/federated-communication",
+  "releaseVersionUnchanged": "V0.3.2",
+  "scope": "remote group default receiving Bots",
+  "capability": "multi-bot-default-receivers",
+  "checks": {
+    "plugin": {"total": 2119, "passed": 2114, "skipped": 5, "failed": 0},
+    "hub": {"passed": 206, "failed": 0},
+    "nativeTwoDshMock": {"passed": 4},
+    "nativeTeamSmoke": {"passed": 52},
+    "chromium": {"desktop": "PASS", "mobile390px": "PASS", "browserErrors": 0},
+    "lint": "PASS with existing warnings",
+    "generatedClientFreshness": "PASS"
+  },
+  "verified": [
+    "all selected passive Bots receive the same unmentioned Human input",
+    "each Bot has its own exact reply grant and can explicitly reply or decline",
+    "untargeted Bot results do not activate the default receiving list",
+    "mentions and direct replies retain exact recipient precedence",
+    "invalid, unauthorized or stale atomic edits change nothing",
+    "lifecycle pruning preserves unaffected defaults and never restores retired identities",
+    "existing singleton databases migrate without reset and preserve selections across reopen",
+    "older Hubs accept singleton settings but reject multiple defaults precisely",
+    "Cancel does not mutate a selection and confirmation stages one atomic Save",
+    "desktop and mobile dialogs have no horizontal clipping"
+  ],
+  "environment": "owned Linux DSH instances, loopback Hub, deterministic Mock and synthetic Chromium fixtures",
+  "notClaimed": ["physical Windows deployment", "physical cross-machine network test", "real LLM behavior"]
+}

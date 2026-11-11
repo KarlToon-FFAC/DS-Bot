@@ -170,7 +170,7 @@ export function install(rt) {
       execute: execute((comm, actor, args, exec) => comm.operation(actor.principalId, 'group.configure', args, toolOperation('configure', exec))) }),
     defineTool({ name: 'save_communication_group_settings', description: 'Atomically save permitted group title, receiving rule and member policies using the current membershipVersion. A conflict or invalid change saves nothing. Current group owner/admin authority is required.',
       parameters: { conversationId: { type: 'string', required: true }, expectedVersion: { type: 'integer', required: true }, title: { type: 'string' },
-        routing: { type: 'object', additionalProperties: false, properties: { mode: { type: 'string', required: true, enum: ['admin','mentionsOnly'] }, adminBotPrincipalId: { type: 'string' } } },
+        routing: { type: 'object', additionalProperties: false, properties: { mode: { type: 'string', required: true, enum: ['admin','mentionsOnly'] }, adminBotPrincipalId: { type: 'string' }, defaultBotPrincipalIds: { type:'array',items:{type:'string'},description:'Exact current group Bot IDs to receive unmentioned Human messages; requires an updated Hub for multiple Bots.' } } },
         policies: { type: 'array', items: { type: 'object', additionalProperties: false, properties: {
           targetPrincipalId: { type: 'string', required: true }, role: { type: 'string', enum: ['member','admin'] }, speakingMode: { type: 'string', enum: ['readOnly','speak','passive','active'] } } } } }, output,
       execute: execute((comm, actor, args, exec) => comm.operation(actor.principalId, 'group.settings', args, toolOperation('settings', exec))) }),
@@ -186,8 +186,8 @@ export function install(rt) {
     defineTool({ name: 'remove_communication_member', description: 'Remove a participant from a communication group you manage. A remote Main Bot label grants no management rights.',
       parameters: { conversationId: { type: 'string', required: true }, targetPrincipalId: { type: 'string', required: true } }, output,
       execute: execute((comm, actor, args, exec) => comm.operation(actor.principalId, 'group.remove', args, toolOperation('remove', exec))) }),
-    defineTool({ name: 'set_communication_receiving_rule', description: 'Set the receiving rule of a communication group you manage. Human mentions notify people; Bot mentions dispatch exact recipients. Ordinary Bot replies do not broadcast.',
-      parameters: { conversationId: { type: 'string', required: true }, mode: { type: 'string', enum: ['admin', 'mentionsOnly'], required: true }, adminBotPrincipalId: { type: 'string' } }, output,
+    defineTool({ name: 'set_communication_receiving_rule', description: 'Set the receiving rule of a communication group you manage. In admin mode defaultBotPrincipalIds selects one or more current published Bots for unmentioned Human messages; adminBotPrincipalId is the legacy singleton alternative. Human mentions/direct replies keep their exact targets. Ordinary Bot replies never broadcast to the default list.',
+      parameters: { conversationId: { type: 'string', required: true }, mode: { type: 'string', enum: ['admin', 'mentionsOnly'], required: true }, adminBotPrincipalId: { type: 'string' }, defaultBotPrincipalIds: {type:'array',items:{type:'string'}} }, output,
       execute: execute((comm, actor, args, exec) => comm.operation(actor.principalId, 'group.routing', args, toolOperation('routing', exec))) }),
     defineTool({ name: 'end_communication_group', description: 'As the current group owner, end the group for every participant, revoking unfinished delivery. Admins cannot end a group. This differs from leaving it yourself.',
       parameters: { conversationId: { type: 'string', required: true } }, output,
@@ -325,7 +325,7 @@ export function install(rt) {
             break
           }
           case 'remove': value = await comm.operation(comm.human.principalId, 'group.remove', { membershipEpoch: body.membershipEpoch, expectedVersion: body.expectedVersion, conversationId: body.conversationId, targetPrincipalId: body.targetPrincipalId ?? comm.human.principalId }, body.operationId); break
-          case 'routing': value = await comm.operation(comm.human.principalId, 'group.routing', { membershipEpoch: body.membershipEpoch, expectedVersion: body.expectedVersion, conversationId: body.conversationId, mode: body.mode, adminBotPrincipalId: body.adminBotPrincipalId }, body.operationId); break
+          case 'routing': value = await comm.operation(comm.human.principalId, 'group.routing', { membershipEpoch: body.membershipEpoch, expectedVersion: body.expectedVersion, conversationId: body.conversationId, mode: body.mode, adminBotPrincipalId: body.adminBotPrincipalId, defaultBotPrincipalIds: body.defaultBotPrincipalIds }, body.operationId); break
           case 'dissolve': value = await comm.operation(comm.human.principalId, 'group.dissolve', { conversationId: body.conversationId }, body.operationId); break
           case 'policy': value = await comm.operation(comm.human.principalId, 'group.policy', { membershipEpoch: body.membershipEpoch, expectedVersion: body.expectedVersion, conversationId: body.conversationId, targetPrincipalId: body.targetPrincipalId,
             ...(body.role === undefined ? {} : { role: body.role }), ...(body.speakingMode === undefined ? {} : { speakingMode: body.speakingMode }) }, body.operationId); break

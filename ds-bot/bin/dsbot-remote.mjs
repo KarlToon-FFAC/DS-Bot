@@ -25,13 +25,13 @@ const schemas = {
   accept: { inviteId: text, recipientPrincipalId: text, operationId: text },
   remove: { conversationId: text, targetPrincipalId: text, membershipEpoch: text, expectedVersion: integer, operationId: text },
   leave: { conversationId: text, membershipEpoch: text, expectedVersion: integer, operationId: text },
-  routing: { conversationId: text, mode: ['admin', 'mentionsOnly'], adminBotPrincipalId: text, membershipEpoch: text, expectedVersion: integer, operationId: text },
+  routing: { conversationId: text, mode: ['admin', 'mentionsOnly'], adminBotPrincipalId: text, defaultBotPrincipalIds: 'strings', membershipEpoch: text, expectedVersion: integer, operationId: text },
   policy: { conversationId: text, targetPrincipalId: text, role: ['member', 'admin'], speakingMode: ['readOnly', 'speak', 'passive', 'active'], membershipEpoch: text, expectedVersion: integer, operationId: text },
   transfer: { conversationId: text, targetPrincipalId: text, expectedVersion: integer, membershipEpoch: text, operationId: text },
   dissolve: { conversationId: text, operationId: text },
   'configure-group': { conversationId: text, title: text, expectedVersion: integer, membershipEpoch: text, operationId: text },
   'save-settings': { conversationId: text, expectedVersion: integer, membershipEpoch: text, operationId: text, title: text,
-    routing: { fields: { mode: ['admin', 'mentionsOnly'], adminBotPrincipalId: text }, required: ['mode'] },
+    routing: { fields: { mode: ['admin', 'mentionsOnly'], adminBotPrincipalId: text, defaultBotPrincipalIds: 'strings' }, required: ['mode'] },
     policies: { items: { fields: { targetPrincipalId: text, role: ['member', 'admin'], speakingMode: ['readOnly', 'speak', 'passive', 'active'] },
       required: ['targetPrincipalId'], someRequired: ['role', 'speakingMode'] } } },
   'rename-human': { displayName: text },
@@ -202,6 +202,7 @@ export function prepare(operation, input = {}) {
 }
 
 const fieldDescriptions = {
+  defaultBotPrincipalIds: 'Exact current published group Bot principal IDs. In admin mode, all selected Bots receive unmentioned Human messages; explicit mentions/replies override this default. Multiple Bots require Hub capability multi-bot-default-receivers. Do not supply the legacy singleton field together with a multi-selection.',
   localBotId: 'Exact native Bot id from available-bots.bots[].id, often session-<id>. Not a global bot:<instance>:<id>, a name, or another/current remote Session id.',
   localBotIds: 'Native Bot ids from available-bots.bots[].id (often session-<id>); never global bot:<instance>:<id> principal ids. A successful publication save reports reloadReason:publication and publicationStatus:saved-pending-reload. Wait for state.reloadRequired=false and current membership before Bot-scoped operations; pending calls return PUBLICATION_RELOAD_REQUIRED.',
   mentions: 'CLI/API accepts an array of exact principal-id strings. The host normalizes these to protocol {principalId} objects and validates current conversation membership, including group members outside your contact directory.',

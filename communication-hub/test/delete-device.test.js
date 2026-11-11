@@ -199,3 +199,18 @@ test('actual administrator CLI/HTTP deletion requires admin and closes live sign
   staticHub.revoke('static-delete-fixture')
   await assert.rejects(execute(prepare('delete', { instanceId: 'static-delete-fixture', expectedPairingRevision: 1, expectedNameVersion: 0, ownedSharedGroups: [], confirmDelete: true }), { url: `http://127.0.0.1:${staticHub.port}`, password }), { code: 'STATIC_PEER_REMOVAL_REQUIRED' })
 })
+
+test('deleting one device preserves the other selected default receiver in a shared group',t=>{
+ const {store,m,a,b,c}=fixture(t)
+ consent(m,b,a);consent(m,b,c)
+ const lost=store.register(a.auth,{localId:'lost',kind:'bot',displayName:'Removed receiver'}).principalId
+ const kept=store.register(c.auth,{localId:'kept',kind:'bot',displayName:'Retained receiver'}).principalId
+ const group=store.createGroup(b.auth,op({principalId:b.principalId,title:'Shared multiple receivers'})).conversationId
+ add(store,b,{...a,principalId:lost},group);add(store,b,{...c,principalId:kept},group)
+ store.routing(b.auth,op({principalId:b.principalId,conversationId:group,membershipEpoch:member(store,b,group).membershipEpoch,defaultBotPrincipalIds:[lost,kept],mode:'admin'}))
+ m.delete(deletion(m,a))
+ const retained=member(store,b,group)
+ assert.deepEqual(retained.defaultBotPrincipalIds,[kept]);assert.equal(retained.routingMode,'admin');assert.equal(retained.adminBotPrincipalId,kept)
+ assert.equal(JSON.stringify(store.db.prepare('SELECT * FROM conversations WHERE id=?').get(group)).includes(lost),false)
+ assert.deepEqual(store.db.prepare('PRAGMA foreign_key_check').all(),[])
+})

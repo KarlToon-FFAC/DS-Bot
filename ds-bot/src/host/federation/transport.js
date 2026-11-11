@@ -1,4 +1,5 @@
 import { communicationCompatibility, incompatibleCommunication } from '../../shared/communication-version.js'
+import { usesDefaultBotList, MULTI_BOT_ROUTING_CAPABILITY } from '../../shared/communication-routing.js'
 import { randomUUID } from 'node:crypto'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { ATTACHMENT_CAPABILITY } from '../../shared/communication-attachments.js'
@@ -7,7 +8,7 @@ const PROTOCOL = 'dsbot-communication/1'
 const CAPABILITIES = ['text', 'markdown', 'mentions', 'group', 'dm', 'reply', 'history', 'group-policy', 'membership-epoch', 'explicit-bot-activation', 'bot-input-updates']
 const STATE_INVALIDATION = 'state-invalidation'
 const BOUNDED_COLLABORATION = 'bounded-bot-collaboration'
-export const communicationCapabilities = () => [...CAPABILITIES, BOUNDED_COLLABORATION, ATTACHMENT_CAPABILITY, STATE_INVALIDATION, 'explicit-bot-dialogue']
+export const communicationCapabilities = () => [...CAPABILITIES, BOUNDED_COLLABORATION, ATTACHMENT_CAPABILITY, STATE_INVALIDATION, 'explicit-bot-dialogue', MULTI_BOT_ROUTING_CAPABILITY]
 const outboxCapacity = Symbol('outbox-capacity')
 const membershipChanged = Symbol('membership-changed')
 const transient = new Set(['CONNECTION_LOST', 'REQUEST_TIMEOUT', 'HUB_CONNECTION_REFUSED', 'HUB_CONNECTION_TIMEOUT', 'HUB_UNREACHABLE', 'STORAGE_UNAVAILABLE', 'BACKPRESSURE', 'HISTORY_GAP'])
@@ -213,6 +214,7 @@ export class CommunicationTransport {
       try {
         // Upgrades must not replay removed ownership recovery against an older Hub.
         if (item.type === 'group.reclaim') throw errorWith('UNKNOWN_OPERATION')
+        if (usesDefaultBotList(item.type,item.payload) && !this.welcome.capabilities.includes(MULTI_BOT_ROUTING_CAPABILITY)) throw errorWith('MULTI_BOT_ROUTING_REQUIRED')
         if (item.type === 'message.publish') {
           this.queue.validateMessage(item.payload)
           if(item.payload.attachments?.length&&!this.welcome.capabilities.includes(ATTACHMENT_CAPABILITY))throw errorWith('ATTACHMENT_CAPABILITY_REQUIRED')

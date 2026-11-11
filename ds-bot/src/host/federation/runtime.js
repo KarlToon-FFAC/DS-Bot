@@ -1,4 +1,5 @@
 import {searchHistory} from './history-search.js'
+import { groupRoutingPayload, usesDefaultBotList, MULTI_BOT_ROUTING_CAPABILITY } from '../../shared/communication-routing.js'
 import { botDmRecords, botDmContext } from './bot-dm-records.js'
 import { join } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
@@ -424,6 +425,7 @@ export class CommunicationRuntime {
   async operation(principalId, type, payload, id = randomUUID()) {
     if (type === 'group.reclaim') fail('UNKNOWN_OPERATION')
     payload = Object.fromEntries(Object.entries(payload).filter(([,value]) => value !== undefined))
+    payload = groupRoutingPayload(type,payload)
     const saved = this.queue.intent(id)
     if (saved) {
       if (saved.type !== type) fail('MESSAGE_ID_CONFLICT')
@@ -434,9 +436,12 @@ export class CommunicationRuntime {
         ...(['group.invite','group.remove','group.routing','group.dissolve'].includes(type) && payload.expectedVersion === undefined ? { expectedVersion: member.membershipVersion } : {}) }
     }
     const input = { ...payload, principalId, operationId: id }
+    const unsupportedRouting = usesDefaultBotList(type,input) && !this.transport.welcome?.capabilities?.includes(MULTI_BOT_ROUTING_CAPABILITY)
+    if (!saved && unsupportedRouting) fail('MULTI_BOT_ROUTING_REQUIRED')
     this.queue.enqueueOperation(type, input)
     const old = this.queue.outboxStatus(id)
     if (old.state === 'accepted') return old.result
+    if (unsupportedRouting) fail('MULTI_BOT_ROUTING_REQUIRED')
     if (!this.transport.connected) return { operationId: id, status: 'queued' }
     let result
     try { result = await this.transport.request(type, input) } catch (error) {
@@ -706,6 +711,7 @@ export class CommunicationRuntime {
     return { enabled: true, connected: this.transport.connected, reloadRequired: false, listState: !this.transport.lastSynchronizedAt ? 'not-synchronized' : this.transport.connected ? 'authorized-snapshot' : 'cached-snapshot', reconciled: this.everReconciled, instanceId: this.queue.instanceId, humanPrincipalId: this.human.principalId,
       hubUrl: this.settings.url, hubId: this.settings.hubId ?? this.transport.welcome?.hubId ?? null, queueScope:this.settings.queueScope??'legacy',
       attachmentsAvailable: this.transport.welcome?.capabilities?.includes(ATTACHMENT_CAPABILITY) === true,
+      multipleDefaultBotsAvailable: this.transport.welcome?.capabilities?.includes(MULTI_BOT_ROUTING_CAPABILITY) === true,
       managementRevision: this.managementRevision ?? 0, transport: this.transport.diagnostics?.() ?? null,
       compatibility: this.transport.compatibility, managementUrl, managementAvailable: managementUrl !== null,
       lastConnectedAt: this.lastConnectedAt ?? null, error: this.transportError ?? this.lastError ?? null, avatarError: this.avatarError ?? null, contacts: this.contacts,

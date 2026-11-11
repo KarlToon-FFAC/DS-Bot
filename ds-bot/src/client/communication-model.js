@@ -107,7 +107,9 @@ export function collaborationStops(events, outbox) {
 
 
 export function groupSettingsValues(member) {
-  return { title: member.title ?? '', routing: { mode: member.routingMode ?? 'mentionsOnly', adminBotPrincipalId: member.adminBotPrincipalId ?? null },
+  const mode = member.routingMode ?? 'mentionsOnly'
+  const ids = member.defaultBotPrincipalIds ?? (member.adminBotPrincipalId ? [member.adminBotPrincipalId] : [])
+  return { title: member.title ?? '', routing: { mode, defaultBotPrincipalIds: mode === 'admin' ? [...new Set(ids)].sort() : [] },
     policies: Object.fromEntries((member.info?.members ?? []).map(person => [person.principalId, { role: person.role, speakingMode: person.speakingMode }])) }
 }
 

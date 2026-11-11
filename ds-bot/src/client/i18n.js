@@ -5,6 +5,18 @@
 export const NAMESPACE = 'ds-bot'
 
 const ZH = {
+  "Default receiving Bots": "默认接收 Bot",
+  "Choose receiving Bots": "选择接收 Bot",
+  "Use selected Bots": "使用所选 Bot",
+  "Plain messages go to selected Bots": "普通消息发给所选 Bot",
+  "Choose at least one receiving Bot before saving.": "保存前请至少选择一个接收 Bot。",
+  "Unmentioned user messages go to every selected Bot. Mentions and direct replies keep their targets. Bot answers do not wake the default list.": "未指定 @ 的用户消息会同时发给所选 Bot。@ 和直接回复仍按指定目标派发，Bot 的回复不会唤醒默认接收列表。",
+  "Receive plain messages as {name}": "由 {name} 接收普通消息",
+  "No available group Bots. Add a published Bot first.": "群内暂无可用 Bot，请先添加已发布的 Bot。",
+  "Unavailable Bot": "不可用的 Bot",
+  "This Hub does not support multiple default receiving Bots. Update the Hub to select more than one Bot.": "此 Hub 尚不支持多个默认接收 Bot，请更新 Hub 后再多选。",
+  "Choose current published group Bots for the default receiving list.": "请从当前群内已发布的 Bot 中选择默认接收对象。",
+
   'This user code cannot receive a contact request. Ask the contact for their current code.': '此用户码无法接收联系人申请，请向对方索取当前有效的用户码。',
   'Update and restart the Hub to validate user codes and repair contact Bot sharing.': '请更新并重启 Hub，以验证用户码并修复联系人 Bot 共享范围。',
   'Contact request unavailable': '联系人申请不可送达',

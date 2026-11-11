@@ -1,5 +1,6 @@
 import { COMMUNICATION_VERSION } from './version.js'
 import { retireBot } from './bot-retirement.js'
+import { defaultReceivingBots, normalizeGroupRouting, writeGroupRouting, removeGroupReceivers } from './group-routing.js'
 import { DatabaseSync } from 'node:sqlite'
 import { randomUUID } from 'node:crypto'
 import { mkdirSync } from 'node:fs'
@@ -51,6 +52,7 @@ export class HubStore {
       CREATE TABLE IF NOT EXISTS input_updates (message_id TEXT PRIMARY KEY,parent_delivery_id TEXT NOT NULL,recipient_id TEXT NOT NULL,epoch TEXT NOT NULL,read INTEGER NOT NULL DEFAULT 0);
       CREATE TABLE IF NOT EXISTS bot_dispatches (cause_key TEXT NOT NULL,author_id TEXT NOT NULL,target_id TEXT NOT NULL,PRIMARY KEY(cause_key,author_id,target_id));
       `)
+    if (!this.db.prepare('PRAGMA table_info(conversations)').all().some(column => column.name === 'default_bots')) this.db.exec('ALTER TABLE conversations ADD COLUMN default_bots TEXT')
     if(version<2)this.transaction(()=>{
       this.db.exec(`ALTER TABLE conversations ADD COLUMN owner_id TEXT;
         ALTER TABLE conversations ADD COLUMN closed INTEGER NOT NULL DEFAULT 0;
@@ -572,21 +574,20 @@ export class HubStore {
   dropGroupMember(conversationId,target) {
     this.db.prepare('UPDATE memberships SET active=0 WHERE conversation_id=? AND principal_id=?').run(conversationId,target.principalId)
     this.db.prepare('UPDATE deliveries SET revoked=1 WHERE recipient_id=? AND membership_epoch=? AND ai_accepted=0').run(target.principalId,target.epoch)
-    this.db.prepare('UPDATE conversations SET version=version+1,routing_mode=CASE WHEN admin_bot=? THEN ? ELSE routing_mode END,admin_bot=CASE WHEN admin_bot=? THEN NULL ELSE admin_bot END WHERE id=?').run(target.principalId,'mentionsOnly',target.principalId,conversationId)
+    this.db.prepare('UPDATE conversations SET version=version+1 WHERE id=?').run(conversationId)
+    removeGroupReceivers(this,conversationId,[target.principalId])
     this.db.prepare('UPDATE invites SET active=0 WHERE conversation_id=? AND (principal_id=? OR inviter_id=?)').run(conversationId,target.principalId,target.principalId)
     this.event(conversationId,'membership.removed',{principalId:target.principalId,membershipEpoch:target.epoch})
   }
   routing(auth,input) {
     return this.operation(auth,input.operationId,input,()=>{
       requireThat(['owner','admin'].includes(this.actorMembership(auth,input).role),'FORBIDDEN')
-      requireThat(['admin','mentionsOnly'].includes(input.mode),'INVALID_REQUEST')
+      requireThat(Object.keys(input).every(key=>['conversationId','principalId','membershipEpoch','expectedVersion','operationId','mode','adminBotPrincipalId','defaultBotPrincipalIds'].includes(key)),'INVALID_REQUEST')
       requireThat(this.db.prepare('SELECT kind FROM conversations WHERE id=?').get(input.conversationId).kind==='group','INVALID_REQUEST')
-      if(input.mode==='admin'){
-        const bot=this.db.prepare('SELECT p.kind FROM memberships m JOIN principals p ON p.id=m.principal_id WHERE m.conversation_id=? AND m.principal_id=? AND m.active=1').get(input.conversationId,input.adminBotPrincipalId)
-        requireThat(bot?.kind==='bot'&&this.isPublished(input.adminBotPrincipalId),'INVALID_ADMIN')
-      }
-      this.db.prepare('UPDATE conversations SET version=version+1,routing_mode=?,admin_bot=? WHERE id=?').run(input.mode,input.mode==='admin'?input.adminBotPrincipalId:null,input.conversationId)
-      this.event(input.conversationId,'routing.changed',{mode:input.mode,adminBotPrincipalId:input.mode==='admin'?input.adminBotPrincipalId:null})
+      const routing = normalizeGroupRouting(this,input.conversationId,{mode:input.mode,...(input.adminBotPrincipalId===undefined?{}:{adminBotPrincipalId:input.adminBotPrincipalId}),...(input.defaultBotPrincipalIds===undefined?{}:{defaultBotPrincipalIds:input.defaultBotPrincipalIds})})
+      writeGroupRouting(this,input.conversationId,routing)
+      this.db.prepare('UPDATE conversations SET version=version+1 WHERE id=?').run(input.conversationId)
+      this.event(input.conversationId,'routing.changed',routing)
       return {updated:true}
     })
   }
@@ -635,12 +636,7 @@ export class HubStore {
       requireThat(['owner','admin'].includes(caller.role),'FORBIDDEN')
       requireThat(Object.keys(input).every(key=>['conversationId','principalId','membershipEpoch','expectedVersion','operationId','title','routing','policies'].includes(key)),'INVALID_REQUEST')
       if(input.title!==undefined)requireThat(typeof input.title==='string'&&input.title.trim()&&input.title.length<=256,'INVALID_REQUEST')
-      const routing=input.routing
-      if(routing!==undefined){
-        requireThat(routing&&typeof routing==='object'&&!Array.isArray(routing)&&Object.keys(routing).every(key=>['mode','adminBotPrincipalId'].includes(key))&&['admin','mentionsOnly'].includes(routing.mode),'INVALID_REQUEST')
-        requireThat(routing.adminBotPrincipalId===undefined||routing.adminBotPrincipalId===null||typeof routing.adminBotPrincipalId==='string','INVALID_REQUEST')
-        if(routing.mode==='admin')requireThat(typeof routing.adminBotPrincipalId==='string'&&this.db.prepare("SELECT 1 FROM memberships m JOIN principals p ON p.id=m.principal_id WHERE m.conversation_id=? AND m.principal_id=? AND m.active=1 AND p.kind='bot'").get(input.conversationId,routing.adminBotPrincipalId)&&this.isPublished(routing.adminBotPrincipalId),'INVALID_ADMIN')
-      }
+      const routing=input.routing===undefined?undefined:normalizeGroupRouting(this,input.conversationId,input.routing)
       requireThat(input.policies===undefined||Array.isArray(input.policies)&&input.policies.length<=this.limits.maxMembers,'INVALID_REQUEST')
       const policies=[],seen=new Set()
       for(const policy of input.policies??[]){
@@ -653,8 +649,8 @@ export class HubStore {
         policies.push(this.memberPolicy(caller,{...policy,conversationId:input.conversationId}))
       }
       requireThat(input.title!==undefined||routing!==undefined||policies.length>0,'INVALID_REQUEST')
-      this.db.prepare('UPDATE conversations SET title=?,routing_mode=?,admin_bot=?,version=version+1 WHERE id=?').run(input.title?.trim()??group.title,routing?.mode??group.routing_mode,
-        routing ? routing.mode==='admin'?routing.adminBotPrincipalId:null : group.admin_bot,input.conversationId)
+      this.db.prepare('UPDATE conversations SET title=?,version=version+1 WHERE id=?').run(input.title?.trim()??group.title,input.conversationId)
+      if (routing) writeGroupRouting(this,input.conversationId,routing)
       const changed=[]
       for(const {target,role,mode} of policies){
         this.db.prepare('UPDATE memberships SET role=?,manager=?,speaking_mode=? WHERE conversation_id=? AND principal_id=?').run(role,Number(role!=='member'),mode,input.conversationId,target.principal_id)
@@ -662,7 +658,7 @@ export class HubStore {
         changed.push({principalId:target.principal_id,role,speakingMode:mode})
       }
       this.event(input.conversationId,'group.settings.changed',{membershipVersion:group.version+1,...(input.title!==undefined?{title:input.title.trim()}:{}),
-        ...(routing?{routing:{mode:routing.mode,adminBotPrincipalId:routing.mode==='admin'?routing.adminBotPrincipalId:null}}:{}),...(policies.length?{policies:changed}:{})})
+        ...(routing?{routing}:{}),...(policies.length?{policies:changed}:{})})
       return {conversationId:input.conversationId,updated:true,membershipVersion:group.version+1}
     })
   }
@@ -687,7 +683,7 @@ export class HubStore {
       this.db.prepare('UPDATE memberships SET active=0 WHERE conversation_id=?').run(input.conversationId)
       this.db.prepare('UPDATE deliveries SET revoked=1 WHERE message_id IN (SELECT id FROM messages WHERE conversation_id=?) AND ai_accepted=0').run(input.conversationId)
       this.db.prepare('UPDATE invites SET active=0 WHERE conversation_id=?').run(input.conversationId)
-      this.db.prepare('UPDATE conversations SET version=version+1,routing_mode=?,admin_bot=NULL,closed=1 WHERE id=?').run('mentionsOnly',input.conversationId)
+      this.db.prepare("UPDATE conversations SET version=version+1,routing_mode=?,admin_bot=NULL,default_bots='[]',closed=1 WHERE id=?").run('mentionsOnly',input.conversationId)
       return {conversationId:input.conversationId,dissolved:true}
     })
   }
@@ -702,7 +698,8 @@ export class HubStore {
       for(const member of members){
         this.db.prepare('UPDATE memberships SET active=0 WHERE conversation_id=? AND principal_id=?').run(member.conversation_id,member.principal_id)
         this.db.prepare('UPDATE deliveries SET revoked=1 WHERE recipient_id=? AND membership_epoch=? AND ai_accepted=0').run(member.principal_id,member.epoch)
-        this.db.prepare('UPDATE conversations SET version=version+1,routing_mode=CASE WHEN admin_bot=? THEN ? ELSE routing_mode END,admin_bot=CASE WHEN admin_bot=? THEN NULL ELSE admin_bot END WHERE id=?').run(member.principal_id,'mentionsOnly',member.principal_id,member.conversation_id)
+        this.db.prepare('UPDATE conversations SET version=version+1 WHERE id=?').run(member.conversation_id)
+        removeGroupReceivers(this,member.conversation_id,[member.principal_id])
         this.db.prepare('UPDATE invites SET active=0 WHERE conversation_id=? AND (principal_id=? OR inviter_id=?)').run(member.conversation_id,member.principal_id,member.principal_id)
         this.event(member.conversation_id,'membership.removed',{principalId:member.principal_id,membershipEpoch:member.epoch,reason:'trustRevoked'})
       }
@@ -810,13 +807,14 @@ export class HubStore {
       const event={message,serverAcceptedAt:acceptedAt,payloadHash:digest,causality,conversationId:message.conversationId,conversationSeq:conversation.seq+1,eventId:message.messageId,type:'message'}
       const targets=author.kind==='bot'?message.activationTargets:message.mentions
       const explicitBots=targets.filter(mention=>members.some(member=>member.kind==='bot'&&member.principal_id===mention.principalId))
+      const defaultBots = new Set(defaultReceivingBots(conversation))
       const dispatchKey=cause?.message_id??parentMessageId??rootId
       let duplicate=false
       const deliveries=members.map(member=>{
         const mentioned=targets.some(mention=>mention.principalId===member.principal_id)
         const mayReceiveAi=conversation.kind==='dm'||['passive','active'].includes(member.speaking_mode)
         let ai=member.kind==='bot'&&member.published===1&&member.principal_id!==author.principalId&&mayReceiveAi&&(conversation.kind==='dm'?(author.kind==='human'||mentioned||(!cause&&!message.replyToMessageId)||this.resumesDmRequest(message,cause,member.principal_id,author.principalId)):
-          mentioned||(!explicitBots.length&&replyBot===member.principal_id)||(!replyBot&&!message.mentions.length&&author.kind==='human'&&conversation.routing_mode==='admin'&&conversation.admin_bot===member.principal_id))
+          mentioned||(!explicitBots.length&&replyBot===member.principal_id)||(!replyBot&&!message.mentions.length&&author.kind==='human'&&defaultBots.has(member.principal_id)))
         if(message.updateForMessageId)ai=false
         if(ai&&author.kind==='bot'&&this.db.prepare('SELECT 1 FROM bot_dispatches WHERE cause_key=? AND author_id=? AND target_id=?').get(dispatchKey,author.principalId,member.principal_id)){ai=false;duplicate=true}
         return {deliveryId:randomUUID(),messageId:message.messageId,conversationId:message.conversationId,recipientPrincipalId:member.principal_id,membershipEpoch:member.epoch,routingVersion:conversation.version,notify:member.kind==='human'&&member.principal_id!==author.principalId,ai:Boolean(ai),event}
@@ -851,14 +849,14 @@ export class HubStore {
   }
   memberships(auth) {
     this.check(auth)
-    const members=this.db.prepare('SELECT m.*,c.title,c.kind,c.version,c.routing_mode,c.admin_bot,c.owner_id,c.closed,c.seq FROM memberships m JOIN principals p ON p.id=m.principal_id JOIN conversations c ON c.id=m.conversation_id WHERE p.instance_id=?').all(auth.instanceId)
+    const members=this.db.prepare('SELECT m.*,c.title,c.kind,c.version,c.routing_mode,c.admin_bot,c.default_bots,c.owner_id,c.closed,c.seq FROM memberships m JOIN principals p ON p.id=m.principal_id JOIN conversations c ON c.id=m.conversation_id WHERE p.instance_id=?').all(auth.instanceId)
     const invites=this.db.prepare('SELECT i.id inviteId,i.conversation_id conversationId,i.principal_id principalId,p.name principalName,i.inviter_id inviterPrincipalId,source.name inviterName,source.instance_id inviterInstanceId,a.address inviterIpAddress,c.title FROM invites i JOIN principals p ON p.id=i.principal_id JOIN principals source ON source.id=i.inviter_id LEFT JOIN instance_addresses a ON a.instance_id=source.instance_id JOIN conversations c ON c.id=i.conversation_id WHERE p.instance_id=? AND i.active=1').all(auth.instanceId)
     const readableArchive = member => {
       if (!this.db.prepare('SELECT 1 FROM retired_memberships WHERE conversation_id=? AND principal_id=? AND epoch=?').get(member.conversation_id,member.principal_id,member.epoch)) return false
       try { this.dmPolicy?.(member.conversation_id); return true }
       catch (error) { if (error.code === 'CONTACT_REQUIRED') return false; throw error }
     }
-    return {memberships:members.map(m=>({conversationId:m.conversation_id,principalId:m.principal_id,membershipEpoch:m.epoch,joinSeq:m.join_seq,active:Boolean(m.active || readableArchive(m)),manager:Boolean(m.manager),role:m.role,speakingMode:m.speaking_mode,ownerPrincipalId:m.owner_id,dissolved:Boolean(m.closed),...(m.kind==='dm' && this.db.prepare('SELECT 1 FROM memberships dm JOIN principal_retirements r ON r.principal_id=dm.principal_id WHERE dm.conversation_id=?').get(m.conversation_id)?{retiredPeer:true}:{}),...(this.retirementOf(m.principal_id) ?? {}),title:m.title,kind:m.kind,membershipVersion:m.version,routingMode:m.routing_mode,adminBotPrincipalId:m.admin_bot,watermark:this.db.prepare('SELECT last_seq FROM retired_memberships WHERE conversation_id=? AND principal_id=? AND epoch=?').get(m.conversation_id,m.principal_id,m.epoch)?.last_seq ?? m.seq})),invites}
+    return {memberships:members.map(m=>({conversationId:m.conversation_id,principalId:m.principal_id,membershipEpoch:m.epoch,joinSeq:m.join_seq,active:Boolean(m.active || readableArchive(m)),manager:Boolean(m.manager),role:m.role,speakingMode:m.speaking_mode,ownerPrincipalId:m.owner_id,dissolved:Boolean(m.closed),...(m.kind==='dm' && this.db.prepare('SELECT 1 FROM memberships dm JOIN principal_retirements r ON r.principal_id=dm.principal_id WHERE dm.conversation_id=?').get(m.conversation_id)?{retiredPeer:true}:{}),...(this.retirementOf(m.principal_id) ?? {}),title:m.title,kind:m.kind,membershipVersion:m.version,routingMode:m.routing_mode,adminBotPrincipalId:m.admin_bot,defaultBotPrincipalIds:defaultReceivingBots(m),watermark:this.db.prepare('SELECT last_seq FROM retired_memberships WHERE conversation_id=? AND principal_id=? AND epoch=?').get(m.conversation_id,m.principal_id,m.epoch)?.last_seq ?? m.seq})),invites}
   }
   sync(auth,input) {
     const member=this.member(auth,input.conversationId,input.principalId,input.membershipEpoch,true)
@@ -892,8 +890,8 @@ export class HubStore {
       for(const id of input.checkPrincipalIds){identifier(id);requireThat(!this.retirementOf(id),'BOT_RETIRED')}
       for(const id of input.checkPrincipalIds)requireThat(this.db.prepare('SELECT 1 FROM memberships WHERE conversation_id=? AND principal_id=? AND active=1').get(input.conversationId,id),'UNKNOWN_MENTION')
     }
-    const conversation=this.db.prepare('SELECT title,kind,version,routing_mode,admin_bot,owner_id FROM conversations WHERE id=?').get(input.conversationId)
-    const result = {conversationId:input.conversationId,title:conversation.title,kind:conversation.kind,membershipVersion:conversation.version,routingMode:conversation.routing_mode,adminBotPrincipalId:conversation.admin_bot,ownerPrincipalId:conversation.owner_id,members:[],formerMembers:[]}
+    const conversation=this.db.prepare('SELECT title,kind,version,routing_mode,admin_bot,default_bots,owner_id FROM conversations WHERE id=?').get(input.conversationId)
+    const result = {conversationId:input.conversationId,title:conversation.title,kind:conversation.kind,membershipVersion:conversation.version,routingMode:conversation.routing_mode,adminBotPrincipalId:conversation.admin_bot,defaultBotPrincipalIds:defaultReceivingBots(conversation),ownerPrincipalId:conversation.owner_id,members:[],formerMembers:[]}
     const maxBytes = this.limits.maxEnvelopeBytes - responseBytes(result) + responseBytes([])
     result.members=this.participantProfiles(this.db.prepare('SELECT p.id principalId,p.kind,p.name displayName,p.instance_id homeInstanceId,i.label instanceLabel,m.manager,m.role,m.speaking_mode speakingMode FROM memberships m JOIN principals p ON p.id=m.principal_id JOIN instances i ON i.id=p.instance_id WHERE m.conversation_id=? AND (m.active=1 OR EXISTS(SELECT 1 FROM principal_retirements r WHERE r.principal_id=p.id)) AND m.join_seq<=? ORDER BY p.id').all(input.conversationId,reader.read_until ?? Number.MAX_SAFE_INTEGER).map(person=>({...person,published:this.isPublished(person.principalId),avatar:this.avatarOf(person.principalId)})), { maxBytes })
     if(conversation.kind==='group'){result.formerMembers=result.members.filter(person=>person.retired);result.members=result.members.filter(person=>!person.retired)}
