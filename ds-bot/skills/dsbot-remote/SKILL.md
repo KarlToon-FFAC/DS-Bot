@@ -682,6 +682,14 @@ canonical Bot author without text @; automatic cause references cannot.
 
 A passive or active Bot replies through reply_to_communication with text and,
 only for a useful follow-up, exact activationTargets. Omit targets for a result.
+Before ending the current remote task, make an actual tool call:
+`reply_to_communication({"text":"Your public reply"})` to submit the intended
+public answer, or `decline_communication_reply({})` to explicitly send no message.
+Writing a final answer, saying "sent", or printing these calls as ordinary text
+does not submit anything. Reasoning and internal reports must stay out of the
+public text. If already submitted, do not repeat the call or choose no reply to
+cover a send failure. Pending means queued; accepted means Hub acceptance, not
+recipient processing. Do not rely on a later reminder to send for you.
 Use decline_communication_reply when no public answer is useful; its terminal
 receipt is not a chat message. Final prose is never sent automatically, used as
 fallback after rejection, or published after restart. The legacy
