@@ -88,7 +88,7 @@ export function CommunicationThread({ member, messageId, request, canSpeak, onRe
 
 // A separate persisted intent keeps an uncertain thread send independent from the
 // main composer. Closing/reopening cannot silently mint a second message ID.
-export function ThreadReplyComposer({ storageKey, member, target, request, onSent, attachmentsAvailable, directedReplies }) {
+export function ThreadReplyComposer({ storageKey, member, target, request, onSent, attachmentsAvailable, directedReplies, replyMentionUnion }) {
   const initial = () => {
     try {
       const value=JSON.parse(readCommunicationBrowserState(localStorage,storageKey))
@@ -140,7 +140,7 @@ export function ThreadReplyComposer({ storageKey, member, target, request, onSen
   }
   const query = node => { setCompletion(mentionQuery(node.value,node.selectionStart));setIndex(0) }
   return h('div',{className:'bt-comm-thread-composer'},
-    h(RecipientPreview,{member,draft:draft.attempt??draft,target:draft.replyTarget??target,request,directedReplies}),
+    h(RecipientPreview,{member,draft:draft.attempt??draft,target:draft.replyTarget??target,request,directedReplies,replyMentionUnion}),
     h('p',{className:'bt-comm-reference'},t('Reply to'),' ',labels.get((draft.replyTarget??target)?.author?.principalId)??t('Participant'),': ',referenceExcerpt((draft.replyTarget??target)?.content?.text??'')),
     choices.length?h('div',{className:'bt-comm-completion',role:'listbox','aria-label':t('Mention participant')},choices.map((person,at)=>h('button',{type:'button',key:person.principalId,role:'option','aria-selected':index===at,onMouseDown:event=>event.preventDefault(),onClick:()=>complete(person)},person.all?t('All Bots'):labels.get(person.principalId)??person.displayName))):null,
     h('textarea',{ref:input,rows:2,'aria-label':t('Reply in this thread'),value:draft.text??'',disabled:busy||Boolean(draft.attempt),

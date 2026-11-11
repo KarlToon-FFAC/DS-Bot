@@ -22005,12 +22005,12 @@ function listedOpener({ list, open, refresh, current }) {
 }
 
 // ../communication-hub/src/human-routing.js
-function humanReceivingBots({ kind, members, mentions = [], replyToMessageId, replyAuthorId, defaultBotIds = [], directedReplies = true }) {
+function humanReceivingBots({ kind, members, mentions = [], replyToMessageId, replyAuthorId, defaultBotIds = [], directedReplies = true, replyMentionUnion = true }) {
   const ids = new Set(mentions.map((value) => typeof value === "string" ? value : value.principalId));
   const hasBotMention = members.some((person) => person.kind === "bot" && ids.has(person.principalId));
   return members.flatMap((person) => {
     if (person.kind !== "bot" || person.retired || person.published === false || person.published === 0 || kind !== "dm" && !["active", "passive"].includes(person.speakingMode)) return [];
-    const reason = kind === "dm" ? "Direct message" : ids.has(person.principalId) ? "Mention" : !(directedReplies ? ids.size : hasBotMention) && replyAuthorId === person.principalId ? "Reply target" : !(directedReplies ? replyToMessageId : replyAuthorId) && !ids.size && defaultBotIds.includes(person.principalId) ? "Default receiver" : null;
+    const reason = kind === "dm" ? "Direct message" : ids.has(person.principalId) ? "Mention" : (replyMentionUnion || !(directedReplies ? ids.size : hasBotMention)) && replyAuthorId === person.principalId ? "Reply target" : !(directedReplies ? replyToMessageId : replyAuthorId) && !ids.size && defaultBotIds.includes(person.principalId) ? "Default receiver" : null;
     return reason ? [{ ...person, receivingReason: reason }] : [];
   });
 }
@@ -22515,7 +22515,7 @@ function HumanProfile({ human, request, operation, onSaved, convertImage = avata
 
 // src/client/communication-recipient-preview.js
 var import_react57 = require("react");
-function previewRecipients(member, draft, target, directedReplies) {
+function previewRecipients(member, draft, target, directedReplies, replyMentionUnion = false) {
   const info = member?.info;
   if (!info?.members || info.membershipVersion !== member.membershipVersion) return { unavailable: true, bots: [] };
   const members = info.members;
@@ -22525,13 +22525,13 @@ function previewRecipients(member, draft, target, directedReplies) {
     if (replyToMessageId && !target?.author) return { unavailable: true, bots: [] };
     const replyAuthorId = members.some((person) => person.principalId === target?.author?.principalId && person.kind === "bot") ? target.author.principalId : void 0;
     const defaultBotIds = info.routingMode === "admin" ? info.defaultBotPrincipalIds ?? (info.adminBotPrincipalId ? [info.adminBotPrincipalId] : []) : [];
-    return { bots: humanReceivingBots({ kind: member.kind, members, mentions, replyToMessageId, replyAuthorId, defaultBotIds, directedReplies }) };
+    return { bots: humanReceivingBots({ kind: member.kind, members, mentions, replyToMessageId, replyAuthorId, defaultBotIds, directedReplies, replyMentionUnion }) };
   } catch (error) {
     return { error: error.code, bots: [] };
   }
 }
-function RecipientPreview({ member, draft, target, request, directedReplies }) {
-  const preview = previewRecipients(member, draft, target, directedReplies);
+function RecipientPreview({ member, draft, target, request, directedReplies, replyMentionUnion }) {
+  const preview = previewRecipients(member, draft, target, directedReplies, replyMentionUnion);
   const labels = contactLabels(member?.info?.members ?? []);
   return (0, import_react57.createElement)(
     "div",
@@ -24506,7 +24506,7 @@ function CommunicationThread({ member, messageId, request, canSpeak, onReply, on
     } }, t("Load more replies")) : null
   );
 }
-function ThreadReplyComposer({ storageKey, member, target, request, onSent, attachmentsAvailable, directedReplies }) {
+function ThreadReplyComposer({ storageKey, member, target, request, onSent, attachmentsAvailable, directedReplies, replyMentionUnion }) {
   const initial = () => {
     try {
       const value = JSON.parse(readCommunicationBrowserState(localStorage, storageKey));
@@ -24614,7 +24614,7 @@ function ThreadReplyComposer({ storageKey, member, target, request, onSent, atta
   return (0, import_react74.createElement)(
     "div",
     { className: "bt-comm-thread-composer" },
-    (0, import_react74.createElement)(RecipientPreview, { member, draft: draft.attempt ?? draft, target: draft.replyTarget ?? target, request, directedReplies }),
+    (0, import_react74.createElement)(RecipientPreview, { member, draft: draft.attempt ?? draft, target: draft.replyTarget ?? target, request, directedReplies, replyMentionUnion }),
     (0, import_react74.createElement)("p", { className: "bt-comm-reference" }, t("Reply to"), " ", labels.get((draft.replyTarget ?? target)?.author?.principalId) ?? t("Participant"), ": ", referenceExcerpt((draft.replyTarget ?? target)?.content?.text ?? "")),
     choices.length ? (0, import_react74.createElement)("div", { className: "bt-comm-completion", role: "listbox", "aria-label": t("Mention participant") }, choices.map((person, at) => (0, import_react74.createElement)("button", { type: "button", key: person.principalId, role: "option", "aria-selected": index === at, onMouseDown: (event) => event.preventDefault(), onClick: () => complete(person) }, person.all ? t("All Bots") : labels.get(person.principalId) ?? person.displayName))) : null,
     (0, import_react74.createElement)("textarea", {
@@ -26265,7 +26265,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
           onInspect: inspect,
           chronological: true,
           onReply: setThreadReplyTarget
-        }), canSpeak ? (0, import_react76.createElement)(ThreadReplyComposer, { key: `composer:${contextKey.current}:${threadMessageId}`, storageKey: `ds-bot:communication:thread:${contextKey.current}:${threadMessageId}`, member, target: threadReplyTarget, request, directedReplies: state.directedGroupRepliesAvailable === true, onSent: refresh, attachmentsAvailable: state.attachmentsAvailable }) : null) : null : activePanel === "activity" ? (0, import_react76.createElement)(CommunicationActivity, {
+        }), canSpeak ? (0, import_react76.createElement)(ThreadReplyComposer, { key: `composer:${contextKey.current}:${threadMessageId}`, storageKey: `ds-bot:communication:thread:${contextKey.current}:${threadMessageId}`, member, target: threadReplyTarget, request, replyMentionUnion: state.replyMentionUnionAvailable === true, directedReplies: state.directedGroupRepliesAvailable === true, onSent: refresh, attachmentsAvailable: state.attachmentsAvailable }) : null) : null : activePanel === "activity" ? (0, import_react76.createElement)(CommunicationActivity, {
           state,
           member,
           events,
@@ -26455,7 +26455,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
       canSpeak ? (0, import_react76.createElement)(
         "footer",
         null,
-        (0, import_react76.createElement)(RecipientPreview, { member, draft: attempts[key2] ?? draft, target: reply, request, directedReplies: state.directedGroupRepliesAvailable === true }),
+        (0, import_react76.createElement)(RecipientPreview, { member, draft: attempts[key2] ?? draft, target: reply, request, replyMentionUnion: state.replyMentionUnionAvailable === true, directedReplies: state.directedGroupRepliesAvailable === true }),
         reply ? (0, import_react76.createElement)("div", { className: "bt-comm-reference" }, `${t("Reply to")} ${reply.content.text.slice(0, 120)}`, btn("Cancel reply", () => setReply(null))) : null,
         (0, import_react76.createElement)("div", { className: "bt-comm-mentions" }, (draft.mentions ?? []).map((id) => btn(`@${labels.get(id) ?? id} ×`, () => changeDraft({ mentions: draft.mentions.filter((item) => item !== id), manualMentions: (draft.manualMentions ?? []).filter((item) => item !== id) }), { key: id, "data-manual-mention": (draft.manualMentions ?? []).includes(id), "aria-label": `${t("Remove mention")}: ${labels.get(id) ?? id}` }))),
         suggestions.length ? (0, import_react76.createElement)("div", { className: "bt-comm-completion", role: "listbox", id: "bt-comm-completion", "aria-label": t("Mention participant") }, suggestions.map((person, index) => (0, import_react76.createElement)("button", {

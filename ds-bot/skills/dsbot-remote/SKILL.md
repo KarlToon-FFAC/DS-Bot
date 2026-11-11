@@ -393,8 +393,11 @@ activationTargets exact IDs or allBots=true. The explicit mentions tool argument
 is a compatibility alias; names in Bot body text are display-only. An explicit
 tool replyToMessageId may resolve its current Bot author through authorized
 canonical history. Human GUI/CLI typed @ and direct replies keep their routing. With
-`directed-group-replies`, explicit mentions override the reply author, including
-Human-only mentions; an unmentioned reply to a Human activates no Bot. Only an
+`reply-mention-union`, replying to A implicitly selects A together with any
+explicitly mentioned Bots, deduplicated. Human-only mentions do not remove A.
+An unmentioned reply to a Human activates no Bot. All activated Bots receive
+the exact quoted message as authorized context, even outside the recent-history
+window; unavailable references never widen their history permissions. Only an
 unmentioned new root uses the default receiving list. Both GUI composers show
 the selected Bot avatars and selection reasons; this is activation, not privacy
 from other members who can still read the group history.

@@ -1842,7 +1842,7 @@ test('both composers show actual Bot avatars for defaults, typed mentions and di
  const bots=['Alpha','Beta'].map(name=>({principalId:'bot:b:'+name,displayName:name,kind:'bot',published:true,speakingMode:'passive'}))
  const member={...membership,info:{...membership.info,membershipVersion:1,routingMode:'admin',defaultBotPrincipalIds:bots.map(bot=>bot.principalId),members:[...membership.info.members,...bots]}}
  const event={type:'message',conversationSeq:1,serverAcceptedAt:'2026-11-11T00:00:00Z',message:{messageId:'bot-result',author:bots[0],content:{text:'Progress report'},mentions:[],replyToMessageId:null}}
- await pane({snapshot:{...state(),directedGroupRepliesAvailable:true,conversations:[member]},history:[event],handle:async body=>body.endpoint==='thread'?{conversationId:'group',membershipEpoch:'epoch',messageId:'bot-result',rootMessageId:'bot-result',events:[event],watermark:1}:{}},async({doc,click,edit,calls})=>{
+ await pane({snapshot:{...state(),directedGroupRepliesAvailable:true,replyMentionUnionAvailable:true,conversations:[member]},history:[event],handle:async body=>body.endpoint==='thread'?{conversationId:'group',membershipEpoch:'epoch',messageId:'bot-result',rootMessageId:'bot-result',events:[event],watermark:1}:{}},async({doc,click,edit,calls})=>{
   await click('Shared group')
   const ids=selector=>[...doc.querySelectorAll(selector+' [data-recipient-id]')].map(node=>node.dataset.recipientId)
   assert.deepEqual(ids('footer'),bots.map(bot=>bot.principalId))
@@ -1850,11 +1850,10 @@ test('both composers show actual Bot avatars for defaults, typed mentions and di
   assert.deepEqual(ids('footer'),[bots[1].principalId])
   await click('Reply')
   assert.deepEqual(ids('.bt-comm-thread-composer'),[bots[0].principalId])
-  await edit(doc.querySelector('.bt-comm-thread-composer textarea'),'@Beta instead')
-  assert.deepEqual(ids('.bt-comm-thread-composer'),[bots[1].principalId])
+  await edit(doc.querySelector('.bt-comm-thread-composer textarea'),'@Beta too')
+  assert.deepEqual(ids('.bt-comm-thread-composer'),bots.map(bot=>bot.principalId))
   await edit(doc.querySelector('.bt-comm-thread-composer textarea'),'@Owner human only')
-  assert.deepEqual(ids('.bt-comm-thread-composer'),[])
-  assert.match(doc.querySelector('.bt-comm-thread-composer .bt-comm-recipient-preview').textContent,/No Bot will be activated/)
+  assert.deepEqual(ids('.bt-comm-thread-composer'),[bots[0].principalId])
   assert.equal(calls.some(call=>call.endpoint==='send'),false)
  })
 })

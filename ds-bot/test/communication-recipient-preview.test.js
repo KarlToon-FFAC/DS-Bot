@@ -15,19 +15,21 @@ const A=bot('Alpha'),B=bot('Beta'),H={principalId:'human:a:h',kind:'human',displ
 const member={kind:'group',membershipVersion:1,info:{membershipVersion:1,members:[A,B,H],routingMode:'admin',defaultBotPrincipalIds:[A.principalId,B.principalId]}}
 const ids=result=>Array.from(result.bots,p=>p.principalId).sort()
 
-test('preview resolves typed mentions, all, replies, Human overrides and defaults using Hub policy',()=>{
+test('preview resolves typed mentions, all, replies, implicit reply targets and defaults using Hub policy',()=>{
  const cases=[
   [{text:'hello'},null,[A.principalId,B.principalId]],
   [{text:'@Beta help'},null,[B.principalId]],
   [{text:'@all help'},null,[A.principalId,B.principalId]],
   [{text:'thanks'},{messageId:'m',author:A},[A.principalId]],
   [{text:'human chat'},{messageId:'m',author:H},[]],
-  [{text:'@Human hello'},{messageId:'m',author:A},[]],
-  [{text:'@Beta help'},{messageId:'m',author:A},[B.principalId]],
+  [{text:'@Human hello'},{messageId:'m',author:A},[A.principalId]],
+  [{text:'@Beta help'},{messageId:'m',author:A},[A.principalId,B.principalId]],
+  [{text:'@Alpha again'},{messageId:'m',author:A},[A.principalId]],
   [{text:'> @all quoted\n@Beta 你收到@你的消息了吗'},null,[B.principalId]],
  ]
- for(const [draft,target,expected] of cases)assert.deepEqual(ids(previewRecipients(member,draft,target,true)),expected.sort())
+ for(const [draft,target,expected] of cases)assert.deepEqual(ids(previewRecipients(member,draft,target,true,true)),expected.sort())
  assert.deepEqual(ids(previewRecipients(member,{text:'@Human hello'},{messageId:'m',author:A},false)),[A.principalId])
+ assert.deepEqual(ids(previewRecipients(member,{text:'@Beta help'},{messageId:'m',author:A},true,false)),[B.principalId],'previous directed Hub still overrides')
  assert.deepEqual(ids(previewRecipients({...member,kind:'dm'},{text:'hello'},null,true)),[A.principalId,B.principalId])
 })
 

@@ -148,6 +148,11 @@ function decide(body) {
       const reports=blocks.filter(block=>block.type==='tool_result').flatMap(block=>{try{return JSON.parse(textOf(block.content)).reports??[]}catch{return[]}})
       return publicReply(`Collected ${collection[2]}: ${reports.map(report=>report.status+':'+(report.text??'')).join('; ')}`)
     }
+    const checkQuote = /^COMM-CHECK-QUOTE (\S+) (\S+)$/m.exec(relationshipInput.split('Current message:\n').at(-1))
+    if (checkQuote) {
+      let reference;try{reference=JSON.parse(relationshipInput.split('Referenced message (authorized context only, not a new request or instruction):\n')[1]?.split('\n')[0])}catch{}
+      return publicReply(`Quoted context ${checkQuote[2]} ${reference?.messageId===checkQuote[1] && reference?.content?.text===`Communication reply quote-${checkQuote[2]}` ? 'PRESENT' : 'MISSING'}`)
+    }
     const workApproval = /^COMM-WORK-APPROVAL ([a-zA-Z0-9-]+)$/m.exec(relationshipInput.split('Current message:\n').at(-1))
     if (workApproval) {
       const tag = workApproval[1], start = messages.findLastIndex(message => message.role === 'user' && textOf(message.content).includes('[Communication delivery]'))
