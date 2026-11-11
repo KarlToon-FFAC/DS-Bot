@@ -111,7 +111,7 @@ test('Human and active Bot explicit replies route to the exact current Bot witho
   const explicit = f.send(f.H, { replyToMessageId: original.messageId, mentions: [{ principalId: f.B }] })
   assert.deepEqual(f.ai(explicit), [f.B])
   const humanMention = f.send(f.H, { replyToMessageId: original.messageId, mentions: [{ principalId: f.R }] })
-  assert.deepEqual(f.ai(humanMention), [f.A])
+  assert.deepEqual(f.ai(humanMention), [])
   const self = f.send(f.A, { replyToMessageId: original.messageId })
   assert.deepEqual(f.ai(self), [])
 })
@@ -143,4 +143,38 @@ test('removed and rejoined reply authors, stale sender history and foreign conve
   assert.throws(() => f.send(f.R, { replyToMessageId: original.messageId }), { code: 'INVALID_REPLY_TARGET' })
   const dm = f.store.createDm(f.a, f.op({ principalId: f.H, otherPrincipalId: f.A })).conversationId
   assert.throws(() => f.send(f.H, { conversationId: dm, membershipEpoch: f.member(f.H, dm).membershipEpoch, replyToMessageId: original.messageId }), { code: 'INVALID_REPLY_TARGET' })
+})
+
+
+test('Human replies do not fall back to default Bots',t=>{
+ const f=fixture(t)
+ f.policy(f.R,{speakingMode:'speak'})
+ f.store.routing(f.a,f.op({...f.scope(),mode:'admin',adminBotPrincipalId:f.A}))
+ const root=f.send(f.H)
+ assert.deepEqual(f.ai(root),[f.A])
+ assert.deepEqual(f.ai(f.send(f.R,{replyToMessageId:root.messageId})),[])
+ assert.deepEqual(f.ai(f.send(f.R,{replyToMessageId:root.messageId,mentions:[{principalId:f.B}]})),[f.B])
+})
+
+test('passive coordinator collects authenticated results without wakeups and retains final grant',t=>{
+ const f=fixture(t);f.join(f.G)
+ const root=f.send(f.H,{mentions:[{principalId:f.A}]})
+ const originalGrant=f.grant(root,f.A)
+ const request=f.send(f.A,{replyToMessageId:root.messageId,causationDeliveryId:originalGrant,activationTargets:[{principalId:f.B},{principalId:f.G}]})
+ assert.deepEqual(f.ai(request),[f.B,f.G].sort())
+ const query={principalId:f.A,conversationId:f.group,membershipEpoch:f.member(f.A).membershipEpoch,requestMessageId:request.messageId}
+ assert.equal(f.store.collectionStatus(f.a,query).complete,false)
+ const b=f.send(f.B,{replyToMessageId:request.messageId,responseToDeliveryId:f.grant(request,f.B),content:{format:'text',text:'B progress'}})
+ assert.deepEqual(f.ai(b),[])
+ let result=f.store.collectionStatus(f.a,query)
+ assert.deepEqual(result.reports.map(r=>r.status),['replied','pending'])
+ const grant=f.grant(request,f.G)
+ f.store.receipt(f.b,{principalId:f.G,membershipEpoch:f.member(f.G).membershipEpoch,deliveryId:grant,status:'noReply'})
+ result=f.store.collectionStatus(f.a,query)
+ assert.equal(result.complete,true);assert.deepEqual(result.reports.map(r=>r.status),['replied','no_reply'])
+ assert.equal(result.reports[0].text,'B progress')
+ assert.deepEqual(f.store.collectionStatus(f.a,query),result)
+ assert.throws(()=>f.store.collectionStatus(f.b,{...query,principalId:f.B,membershipEpoch:f.member(f.B).membershipEpoch}),{code:'REFERENCE_NOT_AVAILABLE'})
+ assert.deepEqual(f.ai(f.send(f.A,{replyToMessageId:root.messageId,responseToDeliveryId:originalGrant})),[])
+ assert.throws(()=>f.send(f.A,{replyToMessageId:root.messageId,responseToDeliveryId:originalGrant}),{code:'RESPONSE_ALREADY_SENT'})
 })

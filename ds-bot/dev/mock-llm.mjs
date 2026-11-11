@@ -134,7 +134,17 @@ function decide(body) {
     if (remote && communicationResults && previous?.content?.some?.(block => block.type === 'tool_use' && ['reply_to_communication','decline_communication_reply'].includes(block.name))) return [text('LOCAL_CLOSING_CANARY: private execution note')]
     const publicReply = value => remote ? [tool('reply_to_communication',{text:value})] : [text(value)]
     const current = textOf(last?.content)
+    if (remote && current.includes('[Local completion check')) {
+      const draftId = textOf(previous?.content).startsWith('Draft result ') && /reply_to_communication\(\{"draftId":"([^"]+)"\}\)/.exec(current)?.[1]
+      return [tool(draftId ? 'reply_to_communication' : 'decline_communication_reply',draftId ? {draftId} : {})]
+    }
     const relationshipInput = textOf(messages.findLast(message => message.role === 'user' && textOf(message.content).includes('[Communication delivery]'))?.content)
+    const collection = /^COMM-COLLECT (\S+) (\S+)$/m.exec(relationshipInput.split('Current message:\n').at(-1))
+    if (collection) {
+      if (!communicationResults) return [tool('collect_communication_progress',{activationTargets:collection[1].split(','),text:`COMM-ECHO ${collection[2]}-progress`,waitSeconds:30})]
+      const reports=blocks.filter(block=>block.type==='tool_result').flatMap(block=>{try{return JSON.parse(textOf(block.content)).reports??[]}catch{return[]}})
+      return publicReply(`Collected ${collection[2]}: ${reports.map(report=>report.status+':'+(report.text??'')).join('; ')}`)
+    }
     const workApproval = /^COMM-WORK-APPROVAL ([a-zA-Z0-9-]+)$/m.exec(relationshipInput.split('Current message:\n').at(-1))
     if (workApproval) {
       const tag = workApproval[1], start = messages.findLastIndex(message => message.role === 'user' && textOf(message.content).includes('[Communication delivery]'))
@@ -215,6 +225,8 @@ function decide(body) {
     if (!communicationResults && command === 'COMM-LIST') return [tool('list_communication_conversations', {})]
     if (/^COMM-MODEL-ERROR (\S+)$/.test(command)) return 'fail'
     const echo = /^COMM-ECHO ([^\n]+)$/.exec(command)
+    const missingReply = /^COMM-MISSING-REPLY (\S+)$/.exec(command)
+    if (!communicationResults && missingReply) return [text(`Draft result ${missingReply[1]}`)]
       // Echoed mentions are quoted data; intentional delegation uses COMM-COLLAB.
       if (!communicationResults && echo) return [tool('reply_to_communication',{text:`${echo[1].includes('@') ? '> ' : ''}Communication reply ${echo[1]}`})]
     const delayed = /^COMM-DELAY-ECHO (\d+) ([^\n]+)$/.exec(command)

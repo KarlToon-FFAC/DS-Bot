@@ -52,7 +52,7 @@ test('Human to local A to remote B back to A preserves causal identity; passive 
   const b = f.send(f.B, { responseToDeliveryId: bGrant, replyToMessageId: a.messageId, mentions: [{ principalId: f.A }] })
   assert.deepEqual(f.ai(b), [f.A])
   assert.deepEqual(b.causality, { rootMessageId: human.messageId, parentMessageId: a.messageId, depth: 2 })
-  assert.throws(() => f.send(f.A, { causationDeliveryId: aGrant, mentions: [{ principalId: f.B }] }), { code: 'PASSIVE_REPLY_REQUIRED' })
+  assert.throws(() => f.send(f.A, { causationDeliveryId: aGrant, mentions: [{ principalId: f.B }] }), { code: 'RESPONSE_ALREADY_SENT' })
   assert.throws(() => f.send(f.A, { responseToDeliveryId: aGrant, replyToMessageId: human.messageId }), { code: 'RESPONSE_ALREADY_SENT' })
 })
 

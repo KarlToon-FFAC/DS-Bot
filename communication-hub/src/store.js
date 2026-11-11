@@ -1,3 +1,4 @@
+import { humanReceivingBots } from './human-routing.js'
 import { COMMUNICATION_VERSION } from './version.js'
 import { retireBot } from './bot-retirement.js'
 import { defaultReceivingBots, normalizeGroupRouting, writeGroupRouting, removeGroupReceivers } from './group-routing.js'
@@ -705,6 +706,29 @@ export class HubStore {
       }
       return {revoked:true}
   }
+  collectionStatus(auth, input) {
+    const actor=this.principal(auth,input.principalId)
+    const member=this.member(auth,input.conversationId,actor.principalId,input.membershipEpoch)
+    const row=this.db.prepare('SELECT * FROM messages WHERE id=?').get(input.requestMessageId)
+    requireThat(row && row.conversation_id===input.conversationId && row.author_id===actor.principalId && row.seq>=member.join_seq,'REFERENCE_NOT_AVAILABLE')
+    const request=JSON.parse(row.body)
+    requireThat(request.membershipEpoch===member.epoch && actor.kind==='bot','MEMBERSHIP_REVOKED')
+    const targets=request.activationTargets??[]
+    requireThat(targets.length>0,'INVALID_REQUEST')
+    const reports=targets.map(({principalId})=>{
+      const delivery=this.db.prepare('SELECT * FROM deliveries WHERE message_id=? AND recipient_id=?').get(row.id,principalId)
+      const response=delivery && this.db.prepare('SELECT m.* FROM responses r JOIN messages m ON m.id=r.message_id WHERE r.delivery_id=?').get(delivery.id)
+      if(response){
+        const message=JSON.parse(response.body), text=message.content.text, limit=Math.floor(8000/targets.length)
+        return {principalId,status:'replied',messageId:response.id,text:text.slice(0,limit),truncated:text.length>limit}
+      }
+      const current=this.db.prepare('SELECT active,epoch FROM memberships WHERE conversation_id=? AND principal_id=?').get(input.conversationId,principalId)
+      if(!delivery?.ai || delivery.revoked || !this.isPublished(principalId) || !current?.active || current.epoch!==delivery.membership_epoch)return {principalId,status:'unavailable'}
+      if(this.db.prepare('SELECT 1 FROM events WHERE id=?').get('bot-work-completed:'+delivery.id))return {principalId,status:'no_reply'}
+      return {principalId,status:'pending'}
+    })
+    return {requestMessageId:row.id,conversationId:input.conversationId,complete:reports.every(report=>report.status!=='pending'),reports}
+  }
   resumesDmRequest(message, cause, recipientId, responderId) {
     if (!message.responseToDeliveryId || !cause) return false
     const parent = this.db.prepare('SELECT author_id,body FROM messages WHERE id=?').get(cause.message_id)
@@ -731,7 +755,7 @@ export class HubStore {
       if(conversation.kind==='group'){
         requireThat(['owner','admin','member'].includes(sender.role),'FORBIDDEN')
         requireThat(author.kind==='human'?sender.speaking_mode==='speak':['passive','active'].includes(sender.speaking_mode),'SPEAKING_FORBIDDEN')
-        requireThat(author.kind!=='bot'||sender.speaking_mode!=='passive'||message.responseToDeliveryId,'PASSIVE_REPLY_REQUIRED')
+        requireThat(author.kind!=='bot'||sender.speaking_mode!=='passive'||message.responseToDeliveryId||(message.causationDeliveryId&&message.activationTargets?.length),'PASSIVE_REPLY_REQUIRED')
       }
       let cause, updateParent
       if(message.responseToDeliveryId || message.causationDeliveryId){
@@ -741,7 +765,7 @@ export class HubStore {
           &&delivery.membership_epoch===sender.epoch&&delivery.conversation_id===message.conversationId
           &&(!message.responseToDeliveryId || delivery.message_id===message.replyToMessageId),message.responseToDeliveryId?'INVALID_RESPONSE_GRANT':'INVALID_CAUSATION_GRANT')
         requireThat(!this.db.prepare('SELECT 1 FROM events WHERE id=?').get('bot-work-completed:'+delivery.id),'RESPONSE_ALREADY_SENT')
-        if(message.responseToDeliveryId)requireThat(!this.db.prepare('SELECT 1 FROM responses WHERE delivery_id=?').get(delivery.id),'RESPONSE_ALREADY_SENT')
+        if(message.responseToDeliveryId || sender.speaking_mode==='passive')requireThat(!this.db.prepare('SELECT 1 FROM responses WHERE delivery_id=?').get(delivery.id),'RESPONSE_ALREADY_SENT')
         cause=delivery
       }
       if (message.updateForMessageId) {
@@ -806,15 +830,16 @@ export class HubStore {
       const acceptedAt=new Date().toISOString()
       const event={message,serverAcceptedAt:acceptedAt,payloadHash:digest,causality,conversationId:message.conversationId,conversationSeq:conversation.seq+1,eventId:message.messageId,type:'message'}
       const targets=author.kind==='bot'?message.activationTargets:message.mentions
-      const explicitBots=targets.filter(mention=>members.some(member=>member.kind==='bot'&&member.principal_id===mention.principalId))
-      const defaultBots = new Set(defaultReceivingBots(conversation))
+      const humanTargets = new Set(author.kind === 'human' ? humanReceivingBots({kind:conversation.kind,
+        members:members.map(member=>({...member,principalId:member.principal_id,speakingMode:member.speaking_mode})),
+        mentions:message.mentions,replyToMessageId:message.replyToMessageId,replyAuthorId:replyBot,defaultBotIds:defaultReceivingBots(conversation)}).map(person=>person.principalId) : [])
       const dispatchKey=cause?.message_id??parentMessageId??rootId
       let duplicate=false
       const deliveries=members.map(member=>{
         const mentioned=targets.some(mention=>mention.principalId===member.principal_id)
         const mayReceiveAi=conversation.kind==='dm'||['passive','active'].includes(member.speaking_mode)
-        let ai=member.kind==='bot'&&member.published===1&&member.principal_id!==author.principalId&&mayReceiveAi&&(conversation.kind==='dm'?(author.kind==='human'||mentioned||(!cause&&!message.replyToMessageId)||this.resumesDmRequest(message,cause,member.principal_id,author.principalId)):
-          mentioned||(!explicitBots.length&&replyBot===member.principal_id)||(!replyBot&&!message.mentions.length&&author.kind==='human'&&defaultBots.has(member.principal_id)))
+        let ai=author.kind==='human'?humanTargets.has(member.principal_id):member.kind==='bot'&&member.published===1&&member.principal_id!==author.principalId&&mayReceiveAi&&(conversation.kind==='dm'?(mentioned||(!cause&&!message.replyToMessageId)||this.resumesDmRequest(message,cause,member.principal_id,author.principalId)):
+          mentioned)
         if(message.updateForMessageId)ai=false
         if(ai&&author.kind==='bot'&&this.db.prepare('SELECT 1 FROM bot_dispatches WHERE cause_key=? AND author_id=? AND target_id=?').get(dispatchKey,author.principalId,member.principal_id)){ai=false;duplicate=true}
         return {deliveryId:randomUUID(),messageId:message.messageId,conversationId:message.conversationId,recipientPrincipalId:member.principal_id,membershipEpoch:member.epoch,routingVersion:conversation.version,notify:member.kind==='human'&&member.principal_id!==author.principalId,ai:Boolean(ai),event}

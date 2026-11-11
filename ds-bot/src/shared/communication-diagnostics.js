@@ -1,4 +1,8 @@
 export const communicationDescriptions = {
+  REPLY_DECISION_REQUIRED: 'The Bot ended without submitting a reply decision. Its text was not sent. Ask it to submit a public reply or explicitly choose no reply.',
+  REPLY_SEND_FAILED: 'The Bot tried to reply, but sending failed. Check the failed send; its private closing text was not forwarded.',
+  COMMUNICATION_DRAFT_UNAVAILABLE: 'This draft does not belong to the current reply or is no longer available. Submit new public text instead.',
+
   CONTACT_CODE_UNAVAILABLE: 'This user code cannot receive a contact request. Ask the contact for their current code.',
   CONTACT_CONSENT_UPGRADE_REQUIRED: 'Update and restart the Hub to validate user codes and repair contact Bot sharing.',
   COMMUNICATION_WORKSPACE_CHANGED: 'The Bot working directory changed. Let its current task settle, then retry in a new communication Session.',

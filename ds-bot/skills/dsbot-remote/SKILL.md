@@ -392,7 +392,12 @@ Active Bots explicitly address current member Bots using send_contact_message
 activationTargets exact IDs or allBots=true. The explicit mentions tool argument
 is a compatibility alias; names in Bot body text are display-only. An explicit
 tool replyToMessageId may resolve its current Bot author through authorized
-canonical history. Human GUI/CLI typed @ and direct replies keep their routing.
+canonical history. Human GUI/CLI typed @ and direct replies keep their routing. With
+`directed-group-replies`, explicit mentions override the reply author, including
+Human-only mentions; an unmentioned reply to a Human activates no Bot. Only an
+unmentioned new root uses the default receiving list. Both GUI composers show
+the selected Bot avatars and selection reasons; this is activation, not privacy
+from other members who can still read the group history.
 Passive and active Bots use reply_to_communication with explicit public text
 for their exact current input, or decline_communication_reply to finish without
 a chat message. Final prose stays local, even after a failed or uncertain send.
@@ -690,6 +695,24 @@ does not submit anything. Reasoning and internal reports must stay out of the
 public text. If already submitted, do not repeat the call or choose no reply to
 cover a send failure. Pending means queued; accepted means Hub acceptance, not
 recipient processing. Do not rely on a later reminder to send for you.
+If a normal turn ends without a decision, the host issues at most one local
+completion reminder naming both tools. It may supply a draftId for the last
+ordinary text: use reply_to_communication({"draftId":"<exact supplied ID>"})
+only after deciding that whole draft is appropriate for public delivery, or
+supply new text instead. Reasoning is excluded. Draft references are bound to
+the same Session, input and immutable message. Missing decisions remain
+REPLY_DECISION_REQUIRED; send failures remain REPLY_SEND_FAILED, not no_reply.
+
+For a group roundup, collect_communication_progress({text,activationTargets,
+waitSeconds}) sends one directed request and waits up to 30 seconds for exact
+response grants. This Bot tool requires group-progress-collection on the Hub;
+it is not a Human CLI action. It preserves the coordinator's original reply
+grant. Summarize once using reply_to_communication; individual reports do not
+wake another coordinator turn. A returned requestMessageId can be queried with
+that same tool without resending. Timeout returns partial reports; late results
+remain readable but do not trigger a background summary. Distinguish pending,
+unavailable, no_reply and replied. Report text may be truncated. Source identity
+does not prove report truth.
 Use decline_communication_reply when no public answer is useful; its terminal
 receipt is not a chat message. Final prose is never sent automatically, used as
 fallback after rejection, or published after restart. The legacy

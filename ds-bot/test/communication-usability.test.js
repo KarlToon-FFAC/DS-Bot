@@ -385,7 +385,7 @@ test('personal gear owns profile, identity and connection settings without conve
   })
 })
 
-test('floating replies show chronological messages without repeated quotes and preserve reply targets and read-only controls', async () => {
+test('floating replies show chronological messages with parent quotes and preserve reply targets and read-only controls', async () => {
   const snapshot = { ...state(), conversations: [{ ...membership }] }
   const events = ['Root', 'Child', 'Another branch', 'Late deep reply'].map((text, i) => ({ type: 'message', conversationSeq: i + 1, serverAcceptedAt: '2026-11-04T00:00:00Z', message: { messageId: `m${i}`, author: membership.info.members[0], content: { text }, mentions: [], replyToMessageId: i === 3 ? 'm1' : i ? 'm0' : null } }))
   await pane({ snapshot, history: events, handle: async body => body.endpoint === 'thread' ? { conversationId: 'group', membershipEpoch: 'epoch', messageId: body.messageId, rootMessageId: 'm0', watermark: 4, events, hasMore: false } : {} }, async ({ autoRefresh, doc, click, edit, calls }) => {
@@ -393,7 +393,7 @@ test('floating replies show chronological messages without repeated quotes and p
     await click('View replies')
     assert.equal(doc.querySelectorAll('.bt-comm-thread-log article').length, 4)
     assert.deepEqual([...doc.querySelectorAll('.bt-comm-thread-log article')].map(node=>node.dataset.threadMessageId),['m0','m1','m2','m3'])
-    assert.equal(doc.querySelector('.bt-comm-thread-parent'),null)
+    assert.equal(doc.querySelectorAll('.bt-comm-thread-parent').length,3)
     assert.equal(doc.querySelector('.bt-comm-thread-branches'),null)
     assert.equal(events[3].message.replyToMessageId,'m1','display flattening retains canonical reply relationships')
     assert.ok(doc.querySelector('.bt-comm-log [data-message-id="m3"] .bt-comm-message-bubble'),'main conversation remains intact')
@@ -1835,5 +1835,26 @@ test('old Hub allows a single default but explains and blocks multi-selection; d
   await click('Use selected Bots')
   assert.equal(doc.querySelector('[aria-label="Save group settings"]').disabled,false)
   assert.equal(calls.some(c=>c.endpoint==='save-settings'),false)
+ })
+})
+
+test('both composers show actual Bot avatars for defaults, typed mentions and directed replies',async()=>{
+ const bots=['Alpha','Beta'].map(name=>({principalId:'bot:b:'+name,displayName:name,kind:'bot',published:true,speakingMode:'passive'}))
+ const member={...membership,info:{...membership.info,membershipVersion:1,routingMode:'admin',defaultBotPrincipalIds:bots.map(bot=>bot.principalId),members:[...membership.info.members,...bots]}}
+ const event={type:'message',conversationSeq:1,serverAcceptedAt:'2026-11-11T00:00:00Z',message:{messageId:'bot-result',author:bots[0],content:{text:'Progress report'},mentions:[],replyToMessageId:null}}
+ await pane({snapshot:{...state(),directedGroupRepliesAvailable:true,conversations:[member]},history:[event],handle:async body=>body.endpoint==='thread'?{conversationId:'group',membershipEpoch:'epoch',messageId:'bot-result',rootMessageId:'bot-result',events:[event],watermark:1}:{}},async({doc,click,edit,calls})=>{
+  await click('Shared group')
+  const ids=selector=>[...doc.querySelectorAll(selector+' [data-recipient-id]')].map(node=>node.dataset.recipientId)
+  assert.deepEqual(ids('footer'),bots.map(bot=>bot.principalId))
+  await edit(doc.querySelector('footer textarea'),'@Beta help')
+  assert.deepEqual(ids('footer'),[bots[1].principalId])
+  await click('Reply')
+  assert.deepEqual(ids('.bt-comm-thread-composer'),[bots[0].principalId])
+  await edit(doc.querySelector('.bt-comm-thread-composer textarea'),'@Beta instead')
+  assert.deepEqual(ids('.bt-comm-thread-composer'),[bots[1].principalId])
+  await edit(doc.querySelector('.bt-comm-thread-composer textarea'),'@Owner human only')
+  assert.deepEqual(ids('.bt-comm-thread-composer'),[])
+  assert.match(doc.querySelector('.bt-comm-thread-composer .bt-comm-recipient-preview').textContent,/No Bot will be activated/)
+  assert.equal(calls.some(call=>call.endpoint==='send'),false)
  })
 })

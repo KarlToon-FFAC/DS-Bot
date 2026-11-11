@@ -20,7 +20,7 @@ const routes = {
   'principal.register':'register', 'contacts.list':'contacts', 'dm.open':'createDm', 'group.create':'createGroup',
   'group.invite':'invite', 'group.accept':'accept', 'group.remove':'remove', 'group.routing':'routing', 'group.dissolve':'dissolve',
   'group.policy':'policy', 'group.transfer':'transfer', 'principal.rename':'renameHuman', 'group.configure':'configureGroup', 'group.settings':'settings',
-  'message.publish':'publish', 'memberships.list':'memberships', 'conversation.sync':'sync', 'conversation.authorize':'authorize', 'conversation.members':'members',
+  'collection.status':'collectionStatus', 'message.publish':'publish', 'memberships.list':'memberships', 'conversation.sync':'sync', 'conversation.authorize':'authorize', 'conversation.members':'members',
   'conversation.ack':'acknowledgeCursor', 'deliveries.pull':'pending', 'delivery.receipt':'receipt', 'message.status':'deliveryStatus',
   'principal.avatar.begin':'avatarBegin', 'principal.avatar.chunk':'avatarChunk', 'principal.avatar.read':'avatarRead', 'principal.profile':'profile',
   'principal.publication':'syncPublication',

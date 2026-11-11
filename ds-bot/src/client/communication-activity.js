@@ -23,7 +23,7 @@ export function CommunicationActivity({ state, member, events, outbox, operation
       item.state === 'failed' ? h('button', { type: 'button', disabled: copyDisabled || busy, onClick: () => onCopy(item) }, t('Copy to draft')) : null)),
     events.filter(event=>event.type==='bot.input.read').map(event=>h('p',{key:event.eventId,role:'status'},`${labels.get(event.principalId) ?? t('Participant')}: ${t('Update read into task')}`)),
     stops.map(item => h('p', { key: item.messageId, role: 'status', 'data-causal-stop': item.messageId }, t('Bot collaboration stopped at the safety limit. Send a new Human message to continue.'))),
-    failures.map(item => h('p', { key: item.bindingId, role: 'status' }, t('Bot delivery needs reconciliation'), ': ', item.code)),
+    failures.map(item => h('p', { key: item.bindingId, role: 'status' }, t('Bot delivery needs reconciliation'), ': ', ['REPLY_DECISION_REQUIRED','REPLY_SEND_FAILED'].includes(item.code) ? friendly({code:item.code}) : item.code)),
     exports.map(item => h('p', { key: item.messageId, role: 'status' }, t('Send failed'), ': ', item.code)),
     !error && !state?.error && !pollError && !pendingAttempt && !operationPending && !operations.length && !outbox.some(item => item.state !== 'accepted') && !stops.length && !failures.length && !exports.length ? notice('No activity needs attention.') : null)
 }

@@ -1,3 +1,4 @@
+import {checkCommunicationCompletion,communicationDraft} from './turn-completion.js'
 import {searchHistory} from './history-search.js'
 import { groupRoutingPayload, usesDefaultBotList, MULTI_BOT_ROUTING_CAPABILITY } from '../../shared/communication-routing.js'
 import { botDmRecords, botDmContext } from './bot-dm-records.js'
@@ -301,6 +302,7 @@ export class CommunicationRuntime {
     return this.relationships.seed(binding, info, input, this.human.principalId)
   }
   installHooks() {
+    this.disposers.push(this.ctx.on('agent/turn-stopping', payload => checkCommunicationCompletion(this,payload)))
     this.workInputs ??= new Map()
     this.workSteps ??= new Map()
     this.workEvents ??= Promise.resolve()
@@ -622,11 +624,41 @@ export class CommunicationRuntime {
     return { messageId, conversationId, status: this.queue.outboxStatus(messageId).state,
       completesCurrentReply:Boolean(exec.communicationBinding?.id&&causal?.causationDeliveryId&&this.queue.completedToolReply(exec.communicationBinding.id,causal.causationDeliveryId)===messageId&&this.queue.outboxStatus(messageId).state==='accepted') }
   }
-  replyBot(actor, input, exec) {
+  async collectProgress(actor, input, exec) {
+    if (!this.transport?.welcome?.capabilities?.includes('group-progress-collection')) fail('UNSUPPORTED_CAPABILITY')
+    const conversationId=input.conversationId??exec.communicationBinding?.conversationId
+    const member=this.member(actor.principalId,conversationId,exec.communicationBinding?.membershipEpoch??input.membershipEpoch)
+    if(member.kind!=='group')fail('INVALID_REQUEST')
+    const waitSeconds=input.waitSeconds??30
+    if(!Number.isInteger(waitSeconds)||waitSeconds<0||waitSeconds>30)fail('INVALID_REQUEST')
+    if(input.requestMessageId && (input.text!==undefined || input.activationTargets!==undefined))fail('INVALID_REQUEST')
+    let requestMessageId=input.requestMessageId
+    if(!requestMessageId){
+      if(!Array.isArray(input.activationTargets)||!input.activationTargets.length)fail('INVALID_REQUEST')
+      const sent=await this.sendBot(actor,{conversationId,text:input.text,activationTargets:input.activationTargets,continueReply:true},{...exec,explicitReply:true})
+      requestMessageId=sent.messageId
+    }
+    const deadline=Date.now()+waitSeconds*1000
+    for(;;){
+      if(exec.signal?.aborted)fail('ABORTED')
+      this.member(actor.principalId,conversationId,member.membershipEpoch)
+      const local=this.queue.intent(requestMessageId)
+      if(local && this.queue.outboxStatus(requestMessageId).state==='failed')fail('SEND_FAILED')
+      let result
+      if(local && this.queue.outboxStatus(requestMessageId).state!=='accepted')result={complete:false,reports:[],status:'pending_send'}
+      else result=await this.transport.request('collection.status',{principalId:actor.principalId,conversationId,membershipEpoch:member.membershipEpoch,requestMessageId})
+      if(result.complete||Date.now()>=deadline)return {...result,requestMessageId,conversationId,timedOut:!result.complete,finalReplyRequired:true}
+      await new Promise(resolve=>setTimeout(resolve,500))
+    }
+  }
+  async replyBot(actor, input, exec) {
     if (!exec.communicationBinding || !exec.communicationCausation?.causationDeliveryId) fail('COMMUNICATION_INPUT_SOURCE_UNKNOWN')
-    if (Object.keys(input).some(key => !['text','activationTargets','membershipEpoch'].includes(key))) fail('INVALID_REQUEST')
+    if (Object.keys(input).some(key => !['text','draftId','activationTargets','membershipEpoch'].includes(key))) fail('INVALID_REQUEST')
     if (input.membershipEpoch !== undefined && input.membershipEpoch !== exec.communicationBinding.membershipEpoch) fail('CONVERSATION_SCOPE_MISMATCH')
-    return this.sendBot(actor,{...input,conversationId:exec.communicationBinding.conversationId,replyToMessageId:exec.communicationCausation.replyToMessageId},{...exec,explicitReply:true})
+    if ((typeof input.text==='string') === (typeof input.draftId==='string')) fail('INVALID_REQUEST')
+    const {draftId,...reply}=input
+    if (draftId !== undefined) reply.text=await communicationDraft(this,draftId,exec)
+    return this.sendBot(actor,{...reply,conversationId:exec.communicationBinding.conversationId,replyToMessageId:exec.communicationCausation.replyToMessageId},{...exec,explicitReply:true})
   }
   async declineReply(actor, exec) {
     const binding=exec.communicationBinding, cause=exec.communicationCausation
@@ -711,6 +743,7 @@ export class CommunicationRuntime {
     return { enabled: true, connected: this.transport.connected, reloadRequired: false, listState: !this.transport.lastSynchronizedAt ? 'not-synchronized' : this.transport.connected ? 'authorized-snapshot' : 'cached-snapshot', reconciled: this.everReconciled, instanceId: this.queue.instanceId, humanPrincipalId: this.human.principalId,
       hubUrl: this.settings.url, hubId: this.settings.hubId ?? this.transport.welcome?.hubId ?? null, queueScope:this.settings.queueScope??'legacy',
       attachmentsAvailable: this.transport.welcome?.capabilities?.includes(ATTACHMENT_CAPABILITY) === true,
+      directedGroupRepliesAvailable: this.transport.welcome?.capabilities?.includes('directed-group-replies') === true,
       multipleDefaultBotsAvailable: this.transport.welcome?.capabilities?.includes(MULTI_BOT_ROUTING_CAPABILITY) === true,
       managementRevision: this.managementRevision ?? 0, transport: this.transport.diagnostics?.() ?? null,
       compatibility: this.transport.compatibility, managementUrl, managementAvailable: managementUrl !== null,
@@ -1003,16 +1036,21 @@ export class CommunicationRuntime {
         } catch { this.errors.set(binding.id, 'WORK_START_NOT_RECORDED') }
       }
     }
+    let unresolved
     for (const output of completedOutputs(sessions, binding, { recoverSettled: true, includeEmpty: true })) {
       if (this.queue.db.prepare('SELECT 1 FROM exports WHERE source_key=?').get(output.sourceKey)) continue
       const input = sourceDelivery(this.queue, binding, output.inputSource)
       const toolMessageId=this.queue.completedToolReply(binding.id,input.deliveryId)
       const state=toolMessageId ? this.queue.outboxStatus(toolMessageId).state : null
-      this.queue.recordDecision(binding,input,output.sourceKey,state === 'accepted' ? 'sent' : state === 'pending' ? 'pending' : 'no_reply', {
+      if (state==='failed') unresolved='REPLY_SEND_FAILED'
+      else if (!state && !this.queue.replyDeclined(input.deliveryId)) unresolved ??= 'REPLY_DECISION_REQUIRED'
+      this.queue.recordDecision(binding,input,output.sourceKey,state === 'accepted' ? 'sent' : state === 'pending' ? 'pending' : this.queue.replyDeclined(input.deliveryId) ? 'no_reply' : state === 'failed' ? 'send_failed' : 'decision_missing', {
         sessionId:output.sessionId,seq:output.seq,outputId:output.messageId,triggerOrigin:'remote',audience:'local',
         bytes:Buffer.byteLength(output.parts.map(p=>p.text).join('\n')),sha256:createHash('sha256').update(output.parts.map(p=>p.text).join('\n')).digest('hex'), ...(toolMessageId ? {messageId:toolMessageId} : {})
       })
     }
+    if (unresolved) this.errors.set(binding.id,unresolved)
+    else if (['REPLY_DECISION_REQUIRED','REPLY_SEND_FAILED'].includes(this.errors.get(binding.id))) this.errors.delete(binding.id)
   }
   async processUpdates(binding) {
     for(const delivery of this.queue.inputUpdates(binding)){
@@ -1072,7 +1110,7 @@ export class CommunicationRuntime {
       if (this.queue?.isRetiredBot?.(binding.recipientPrincipalId)) continue
       try {
         await this.export(binding)
-          if (!injectionFailed.has(binding.id) && !['INPUT_CANCELED','COMMUNICATION_SESSION_MIGRATION_REQUIRED','COMMUNICATION_INPUT_SOURCE_UNKNOWN'].includes(this.errors.get(binding.id))) this.errors.delete(binding.id)
+          if (!injectionFailed.has(binding.id) && !['INPUT_CANCELED','COMMUNICATION_SESSION_MIGRATION_REQUIRED','COMMUNICATION_INPUT_SOURCE_UNKNOWN','REPLY_DECISION_REQUIRED','REPLY_SEND_FAILED'].includes(this.errors.get(binding.id))) this.errors.delete(binding.id)
         const failed = this.queue.exportFailures().find(item => item.bindingId === binding.id)
         if (failed) this.errors.set(binding.id, failed.code ?? 'EXPORT_REJECTED')
       } catch (error) { this.errors.set(binding.id, error.code ?? 'EXPORT_UNKNOWN') }

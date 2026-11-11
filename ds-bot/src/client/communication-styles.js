@@ -118,6 +118,11 @@ export const communicationCSS = `
 .bt-comm-field{display:flex;flex-direction:column;gap:6px;margin:8px 0;font-size:12px;line-height:16px}
 .bt-comm-check{display:flex;gap:8px;align-items:flex-start;margin:10px 0;font-size:12px;line-height:18px;overflow-wrap:anywhere}
 .bt-comm-check input{flex:0 0 16px;width:16px;height:16px;flex-shrink:0;margin-top:1px}
+.bt-comm-recipient-preview{display:flex;align-items:center;flex-wrap:wrap;gap:4px 8px;max-height:108px;overflow:auto;margin-bottom:6px;font-size:12px;color:var(--bt-ink-2)}
+.bt-comm-recipient-heading{flex:none}
+.bt-comm-recipient-chip{display:inline-flex;align-items:center;gap:4px;max-width:100%;min-width:0;padding:2px 6px;border:.5px solid var(--bt-line);border-radius:12px;background:var(--bt-card)}
+.bt-comm-recipient-chip>span:not(.bt-comm-avatar){overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bt-comm-recipient-chip small{flex:none;color:var(--bt-ink-3)}
 .bt-comm-mentions{display:flex;gap:4px;flex-wrap:wrap}
 .bt-comm-pending-text{white-space:pre-wrap}
 .bt-comm-members{flex-shrink:0;max-height:32vh;overflow:auto;overscroll-behavior:contain;border:1px solid var(--bt-line);border-radius:12px;padding:8px 12px}

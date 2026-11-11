@@ -5,6 +5,20 @@
 export const NAMESPACE = 'ds-bot'
 
 const ZH = {
+  'The Bot ended without submitting a reply decision. Its text was not sent. Ask it to submit a public reply or explicitly choose no reply.': 'Bot 已结束，但仍未提交回复决定，正文没有发出。请让它提交公开回复或明确选择不回复。',
+  'The Bot tried to reply, but sending failed. Check the failed send; its private closing text was not forwarded.': 'Bot 尝试回复，但发送失败。请检查失败记录；私密收尾正文没有被转发。',
+  'This draft does not belong to the current reply or is no longer available. Submit new public text instead.': '此草稿不属于当前回复或已不可用，请重新提交公开正文。',
+
+  'Bot recipients': '本条唤醒',
+  'Waiting for current members…': '正在获取最新成员…',
+  'Check mentions before sending.': '请检查 @ 对象后发送。',
+  'No Bot will be activated': '不会唤醒 Bot',
+  'Mention': '@ 指定',
+  'Reply target': '回复对象',
+  'Default receiver': '默认接收',
+  'Direct message': '私聊对象',
+  'These Bots will be asked to process this message. Other members can still read the group history. Bots may choose not to reply.': '这些 Bot 会收到处理请求。其他成员仍可查看群历史，Bot 可以选择不回复。',
+
   "Default receiving Bots": "默认接收 Bot",
   "Choose receiving Bots": "选择接收 Bot",
   "Use selected Bots": "使用所选 Bot",

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import {checkCommunicationCompletion,communicationDraft} from '../src/host/federation/turn-completion.js'
 import { test } from 'node:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -50,6 +51,56 @@ function fixture(t, path=':memory:') {
   const runtime=Object.assign(Object.create(CommunicationRuntime.prototype),{queue:q,bots:new Map([['worker',principal]]),contacts:[],scope:()=>{},errors:new Map(),ctx:{get:()=>registry,sessionController:{resolveAgent:async()=>({agent:{ctx:{},session:{}}}),inspect:async()=>({events})},sessions:{flush:async()=>{}},parallel:async()=>{}},member:()=>({membershipEpoch:'epoch'})})
   return {q,binding,source,original,events,runtime,receive}
 }
+
+test('completion check reminds once and exposes only immutable plain text without closing the grant',async t=>{
+ const {q,binding,runtime,events}=fixture(t)
+ events.splice(events.findIndex(e=>e.type==='turn/end'),1)
+ events.find(e=>e.type==='assistant/message').data.message.content.unshift({type:'reasoning',text:'PRIVATE_REASONING'})
+ runtime.owners=new Map([['session',binding]]);runtime.authorize=async()=>{}
+ const notices=[],agent={id:'session',session:{},steer:notice=>notices.push(notice)}
+ await checkCommunicationCompletion(runtime,{agent,turn:1})
+ assert.equal(notices.length,1)
+ const notice=notices[0].content.map(part=>part.text).join('')
+ assert.match(notice,/reply_to_communication/);assert.match(notice,/decline_communication_reply/)
+ assert.equal(notice.includes('PRIVATE_REASONING'),false)
+ const row=q.db.prepare('SELECT * FROM completion_checks').get()
+ const exec={agent,communicationBinding:binding,communicationCausation:{causationDeliveryId:'task'}}
+ assert.equal(await communicationDraft(runtime,row.draft_id,exec),'Substantive final result')
+ await assert.rejects(communicationDraft(runtime,row.draft_id,{...exec,communicationCausation:{causationDeliveryId:'another'}}),{code:'COMMUNICATION_DRAFT_UNAVAILABLE'})
+ await checkCommunicationCompletion(runtime,{agent,turn:1})
+ assert.equal(notices.length,1);assert.equal(runtime.errors.get(binding.id),'REPLY_DECISION_REQUIRED')
+ assert.equal(q.pendingOutbox().length,0);assert.equal(q.replyDeclined('task'),false)
+ assert.equal(q.pendingReceipts().some(row=>row.payload.status==='noReply'),false)
+ events.find(e=>e.type==='assistant/message').data.message.content.push({type:'text',text:'changed'})
+ await assert.rejects(communicationDraft(runtime,row.draft_id,exec),{code:'COMMUNICATION_DRAFT_UNAVAILABLE'})
+})
+
+test('reasoning-only completion has no draft and explicit silence skips correction',async t=>{
+ for(const declined of [false,true]){
+  const {q,binding,runtime,events}=fixture(t)
+  events.splice(events.findIndex(e=>e.type==='turn/end'),1)
+  events.find(e=>e.type==='assistant/message').data.message.content=[{type:'reasoning',text:'PRIVATE_REASONING'}]
+  runtime.owners=new Map([['session',binding]]);runtime.authorize=async()=>{}
+  if(declined)q.recordDecision(binding,{deliveryId:'task'},'declined','no_reply')
+  const notices=[],agent={id:'session',session:{},steer:notice=>notices.push(notice)}
+  await checkCommunicationCompletion(runtime,{agent,turn:1})
+  assert.equal(notices.length,declined?0:1)
+  if(!declined){assert.equal(q.db.prepare('SELECT draft_id FROM completion_checks').get().draft_id,null);assert.equal(JSON.stringify(notices).includes('PRIVATE_REASONING'),false)}
+ }
+})
+
+test('collection rechecks existing request without sending and returns bounded partial status',async()=>{
+ const calls=[],runtime=Object.assign(Object.create(CommunicationRuntime.prototype),{
+  transport:{welcome:{capabilities:['group-progress-collection']},request:async(type,input)=>{calls.push({type,input});return{complete:false,reports:[{principalId:'bot:b:k',status:'pending'}]}}},
+  member:()=>({kind:'group',membershipEpoch:'epoch'}),queue:{intent:()=>null},sendBot:()=>assert.fail('status query must not resend')})
+ const actor={principalId:'bot:a:k'},exec={communicationBinding:{conversationId:'group',membershipEpoch:'epoch'}}
+ const result=await runtime.collectProgress(actor,{requestMessageId:'request',waitSeconds:0},exec)
+ assert.equal(result.timedOut,true);assert.equal(result.requestMessageId,'request');assert.equal(calls.length,1)
+ assert.equal(calls[0].input.principalId,actor.principalId)
+ await assert.rejects(runtime.collectProgress(actor,{requestMessageId:'request',text:'new',waitSeconds:0},exec),{code:'INVALID_REQUEST'})
+ runtime.transport.welcome.capabilities=[]
+ await assert.rejects(runtime.collectProgress(actor,{requestMessageId:'request',waitSeconds:0},exec),{code:'UNSUPPORTED_CAPABILITY'})
+})
 
 test('pending or rejected explicit reply never publishes subsequent private final text',async t=>{
   for(const outcome of ['accepted','failed']){
@@ -136,24 +187,24 @@ test('restart waits for a pending reply and does not regenerate a Hub-accepted r
   await runtime.recoverInterrupted(binding)
 })
 
-test('a private final creates an idempotent no-reply audit and control receipt, never a message',async t=>{
+test('a private final creates a missing-decision audit without a decline receipt, never a message',async t=>{
  const {q,binding,runtime,events}=fixture(t)
  const agent={id:'session',status:'idle',inbox:{nextTurn:[],nextStep:[]}}
  assert.equal(legacySessionSettled(q,binding,agent,events),false)
  await runtime.export(binding);await runtime.export(binding)
  assert.equal(q.pendingOutbox().length,0)
  const decisions=q.db.prepare('SELECT * FROM outbound_decisions').all()
- assert.equal(decisions.length,1);assert.equal(decisions[0].outcome,'no_reply')
+ assert.equal(decisions.length,1);assert.equal(decisions[0].outcome,'decision_missing')
  assert.equal(JSON.stringify(decisions).includes('Substantive final result'),false)
  const audit=q.routingAudit(1)
  assert.equal(audit.decisions.length,1);assert.equal(audit.decisions[0].sourceDeliveryId,'task')
  assert.ok(audit.decisions[0].createdAt);assert.equal(audit.decisions[0].audience,'local')
  assert.equal(JSON.stringify(audit).includes('Substantive final result'),false)
  for(const limit of [0,-1,201,1.1,'50'])assert.throws(()=>q.routingAudit(limit),{code:'INVALID_REQUEST'})
- assert.equal(q.pendingReceipts().filter(r=>r.payload.status==='noReply').length,1)
- assert.equal(legacySessionSettled(q,binding,agent,events),true,'private finals with durable decisions do not prevent workspace/segment rotation')
+ assert.equal(q.pendingReceipts().filter(r=>r.payload.status==='noReply').length,0)
+ assert.equal(legacySessionSettled(q,binding,agent,events),false,'private finals with durable decisions do not prevent workspace/segment rotation')
  events.at(-1).data.reason.kind='interrupted'
- assert.equal(legacySessionSettled(q,binding,agent,events),true,'a crash after a durable terminal decision must not strand the next workspace')
+ assert.equal(legacySessionSettled(q,binding,agent,events),false,'a crash after a durable terminal decision must not strand the next workspace')
  q.db.prepare("UPDATE outbound_decisions SET outcome='pending'").run()
  assert.equal(legacySessionSettled(q,binding,agent,events),false,'uncertain explicit sends cannot authorize segment migration')
 })
@@ -164,8 +215,8 @@ test('explicit reply accepts only its current host epoch and cannot select a dif
  const actor={principalId:'bot:local:one'},exec={communicationBinding:binding,communicationCausation:causal}
  const result=await runtime.replyBot(actor,{text:'public',membershipEpoch:'epoch'},exec)
  assert.equal(result.input.conversationId,'group');assert.equal(result.input.replyToMessageId,'source');assert.equal(result.explicit,true)
- for(const extra of [{conversationId:'other'},{author:'forged'},{membershipEpoch:'old'}])assert.throws(()=>runtime.replyBot(actor,{text:'public',...extra},exec))
- assert.throws(()=>runtime.replyBot(actor,{text:'public'},{}),{code:'COMMUNICATION_INPUT_SOURCE_UNKNOWN'})
+ for(const extra of [{conversationId:'other'},{author:'forged'},{membershipEpoch:'old'}])await assert.rejects(()=>runtime.replyBot(actor,{text:'public',...extra},exec))
+ await assert.rejects(()=>runtime.replyBot(actor,{text:'public'},{}),{code:'COMMUNICATION_INPUT_SOURCE_UNKNOWN'})
 })
 
 test('explicit decline validates its exact source and is terminal locally without sending a goodbye',async t=>{
@@ -178,14 +229,14 @@ test('explicit decline validates its exact source and is terminal locally withou
  await assert.rejects(runtime.declineReply(actor,{...exec,communicationCausation:{causationDeliveryId:'forged',replyToMessageId:'task'}}),{code:'COMMUNICATION_INPUT_SOURCE_UNKNOWN'})
 })
 
-test('a completed empty final is also a no-reply control outcome, without a magic silence token',async t=>{
+test('a completed empty final requires an explicit decision',async t=>{
  const {q,runtime,binding,events}=fixture(t)
  events[2].data.message.content=[]
  await runtime.export(binding)
  assert.equal(q.pendingOutbox().length,0)
- assert.equal(q.routingAudit().decisions[0].outcome,'no_reply')
+ assert.equal(q.routingAudit().decisions[0].outcome,'decision_missing')
  assert.equal(q.routingAudit().decisions[0].bytes,0)
- assert.equal(q.pendingReceipts().filter(r=>r.payload.status==='noReply').length,1)
+ assert.equal(q.pendingReceipts().filter(r=>r.payload.status==='noReply').length,0)
 })
 
 test('upgrade quarantines an uncommitted legacy automatic final but retains explicit tool sends',async t=>{
@@ -203,7 +254,7 @@ test('an old Hub cannot receive updated Bot sends or no-reply receipts under leg
  for(const decision of ['send','no_reply']){
   const {q,binding,runtime}=fixture(t)
   if(decision==='send')q.enqueueMessage(runtime.message(binding.recipientPrincipalId,'group',{text:'public',messageId:'explicit',replyToMessageId:'task',responseToDeliveryId:'task'}))
-  else await runtime.export(binding)
+  else q.recordDecision(binding,{deliveryId:'task'},'decline:task','no_reply')
   const requests=[],transport=new CommunicationTransport(q,{url:'ws://127.0.0.1:1/communication'})
   transport.connected=true;transport.welcome={capabilities:['proactive-bot-roots']}
   transport.request=async(type,payload)=>{
