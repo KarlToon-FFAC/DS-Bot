@@ -298,6 +298,8 @@ var ZH = {
   "The Hub is busy. Its original request ID is retained.": "Hub 繁忙，已保留原请求编号。",
   "Remote communication is not ready. Wait for connection status to update without repeating the operation.": "远程通信尚未就绪，请等待连接状态更新，不要重复提交操作。",
   "This profile has no active Hub configuration. Check the approved device profile.": "当前资料没有生效的 Hub 配置，请核对已批准设备使用的资料。",
+  "This Hub lacks explicit Bot dialogue support. Update the Hub to send Bot messages safely; local final text remains private.": "此 Hub 尚不支持显式 Bot 对话，请更新 Hub 后再发送 Bot 消息；本地收尾正文仍保持私有。",
+  "An older automatic final reply was quarantined during upgrade and will not be sent. Review it locally before any explicit send.": "升级时已隔离旧的自动收尾回复，不会发送；请在本地检查后再决定是否显式发送。",
   "The instance credential provider is unavailable. Restart with the intended private credential source; do not send its value.": "实例凭据提供器不可用。请使用原定的私密凭据来源重启，不要发送凭据值。",
   "This DSH version has no supported configuration editor. Check the installed DSH version.": "此 DSH 版本缺少受支持的配置编辑器，请核对安装版本。",
   "The active DS Bot configuration entry could not be identified. Check the loaded profile and plugin.": "无法确定当前 DS Bot 配置项，请核对已加载的资料与插件。",
@@ -437,7 +439,7 @@ var ZH = {
   "Participant": "成员",
   "Upgrade the Hub to support bounded Bot collaboration. Your queued messages are retained.": "请升级 Hub 以支持有界 Bot 协作。排队消息已保留。",
   "Bot collaboration stopped at the safety limit. Send a new Human message to continue.": "Bot 协作已达到安全限制。请由用户发送新消息继续。",
-  "Both Bot modes may @mention current group Bots in an authorized final reply. Reply-only Bots cannot initiate messages or send proactively with tools. Active Bots may also initiate with tools. Bot delegation chains stop at the server’s finite limit.": "两种 Bot 模式都可在获准的最终回复中 @当前群内 Bot。被动回复 Bot 不能主动发起消息或使用工具主动发送；主动 Bot 也可通过工具发起消息。Bot 委派链达到服务端的有限额度后会停止。",
+  "Both Bot modes can explicitly reply to their current input or finish without a reply. Final prose stays local. Reply-only Bots cannot initiate messages. Active Bots may also initiate with tools. Explicit follow-ups stay within the server’s finite delegation limit.": "两种 Bot 模式都可显式回复当前输入，或选择不回复。收尾正文仅保存在本地。被动 Bot 不能主动发起消息；主动 Bot 可通过工具发起。显式追问仍受服务端的有限委派额度约束。",
   "An operation is not confirmed. Check status, then retry the same action.": "有操作尚未确认。请核对状态，再重试同一操作。",
   "Remove mention": "取消点名",
   "Join Hub": "加入 Hub",
@@ -1175,6 +1177,7 @@ var ZH = {
   "The group replies could not be shown": "群里的回复显示不出来",
   "Paused after {count} Bot relays. Waiting: {names}": "Bot 之间已接力 {count} 次，先停下了。还在等：{names}",
   "{name} paused for your approval": "{name} 停下来等你批准",
+  "{name} finished without a reply": "{name} 已完成，未发送回复",
   "{name} started on it": "{name} 开始做了",
   "You stopped {name}'s work": "你停下了 {name} 的工作",
   "{name} finished its work": "{name} 做完了",
@@ -12394,6 +12397,8 @@ var communicationDescriptions = {
   COMMUNICATION_PRESET_CONFLICT: "An isolated communication preset is already registered. Check for duplicate DS Bot plugin instances; do not remove isolation.",
   SCHEMA_VERSION_UNSUPPORTED: "The stored communication database requires a different application version. Preserve the data and check the matching Hub/client versions.",
   ERR_UNKNOWN_BUILTIN_MODULE: "This runtime lacks a required Node built-in module. Use the supported Node and DSH versions.",
+  EXPLICIT_REPLY_CAPABILITY_REQUIRED: "This Hub lacks explicit Bot dialogue support. Update the Hub to send Bot messages safely; local final text remains private.",
+  LEGACY_AUTO_EXPORT_QUARANTINED: "An older automatic final reply was quarantined during upgrade and will not be sent. Review it locally before any explicit send.",
   CONFIG_EDITOR_UNAVAILABLE: "This DSH version has no supported configuration editor. Check the installed DSH version.",
   CONFIG_ENTRY_UNAVAILABLE: "The active DS Bot configuration entry could not be identified. Check the loaded profile and plugin.",
   CONFIG_EDIT_OVERLAID: "A home or command-line patch overrides DS Bot settings. Move those settings into the active profile's cordis.patch.yml and restart DSH before saving.",
@@ -22152,7 +22157,9 @@ function communicationLogEvents(events) {
   const seen = /* @__PURE__ */ new Set();
   return events.filter((event) => {
     if (event.type === "message") return true;
-    if (event.type !== "bot.work.started" || !event.deliveryId || event.eventId !== `bot-work-started:${event.deliveryId}` || !event.messageId || !event.principalId?.startsWith("bot:") || !event.serverStartedAt || seen.has(event.eventId)) return false;
+    const started = event.type === "bot.work.started" && event.eventId === `bot-work-started:${event.deliveryId}` && event.serverStartedAt;
+    const completed = event.type === "bot.work.completed" && event.eventId === `bot-work-completed:${event.deliveryId}` && event.outcome === "no_reply";
+    if (!started && !completed || !event.deliveryId || !event.messageId || !event.principalId?.startsWith("bot:") || seen.has(event.eventId)) return false;
     seen.add(event.eventId);
     return true;
   });
@@ -24007,11 +24014,12 @@ function CommunicationMessage({ message, members, request, onInspect }) {
     ))) : null
   );
 }
-function BotWorkStarted({ event, members, request, onInspect }) {
+function BotWorkStatus({ event, members, request, onInspect }) {
   const person = members.find((member) => member.principalId === event.principalId && member.kind === "bot");
   const name = person ? contactLabels(members).get(person.principalId) : t("Bot");
-  const content = [(0, import_react67.createElement)(CommunicationAvatar, { key: "avatar", person: person ?? { principalId: "bot:unknown", kind: "bot", displayName: t("Bot") }, request, size: 16 }), (0, import_react67.createElement)("span", { key: "label" }, t("{name} started on it", { name }))];
-  return (0, import_react67.createElement)("div", { className: "bt-comm-work-started", "data-work-event-id": event.eventId }, person ? (0, import_react67.createElement)("button", { type: "button", title: person.principalId, "aria-label": `${t("{name} started on it", { name })} · ${t("View participant")}`, onClick: () => onInspect([person.principalId]) }, ...content) : (0, import_react67.createElement)("span", null, ...content));
+  const label = t(event.type === "bot.work.completed" ? "{name} finished without a reply" : "{name} started on it", { name });
+  const content = [(0, import_react67.createElement)(CommunicationAvatar, { key: "avatar", person: person ?? { principalId: "bot:unknown", kind: "bot", displayName: t("Bot") }, request, size: 16 }), (0, import_react67.createElement)("span", { key: "label" }, label)];
+  return (0, import_react67.createElement)("div", { className: "bt-comm-work-started", "data-work-event-id": event.eventId }, person ? (0, import_react67.createElement)("button", { type: "button", title: person.principalId, "aria-label": `${label} · ${t("View participant")}`, onClick: () => onInspect([person.principalId]) }, ...content) : (0, import_react67.createElement)("span", null, ...content));
 }
 
 // src/client/communication-list.js
@@ -25267,7 +25275,7 @@ function GroupSettings({ member, contacts, operation, pendingSettings, pendingIn
           group.bots.length ? (0, import_react74.createElement)("div", { className: "bt-comm-member-bots" }, group.bots.map(memberRow)) : null
         ))),
         member.info?.formerMembers?.length ? (0, import_react74.createElement)("details", null, (0, import_react74.createElement)("summary", null, t("Former Bots")), member.info.formerMembers.map((person) => btn(person.displayName, (event) => onInspect([person.principalId], event.currentTarget), { key: person.principalId, children: personLabel(person) }))) : null,
-        (0, import_react74.createElement)("p", { className: "bt-comm-reference" }, t("Both Bot modes may @mention current group Bots in an authorized final reply. Reply-only Bots cannot initiate messages or send proactively with tools. Active Bots may also initiate with tools. Bot delegation chains stop at the server’s finite limit.")),
+        (0, import_react74.createElement)("p", { className: "bt-comm-reference" }, t("Both Bot modes can explicitly reply to their current input or finish without a reply. Final prose stays local. Reply-only Bots cannot initiate messages. Active Bots may also initiate with tools. Explicit follow-ups stay within the server’s finite delegation limit.")),
         canManage ? (0, import_react74.createElement)(
           import_react74.Fragment,
           null,
@@ -26228,7 +26236,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
         history.loading ? (0, import_react74.createElement)("p", { className: "bt-comm-history-status", role: "status" }, t("Loading messages…")) : history.failure ? btn("Retry loading messages", () => {
           void history.retry();
         }) : null,
-        communicationLogEvents(events).map((event) => event.type === "bot.work.started" ? (0, import_react74.createElement)(BotWorkStarted, { key: event.eventId, event, members: knownMembers, request, onInspect: inspect }) : (0, import_react74.createElement)(
+        communicationLogEvents(events).map((event) => event.type !== "message" ? (0, import_react74.createElement)(BotWorkStatus, { key: event.eventId, event, members: knownMembers, request, onInspect: inspect }) : (0, import_react74.createElement)(
           "article",
           { key: event.message.messageId, "data-message-id": event.message.messageId, "data-self": event.message.author.principalId === state.humanPrincipalId, "data-referenced": event.message.messageId === referenced },
           messageAvatar(event.message.author.principalId, contacts.find((person) => person.principalId === event.message.author.principalId)?.displayName ?? event.message.author.displayName),

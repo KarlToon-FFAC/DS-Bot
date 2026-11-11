@@ -1,0 +1,31 @@
+{
+  "status": "PASS",
+  "branch": "chore/federated-communication",
+  "releaseVersion": "V0.3.1",
+  "environment": {"platform": "Linux", "nodeMajor": 24, "model": "deterministic Mock", "nativeDshHosts": 2, "hub": "owned loopback process"},
+  "checks": {
+    "plugin": {"total": 2114, "passed": 2109, "skipped": 5, "failed": 0},
+    "hub": {"passed": 201, "failed": 0},
+    "nativeSmoke": {"passed": 52},
+    "explicitDialogue": {"passed": 4},
+    "botCollaboration": {"passed": 13},
+    "nativeWorkAndApproval": {"passed": 8},
+    "recoveryCheckpoints": {"passed": 6},
+    "lint": "PASS with existing warnings",
+    "clientBundleFreshness": "PASS",
+    "diffCheck": "PASS"
+  },
+  "assertedBoundaries": [
+    "closing canary absent from Hub messages",
+    "Bot DM request/result terminates with two messages and two AI deliveries",
+    "no-reply completion is idempotent control data and cannot activate peers",
+    "explicit passive follow-up consumes exact source grant",
+    "failed or pending explicit sends never publish closing prose as fallback",
+    "internal and mixed-input output excluded from canonical user-output feed",
+    "genuine user delegation retains its audience",
+    "old automatic pending exports quarantined; proven explicit intents retained",
+    "old Hub rejected for updated Bot send/control capability",
+    "restart, duplicate socket delivery and work-directory rotation preserve intent"
+  ],
+  "notVerified": ["physical Windows deployment", "physical cross-machine networking", "real LLM providers", "external WeLink adapter integration"]
+}

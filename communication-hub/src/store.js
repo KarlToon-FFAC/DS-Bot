@@ -708,6 +708,14 @@ export class HubStore {
       }
       return {revoked:true}
   }
+  resumesDmRequest(message, cause, recipientId, responderId) {
+    if (!message.responseToDeliveryId || !cause) return false
+    const parent = this.db.prepare('SELECT author_id,body FROM messages WHERE id=?').get(cause.message_id)
+    if (parent?.author_id !== recipientId) return false
+    const request = JSON.parse(parent.body)
+    return (request.activationTargets ?? []).some(target => target.principalId === responderId)
+      || (!request.responseToDeliveryId && !request.causationDeliveryId && !request.replyToMessageId)
+  }
   publish(auth,input) {
     const author=this.principal(auth,input.author?.principalId)
     const message=normalizeMessage(input,author,this.limits)
@@ -735,6 +743,7 @@ export class HubStore {
         requireThat(author.kind==='bot'&&delivery?.ai===1&&delivery.stored===1&&!delivery.revoked&&delivery.recipient_id===author.principalId
           &&delivery.membership_epoch===sender.epoch&&delivery.conversation_id===message.conversationId
           &&(!message.responseToDeliveryId || delivery.message_id===message.replyToMessageId),message.responseToDeliveryId?'INVALID_RESPONSE_GRANT':'INVALID_CAUSATION_GRANT')
+        requireThat(!this.db.prepare('SELECT 1 FROM events WHERE id=?').get('bot-work-completed:'+delivery.id),'RESPONSE_ALREADY_SENT')
         if(message.responseToDeliveryId)requireThat(!this.db.prepare('SELECT 1 FROM responses WHERE delivery_id=?').get(delivery.id),'RESPONSE_ALREADY_SENT')
         cause=delivery
       }
@@ -745,7 +754,7 @@ export class HubStore {
         requireThat(updateParent?.ai===1 && !updateParent.revoked && this.isPublished(updateParent.recipient_id), 'INVALID_INPUT_UPDATE')
         const target=this.db.prepare('SELECT * FROM memberships WHERE conversation_id=? AND principal_id=?').get(message.conversationId,updateParent.recipient_id)
         requireThat(target?.active===1 && target.epoch===updateParent.membership_epoch, 'MEMBERSHIP_REVOKED')
-        requireThat(!this.db.prepare('SELECT 1 FROM responses WHERE delivery_id=?').get(updateParent.id), 'HANDOFF_ALREADY_COMPLETED')
+        requireThat(!this.db.prepare('SELECT 1 FROM responses WHERE delivery_id=?').get(updateParent.id)&&!this.db.prepare('SELECT 1 FROM events WHERE id=?').get('bot-work-completed:'+updateParent.id), 'HANDOFF_ALREADY_COMPLETED')
         requireThat(this.db.prepare('SELECT count(*) n FROM input_updates WHERE parent_delivery_id=?').get(updateParent.id).n<100, 'BACKPRESSURE')
       }
       if (message.responseToDeliveryId) {
@@ -806,7 +815,7 @@ export class HubStore {
       const deliveries=members.map(member=>{
         const mentioned=targets.some(mention=>mention.principalId===member.principal_id)
         const mayReceiveAi=conversation.kind==='dm'||['passive','active'].includes(member.speaking_mode)
-        let ai=member.kind==='bot'&&member.published===1&&member.principal_id!==author.principalId&&mayReceiveAi&&(conversation.kind==='dm'?true:
+        let ai=member.kind==='bot'&&member.published===1&&member.principal_id!==author.principalId&&mayReceiveAi&&(conversation.kind==='dm'?(author.kind==='human'||mentioned||(!cause&&!message.replyToMessageId)||this.resumesDmRequest(message,cause,member.principal_id,author.principalId)):
           mentioned||(!explicitBots.length&&replyBot===member.principal_id)||(!replyBot&&!message.mentions.length&&author.kind==='human'&&conversation.routing_mode==='admin'&&conversation.admin_bot===member.principal_id))
         if(message.updateForMessageId)ai=false
         if(ai&&author.kind==='bot'&&this.db.prepare('SELECT 1 FROM bot_dispatches WHERE cause_key=? AND author_id=? AND target_id=?').get(dispatchKey,author.principalId,member.principal_id)){ai=false;duplicate=true}
@@ -926,6 +935,15 @@ export class HubStore {
         const eventId=`bot-input-read:${row.id}`
         if(!this.db.prepare('SELECT 1 FROM events WHERE id=?').get(eventId))this.event(row.conversation_id,'bot.input.read',{deliveryId:row.id,messageId:row.message_id,principalId:row.recipient_id,parentDeliveryId:update.parent_delivery_id,membershipEpoch:row.membership_epoch},eventId)
         this.db.prepare('UPDATE input_updates SET read=1 WHERE message_id=?').run(row.message_id)
+        return {deliveryId:row.id,status:input.status,eventId}
+      }
+      if(input.status==='noReply'){
+        requireThat(row.kind==='bot'&&row.ai===1&&row.stored===1,'INVALID_RECEIPT')
+        this.dmPolicy?.(row.conversation_id)
+        requireThat(!this.db.prepare('SELECT 1 FROM responses WHERE delivery_id=?').get(row.id),'RESPONSE_ALREADY_SENT')
+        const eventId='bot-work-completed:'+row.id
+        if(!this.db.prepare('SELECT 1 FROM events WHERE id=?').get(eventId))this.event(row.conversation_id,'bot.work.completed',{deliveryId:row.id,messageId:row.message_id,principalId:row.recipient_id,membershipEpoch:row.membership_epoch,outcome:'no_reply'},eventId)
+        this.db.prepare('UPDATE deliveries SET ai_accepted=1 WHERE id=?').run(row.id)
         return {deliveryId:row.id,status:input.status,eventId}
       }
       if(input.status==='aiStarted'){

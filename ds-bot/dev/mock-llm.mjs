@@ -129,6 +129,10 @@ function decide(body) {
   if (tools.has('send_contact_message')) {
     const communicationResults = isResults(last) && blocks.findLastIndex(block => block.type === 'tool_result')
       > blocks.findLastIndex(block => block.type === 'text' && block.text.includes('[Communication delivery]'))
+    const remote = system.includes('This Session belongs only to one explicit communication conversation')
+    const previous = messages.findLast(message => message.role === 'assistant')
+    if (remote && communicationResults && previous?.content?.some?.(block => block.type === 'tool_use' && ['reply_to_communication','decline_communication_reply'].includes(block.name))) return [text('LOCAL_CLOSING_CANARY: private execution note')]
+    const publicReply = value => remote ? [tool('reply_to_communication',{text:value})] : [text(value)]
     const current = textOf(last?.content)
     const relationshipInput = textOf(messages.findLast(message => message.role === 'user' && textOf(message.content).includes('[Communication delivery]'))?.content)
     const workApproval = /^COMM-WORK-APPROVAL ([a-zA-Z0-9-]+)$/m.exec(relationshipInput.split('Current message:\n').at(-1))
@@ -138,14 +142,14 @@ function decide(body) {
       const args = { file_path: `native-approval-${tag}.txt`, content: `approved:${tag}` }
       if (!calls.length) return [tool('write', args)]
       if (calls.length === 1) return [tool('write', { ...args, sandbox_permissions: 'workspace-write', justification: 'Allow this one test file in the owned fixture workspace.' })]
-      return [text(`Remote approval ${tag} ${blocks.some(block => block.type === 'tool_result' && block.is_error) ? 'rejected' : 'accepted'}`)]
+      return publicReply(`Remote approval ${tag} ${blocks.some(block => block.type === 'tool_result' && block.is_error) ? 'rejected' : 'accepted'}`)
     }
     const work = /^COMM-WORK ([a-zA-Z0-9-]+)$/m.exec(relationshipInput.split('Current message:\n').at(-1))
     if (work) {
       const tag = work[1], file = `native-work-${tag}.txt`, shellFile = `native-shell-${tag}.txt`
       const start = messages.findLastIndex(message => message.role === 'user' && textOf(message.content).includes('[Communication delivery]'))
       const turn = messages.slice(start + 1), used = turn.flatMap(message => Array.isArray(message.content) ? message.content.filter(block => block.type === 'tool_use') : [])
-      if (turn.some(message => Array.isArray(message.content) && message.content.some(block => block.type === 'tool_result' && block.is_error))) return [text(`Remote work failed ${tag}`)]
+      if (turn.some(message => Array.isArray(message.content) && message.content.some(block => block.type === 'tool_result' && block.is_error))) return publicReply(`Remote work failed ${tag}`)
       const shell = tools.has('pwsh') ? 'pwsh' : 'bash'
       const steps = [
         ['write', { file_path: file, content: `before:${tag}` }],
@@ -157,15 +161,15 @@ function decide(body) {
       ]
       const next = steps[used.length]
       if (next) return tools.has(next[0]) ? [tool(next[0], next[1])] : [text(`Remote work missing ${next[0]} ${tag}`)]
-      return [text(`Remote work completed ${tag}`)]
+      return publicReply(`Remote work completed ${tag}`)
     }
     const relationship = /^COMM-RELATIONSHIP (SAVE|READ|PROMPT) (\S+) (.+)$/m.exec(relationshipInput.split('Current message:\n').at(-1))
     if (relationship) {
       const [, action, tag, value] = relationship
-      if (action === 'PROMPT') return [text(`Relationship prompt ${tag} ${system.includes(value) ? 'PRESENT' : 'ABSENT'}`)]
+      if (action === 'PROMPT') return publicReply(`Relationship prompt ${tag} ${system.includes(value) ? 'PRESENT' : 'ABSENT'}`)
       if (communicationResults) {
         const result = blocks.filter(block => block.type === 'tool_result').map(block => textOf(block.content)).join('\n')
-        return [text(action === 'SAVE' ? `Relationship saved ${tag}` : `Relationship recalled ${tag} ${result}`)]
+        return publicReply(action === 'SAVE' ? `Relationship saved ${tag}` : `Relationship recalled ${tag} ${result}`)
       }
       const args = JSON.parse(value)
       return [tool(action === 'SAVE' ? 'remember_communication_relationship' : 'read_communication_relationships',
@@ -175,18 +179,19 @@ function decide(body) {
     if(receiptCommand)return communicationResults?[text('Sent @CollabB, status pending. Internal tool receipt.')]:[tool('send_contact_message',{conversationId:receiptCommand[1],activationTargets:[receiptCommand[2]],text:`COMM-COLLAB DONE ${receiptCommand[3]} @CollabB`})]
     const recovering = current.startsWith('[Local transport recovery notice]')
     const stagedHandoff = isResults(last) && blocks.some(block => block.type === 'tool_result' && JSON.stringify(block.content).includes('staged'));
+    const stagedTargets = blocks.flatMap(block => { try { return JSON.parse(textOf(block.content)).activationTargets ?? [] } catch { return [] } })
     const commandText = (recovering || stagedHandoff) ? messages.findLast(message => message.role === 'user' && textOf(message.content).includes('[Communication delivery]'))?.content : last?.content
     const command = textOf(commandText).split('Current message:\n').at(-1).replace(/^\[(?:Message from|Reply from|Group chat|Group post from)[^\n]*\]\r?\n/, '').trimStart().split('\n')[0].trim()
       const collaboration = /^COMM-COLLAB FINAL (\d+) (\S+) (\S+) (\S+)(?:\s+@\S+)*$/.exec(command)
       if ((!communicationResults || stagedHandoff) && collaboration) {
         const remaining = Number(collaboration[1]), [, , tag, nextName, returnName] = collaboration
         if (remaining > 0 && !stagedHandoff) return [tool('set_communication_reply_targets', { allBots: true, replyToMessageId: /Message ID: ([^\n]+)/.exec(textOf(commandText))?.[1] })]
-        return [text(remaining > 0 ? `COMM-COLLAB FINAL ${remaining - 1} ${tag} ${returnName} ${nextName} @${nextName}` : `COMM-COLLAB DONE ${tag}`)]
+        return [tool('reply_to_communication',{text:remaining > 0 ? `COMM-COLLAB FINAL ${remaining - 1} ${tag} ${returnName} ${nextName} @${nextName}` : `COMM-COLLAB DONE ${tag}`,activationTargets:remaining > 0 ? stagedTargets : []})]
       }
       const collaborationAll = /^COMM-COLLAB ALL (\S+)$/.exec(command)
-      if ((!communicationResults || stagedHandoff) && collaborationAll) return stagedHandoff ? [text(`COMM-COLLAB DONE ${collaborationAll[1]} @all`)] : [tool('set_communication_reply_targets', { allBots: true, replyToMessageId: /Message ID: ([^\n]+)/.exec(textOf(commandText))?.[1] })]
+      if ((!communicationResults || stagedHandoff) && collaborationAll) return stagedHandoff ? [tool('reply_to_communication',{text:`COMM-COLLAB DONE ${collaborationAll[1]} @all`,activationTargets:stagedTargets})] : [tool('set_communication_reply_targets', { allBots: true, replyToMessageId: /Message ID: ([^\n]+)/.exec(textOf(commandText))?.[1] })]
       const collaborationDone = /^COMM-COLLAB DONE (\S+)(?:\s+@\S+)*$/.exec(command)
-      if (!communicationResults && collaborationDone) return [text(`Collaboration done ${collaborationDone[1]}`)]
+      if (!communicationResults && collaborationDone) return publicReply(`Collaboration done ${collaborationDone[1]}`)
       const collaborationReply = /^COMM-COLLAB REPLY (\S+) (\S+) (\S+)$/.exec(command)
       if (!communicationResults && collaborationReply) return [tool('send_contact_message', { conversationId: collaborationReply[1], replyToMessageId: collaborationReply[2], text: `COMM-ECHO ${collaborationReply[3]}`, mentions: [] })]
       const collaborationBurst = /^COMM-COLLAB BURST (\S+) (\S+) (\d+) (\S+)$/.exec(command)
@@ -196,7 +201,7 @@ function decide(body) {
         return Array.from({ length: count }, (_, index) => tool('send_contact_message', { conversationId: collaborationBurst[1], text: `COMM-COLLAB DONE ${collaborationBurst[4]}-${index}`, mentions: [collaborationBurst[2]],continueReply:true }))
       }
     const restate = /^COMM-RESTATE (single|all|quote) (\S+)$/.exec(command)
-    if (!communicationResults && restate) return [text(`${restate[1] === 'quote' ? '> ' : ''}Summary ${restate[2]} ${restate[1] === 'all' ? '@all' : '@CollabB'}`)]
+    if (!communicationResults && restate) return publicReply(`${restate[1] === 'quote' ? '> ' : ''}Summary ${restate[2]} ${restate[1] === 'all' ? '@all' : '@CollabB'}`)
     const createGroup = /^COMM-CREATE-GROUP (.+)$/.exec(command)
     if (!communicationResults && createGroup && tools.has('create_communication_group')) return [tool('create_communication_group', {title:createGroup[1]})]
     const workSend = /^COMM-WORK-SEND (\S+) ([a-zA-Z0-9-]+)$/.exec(command)
@@ -211,10 +216,11 @@ function decide(body) {
     if (/^COMM-MODEL-ERROR (\S+)$/.test(command)) return 'fail'
     const echo = /^COMM-ECHO ([^\n]+)$/.exec(command)
       // Echoed mentions are quoted data; intentional delegation uses COMM-COLLAB.
-      if (!communicationResults && echo) return [text(`${echo[1].includes('@') ? '> ' : ''}Communication reply ${echo[1]}`)]
+      if (!communicationResults && echo) return [tool('reply_to_communication',{text:`${echo[1].includes('@') ? '> ' : ''}Communication reply ${echo[1]}`})]
     const delayed = /^COMM-DELAY-ECHO (\d+) ([^\n]+)$/.exec(command)
-    if (!communicationResults && delayed) return Object.assign([text(`Communication reply ${delayed[2]}`)], { delay: Number(delayed[1]) })
-    if (system.includes('This Session belongs only to one explicit communication conversation')) return [text('')]
+    if (!communicationResults && delayed) return Object.assign([tool('reply_to_communication',{text:`Communication reply ${delayed[2]}`})], { delay: Number(delayed[1]) })
+    if (!communicationResults && command === 'COMM-NOREPLY') return [tool('decline_communication_reply',{})]
+    if (system.includes('This Session belongs only to one explicit communication conversation')) return [text('LOCAL_CLOSING_CANARY: private execution note')]
   }
   // A side-chat question (side.js). The first line is the marker; the reply is
   // fixed and calls nothing. Its count of earlier answers proves follow-ups

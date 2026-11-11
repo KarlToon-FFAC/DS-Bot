@@ -27,6 +27,10 @@ test('work-start history requires canonical events and deduplicates durable IDs'
   const events = [{ type: 'message', message: message('Hello') }, { type: 'receipt', aiAccepted: true }, started, structuredClone(started), { ...started, eventId: 'invented' }, { ...started, eventId: 'bot-work-started:d2', deliveryId: 'd2', principalId: 'human:a:all' }]
   assert.deepEqual(communicationLogEvents(events), [events[0], started])
 })
+test('no-reply completion is a canonical deduplicated status rather than a chat message',()=>{
+ const completed={type:'bot.work.completed',eventId:'bot-work-completed:d1',deliveryId:'d1',messageId:'m1',principalId:'bot:a:chief',outcome:'no_reply'}
+ assert.deepEqual(communicationLogEvents([completed,structuredClone(completed),{...completed,eventId:'forged'},{...completed,outcome:'other'},{...completed,principalId:'human:a:all'}]),[completed])
+})
 const harness = createRequire(join(process.env.DSH_HARNESS, 'package.json'))
 const { JSDOM } = harness('jsdom'), React = harness('react'), { act } = React
 // The harness supplies platform primitives in product; here an anchor-producing
@@ -72,13 +76,16 @@ test('inline avatar portals retain Markdown source and only inspect authorized t
 test('started rows use current Bot metadata only and never pretend to be currently running', async () => {
   await ui(async ({ api, doc, render }) => {
     const inspected = [], props = { event: started, members, request: async () => { throw new Error('No image fetch') }, onInspect: ids => inspected.push(ids) }
-    await render(React.createElement(api.BotWorkStarted, props))
+    await render(React.createElement(api.BotWorkStatus, props))
     assert.match(doc.body.textContent, /Chief.*started on it/); assert.ok(doc.querySelector('.bt-mark'))
     assert.match(doc.querySelector('button').getAttribute('aria-label'), /Chief.*started on it.*View participant/)
     await act(async () => doc.querySelector('button').click())
     assert.deepEqual(inspected.map(ids => Array.from(ids)), [['bot:a:chief']])
-    await render(React.createElement(api.BotWorkStarted, { ...props, members: [] }))
+    await render(React.createElement(api.BotWorkStatus, { ...props, members: [] }))
     assert.equal(doc.body.textContent, 'Bot started on it'); assert.equal(doc.querySelector('button'), null); assert.equal(doc.querySelector('[aria-busy]'), null)
+    await render(React.createElement(api.BotWorkStatus, { ...props,event:{...started,type:'bot.work.completed',outcome:'no_reply'} }))
+    assert.match(doc.body.textContent,/Chief.*finished without a reply/)
+    assert.equal(doc.querySelector('article'),null)
   })
 })
 

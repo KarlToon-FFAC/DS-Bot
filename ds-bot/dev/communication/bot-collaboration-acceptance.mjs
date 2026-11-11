@@ -9,16 +9,16 @@ import { LocalTopology, until } from './local-topology.mjs'
 import { startHub } from '../../../communication-hub/src/server.js'
 
 if(process.argv[2]==='--owned-hub'){
-  let duplicateId=null,duplicateInjected=0
+  let duplicateId=null,duplicateAuthor=null,duplicateInjected=0
   const hub=await startHub({databasePath:process.argv[3],port:3198,peers:JSON.parse(process.env.DSBOT_TEST_PEERS),beforeResponse:({type,value})=>{
-    if(type!=='deliveries.pull'||!duplicateId||!Array.isArray(value))return
-    const delivery=value.find(d=>d.messageId===duplicateId&&d.ai)
-    if(delivery){value.push(structuredClone(delivery));duplicateId=null;duplicateInjected++}
+    if(type!=='deliveries.pull'||(!duplicateId&&!duplicateAuthor)||!Array.isArray(value))return
+    const delivery=value.find(d=>(duplicateId?d.messageId===duplicateId:d.event?.message?.author.principalId===duplicateAuthor)&&d.ai)
+    if(delivery){value.push(structuredClone(delivery));duplicateId=null;duplicateAuthor=null;duplicateInjected++}
   }})
   delete process.env.DSBOT_TEST_PEERS
   process.on('message',message=>{
     let value
-    if(message.command==='duplicate'){duplicateId=message.value.messageId;value={armed:true}}
+    if(message.command==='duplicate'){duplicateId=message.value.messageId??null;duplicateAuthor=message.value.authorPrincipalId??null;value={armed:true}}
     else if(message.command==='stats')value={messages:hub.store.db.prepare('SELECT id,conversation_id,seq,author_id,body FROM messages').all(),deliveries:hub.store.db.prepare('SELECT * FROM deliveries').all(),responses:hub.store.db.prepare('SELECT * FROM responses').all(),events:hub.store.db.prepare("SELECT body FROM events WHERE type IN ('message','bot.work.started')").all().map(row=>JSON.parse(row.body)),duplicateInjected}
     else return process.send({id:message.id,ok:false})
     process.send({id:message.id,ok:true,value})
@@ -99,7 +99,7 @@ try{
   for (const kind of ['single','all','quote']) {
     const echoGroup=await topology.group('Restatement '+kind+' '+nonce,[a.bot,b.bot],{allowSpeaking:false})
     await topology.send(a,echoGroup,'COMM-RESTATE '+kind+' '+nonce,[a.bot])
-    const value=await until(async()=>{const s=await stats();return groupMessages(s,echoGroup).some(row=>row.author_id===a.bot)&&s},'restatement final is exported')
+    const value=await until(async()=>{const s=await stats();return groupMessages(s,echoGroup).some(row=>row.author_id===a.bot)&&s},'restatement explicit reply is published')
     const final=groupMessages(value,echoGroup).find(row=>row.author_id===a.bot)
     assert.deepEqual(body(final).activationTargets,[])
     assert.equal(value.deliveries.filter(row=>row.message_id===final.id&&row.ai).length,0)
@@ -192,11 +192,11 @@ try{
   record('two-real-local-team-Bot-DM-tasks-wake-the-peer-in-the-same-existing-DM')
 
   const recoveryGroup=await topology.group(`Recovery correlation ${nonce}`,[a.bot,b.bot],{allowSpeaking:false})
-  await a.client.api({operation:'production-hold',point:'after-export',conversationId:recoveryGroup})
+  await a.client.api({operation:'production-hold',point:'after-output',conversationId:recoveryGroup})
+  await topology.hub('duplicate',{authorPrincipalId:a.bot})
   const recoveryRoot=await chain(a,recoveryGroup,`recovery-${nonce}`)
-  const held=await until(async()=>{const s=await inspect(a,recoveryGroup);return s.checkpoints.some(c=>c.point==='after-export')&&s.exports.length===1&&s},'first final durably exported before crash')
+  const held=await until(async()=>{const s=await inspect(a,recoveryGroup);return s.sessions.some(session=>session.checkpoint?.point==='after-output')&&s.exports.length===1&&s},'explicit reply durable before private closing turn stops')
   const stable=held.exports[0].message_id
-  await topology.hub('duplicate',{messageId:stable})
   await topology.bench(a,'stop');await topology.startPeer(a)
   await completed(recoveryGroup,`recovery-${nonce}`)
   const recovered=await stats(),recovery=verifyChain(recovered,recoveryGroup,recoveryRoot.messageId,`recovery-${nonce}`)
@@ -207,7 +207,7 @@ try{
   const after=await inspect(a,recoveryGroup)
   assert.equal(after.exports.filter(entry=>entry.message_id===stable).length,1)
   assert.equal(inputs(after).filter(event=>event.data.source?.messageId===recoveryRoot.messageId).length,1)
-  record('after-export-crash-recovery-and-duplicate-delivery-preserve-root-parent-grant-source',{rootMessageId:recoveryRoot.messageId,stableMessageId:stable,duplicateDeliveriesInjected:1})
+  record('explicit-reply-crash-recovery-and-duplicate-delivery-preserve-root-parent-grant-source',{rootMessageId:recoveryRoot.messageId,stableMessageId:stable,duplicateDeliveriesInjected:1})
   evidence.status='PASS'
 }catch(error){evidence.status='FAIL';evidence.error=error.message;console.error(error.message);process.exitCode=1}
 finally{

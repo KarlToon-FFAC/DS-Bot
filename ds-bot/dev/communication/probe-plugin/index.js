@@ -160,7 +160,8 @@ export function apply(ctx) {
         }
         return { bindings, sessions, checkpoints: [...runtimeCheckpoints.values()].filter(item => item.conversationId === body.conversationId),
           inbox: db.prepare('SELECT delivery_id,ai,ai_state,mapping,revoked,revocation_result FROM inbox WHERE conversation_id=?').all(body.conversationId),
-          exports: db.prepare('SELECT source_key,message_id FROM exports WHERE binding_id IN (SELECT id FROM bindings WHERE conversation_id=?)').all(body.conversationId) }
+          exports: db.prepare(`SELECT source_key,message_id FROM exports WHERE binding_id IN (SELECT id FROM bindings WHERE conversation_id=?)
+            OR binding_id IN (SELECT 'tool:'||j.value FROM bindings b,json_each(b.sessions) j WHERE b.conversation_id=?)`).all(body.conversationId,body.conversationId) }
       } finally { db.close() }
     }
     if (body.operation === 'production-foreign-input') {

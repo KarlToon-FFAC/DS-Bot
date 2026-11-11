@@ -21,6 +21,7 @@ const requests = {
   'participant-profile':{conversationId:'group',membershipEpoch:'epoch',targetPrincipalId:'bot:b:expert'},
   'answer-work-approval': {id:'approval-test',choice:'reject',expectedScope:'local-scope'},
   state: {}, diagnose: {}, contacts: {}, conversations: {}, invites: {}, outbox: {}, members: { conversationId: 'group' },
+  'routing-audit': {limit:20},
   history: { conversationId: 'group', after: 1, before: 20, limit: 10, latest: false, membershipEpoch: 'epoch' },
   thread: { conversationId: 'group', messageId: 'message', after: 1, limit: 20, watermark: 10, membershipEpoch: 'epoch' },
   reference: { conversationId: 'group', messageId: 'message' }, read: { conversationId: 'group', seq: 5 },

@@ -84,7 +84,7 @@ never a cookie/password argument. No operation silently retries a mutation.
 | Operation family | Human/operator CLI | Executing Bot |
 | --- | --- | --- |
 | Contacts/conversations, members/history/reference/thread | `contacts`, `conversations`, `members`, `history`, `reference`, `thread` | Own authorized communication read tools; isolated Sessions stay in their exact conversation/epoch |
-| DM, send, reply/@all | `dm`, `send` (replyToMessageId/mentions) | `send_contact_message`; passive final handoff uses `set_communication_reply_targets`; no Human impersonation |
+| DM, send, reply/@all | `dm`, `send` (replyToMessageId/mentions) | `reply_to_communication` / `decline_communication_reply` for the current remote input; active initiation uses `send_contact_message`; no Human impersonation |
 | Local-owner Bot DM records | `state` lists `botConversations`; `bot-dm-history`, `bot-dm-reference` read one exact owned local Bot/DM/epoch | Authenticated local Human inspection only; never run owner CLI from a Remote Session or use it to borrow another Bot’s history |
 | Full participant profile | `participant-profile` with exact conversation, membership epoch and target principal | Current authorized members only; public fields never include private Bot instructions |
 | Create/invite/accept/leave/remove | `create-group`, `invite`, `accept`, `leave`, `remove` | Matching group tools as own Bot, subject to membership/role/speaking authority |
@@ -392,9 +392,11 @@ activationTargets exact IDs or allBots=true. The explicit mentions tool argument
 is a compatibility alias; names in Bot body text are display-only. An explicit
 tool replyToMessageId may resolve its current Bot author through authorized
 canonical history. Human GUI/CLI typed @ and direct replies keep their routing.
-A passive Bot calls set_communication_reply_targets with the exact current input
-Message ID and targets, then finishes its single authorized final response. This
-stages intent only and never grants proactive send permission. Summaries, quotes,
+Passive and active Bots use reply_to_communication with explicit public text
+for their exact current input, or decline_communication_reply to finish without
+a chat message. Final prose stays local, even after a failed or uncertain send.
+The host derives the conversation, reply grant and causality; this never grants
+passive Bots proactive send permission. Summaries, quotes,
 @all text and automatic reply references alone do not activate Bots. A handoff does not widen the locally configured work-tool permissions and never
 unlocks secret, other-chat, subagent or workflow tools. Use foreground commands;
 background jobs are unavailable in remote Sessions.
@@ -677,14 +679,30 @@ allBots=true. The explicit mentions tool argument remains a compatibility alias;
 body text @ is display-only. An explicit tool replyToMessageId can target its
 canonical Bot author without text @; automatic cause references cannot.
 
-A passive or active Bot in a remote group can call
-set_communication_reply_targets with replyToMessageId equal to the exact current
-host-provided Message ID, plus activationTargets or allBots=true. Then finish the
-normal final reply. This stages a handoff for that one input only, sends nothing
-immediately, cannot be moved to another input/conversation, and does not grant
-proactive speaking. Identical retries are safe; conflicting changes fail with
-HANDOFF_ALREADY_SET. A bare @name/@all in a summary, quote or final never wakes a
-Bot. Read the actual tool result; never claim a handoff was staged after an error.
+A passive or active Bot replies through reply_to_communication with text and,
+only for a useful follow-up, exact activationTargets. Omit targets for a result.
+Use decline_communication_reply when no public answer is useful; its terminal
+receipt is not a chat message. Final prose is never sent automatically, used as
+fallback after rejection, or published after restart. The legacy
+set_communication_reply_targets stages targets for review only; it no longer
+publishes natural final prose. A bare @name/@all in a summary, quote or final
+never wakes a Bot. Never acknowledge acknowledgements.
+
+In a Bot DM, a proactive request activates its recipient. The exact response
+can resume the requester once. An acknowledgement to that result does not
+implicitly wake the peer again. An explicit follow-up must name its target and
+continues the same bounded root. Progress messages without targets do not
+implicitly start more work. Updated Bot sends and no-reply receipts require the
+Hub capability explicit-bot-dialogue; EXPLICIT_REPLY_CAPABILITY_REQUIRED means
+upgrade the Hub. Both plugins should update to stop legacy final publication.
+GUI-only release differences remain compatible.
+
+For the local operator, routing-audit {limit:50} returns metadata-only send/skip
+decisions, source delivery, audience, text length/hash, current transport state
+and quarantine IDs. It never returns final prose. Old uncommitted automatic Bot
+exports are quarantined as LEGACY_AUTO_EXPORT_QUARANTINED on first upgrade;
+proven explicit-tool/Human intents and accepted history are retained. Review
+history rather than bulk retrying quarantined entries.
 
 The Hub deduplicates same-input/same-sender/same-target handoffs durably. New work
 results may produce a fresh A-to-B-to-A continuation. DUPLICATE_HANDOFF and

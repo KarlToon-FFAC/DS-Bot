@@ -24,9 +24,9 @@ const TEAM = {
 const userMessage = (text, time) => ({ type: 'user/message', time, data: { source: { kind: 'user' }, content: [{ type: 'text', text }] } })
 const botMessage = (text, time, turn = 1) => ({ type: 'assistant/message', time, data: { turn, message: { content: [{ type: 'text', text }] } } })
 
-function start({ pages = {}, services = {} } = {}) {
+function start({ pages = {}, services = {}, audiences } = {}) {
   const home = mkdtempSync(join(tmpdir(), 'ds-bot-feed-'))
-  writeFileSync(join(home, 'state.json'), JSON.stringify(TEAM))
+  writeFileSync(join(home, 'state.json'), JSON.stringify({...TEAM,...(audiences?{turnAudiences:audiences}:{})}))
   const ctx = fakeContext({ services })
   ctx.sessionController = {
     resolveAgent: async sessionId => ({ agent: { session: { id: sessionId, seq: 100 } } }),
@@ -255,4 +255,20 @@ test('without DSH\'s session projections the run-stats endpoint has nothing to s
   t.after(stop)
   await call('state')
   assert.deepEqual(await call('run-stats', { botId: 'm1' }), { ok: true, value: null })
+})
+
+
+test('canonical user-output feed sends only source-authorized user finals, never internal or unknown finals', async t => {
+ const {ctx,call,stop,routes}=start({audiences:{m1c:{1:{audience:'user',triggerOrigin:'user'},2:{audience:'internal',triggerOrigin:'local-bot'}}}})
+ t.after(stop);await call('state')
+ const abort=new AbortController(), response=await routes['/api/bot/user-output'].fetch(new Request('http://localhost/api/bot/user-output?botId=m1',{signal:abort.signal})), next=reader(response)
+ assert.equal((await next()).event,'hello')
+ const onEvent=ctx.listeners.get('session/event').at(-1)
+ onEvent({id:'m1c'},botMessage('INTERNAL_CANARY',1,2))
+ onEvent({id:'m1c'},botMessage('UNKNOWN_CANARY',2,3))
+ onEvent({id:'m1c'},botMessage('MISSING_SEQUENCE_CANARY',3,1))
+ onEvent({id:'m1c'},{...botMessage('Public answer',3,1),seq:10})
+ const event=await next();assert.equal(event.event,'user-output');assert.equal(event.data.item.text,'Public answer');assert.equal(event.data.item.routing.audience,'user')
+ assert.equal(event.data.outputId,'m1c:10:0')
+ abort.abort();assert.equal(await next(),undefined)
 })

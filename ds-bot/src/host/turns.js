@@ -31,6 +31,7 @@ export const failureLine = failure => `${failure.code}${failure.status ? ` ${fai
 export function answerSender(rt, id, source, text, long) {
   const back = rt.roomOf(source.senderRoomId)?.sessions?.[source.senderSessionId]
   const name = rt.botOf(rt.selfOf(id))?.name ?? 'The other Bot'
+  const rootAudience = rt.state.works?.[source.exchangeId]?.audience
   const work = rt.closeWork?.(source.exchangeId, name, text)
   const exchangeId = randomUUID()
   void rt.deliver({
@@ -40,6 +41,7 @@ export function answerSender(rt, id, source, text, long) {
     text: long?.text ?? text,
     ...(long?.length === undefined ? {} : { files: long.files, length: long.length }),
     role: 'reply',
+    ...(rootAudience ? {rootAudience} : {}),
     replyTo: source.exchangeId,
     exchangeId,
     ...(work ? { work } : {}),
@@ -59,6 +61,7 @@ export function answerSender(rt, id, source, text, long) {
       text: `${said}${long?.text ?? text}`,
       ...(long?.length === undefined ? {} : { files: long.files, length: said.length + long.length }),
       role: 'reply',
+      ...(rootAudience ? {rootAudience} : {}),
       replyTo: source.exchangeId,
       ...(work ? { work } : {}),
     }).catch(again => rt.warn('ds-bot: reply failure notice not delivered: %s', again))
@@ -308,6 +311,7 @@ export function install(rt) {
   // A request whose audience is the user is answered in the recipient's own chat: that
   // turn stays visible there and its reply is not routed back to the sender.
   const answersUser = info => info.role === 'request' && info.audience === 'user'
+  const userAudience = info => answersUser(info) || info.protocol === 'reply' && info.rootAudience === 'user' || info.work && state.works?.[info.work]?.audience === 'user'
   // Roles whose turn owes the sender a reply: a 'stopped' notice asks the Bot to
   // acknowledge, exactly like a request.
   const expectsReply = info => info.role === 'request' || info.role === 'stopped'
@@ -359,12 +363,16 @@ export function install(rt) {
   // package that only opens a part is acknowledged with a fixed line, also hidden.
   const claimTrigger = (sessionId, entry, info) => {
     entry.info = info
+    const audience = userAudience(info) ? 'user' : 'internal'
+    const ledger = (state.turnAudiences ??= {})[sessionId] ??= {}
+    ledger[entry.turn] = {audience,triggerOrigin:'local-bot',protocol:info.role === 'reply' ? 'reply' : 'request'}
+    void rt.save().catch(() => {})
     // A turn that was stopped for a part switch brings its joined requests along.
     if (Array.isArray(info.joined) && info.joined.length > 0) {
       entry.joined = info.joined.filter(item => item?.info !== undefined && item.info !== null)
     }
     if (rt.groupOwners.has(sessionId)) return
-    if ((expectsReply(info) && !answersUser(info)) || info.role === 'room' || (info.role === 'handoff' && info.resume !== true)) {
+    if ((expectsReply(info) && !answersUser(info)) || (info.role === 'reply' && audience !== 'user') || info.role === 'room' || (info.role === 'handoff' && info.resume !== true)) {
       markExchangeTurn(sessionId, entry.turn)
     }
   }
@@ -634,7 +642,17 @@ export function install(rt) {
         // Whether the turn was already opened by an earlier message decides what a
         // Bot relay that lands inside it may claim: the first message of a turn
         // still claims it as today, a later one only joins it.
+        if (entry.turn !== undefined && (source?.kind === 'user' || source?.kind === REPLY_KIND)) {
+          const ledger = (state.turnAudiences ??= {})[id] ??= {}
+          ledger[entry.turn] = ledger[entry.turn]?.audience === 'internal' ? {...ledger[entry.turn],mixed:true} : {audience:'user',triggerOrigin:'user',protocol:'answer'}
+          void rt.save().catch(() => {})
+        }
         const opened = entry.opened === true
+        if (entry.turn !== undefined && opened && source?.kind === SOURCE_KIND && !bare(source) && !userAudience(source)) {
+          const ledger = (state.turnAudiences ??= {})[id] ??= {}
+          ledger[entry.turn] = {...ledger[entry.turn],audience:'internal',triggerOrigin:'local-bot',mixed:true}
+          void rt.save().catch(() => {})
+        }
         if (entry.turn !== undefined && !bare(source)
           && (source?.kind === 'user' || source?.kind === REPLY_KIND || source?.kind === 'schedule' || source?.kind === SOURCE_KIND)) {
           entry.opened = true

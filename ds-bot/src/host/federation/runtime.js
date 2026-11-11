@@ -587,13 +587,12 @@ export class CommunicationRuntime {
     }
     if (!conversationId) fail('CONVERSATION_REQUIRED')
     const member = this.member(actor.principalId, conversationId, exec.communicationBinding?.membershipEpoch ?? input.membershipEpoch)
-    if (member.kind === 'group' && member.speakingMode !== 'active') fail('PASSIVE_REPLY_ONLY')
+    if (member.kind === 'group' && member.speakingMode !== 'active' && !(exec.explicitReply && exec.communicationBinding && member.speakingMode === 'passive')) fail('PASSIVE_REPLY_ONLY')
     const causal = exec.communicationCausation
     if (exec.communicationBinding && !causal?.causationDeliveryId) fail('COMMUNICATION_INPUT_SOURCE_UNKNOWN')
     const replyToMessageId = input.replyToMessageId ?? causal?.replyToMessageId ?? null
-    // Only an accepted immediate send completes this authorized group reply.
-    // A deliberately separate progress post must opt into a later final reply.
-    const completesReply=member.kind==='group'&&exec.communicationBinding?.conversationId===conversationId&&Boolean(causal?.causationDeliveryId)&&input.continueReply!==true
+    // A deliberately separate progress post must opt into a later explicit reply.
+    const completesReply=Boolean(exec.communicationBinding?.id)&&exec.communicationBinding?.conversationId===conversationId&&Boolean(causal?.causationDeliveryId)&&input.continueReply!==true
     let inputUpdateIds
     if(completesReply){
       if(this.queue.inputUpdates(exec.communicationBinding,causal.causationDeliveryId).length)await this.processUpdates(exec.communicationBinding)
@@ -601,8 +600,9 @@ export class CommunicationRuntime {
       if(updates.some(update=>update.state!=='accepted'))fail('INPUT_UPDATES_PENDING')
       inputUpdateIds=updates.map(update=>update.messageId)
     }
+    if (causal?.causationDeliveryId && this.queue.replyDeclined?.(causal.causationDeliveryId)) fail('RESPONSE_ALREADY_SENT')
     const targeting = { ...input }
-    if (input.replyToMessageId && input.activationTargets === undefined && !input.mentions?.length && !input.allBots) {
+    if (!exec.communicationBinding && input.replyToMessageId && input.activationTargets === undefined && !input.mentions?.length && !input.allBots) {
       const reference = this.queue.reference(conversationId, actor.principalId, member.membershipEpoch, input.replyToMessageId)
       if (reference.message.author.kind === 'bot') targeting.activationTargets = [reference.message.author.principalId]
     }
@@ -612,9 +612,24 @@ export class CommunicationRuntime {
     const [messageId] = await CommunicationRuntime.prototype.withFreshTargets.call(this, actor.principalId, conversationId, member.membershipEpoch, () => this.queue.commitExports(`tool:${exec.agent.id}`, [output], [], () => this.message(actor.principalId, conversationId, { ...input, messageId: candidateMessageId, replyToMessageId, inputUpdateIds,
       activationTargets: CommunicationRuntime.prototype.targets.call(this, actor.principalId, conversationId, targeting, member.membershipEpoch),
       responseToDeliveryId: completesReply?causal.causationDeliveryId:undefined, causationDeliveryId: causal?.causationDeliveryId, localUserIntent: causal?.localUserIntent, membershipEpoch: member.membershipEpoch }),
-      completesReply?{bindingId:exec.communicationBinding.id,deliveryId:causal.causationDeliveryId}:undefined))
+      completesReply?{bindingId:exec.communicationBinding.id,deliveryId:causal.causationDeliveryId,explicit:exec.explicitReply}:undefined), exec.explicitReply ? ['passive','active'] : ['active'])
+    this.queue.recordDecision?.(exec.communicationBinding ?? {id:'tool:'+exec.agent.id,conversationId,recipientPrincipalId:actor.principalId,membershipEpoch:member.membershipEpoch}, {deliveryId:causal?.causationDeliveryId??sourceKey}, sourceKey, this.queue.outboxStatus(messageId).state === 'accepted' ? 'sent' : 'pending', {audience:'remote',triggerOrigin:exec.communicationBinding?'remote':'local',messageId,bytes:Buffer.byteLength(input.text),sha256:createHash('sha256').update(input.text).digest('hex')})
     return { messageId, conversationId, status: this.queue.outboxStatus(messageId).state,
       completesCurrentReply:Boolean(exec.communicationBinding?.id&&causal?.causationDeliveryId&&this.queue.completedToolReply(exec.communicationBinding.id,causal.causationDeliveryId)===messageId&&this.queue.outboxStatus(messageId).state==='accepted') }
+  }
+  replyBot(actor, input, exec) {
+    if (!exec.communicationBinding || !exec.communicationCausation?.causationDeliveryId) fail('COMMUNICATION_INPUT_SOURCE_UNKNOWN')
+    if (Object.keys(input).some(key => !['text','activationTargets','membershipEpoch'].includes(key))) fail('INVALID_REQUEST')
+    if (input.membershipEpoch !== undefined && input.membershipEpoch !== exec.communicationBinding.membershipEpoch) fail('CONVERSATION_SCOPE_MISMATCH')
+    return this.sendBot(actor,{...input,conversationId:exec.communicationBinding.conversationId,replyToMessageId:exec.communicationCausation.replyToMessageId},{...exec,explicitReply:true})
+  }
+  async declineReply(actor, exec) {
+    const binding=exec.communicationBinding, cause=exec.communicationCausation
+    if (!binding || !cause?.causationDeliveryId) fail('COMMUNICATION_INPUT_SOURCE_UNKNOWN')
+    await this.authorize(binding)
+    const delivery=sourceDelivery(this.queue,binding,{kind:'ds-bot-communication',conversationId:binding.conversationId,recipientPrincipalId:actor.principalId,membershipEpoch:binding.membershipEpoch,deliveryId:cause.causationDeliveryId,messageId:cause.replyToMessageId})
+    if (this.queue.completedToolReply(binding.id,delivery.deliveryId)) fail('RESPONSE_ALREADY_SENT')
+    return this.queue.recordDecision(binding,delivery,'decline:'+delivery.deliveryId,'no_reply',{triggerOrigin:'remote',audience:'local'})
   }
   targets(principalId, conversationId, input, epoch) {
     const member = this.member(principalId, conversationId, epoch)
@@ -982,29 +997,15 @@ export class CommunicationRuntime {
         } catch { this.errors.set(binding.id, 'WORK_START_NOT_RECORDED') }
       }
     }
-    for (const output of completedOutputs(sessions, binding, { recoverSettled: true })) {
+    for (const output of completedOutputs(sessions, binding, { recoverSettled: true, includeEmpty: true })) {
       if (this.queue.db.prepare('SELECT 1 FROM exports WHERE source_key=?').get(output.sourceKey)) continue
       const input = sourceDelivery(this.queue, binding, output.inputSource)
-      const updates=this.queue.inputUpdates(binding,input.deliveryId)
-      if(updates.some(update=>update.state!=='accepted' || update.mapping.sessionId!==output.sessionId || update.mapping.seq>output.seq))continue
-
       const toolMessageId=this.queue.completedToolReply(binding.id,input.deliveryId)
-      if(toolMessageId){
-        const status=this.queue.outboxStatus(toolMessageId).state
-        if(status==='accepted'){
-          this.queue.completeFinalExport(binding.id,input.deliveryId,output)
-          continue
-        }
-        if(status!=='failed')continue
-      }
-      const text = output.parts.map(part => part.text).join('\n')
-      await this.ctx.parallel('ds-bot/communication-checkpoint', { point: 'before-export', conversationId: binding.conversationId,
-        bindingId: binding.id, sessionId: output.sessionId, sourceKey: output.sourceKey })
-      this.queue.commitExports(binding.id, [output], [{ sessionId: output.sessionId, seq: output.seq }], () => this.message(principal.principalId, binding.conversationId,
-        { text, inputUpdateIds: updates.map(update=>update.messageId), activationTargets: this.queue.replyTargets(binding.id, input.deliveryId), replyToMessageId: input.messageId,
-          responseToDeliveryId: input.deliveryId, membershipEpoch: binding.membershipEpoch }))
-      await this.ctx.parallel('ds-bot/communication-checkpoint', { point: 'after-export', conversationId: binding.conversationId,
-        bindingId: binding.id, sessionId: output.sessionId, sourceKey: output.sourceKey })
+      const state=toolMessageId ? this.queue.outboxStatus(toolMessageId).state : null
+      this.queue.recordDecision(binding,input,output.sourceKey,state === 'accepted' ? 'sent' : state === 'pending' ? 'pending' : 'no_reply', {
+        sessionId:output.sessionId,seq:output.seq,outputId:output.messageId,triggerOrigin:'remote',audience:'local',
+        bytes:Buffer.byteLength(output.parts.map(p=>p.text).join('\n')),sha256:createHash('sha256').update(output.parts.map(p=>p.text).join('\n')).digest('hex'), ...(toolMessageId ? {messageId:toolMessageId} : {})
+      })
     }
   }
   async processUpdates(binding) {

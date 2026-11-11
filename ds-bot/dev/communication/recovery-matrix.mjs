@@ -1,17 +1,22 @@
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
-import { writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { LocalTopology,until } from './local-topology.mjs'
-import { modelCalls } from './bench-client.mjs'
+import { repo } from './bench-client.mjs'
 
-const topology=new LocalTopology(),evidence={status:'RUNNING',platform:process.platform,model:'local deterministic Mock',cases:[]}
+const modelCalls = name => {
+  try { return readFileSync(join(repo,`.dsh-test-${name}`,'mock.jsonl'),'utf8').split('\n').filter(Boolean).map(line=>JSON.parse(line)).filter(row=>row.communicationBoundary?.isolated).length }
+  catch (error) { if (error.code === 'ENOENT') return 0; throw error }
+}
+
 const nonce=randomUUID()
+const topology=new LocalTopology({prefix:`explicit-recovery-${nonce.slice(0,8)}`}),evidence={status:'RUNNING',platform:process.platform,model:'local deterministic Mock',cases:[]}
 const record=(id,detail)=>{evidence.cases.push({id,status:'PASS',...detail});console.log(`PASS ${id}`);writeFileSync(join(topology.root,'p4-recovery.json'),JSON.stringify(evidence,null,2))}
 try{
   await topology.initialize()
   const [a,b]=topology.peers
-  for(const point of ['before-receive','after-receive','before-injection','before-admission','after-injection','before-export','after-export']){
+  for(const point of ['before-receive','after-receive','before-injection','before-admission','after-injection','after-output']){
     const conversationId=await topology.group(`Recovery ${point} ${nonce.slice(0,8)}`)
     await b.client.api({operation:'production-hold',point,conversationId})
     const calls=modelCalls(b.name),tag=`${point}-${nonce}`,text=point==='after-injection'?`COMM-DELAY-ECHO 5000 ${tag}`:`COMM-ECHO ${tag}`
@@ -26,9 +31,8 @@ try{
       const active=await inspect();assert.ok(active.inbox.some(item=>item.ai_state==='injecting'))
       assert.equal(active.sessions.flatMap(session=>session.events).filter(event=>event.type==='assistant/message'&&event.data.message.content.some(part=>part.text===`Communication reply ${tag}`)).length,0)
     }
-    if(point==='before-export')assert.equal(held.exports.length,0)
     const exportedBefore=held.exports.map(item=>item.message_id)
-    if(point==='after-export')assert.equal(exportedBefore.length,1)
+    if(point==='after-output')assert.equal(exportedBefore.length,1)
     await topology.bench(b,'stop')
     await topology.startPeer(b)
     await until(()=>topology.hasText(a,conversationId,`Communication reply ${tag}`),`${point} final response recovered`)
@@ -36,10 +40,10 @@ try{
     assert.equal(logicalInputs(restored).length,1)
     assert.equal((await topology.history(a,conversationId)).events.filter(event=>event.message?.content.text===`Communication reply ${tag}`).length,1)
     assert.equal(restored.exports.length,1)
-    if(point==='after-export')assert.deepEqual(restored.exports.map(item=>item.message_id),exportedBefore)
+    if(point==='after-output')assert.deepEqual(restored.exports.map(item=>item.message_id),exportedBefore)
     const generated=modelCalls(b.name)-calls
-    if(['before-export','after-export'].includes(point))assert.equal(generated,1,'persisted final must not be regenerated')
-    if(point==='after-injection')assert.equal(generated,2,'one lost model attempt plus one truthful host-resumption attempt')
+    if(point==='after-output')assert.equal(generated,2,'explicit reply and private final must not be regenerated')
+    if(point==='after-injection')assert.equal(generated,3,'one lost attempt plus explicit reply and private closing attempt')
     record(point,{conversationId,messageId:sent.messageId,deliveryId:restored.inbox.find(item=>item.ai).delivery_id,
       logicalInputs:1,finalMessages:1,modelCalls:generated,exportedMessageId:restored.exports[0].message_id})
     const after=modelCalls(b.name)

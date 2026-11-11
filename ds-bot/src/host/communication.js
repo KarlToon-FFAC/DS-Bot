@@ -128,7 +128,12 @@ export function install(rt) {
     defineTool({ name: 'list_communication_conversations', description: 'List only communication conversations and invitations authorized for your own Bot identity; original private chats are separate.', parameters: {}, output,
       execute: execute((comm, actor, _args, exec) => ({ conversations: comm.queue.memberships().filter(item => item.principalId === actor.principalId && (!exec.communicationBinding || item.conversationId === exec.communicationBinding.conversationId && item.membershipEpoch === exec.communicationBinding.membershipEpoch)),
         invites: exec.communicationBinding ? [] : comm.queue.invites().filter(item => item.principalId === actor.principalId) })) }),
-    defineTool({ name: 'send_contact_message', description: 'Immediately send as your executing Bot. A same-group send completes the current input only after Hub acceptance. While pending, write a substantive final fallback, not a tool receipt; the host retains it through uncertainty and publishes it on rejection. Prefer set_communication_reply_targets plus one natural final for normal group replies. Only active Bots can send this way. Structured targets wake member Bots; text @ is display-only. Never provide a sender identity.',
+    defineTool({name:'reply_to_communication',description:'Explicitly publish only this tool text to the current remote conversation as the reply to its exact input. Available to passive and active Bots. Final prose stays local. Omit activationTargets for an answer; supply exact Bot IDs only for a useful follow-up request. Never send internal reports or acknowledge acknowledgements.',
+      parameters:{text:{type:'string',required:true},activationTargets:{type:'array',items:{type:'string'}}},output,
+      execute:execute((comm,actor,args,exec)=>comm.replyBot(actor,args,exec))}),
+    defineTool({name:'decline_communication_reply',description:'Finish the exact current remote input without publishing a message. Use for acknowledgement-only inputs, resolved tasks or no useful public answer. Emits only an idempotent control receipt, never chat text or another Bot activation.',parameters:{},output,
+      execute:execute((comm,actor,_args,exec)=>comm.declineReply(actor,exec))}),
+    defineTool({ name: 'send_contact_message', description: 'Explicitly send the supplied text as your executing active Bot. Final prose is local and is never a fallback. Pending is not acceptance; retry only the same intent. For a passive authorized reply use reply_to_communication. Explicit activationTargets request further Bot work; omit them for an answer. Never provide a sender identity.',
       parameters: { text: { type: 'string', required: true }, contactPrincipalId: { type: 'string' }, conversationId: { type: 'string' },
         mentions: { type: 'array', items: { type: 'string' }, description: 'Explicit target IDs; compatibility alias for activationTargets' },
         activationTargets: { type: 'array', items: { type: 'string' }, description: 'Exact member Bot IDs to wake; names in body never wake Bots' },
@@ -139,7 +144,7 @@ export function install(rt) {
     defineTool({ name: 'update_communication_handoff', description: 'Add important information to your own earlier handoff for one recipient. Uses the same task and Session, never a new activation. The task must not have published its final. A pending receipt is not proof the recipient read it.',
       parameters: { conversationId: { type:'string',required:true }, handoffMessageId: { type:'string',required:true }, recipientPrincipalId:{type:'string',required:true}, text:{type:'string',required:true} }, output,
       execute: execute((comm,actor,args,exec)=>comm.sendUpdate(actor,args,toolOperation('input-update',exec))) }),
-    defineTool({ name: 'set_communication_reply_targets', description: 'Preferred for a natural group reply or handoff: stage exact Bot targets, then write one final answer addressed to them. Works for passive or active Bots. Does not send a message or grant proactive permission. Textual @ alone is display-only.',
+    defineTool({ name: 'set_communication_reply_targets', description: 'Stage exact targets for review only; this never publishes final prose. Use reply_to_communication with explicit text and targets to send. Works for passive or active Bots. Does not send a message or grant proactive permission. Textual @ alone is display-only.',
       parameters: { replyToMessageId: { type: 'string', required: true, description: 'The exact current authorized input Message ID from host metadata' }, activationTargets: { type: 'array', items: { type: 'string' } }, allBots: { type: 'boolean' } }, output,
       execute: execute((comm, actor, args, exec) => comm.stageHandoffWithRefresh(actor, args, exec)) }),
     defineTool({ name: 'read_communication_history', description: 'Read authorized canonical history from one communication conversation, without causing a new send or model delivery. Other chats and membership epochs are inaccessible.',
@@ -274,6 +279,7 @@ export function install(rt) {
         let value
         switch (body.endpoint) {
           case 'state': value = { ...comm.snapshot(), ...communicationReloadState(rt, appliedSettings) }; break
+          case 'routing-audit': value = comm.queue.routingAudit(body.limit); break
           case 'set-conversation-archived': value = comm.setConversationArchived(body); break
           case 'answer-work-approval': value = await comm.answerWorkApproval(body); break
           case 'relationship-memory':

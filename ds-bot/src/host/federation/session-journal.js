@@ -186,7 +186,7 @@ export function reconcileInput(sessions, source) {
   return { status: 'absent' }
 }
 
-export function completedOutputs(sessions, binding, { recoverSettled = false } = {}) {
+export function completedOutputs(sessions, binding, { recoverSettled = false, includeEmpty = false } = {}) {
   const outputs = []
   for (const { sessionId, events } of sessions) {
     const completedTurns = new Set(events.filter(event => event.type === 'turn/end'
@@ -222,7 +222,7 @@ export function completedOutputs(sessions, binding, { recoverSettled = false } =
       }
       const parts = message.content.flatMap((block, index) => block.type === 'text'
         ? [{ part: index, text: block.text }] : [])
-      if (!parts.some(part => part.text.trim())) continue
+      if (!includeEmpty && !parts.some(part => part.text.trim())) continue
       const inputs = inputsByTurn.get(turn) ?? []
       if (!inputs.length || inputs.some(source => !source || ![SOURCE_KIND, RECOVERY_SOURCE_KIND, 'ds-bot-communication-update'].includes(source.kind)
         || source.conversationId !== binding.conversationId

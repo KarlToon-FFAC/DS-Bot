@@ -7,7 +7,7 @@ const PROTOCOL = 'dsbot-communication/1'
 const CAPABILITIES = ['text', 'markdown', 'mentions', 'group', 'dm', 'reply', 'history', 'group-policy', 'membership-epoch', 'explicit-bot-activation', 'bot-input-updates']
 const STATE_INVALIDATION = 'state-invalidation'
 const BOUNDED_COLLABORATION = 'bounded-bot-collaboration'
-export const communicationCapabilities = () => [...CAPABILITIES, BOUNDED_COLLABORATION, ATTACHMENT_CAPABILITY, STATE_INVALIDATION]
+export const communicationCapabilities = () => [...CAPABILITIES, BOUNDED_COLLABORATION, ATTACHMENT_CAPABILITY, STATE_INVALIDATION, 'explicit-bot-dialogue']
 const outboxCapacity = Symbol('outbox-capacity')
 const membershipChanged = Symbol('membership-changed')
 const transient = new Set(['CONNECTION_LOST', 'REQUEST_TIMEOUT', 'HUB_CONNECTION_REFUSED', 'HUB_CONNECTION_TIMEOUT', 'HUB_UNREACHABLE', 'STORAGE_UNAVAILABLE', 'BACKPRESSURE', 'HISTORY_GAP'])
@@ -221,6 +221,7 @@ export class CommunicationTransport {
           if(message.author?.kind==='bot'&&!message.replyToMessageId&&!message.responseToDeliveryId&&!message.causationDeliveryId&&!message.localUserIntent&&!message.updateForMessageId
             &&!this.welcome.capabilities.includes('proactive-bot-roots'))throw errorWith('PROACTIVE_ROOT_CAPABILITY_REQUIRED')
         }
+        if(item.payload.author?.kind==='bot'&&!this.welcome.capabilities.includes('explicit-bot-dialogue'))throw errorWith('EXPLICIT_REPLY_CAPABILITY_REQUIRED')
         this.queue.accepted(item.id, await this.request(item.type, item.payload))
       }
       catch (error) {
@@ -266,7 +267,7 @@ export class CommunicationTransport {
         membershipEpoch: member.membershipEpoch, seq: this.queue.cursor(member.conversationId, member.principalId, member.membershipEpoch) })
     }
     for (const receipt of this.queue.pendingReceipts()) {
-      try { await this.request('delivery.receipt', receipt.payload); this.queue.receiptAccepted(receipt.id) }
+      try { if(receipt.payload.status==='noReply'&&!this.welcome.capabilities.includes('explicit-bot-dialogue'))throw errorWith('EXPLICIT_REPLY_CAPABILITY_REQUIRED'); await this.request('delivery.receipt', receipt.payload); this.queue.receiptAccepted(receipt.id) }
       catch (error) {
         if (transient.has(error.code) || error.code === 'STALE_CONNECTION') throw error
         this.queue.receiptRejected(receipt.id, error.code ?? 'INVALID_RESPONSE')

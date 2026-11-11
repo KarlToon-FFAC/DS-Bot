@@ -1,8 +1,9 @@
 # Explicit outbound intent, audience boundaries and bounded Bot dialogue
 
-2026-11-10. Proposed design for the two reported incidents. This document does
-not change runtime publication or activation behavior. Keep release numbers
-unchanged until the user requests a release.
+2026-11-10. User-approved design for the two reported incidents, now implemented
+in this branch. See [implementation and verification](explicit-outbound-implementation.md)
+for the shipped scope and the external WeLink integration requirement.
+Release numbers remain V0.3.1.
 
 ## Findings from the current implementation
 
@@ -38,7 +39,7 @@ Expose explicit, source-bound response decisions using supported tools:
 
 | Decision | Network content | Task outcome / activation |
 | --- | --- | --- |
-| Reply | Only the text/attachments explicitly passed to the reply tool | Completes the authorized input once after Hub acceptance |
+| Reply | Only the text explicitly passed to the reply tool; active send also accepts attachments | Completes the authorized input once after Hub acceptance |
 | No reply | None | Terminal control receipt, no chat text and no new AI activation |
 | Ask a follow-up | Explicit question plus exact activation target/work context | Continues the same bounded task; no new root from a remote turn |
 | Report locally | Explicit local report to an authorized initiating workflow | No remote publication; remote origin remains attached |

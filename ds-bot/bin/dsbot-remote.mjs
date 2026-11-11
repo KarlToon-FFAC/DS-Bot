@@ -12,6 +12,7 @@ const schemas = {
   'remote-hub-settings': {},
   'set-remote-hub-enabled': {enabled:'boolean',expectedVersion:text,confirmHideAllBots:'boolean'},
   state: {}, diagnose: {}, contacts: {}, conversations: {}, invites: {}, outbox: {},
+  'routing-audit': {limit:integer},
   members: { conversationId: text },
   thread: { conversationId: text, messageId: text, after: integer, limit: integer, watermark: integer, membershipEpoch: text },
   'search-history':{query:text,conversationId:text,membershipEpoch:text,cursor:text,limit:integer},

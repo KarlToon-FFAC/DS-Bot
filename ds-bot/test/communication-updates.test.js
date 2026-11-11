@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { CommunicationQueue } from '../src/host/federation/queue-store.js'
 import { CommunicationRuntime } from '../src/host/federation/runtime.js'
-import { COMMUNICATION_PRESET, sourceDelivery } from '../src/host/federation/session-scope.js'
+import { COMMUNICATION_PRESET, sourceDelivery, legacySessionSettled } from '../src/host/federation/session-scope.js'
 import { CommunicationTransport } from '../src/host/federation/transport.js'
 
 test('recovery sends stored before read receipts and final; lost storage ACK retains both for retry',async()=>{
@@ -51,18 +51,18 @@ function fixture(t, path=':memory:') {
   return {q,binding,source,original,events,runtime,receive}
 }
 
-test('pending tool reply retains the substantive final; rejection exports it once, acceptance suppresses it',async t=>{
+test('pending or rejected explicit reply never publishes subsequent private final text',async t=>{
   for(const outcome of ['accepted','failed']){
     const {q,binding,runtime}=fixture(t)
     q.commitExports('tool',[{sourceKey:'tool',parts:[{text:'attempt',part:0}]}],[],()=>runtime.message(binding.recipientPrincipalId,'group',{text:'attempt',messageId:'tool-message',responseToDeliveryId:'task',replyToMessageId:'task'}),{bindingId:binding.id,deliveryId:'task'})
     await runtime.export(binding)
-    assert.equal(q.db.prepare('SELECT count(*) n FROM exports').get().n,1,'uncertain send must not consume the final')
+    assert.equal(q.db.prepare('SELECT count(*) n FROM exports').get().n,1,'final text has no network intent')
     if(outcome==='accepted')q.accepted('tool-message',{messageId:'tool-message'})
     else q.rejected('tool-message','TARGET_NOT_RECEIVING')
     await runtime.export(binding);await runtime.export(binding)
     const messages=q.db.prepare('SELECT payload FROM outbox').all().map(row=>JSON.parse(row.payload))
-    assert.equal(messages.length,outcome==='accepted'?1:2)
-    if(outcome==='failed')assert.equal(messages[1].content.text,'Substantive final result')
+    assert.equal(messages.length,1)
+    assert.equal(messages.some(m=>m.content.text==='Substantive final result'),false)
   }
 })
 
@@ -97,8 +97,7 @@ test('pending final survives reopen without duplicate publication',async t=>{
   assert.equal(reopened.pendingOutbox().length,1)
   reopened.rejected('tool-message','TARGET_NOT_RECEIVING')
   await runtime.export(binding);await runtime.export(binding)
-  assert.equal(reopened.pendingOutbox().length,1)
-  assert.equal(reopened.pendingOutbox()[0].payload.content.text,'Substantive final result')
+  assert.equal(reopened.pendingOutbox().length,0)
 })
 
 test('read receipt requires a targeted update and stable model input mapping',t=>{
@@ -135,4 +134,87 @@ test('restart waits for a pending reply and does not regenerate a Hub-accepted r
   await runtime.recoverInterrupted(binding)
   q.accepted('tool-message',{messageId:'tool-message'})
   await runtime.recoverInterrupted(binding)
+})
+
+test('a private final creates an idempotent no-reply audit and control receipt, never a message',async t=>{
+ const {q,binding,runtime,events}=fixture(t)
+ const agent={id:'session',status:'idle',inbox:{nextTurn:[],nextStep:[]}}
+ assert.equal(legacySessionSettled(q,binding,agent,events),false)
+ await runtime.export(binding);await runtime.export(binding)
+ assert.equal(q.pendingOutbox().length,0)
+ const decisions=q.db.prepare('SELECT * FROM outbound_decisions').all()
+ assert.equal(decisions.length,1);assert.equal(decisions[0].outcome,'no_reply')
+ assert.equal(JSON.stringify(decisions).includes('Substantive final result'),false)
+ const audit=q.routingAudit(1)
+ assert.equal(audit.decisions.length,1);assert.equal(audit.decisions[0].sourceDeliveryId,'task')
+ assert.ok(audit.decisions[0].createdAt);assert.equal(audit.decisions[0].audience,'local')
+ assert.equal(JSON.stringify(audit).includes('Substantive final result'),false)
+ for(const limit of [0,-1,201,1.1,'50'])assert.throws(()=>q.routingAudit(limit),{code:'INVALID_REQUEST'})
+ assert.equal(q.pendingReceipts().filter(r=>r.payload.status==='noReply').length,1)
+ assert.equal(legacySessionSettled(q,binding,agent,events),true,'private finals with durable decisions do not prevent workspace/segment rotation')
+ events.at(-1).data.reason.kind='interrupted'
+ assert.equal(legacySessionSettled(q,binding,agent,events),true,'a crash after a durable terminal decision must not strand the next workspace')
+ q.db.prepare("UPDATE outbound_decisions SET outcome='pending'").run()
+ assert.equal(legacySessionSettled(q,binding,agent,events),false,'uncertain explicit sends cannot authorize segment migration')
+})
+
+test('explicit reply accepts only its current host epoch and cannot select a different conversation or sender',async()=>{
+ const binding={id:'binding',conversationId:'group',membershipEpoch:'epoch'},causal={causationDeliveryId:'delivery',replyToMessageId:'source'}
+ const runtime=Object.assign(Object.create(CommunicationRuntime.prototype),{sendBot:async(actor,input,exec)=>({actor,input,explicit:exec.explicitReply})})
+ const actor={principalId:'bot:local:one'},exec={communicationBinding:binding,communicationCausation:causal}
+ const result=await runtime.replyBot(actor,{text:'public',membershipEpoch:'epoch'},exec)
+ assert.equal(result.input.conversationId,'group');assert.equal(result.input.replyToMessageId,'source');assert.equal(result.explicit,true)
+ for(const extra of [{conversationId:'other'},{author:'forged'},{membershipEpoch:'old'}])assert.throws(()=>runtime.replyBot(actor,{text:'public',...extra},exec))
+ assert.throws(()=>runtime.replyBot(actor,{text:'public'},{}),{code:'COMMUNICATION_INPUT_SOURCE_UNKNOWN'})
+})
+
+test('explicit decline validates its exact source and is terminal locally without sending a goodbye',async t=>{
+ const {q,binding,runtime}=fixture(t);runtime.authorize=async()=>{}
+ const actor={principalId:binding.recipientPrincipalId},exec={communicationBinding:binding,communicationCausation:{causationDeliveryId:'task',replyToMessageId:'task'}}
+ await runtime.declineReply(actor,exec);await runtime.declineReply(actor,exec)
+ assert.equal(q.replyDeclined('task'),true);assert.equal(q.pendingOutbox().length,0)
+ assert.equal(q.pendingReceipts().filter(r=>r.payload.status==='noReply').length,1)
+ await assert.rejects(runtime.sendBot(actor,{conversationId:'group',text:'late progress',continueReply:true},{...exec,callId:'late-call',agent:{id:'session'},communicationSource:'late-source'}),{code:'RESPONSE_ALREADY_SENT'})
+ await assert.rejects(runtime.declineReply(actor,{...exec,communicationCausation:{causationDeliveryId:'forged',replyToMessageId:'task'}}),{code:'COMMUNICATION_INPUT_SOURCE_UNKNOWN'})
+})
+
+test('a completed empty final is also a no-reply control outcome, without a magic silence token',async t=>{
+ const {q,runtime,binding,events}=fixture(t)
+ events[2].data.message.content=[]
+ await runtime.export(binding)
+ assert.equal(q.pendingOutbox().length,0)
+ assert.equal(q.routingAudit().decisions[0].outcome,'no_reply')
+ assert.equal(q.routingAudit().decisions[0].bytes,0)
+ assert.equal(q.pendingReceipts().filter(r=>r.payload.status==='noReply').length,1)
+})
+
+test('upgrade quarantines an uncommitted legacy automatic final but retains explicit tool sends',async t=>{
+ const directory=mkdtempSync(join(tmpdir(),'dsbot-output-policy-')),path=join(directory,'queue.sqlite')
+ const {q,binding,runtime}=fixture(t,path),persisted=q.binding('group',binding.recipientPrincipalId,'epoch','worker')
+ for(const [id,owner]of [['auto',persisted.id],['explicit','tool:session']])q.commitExports(owner,[{sourceKey:id,parts:[{part:0,text:id}]}],[],()=>runtime.message(binding.recipientPrincipalId,'group',{text:id,messageId:id}))
+ q.enqueueMessage(runtime.message(binding.recipientPrincipalId,'group',{text:'explicit supplement',messageId:'input-update-explicit',updateForMessageId:'handoff',updateRecipientPrincipalId:'bot:a:other'}))
+ q.db.prepare("DELETE FROM metadata WHERE key='explicit-output-v1'").run();q.close()
+ const opened=new CommunicationQueue(path,{instanceId:'b'})
+ try{assert.equal(opened.outboxStatus('auto').error,'LEGACY_AUTO_EXPORT_QUARANTINED');assert.equal(opened.outboxStatus('explicit').state,'pending');assert.equal(opened.outboxStatus('input-update-explicit').state,'pending')}
+ finally{opened.close();rmSync(directory,{recursive:true,force:true})}
+})
+
+test('an old Hub cannot receive updated Bot sends or no-reply receipts under legacy semantics',async t=>{
+ for(const decision of ['send','no_reply']){
+  const {q,binding,runtime}=fixture(t)
+  if(decision==='send')q.enqueueMessage(runtime.message(binding.recipientPrincipalId,'group',{text:'public',messageId:'explicit',replyToMessageId:'task',responseToDeliveryId:'task'}))
+  else await runtime.export(binding)
+  const requests=[],transport=new CommunicationTransport(q,{url:'ws://127.0.0.1:1/communication'})
+  transport.connected=true;transport.welcome={capabilities:['proactive-bot-roots']}
+  transport.request=async(type,payload)=>{
+   requests.push({type,payload})
+   if(type==='memberships.list')return{memberships:[]}
+   if(type==='deliveries.pull')return[]
+   return{}
+  }
+  await transport.synchronize()
+  assert.equal(requests.some(r=>r.type==='message.publish'||r.payload?.status==='noReply'),false)
+  if(decision==='send')assert.equal(q.outboxStatus('explicit').error,'EXPLICIT_REPLY_CAPABILITY_REQUIRED')
+  else assert.equal(q.routingAudit().decisions[0].controlReceipt.error,'EXPLICIT_REPLY_CAPABILITY_REQUIRED')
+ }
 })

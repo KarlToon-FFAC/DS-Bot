@@ -1,0 +1,41 @@
+import assert from 'node:assert/strict'
+import {randomUUID} from 'node:crypto'
+import {writeFileSync} from 'node:fs'
+import {join} from 'node:path'
+import {LocalTopology,until} from './local-topology.mjs'
+const nonce=randomUUID().slice(0,8),topology=new LocalTopology({prefix:'explicit-dialogue-'+nonce,webPort:3465,mockPort:9165,hubPort:3469})
+const cases=[],record=name=>{cases.push(name);console.log('PASS',name)}
+try{
+ await topology.initialize();const[a,b]=topology.peers
+ await a.client.request('/api/bot',{endpoint:'send',payload:{sessionId:a.botId,text:`COMM-SEND ${b.bot} ${nonce}`}})
+ const dm=await until(async()=>{const rows=(await topology.hub('stats')).messages;return rows.find(r=>JSON.parse(r.body).content.text===`Communication reply ${nonce}`)?.conversation_id},'explicit Bot DM answer')
+ await until(async()=>{const members=(await a.api({endpoint:'state'})).botConversations;return members.some(m=>m.conversationId===dm)},'requester DM projection')
+ // Await a stable completed no-reply control event in the canonical client history.
+ await until(async()=>{const state=await a.api({endpoint:'state'}),member=state.botConversations.find(m=>m.conversationId===dm);if(!member)return false;const value=await a.api({endpoint:'bot-dm-history',localBotId:a.botId,conversationId:dm,membershipEpoch:member.membershipEpoch,limit:100});return value.events.some(e=>e.type==='bot.work.completed')},'requester ends without an acknowledgement')
+ let stats=await topology.hub('stats'),messages=stats.messages.filter(r=>r.conversation_id===dm)
+ assert.equal(messages.length,2);assert.equal(JSON.stringify(messages).includes('LOCAL_CLOSING_CANARY'),false)
+ assert.equal(stats.deliveries.filter(r=>messages.some(m=>m.id===r.message_id)&&r.ai).length,2)
+ const audit=await a.api({endpoint:'routing-audit',limit:20})
+ assert.ok(audit.decisions.some(d=>d.outcome==='no_reply'&&d.conversationId===dm))
+ assert.equal(JSON.stringify(audit).includes('LOCAL_CLOSING_CANARY'),false)
+ record('Bot request and answer use two messages and two authorized AI deliveries; private finals and acknowledgement storms are absent')
+ const group=await topology.group('Explicit reply '+nonce,[])
+ await topology.operation(a,'invite',{conversationId:group,inviteePrincipalId:b.bot})
+ await until(async()=>(await b.api({endpoint:'state'})).conversations.some(m=>m.conversationId===group),'passive membership')
+ await topology.send(a,group,'COMM-NOREPLY',[b.bot])
+ await until(async()=>{const history=await topology.history(a,group);return history.events.some(e=>e.type==='bot.work.completed')},'explicit no-reply completion receipt')
+ stats=await topology.hub('stats');assert.equal(stats.messages.filter(m=>m.conversation_id===group).length,1)
+ record('a passive group Bot can explicitly decline; completion is a control event, never a chat message')
+ await topology.operation(a,'invite',{conversationId:group,inviteePrincipalId:a.bot})
+ await topology.send(a,group,`COMM-COLLAB FINAL 2 ${nonce} PeerB PeerA`,[a.bot])
+ await until(()=>topology.hasText(a,group,`COMM-COLLAB DONE ${nonce}`),'explicit passive follow-up chain')
+ stats=await topology.hub('stats')
+ const replies=stats.messages.filter(m=>m.conversation_id===group&&m.author_id.startsWith('bot:'))
+ assert.equal(replies.length,3);assert.deepEqual(replies.map(m=>m.author_id),[a.bot,b.bot,a.bot])
+ assert.equal(JSON.stringify(replies).includes('LOCAL_CLOSING_CANARY'),false)
+ record('passive Bots explicitly continue and finish an A-to-B-to-A group task with the same bounded source grants')
+ await topology.bench(b,'stop');await topology.startPeer(b)
+ stats=await topology.hub('stats');assert.equal(stats.messages.filter(m=>m.conversation_id===dm).length,2)
+ record('restart does not export private closing text or manufacture a fresh reply')
+ writeFileSync(join(topology.root,topology.prefix+'-acceptance.json'),JSON.stringify({status:'PASS',model:'Mock',cases},null,2))
+}finally{await topology.close()}

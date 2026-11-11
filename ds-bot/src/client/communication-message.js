@@ -63,10 +63,11 @@ export function CommunicationMessage({ message, members, request, onInspect }) {
       h('span', { className: 'bt-comm-inline-mention-content', 'aria-hidden': true }, h(CommunicationAvatar, { person, request, size: 16 }), h('span', { className: 'bt-comm-mention-label' }, labels.get(person.principalId)))))) : null)
 }
 
-export function BotWorkStarted({ event, members, request, onInspect }) {
+export function BotWorkStatus({ event, members, request, onInspect }) {
   // A removed member's identity is never recovered from another conversation's directory.
   const person = members.find(member => member.principalId === event.principalId && member.kind === 'bot')
   const name = person ? contactLabels(members).get(person.principalId) : t('Bot')
-  const content = [h(CommunicationAvatar, { key: 'avatar', person: person ?? { principalId: 'bot:unknown', kind: 'bot', displayName: t('Bot') }, request, size: 16 }), h('span', { key: 'label' }, t('{name} started on it', { name }))]
-  return h('div', { className: 'bt-comm-work-started', 'data-work-event-id': event.eventId }, person ? h('button', { type: 'button', title: person.principalId, 'aria-label': `${t('{name} started on it', { name })} · ${t('View participant')}`, onClick: () => onInspect([person.principalId]) }, ...content) : h('span', null, ...content))
+  const label = t(event.type === 'bot.work.completed' ? '{name} finished without a reply' : '{name} started on it', { name })
+  const content = [h(CommunicationAvatar, { key: 'avatar', person: person ?? { principalId: 'bot:unknown', kind: 'bot', displayName: t('Bot') }, request, size: 16 }), h('span', { key: 'label' }, label)]
+  return h('div', { className: 'bt-comm-work-started', 'data-work-event-id': event.eventId }, person ? h('button', { type: 'button', title: person.principalId, 'aria-label': `${label} · ${t('View participant')}`, onClick: () => onInspect([person.principalId]) }, ...content) : h('span', null, ...content))
 }

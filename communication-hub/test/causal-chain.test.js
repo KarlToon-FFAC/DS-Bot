@@ -95,18 +95,18 @@ test('depth limit accepts the final visible message without continuing the loop 
   assert.equal(f.store.db.prepare('SELECT sum(ai_deliveries) n FROM causal_roots').get().n, 3)
 })
 
-test('a Bot DM stops one automatic chain but a genuinely new proactive message starts a separate task', t => {
+test('explicit DM follow-ups remain causally bounded while new proactive work has its own root', t => {
   const f = fixture(t, { maxCausalDepth: 3, maxAiDeliveriesPerRoot: 4 })
   const dm = f.store.createDm(f.a, f.op({ principalId: f.A, otherPrincipalId: f.B })).conversationId
   let parent, root
   for (const actor of [f.A, f.B, f.A, f.B]) {
     const member = f.member(actor, dm)
     const extra = parent ? { responseToDeliveryId: f.grant(parent, actor), replyToMessageId: parent.messageId } : {}
-    parent = f.send(actor, { conversationId: dm, membershipEpoch: member.membershipEpoch, ...extra })
+    parent = f.send(actor, { conversationId: dm, membershipEpoch: member.membershipEpoch, activationTargets:[{principalId:actor===f.A?f.B:f.A}], ...extra })
     root ??= parent.causality.rootMessageId
   }
   assert.equal(parent.dispatchSuppressed, 'CAUSAL_LIMIT')
-  const continuation = f.send(f.A, { conversationId: dm, membershipEpoch: f.member(f.A, dm).membershipEpoch, replyToMessageId: parent.messageId })
+  const continuation = f.send(f.A, { conversationId: dm, membershipEpoch: f.member(f.A, dm).membershipEpoch, activationTargets:[{principalId:f.B}], replyToMessageId: parent.messageId })
   assert.equal(continuation.causality.rootMessageId, root)
   assert.equal(continuation.dispatchSuppressed, 'CAUSAL_LIMIT')
   const fresh = f.send(f.A, { conversationId: dm, membershipEpoch: f.member(f.A, dm).membershipEpoch })
@@ -339,9 +339,33 @@ test('long Bot-only DMs have independent proactive tasks beyond 32 deliveries wh
  assert.equal(new Set(sent.map(result=>result.causality.rootMessageId)).size,40)
  assert.equal(f.store.db.prepare('SELECT ai_deliveries FROM causal_roots WHERE id=?').get(`genesis:${dm}`).ai_deliveries,32)
  const parent=sent.at(-1),grant=f.grant(parent,f.A)
- const result=f.send(f.A,{conversationId:dm,membershipEpoch:f.member(f.A,dm).membershipEpoch,causationDeliveryId:grant})
+ const result=f.send(f.A,{conversationId:dm,membershipEpoch:f.member(f.A,dm).membershipEpoch,activationTargets:[{principalId:f.B}],causationDeliveryId:grant})
  assert.deepEqual(f.ai(result),[f.B]);assert.equal(result.causality.depth,1)
- const duplicate=f.send(f.A,{conversationId:dm,membershipEpoch:f.member(f.A,dm).membershipEpoch,causationDeliveryId:grant})
+ const duplicate=f.send(f.A,{conversationId:dm,membershipEpoch:f.member(f.A,dm).membershipEpoch,activationTargets:[{principalId:f.B}],causationDeliveryId:grant})
  assert.equal(duplicate.dispatchSuppressed,'DUPLICATE_HANDOFF');assert.deepEqual(f.ai(duplicate),[])
  assert.equal(duplicate.causality.rootMessageId,parent.causality.rootMessageId)
+})
+
+test('DM result resumes its requester once, acknowledgement does not reactivate the peer, explicit follow-up still works',t=>{
+ const f=fixture(t),dm=f.store.createDm(f.a,f.op({principalId:f.A,otherPrincipalId:f.B})).conversationId
+ const send=(id,extra={})=>f.send(id,{conversationId:dm,membershipEpoch:f.member(id,dm).membershipEpoch,...extra})
+ const request=send(f.A),delivery=f.grant(request,f.B)
+ const answer=send(f.B,{replyToMessageId:request.messageId,responseToDeliveryId:delivery})
+ assert.deepEqual(f.ai(answer),[f.A])
+ const resultGrant=f.grant(answer,f.A)
+ const ack=send(f.A,{replyToMessageId:answer.messageId,responseToDeliveryId:resultGrant})
+ assert.deepEqual(f.ai(ack),[])
+ const question=send(f.A,{causationDeliveryId:resultGrant,activationTargets:[{principalId:f.B}]})
+ assert.deepEqual(f.ai(question),[f.B]);assert.equal(question.causality.rootMessageId,request.messageId)
+})
+
+test('no-reply is an idempotent control event bound to a stored AI grant and prevents later reply publication',t=>{
+ const f=fixture(t),message=f.send(f.H,{mentions:[{principalId:f.B}]}),grant=f.grant(message,f.B)
+ const input={deliveryId:grant,principalId:f.B,membershipEpoch:f.member(f.B).membershipEpoch,status:'noReply'}
+ const result=f.store.receipt(f.b,input);assert.deepEqual(f.store.receipt(f.b,input),result)
+ assert.equal(f.store.db.prepare("SELECT count(*) n FROM events WHERE type='bot.work.completed'").get().n,1)
+ assert.equal(f.store.db.prepare('SELECT count(*) n FROM messages').get().n,1)
+ assert.throws(()=>f.send(f.B,{replyToMessageId:message.messageId,responseToDeliveryId:grant}),{code:'RESPONSE_ALREADY_SENT'})
+ assert.throws(()=>f.send(f.B,{causationDeliveryId:grant,activationTargets:[{principalId:f.A}]}),{code:'RESPONSE_ALREADY_SENT'})
+ assert.throws(()=>f.store.receipt(f.a,input),{code:'FORBIDDEN'})
 })

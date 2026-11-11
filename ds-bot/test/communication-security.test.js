@@ -87,7 +87,7 @@ test('permanent automatic final rejection remains visible as an audited export f
 
 test('legacy migration rotates only a fully settled exported segment and quarantines pending, interrupted or unmapped work', () => {
   let mapped = true
-  const q = { db: { prepare: () => ({ get: () => mapped ? { found: 1 } : undefined }) } }
+  const q = { db: { prepare: sql => ({ get: () => sql.startsWith('SELECT 1 FROM exports') && mapped ? { found: 1 } : undefined }) } }
   const agent = { id: 'legacy', status: 'idle', inbox: { nextTurn: [], nextStep: [] } }
   const events = [{ type: 'turn/start', data: { turn: 1 } }, { type: 'user/message', data: { source: { kind: 'agent-instructions' } } },
     { seq: 2, type: 'assistant/message', data: { turn: 1, message: { id: 'final', content: [{ type: 'text', text: 'legacy final' }] } } },

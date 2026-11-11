@@ -539,3 +539,33 @@ test('a continued subagent hands up each run\'s own result', async (t) => {
   assert.ok(answer.includes('SCHEDULE: Monday'), `the second run's result goes up: ${answer}`)
   assert.ok(answer.indexOf('COST: 42') < answer.indexOf('SCHEDULE: Monday'), `in run order: ${answer}`)
 })
+
+test('a delegated user task preserves its audience when the result resumes the requester',async t=>{
+ const host=await bench(t).start(seed()),turns=turnTaker(host.agents,host.emit)
+ turns.userTurn('a','delegate a user task')
+ await host.tool('message_bot',{to:'Writer',message:'do the task'},'a')
+ assert.ok(Object.values(await worksIn(host)).some(work=>work.audience==='user'))
+ turns.end('a','delegated');turns.take('b');turns.end('b','public task result')
+ await settled(()=>host.agents.get('a')?.calls.length>0)
+ turns.take('a')
+ assert.equal(rt.state.turnAudiences.a[2].audience,'user')
+ turns.end('a','user answer')
+})
+
+test('internal input cannot silently inherit user mirror permission in either mixed-input order',async t=>{
+ const host=await bench(t).start(seed()),{emit}=host,turns=turnTaker(host.agents,emit)
+ const internal={kind:SOURCE_KIND,role:'reply',exchangeId:'internal-only',senderSessionId:'b'}
+ turns.userTurn('a','a direct user request')
+ emit('a','user/message',{source:internal,content:textBlock('INTERNAL_CANARY')})
+ assert.equal(rt.state.turnAudiences.a[1].audience,'internal');assert.equal(rt.state.turnAudiences.a[1].mixed,true)
+ emit('a','user/message',{source:{kind:'user'},content:textBlock('more user input')})
+ assert.equal(rt.state.turnAudiences.a[1].audience,'internal')
+ turns.end('a')
+ turns.open('a',{source:internal,content:textBlock('another internal report')})
+ emit('a','user/message',{source:{kind:'user'},content:textBlock('user joins later')})
+ assert.equal(rt.state.turnAudiences.a[2].audience,'internal');assert.equal(rt.state.turnAudiences.a[2].mixed,true)
+ await host.call('set-prefs',{})
+ const saved=JSON.parse(readFileSync(join(host.home,'state.json'),'utf8'))
+ assert.equal(saved.turnAudiences.a[1].audience,'internal');assert.equal(saved.turnAudiences.a[2].audience,'internal')
+ turns.end('a')
+})

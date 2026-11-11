@@ -163,7 +163,9 @@ export function communicationLogEvents(events) {
   const seen = new Set()
   return events.filter(event => {
     if (event.type === 'message') return true
-    if (event.type !== 'bot.work.started' || !event.deliveryId || event.eventId !== `bot-work-started:${event.deliveryId}` || !event.messageId || !event.principalId?.startsWith('bot:') || !event.serverStartedAt || seen.has(event.eventId)) return false
+    const started = event.type === 'bot.work.started' && event.eventId === `bot-work-started:${event.deliveryId}` && event.serverStartedAt
+    const completed = event.type === 'bot.work.completed' && event.eventId === `bot-work-completed:${event.deliveryId}` && event.outcome === 'no_reply'
+    if ((!started && !completed) || !event.deliveryId || !event.messageId || !event.principalId?.startsWith('bot:') || seen.has(event.eventId)) return false
     seen.add(event.eventId)
     return true
   })

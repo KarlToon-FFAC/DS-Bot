@@ -18,7 +18,7 @@ import { useLinger, useViewport, viewBottom, SPRING_TAP } from './motion.js'
 import { contactLabels, conversationTitle, contactsByAddress, mentionQuery, mentionChoices, insertMention, retainedMentions, groupSettingsValues, groupSettingsChanges, referenceExcerpt, communicationLogEvents, communicationScope } from './communication-model.js'
 import { AddDevice, ContactManager, OwnRemoteProfile } from './communication-onboarding.js'
 import { CommunicationAvatar, HumanProfile, syncAvatarDirectory } from './communication-profile.js'
-import { CommunicationMessage, BotWorkStarted } from './communication-message.js'
+import { CommunicationMessage, BotWorkStatus } from './communication-message.js'
 import { selectedAttachments } from './communication-attachments.js'
 import { ConversationRow, ConversationAvatar } from './communication-list.js'
 import { CommunicationWorkApprovals } from './communication-work-approvals.js'
@@ -160,7 +160,7 @@ function GroupSettings({ member, contacts, operation, pendingSettings, pendingIn
         group.person ? memberRow(group.person) : h('p',{className:'bt-comm-reference'},t('Owner information unavailable')),
         group.bots.length ? h('div',{className:'bt-comm-member-bots'},group.bots.map(memberRow)) : null))),
       member.info?.formerMembers?.length ? h('details', null, h('summary', null, t('Former Bots')), member.info.formerMembers.map(person => btn(person.displayName, event => onInspect([person.principalId], event.currentTarget), { key: person.principalId, children: personLabel(person) }))) : null,
-      h('p', { className: 'bt-comm-reference' }, t('Both Bot modes may @mention current group Bots in an authorized final reply. Reply-only Bots cannot initiate messages or send proactively with tools. Active Bots may also initiate with tools. Bot delegation chains stop at the server’s finite limit.')),
+      h('p', { className: 'bt-comm-reference' }, t('Both Bot modes can explicitly reply to their current input or finish without a reply. Final prose stays local. Reply-only Bots cannot initiate messages. Active Bots may also initiate with tools. Explicit follow-ups stay within the server’s finite delegation limit.')),
       canManage ? h(Fragment, null,
         h('label', { className: 'bt-comm-field' }, t('Receiving rule'), h('select', { value: values.routing.mode, onChange: event => edit({ routing: { mode: event.target.value, adminBotPrincipalId: event.target.value === 'admin' ? values.routing.adminBotPrincipalId : null } }), 'aria-label': t('Receiving rule') },
           h('option', { value: 'mentionsOnly' }, t('Mentions only')), h('option', { value: 'admin' }, t('Plain messages go to one Bot')))),
@@ -644,7 +644,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
         page?.hasEarlier ? btn('Load earlier messages', () => {void history.loadEarlier()}, {disabled:history.loading}) : null,
         page?.hasLater ? btn('Show latest messages', () => {pendingJump.current=null;setReferenced(null);void history.showLatest()}) : null,
         history.loading ? h('p',{className:'bt-comm-history-status',role:'status'},t('Loading messages…')) : history.failure ? btn('Retry loading messages',()=>{void history.retry()}) : null,
-        communicationLogEvents(events).map(event => event.type === 'bot.work.started' ? h(BotWorkStarted, { key: event.eventId, event, members: knownMembers, request, onInspect: inspect }) : h('article', { key: event.message.messageId, 'data-message-id': event.message.messageId, 'data-self': event.message.author.principalId === state.humanPrincipalId, 'data-referenced': event.message.messageId === referenced },
+        communicationLogEvents(events).map(event => event.type !== 'message' ? h(BotWorkStatus, { key: event.eventId, event, members: knownMembers, request, onInspect: inspect }) : h('article', { key: event.message.messageId, 'data-message-id': event.message.messageId, 'data-self': event.message.author.principalId === state.humanPrincipalId, 'data-referenced': event.message.messageId === referenced },
           messageAvatar(event.message.author.principalId, contacts.find(person => person.principalId === event.message.author.principalId)?.displayName ?? event.message.author.displayName), h('strong', { title: event.message.author.principalId }, labels.get(event.message.author.principalId) ?? event.message.author.displayName ?? (event.message.author.principalId === state.humanPrincipalId ? t('You') : event.message.author.principalId), identityIcons(contacts.find(person => person.principalId === event.message.author.principalId) ?? event.message.author)),
           h('div', { className: 'bt-comm-message-bubble' }, event.message.replyToMessageId ? h(ReferenceQuote, { key: `${scope}:${selected}:${member.membershipEpoch}:${event.message.replyToMessageId}`, conversationId: selected,
             membershipEpoch: member.membershipEpoch, messageId: event.message.replyToMessageId, request: conversationRequest, labels, onJump: openReference }) : null,

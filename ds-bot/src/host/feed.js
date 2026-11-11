@@ -20,12 +20,13 @@ export function install(rt) {
   const encoder = new TextEncoder()
   /** @type {Set<ReadableStreamDefaultController<Uint8Array>>} */
   const clients = new Set()
+  const userClients = new Map()
   const send = (controller, chunk) => {
     if ((controller.desiredSize ?? 0) < -MAX_QUEUED) {
       leave(controller)
       return
     }
-    try { controller.enqueue(chunk) } catch { clients.delete(controller) }
+    try { controller.enqueue(chunk) } catch { clients.delete(controller); userClients.delete(controller) }
   }
   const publish = (event, data) => {
     const chunk = encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
@@ -49,10 +50,16 @@ export function install(rt) {
   })
 
   ctx.on('session/event', (session, event) => {
-    if (clients.size === 0) return
+    if (clients.size === 0 && userClients.size === 0) return
     const botId = rt.chatOwners.get(session.id)
     if (botId === undefined) return
-    for (const item of rt.displayItems(session.id, [event])) publish('message', { botId, sessionId: session.id, item })
+    for (const [index, item] of rt.displayItems(session.id, [event]).entries()) {
+      publish('message', { botId, sessionId: session.id, item })
+      if (item.kind === 'bot' && item.routing?.audience === 'user' && Number.isSafeInteger(event.seq)) {
+        const chunk = encoder.encode(`event: user-output\ndata: ${JSON.stringify({botId,sessionId:session.id,outputId:`${session.id}:${event.seq}:${index}`,item})}\n\n`)
+        for (const [controller, target] of userClients) if (target === botId) send(controller, chunk)
+      }
+    }
     if (event.type === 'tool/call') live()
   })
 
@@ -62,7 +69,7 @@ export function install(rt) {
   ctx.on('agent/assistant-stream', ({ agent, frame }) => {
     if (frame.type === 'start') {
       const botId = rt.chatOwners.get(agent.id)
-      if (clients.size === 0 || botId === undefined || (state.exchangeTurns[agent.id] ?? []).includes(frame.turn)) return
+      if (clients.size === 0 || botId === undefined || ((state.exchangeTurns[agent.id] ?? []).includes(frame.turn)||state.turnAudiences?.[agent.id]?.[frame.turn]?.audience==='internal')) return
       writing.set(frame.attemptId, { botId, sessionId: agent.id })
       publish('stream', { botId, sessionId: agent.id, attemptId: frame.attemptId, phase: 'start' })
       return
@@ -77,11 +84,26 @@ export function install(rt) {
   })
 
   const leave = (controller) => {
-    clients.delete(controller)
+    clients.delete(controller); userClients.delete(controller)
     if (clients.size === 0) writing.clear()
     try { controller.close() } catch { /* already closed or errored */ }
   }
 
+  ctx.effect(() => ctx.connection.fetch.register({
+    path: `${ROUTE}/user-output`, methods: ['GET'], requestBody: 'buffered',
+    fetch: async request => {
+      await rt.load(); await rt.refresh()
+      const target = new URL(request.url).searchParams.get('botId')
+      if (!target || !rt.botOf(target)) return new Response('Unknown Bot', {status:400})
+      let controller
+      const body = new ReadableStream({
+        start(own) { controller = own; userClients.set(own,target); send(own,encoder.encode('event: hello\ndata: {}\n\n')) },
+        cancel() { leave(controller) },
+      })
+      request.signal.addEventListener('abort', () => leave(controller), {once:true})
+      return new Response(body, {headers:{'content-type':'text/event-stream', 'cache-control':'no-store'}})
+    },
+  }), 'ds-bot: user-visible output')
   ctx.effect(() => ctx.connection.fetch.register({
     path: FEED_ROUTE,
     methods: ['GET'],
@@ -103,13 +125,13 @@ export function install(rt) {
 
   ctx.effect(() => {
     const keepalive = setInterval(() => {
-      if (clients.size > 0) for (const controller of clients) send(controller, encoder.encode(': keepalive\n\n'))
+      if (clients.size > 0 || userClients.size > 0) for (const controller of [...clients,...userClients.keys()]) send(controller, encoder.encode(': keepalive\n\n'))
     }, KEEPALIVE_MS)
     keepalive.unref?.()
     return () => {
       clearInterval(keepalive)
       clearTimeout(liveTimer)
-      for (const controller of clients) leave(controller)
+      for (const controller of [...clients,...userClients.keys()]) leave(controller)
     }
   }, 'ds-bot: live feed')
 }

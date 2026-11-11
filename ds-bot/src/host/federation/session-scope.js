@@ -55,13 +55,18 @@ export function communicationInputs(queue, binding, messages) {
 export function legacySessionSettled(queue, binding, agent, events) {
   if (agent.status !== 'idle' || agent.inbox.nextTurn.length || agent.inbox.nextStep.length) return false
   const ends = new Map(events.filter(e => e.type === 'turn/end').map(e => [e.data.turn, e.data.reason?.kind]))
-  if (events.some(e => e.type === 'turn/start' && ends.get(e.data.turn) !== 'completed')) return false
   const last = new Map(events.filter(e => e.type === 'assistant/message').map(e => [e.data.turn, e]))
+  for (const start of events.filter(e => e.type === 'turn/start')) {
+    const reason = ends.get(start.data.turn), final = last.get(start.data.turn)
+    if (reason === 'completed') continue
+    if (reason !== 'interrupted' || !final || !queue.db.prepare("SELECT 1 FROM outbound_decisions WHERE source_key=? AND outcome IN ('sent','no_reply')")
+      .get(JSON.stringify([binding.id,agent.id,final.seq,final.data.message.id]))) return false
+  }
   for (const event of last.values()) {
     const message = event.data.message
     if (!message.content.some(part => part.type === 'text' && part.text.trim()) || message.content.some(part => part.type === 'tool-call')) continue
     const key = JSON.stringify([binding.id, agent.id, event.seq, message.id])
-    if (!queue.db.prepare('SELECT 1 FROM exports WHERE source_key=?').get(key)) return false
+    if (!queue.db.prepare("SELECT 1 FROM exports WHERE source_key=? UNION ALL SELECT 1 FROM outbound_decisions WHERE source_key=? AND outcome IN ('sent','no_reply') LIMIT 1").get(key,key)) return false
   }
   return true
 }

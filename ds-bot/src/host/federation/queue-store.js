@@ -30,6 +30,8 @@ export class CommunicationQueue {
       CREATE TABLE IF NOT EXISTS inbox (delivery_id TEXT PRIMARY KEY,message_id TEXT NOT NULL,conversation_id TEXT NOT NULL,principal_id TEXT NOT NULL,epoch TEXT NOT NULL,seq INTEGER NOT NULL,ai INTEGER NOT NULL,notify INTEGER NOT NULL,hash TEXT NOT NULL,body TEXT NOT NULL,ai_state TEXT NOT NULL DEFAULT 'pending',mapping TEXT,applied INTEGER NOT NULL DEFAULT 0,human_read INTEGER NOT NULL DEFAULT 0,revoked INTEGER NOT NULL DEFAULT 0);
       CREATE TABLE IF NOT EXISTS receipts (id TEXT PRIMARY KEY,payload TEXT NOT NULL,state TEXT NOT NULL DEFAULT 'pending',error TEXT);
       CREATE TABLE IF NOT EXISTS exports (source_key TEXT PRIMARY KEY,binding_id TEXT NOT NULL,source_hash TEXT NOT NULL,message_id TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS outbound_decisions (source_key TEXT PRIMARY KEY,binding_id TEXT NOT NULL,delivery_id TEXT NOT NULL,outcome TEXT NOT NULL,metadata TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS outbound_decisions_delivery ON outbound_decisions(delivery_id,outcome);
       CREATE TABLE IF NOT EXISTS export_cursors (binding_id TEXT NOT NULL,session_id TEXT NOT NULL,seq INTEGER NOT NULL,PRIMARY KEY(binding_id,session_id));
       CREATE TABLE IF NOT EXISTS reply_targets (delivery_id TEXT PRIMARY KEY,binding_id TEXT NOT NULL,targets TEXT NOT NULL,source_key TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS tool_reply_completions (delivery_id TEXT PRIMARY KEY,binding_id TEXT NOT NULL,message_id TEXT NOT NULL);
@@ -55,6 +57,13 @@ export class CommunicationQueue {
     this.instanceId = old ?? instanceId ?? randomUUID()
     requireValue(!this.instanceId.includes(':') && Number.isSafeInteger(maxPending) && maxPending > 0, 'INVALID_CONFIG')
     this.db.prepare('INSERT OR IGNORE INTO metadata VALUES (?,?)').run('instanceId', this.instanceId)
+    if (!this.db.prepare("SELECT 1 FROM metadata WHERE key='explicit-output-v1'").get()) this.transaction(() => {
+      this.db.exec(`UPDATE outbox SET state='failed',error='LEGACY_AUTO_EXPORT_QUARANTINED'
+        WHERE state='pending' AND type='message.publish' AND json_extract(payload,'$.author.kind')='bot'
+        AND json_extract(payload,'$.updateForMessageId') IS NULL
+        AND NOT EXISTS(SELECT 1 FROM exports x WHERE x.message_id=outbox.id AND x.binding_id LIKE 'tool:%')`)
+      this.db.prepare("INSERT INTO metadata VALUES ('explicit-output-v1','1')").run()
+    })
     this.limits = JSON.parse(this.db.prepare('SELECT value FROM metadata WHERE key=?').get('limits')?.value ?? '{"maxTextBytes":65536,"maxEnvelopeBytes":131072}')
   }
   close() { this.authorized = false; this.db.close() }
@@ -204,6 +213,7 @@ export class CommunicationQueue {
       const row = this.db.prepare('SELECT type FROM outbox WHERE id=?').get(id)
       requireValue(row && (row.type !== 'message.publish' || result.messageId === id), 'INVALID_RECEIPT')
       this.db.prepare("UPDATE outbox SET state='accepted',result=?,error=NULL WHERE id=?").run(JSON.stringify(result), id)
+      this.db.prepare("UPDATE outbound_decisions SET outcome='sent' WHERE json_extract(metadata,'$.messageId')=? AND outcome='pending'").run(id)
     })
   }
   rejected(id, code) { this.db.prepare("UPDATE outbox SET state='failed',error=? WHERE id=?").run(code, id) }
@@ -441,6 +451,29 @@ export class CommunicationQueue {
     requireValue(!row||row.binding_id===bindingId,'CONVERSATION_SCOPE_MISMATCH')
     return row?.message_id
   }
+  recordDecision(binding, delivery, sourceKey, outcome, metadata = {}) {
+    return this.transaction(() => {
+      const old = this.db.prepare('SELECT * FROM outbound_decisions WHERE source_key=?').get(sourceKey)
+      requireValue(!old || old.binding_id === binding.id && old.delivery_id === delivery.deliveryId, 'CONVERSATION_SCOPE_MISMATCH')
+      this.db.prepare('INSERT INTO outbound_decisions VALUES (?,?,?,?,?) ON CONFLICT(source_key) DO UPDATE SET outcome=excluded.outcome,metadata=excluded.metadata')
+        .run(sourceKey,binding.id,delivery.deliveryId,outcome,JSON.stringify({createdAt:old ? JSON.parse(old.metadata).createdAt : new Date().toISOString(),conversationId:binding.conversationId,principalId:binding.recipientPrincipalId,membershipEpoch:binding.membershipEpoch,...metadata}))
+      if (outcome === 'no_reply') this.receiptInside(delivery,'noReply')
+      return {status:outcome,sendsMessage:false}
+    })
+  }
+  routingAudit(limit = 50) {
+    requireValue(Number.isSafeInteger(limit) && limit >= 1 && limit <= 200, 'INVALID_REQUEST')
+    const decisions = this.db.prepare('SELECT * FROM outbound_decisions ORDER BY rowid DESC LIMIT ?').all(limit).map(row => {
+      const metadata = JSON.parse(row.metadata)
+      const intent = metadata.messageId && this.db.prepare('SELECT state,error FROM outbox WHERE id=?').get(metadata.messageId)
+      const receipt = row.outcome === 'no_reply' && this.db.prepare('SELECT state,error FROM receipts WHERE id=?').get(JSON.stringify([row.delivery_id,'noReply']))
+      return {decisionId:row.source_key,bindingId:row.binding_id,sourceDeliveryId:row.delivery_id,outcome:row.outcome,...metadata,
+        ...(intent ? {transport:{state:intent.state,error:intent.error}} : {}),...(receipt ? {controlReceipt:{state:receipt.state,error:receipt.error}} : {})}
+    })
+    const quarantined = this.db.prepare("SELECT id,error FROM outbox WHERE error='LEGACY_AUTO_EXPORT_QUARANTINED' ORDER BY rowid DESC LIMIT ?").all(limit)
+    return {decisions,quarantined}
+  }
+  replyDeclined(deliveryId) { return Boolean(this.db.prepare("SELECT 1 FROM outbound_decisions WHERE delivery_id=? AND outcome='no_reply'").get(deliveryId)) }
   completeFinalExport(bindingId,deliveryId,output) {
     const messageId=this.completedToolReply(bindingId,deliveryId)
     requireValue(messageId && this.outboxStatus(messageId).state==='accepted','RESPONSE_NOT_ACCEPTED')
@@ -462,7 +495,7 @@ export class CommunicationQueue {
         requireValue(this.owns(message.author?.principalId), 'AUTHOR_MISMATCH')
           if(completion?.deliveryId){
             requireValue(!this.completedToolReply(completion.bindingId,completion.deliveryId),'RESPONSE_ALREADY_SENT')
-            requireValue(!this.db.prepare('SELECT 1 FROM reply_targets WHERE delivery_id=?').get(completion.deliveryId),'HANDOFF_ALREADY_SET')
+            requireValue(completion.explicit || !this.db.prepare('SELECT 1 FROM reply_targets WHERE delivery_id=?').get(completion.deliveryId),'HANDOFF_ALREADY_SET')
             this.db.prepare('INSERT INTO tool_reply_completions VALUES (?,?,?)').run(completion.deliveryId,completion.bindingId,message.messageId)
           }
         this.enqueueInside('message.publish', message, message.messageId)

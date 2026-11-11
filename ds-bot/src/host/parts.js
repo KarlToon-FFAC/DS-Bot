@@ -1305,7 +1305,7 @@ export function install(rt) {
   // the current part as one conversation.
   const EARLIER_PAGE = 60
   function displayItems(partId, events, session, seedTurn) {
-    const hidden = new Set(state.exchangeTurns[partId] ?? [])
+    const hidden = new Set([...(state.exchangeTurns[partId] ?? []), ...Object.entries(state.turnAudiences?.[partId] ?? {}).filter(([,value])=>value.audience==='internal').map(([turn])=>Number(turn))])
     // Call ids of the page's group_relay calls; their tool/result events carry the
     // round's replies. A result without its call on the page (the page cut between
     // them) draws nothing rather than guessing.
@@ -1319,6 +1319,8 @@ export function install(rt) {
     const stamp = (event, item) => {
       if (typeof event.seq === 'number' && Number.isInteger(event.seq)) item.seq = event.seq
       if (turn !== undefined) item.turn = turn
+      const routing = state.turnAudiences?.[partId]?.[event.data?.turn ?? turn]
+      if (routing) { item.routing = {...routing}; item.turn = event.data?.turn ?? turn }
       items.push(item)
     }
     for (const event of events) {
@@ -1364,6 +1366,8 @@ export function install(rt) {
           // the result event's seq, which the chat keys a post's anchor by.
           const item = { time: time ?? reply.time ?? event.time }
           if (turn !== undefined) item.turn = turn
+          const routing = state.turnAudiences?.[partId]?.[event.data?.turn ?? turn]
+          if (routing) { item.routing = {...routing}; item.turn = event.data?.turn ?? turn }
           if (reply.kind === 'user') items.push({ kind: 'user', text: reply.text, ...item })
           else if (reply.kind === undefined) items.push({ kind: 'post', botId: reply.botId ?? null, name: reply.name ?? null, texts, ...item, ...(duration === undefined ? {} : { duration }) })
           else items.push({ kind: 'relay', reply, ...item })
