@@ -1,0 +1,118 @@
+{
+  "scope": "documentation_visualization_only",
+  "status": "design_walkthrough",
+  "productRuntimeTested": false,
+  "networkOrModelSimulated": false,
+  "description": "Fixed scripted scenario replay; checks validate diagram structure and browser interaction only.",
+  "scenarioCount": 10,
+  "nodeCount": 118,
+  "edgeCount": 144,
+  "checks": [
+    {
+      "scenario": "single-bot-followup",
+      "nodes": 9,
+      "edges": 10,
+      "steps": 9,
+      "stepPlayback": true,
+      "groupFilter": true,
+      "nodeDetails": true
+    },
+    {
+      "scenario": "two-independent-bots",
+      "nodes": 9,
+      "edges": 11,
+      "steps": 6,
+      "stepPlayback": true,
+      "groupFilter": true,
+      "nodeDetails": true
+    },
+    {
+      "scenario": "nested-delegation-join",
+      "nodes": 16,
+      "edges": 25,
+      "steps": 14,
+      "stepPlayback": true,
+      "groupFilter": true,
+      "nodeDetails": true
+    },
+    {
+      "scenario": "two-users-shared-bot",
+      "nodes": 11,
+      "edges": 12,
+      "steps": 11,
+      "stepPlayback": true,
+      "groupFilter": true,
+      "nodeDetails": true
+    },
+    {
+      "scenario": "amend-cancel-late-result",
+      "nodes": 14,
+      "edges": 14,
+      "steps": 14,
+      "stepPlayback": true,
+      "groupFilter": true,
+      "nodeDetails": true
+    },
+    {
+      "scenario": "no-reply-versus-missing-decision",
+      "nodes": 11,
+      "edges": 12,
+      "steps": 9,
+      "stepPlayback": true,
+      "groupFilter": true,
+      "nodeDetails": true
+    },
+    {
+      "scenario": "results-thanks-no-storm",
+      "nodes": 10,
+      "edges": 13,
+      "steps": 10,
+      "stepPlayback": true,
+      "groupFilter": true,
+      "nodeDetails": true
+    },
+    {
+      "scenario": "bounded-open-discussion",
+      "nodes": 14,
+      "edges": 21,
+      "steps": 10,
+      "stepPlayback": true,
+      "groupFilter": true,
+      "nodeDetails": true
+    },
+    {
+      "scenario": "lost-ack-restart",
+      "nodes": 12,
+      "edges": 15,
+      "steps": 10,
+      "stepPlayback": true,
+      "groupFilter": true,
+      "nodeDetails": true
+    },
+    {
+      "scenario": "membership-retirement-new-participant",
+      "nodes": 12,
+      "edges": 11,
+      "steps": 12,
+      "stepPlayback": true,
+      "groupFilter": true,
+      "nodeDetails": true
+    },
+    {
+      "autoplay": true
+    },
+    {
+      "viewport": 390,
+      "noDocumentOverflow": true
+    },
+    {
+      "viewport": 768,
+      "noDocumentOverflow": true
+    },
+    {
+      "viewport": 1440,
+      "noDocumentOverflow": true
+    }
+  ],
+  "errors": []
+}
