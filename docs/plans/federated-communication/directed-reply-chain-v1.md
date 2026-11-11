@@ -1,6 +1,6 @@
 # 定向回复链：实现与边界
 
-2026-11-11，基于 V0.3.2；本轮不调整发布版本。
+2026-11-11，首次实现基于 V0.3.2；V0.3.3 将持久化收尾提醒上限调整为 3 次。
 取代 [回复链广播草案](reply-chain-broadcast-v1.md) 的全参与者唤醒规则。
 
 ## 交互与派发
@@ -40,16 +40,16 @@ activationTargets。显示性 @ 不替 Bot 自动申请工作。DM 仅恢复精�
 DSH 内部循环。普通正文和 reasoning 默认都不外发。
 
 - `reply_to_communication({text})` 显式提交新的公开回复。
-- 遗漏提交时，宿主最多提醒一次；提示包含工具名和已有普通正文的 `draftId`。
+- 遗漏提交时，每条输入最多提醒 3 次，逐次检查是否已提交；同一收尾事件不重复计数；提示包含工具名和已有普通正文的 `draftId`。
   `reply_to_communication({draftId})` 可明确选用原正文，无需重新生成。
 - 草稿只引用同一绑定、投递、Session、回合及消息的 text 块，并验证摘要。
   reasoning、工具调用和不同来源的内容不能作为草稿提交。模型必须判断正文
   是否适合公开；内部汇报不可因“已有草稿”直接外发。
 - `decline_communication_reply({})` 明确不回复，只生成控制回执，不生成聊天文本。
-- 提醒后仍不提交：`decision_missing` / `REPLY_DECISION_REQUIRED`；发送被拒：
+- 3 次提醒后仍不提交：`decision_missing` / `REPLY_DECISION_REQUIRED`；发送被拒：
   `send_failed` / `REPLY_SEND_FAILED`。均不会伪装成 no_reply 或关闭回复授权。
   用户可在通信活动中看到错误，routing-audit 可核对状态。
-- 提醒次数和草稿引用持久化，重启不重复提醒。已入 outbox 的提交沿用原意图重试，
+- 提醒次数和草稿引用持久化，重启不重置额度。后续提醒沿用最初保存的草稿引用，避免把纠错说明替换成待发送正文。已入 outbox 的提交沿用原意图重试，
   不能把 pending 当成“已对方处理”。遗漏后不进行无限模型重试。
 
 ## A 收集 B/C 的进展
@@ -73,15 +73,20 @@ Hub `collection.status` 按请求的实际 AI 投递及 response grant 关联报
 ## 验证
 
 - Hub：定向优先级、回复人类不回退、被动协调者授权、B/C 回报与不回复、禁止越权读取。
-- 插件：草稿绑定与摘要、防止 reasoning 外发、一次提醒、显式拒答、遗漏/失败分离、头像规则。
+- 插件：草稿绑定与摘要、防止 reasoning 外发、有界提醒、显式拒答、遗漏/失败分离、头像规则。
 - 双实例 DSH + Mock：DM 停止、被动接力、遗漏后 draftId 补交、协调收集、重启不重发。
 - GUI：主框/回复框头像实时变化、深色引用、窄屏无横向溢出；交互不产生意外发送。
 
 真实 LLM 的工具选择仍有不确定性；宿主提供有界纠正和可见错误，不声称所有模型
 一定做出正确公开选择。未实现更大的 task/waiter/镜像输出提交重构。
 
-本轮验证记录：Hub `npm test` 208/208；插件 `npm test -- --test-concurrency=2`
+首次实现验证记录：Hub `npm test` 208/208；插件 `npm test -- --test-concurrency=2`
 2120 通过、5 个平台条件跳过、0 失败；lint 无错误，生成文件 freshness 通过。
 `dev/communication/explicit-dialogue-acceptance.mjs` 双实例 Mock 六项通过；
 独立测试实例 `dev/smoke.mjs` 52/52 通过，已停止所有本轮测试服务。
 浏览器另验证了深色与 390px 窄屏的主框/回复框头像，不包含真实 LLM 验收。
+
+V0.3.3 验证：插件 2121 通过、5 跳过，Hub 208/208，宿主冒烟 52/52。
+双实例 Mock 七项通过，新增“无效草稿 ID → 仍只写正文 → 第三次提醒正确提交”
+场景，最终只发布一次原稿。单测覆盖同一事件不重复计数、3 次上限、重启及旧版
+提醒记录迁移。lint 与生成文件 freshness 通过，测试服务已停止。

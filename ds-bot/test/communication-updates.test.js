@@ -52,7 +52,7 @@ function fixture(t, path=':memory:') {
   return {q,binding,source,original,events,runtime,receive}
 }
 
-test('completion check reminds once and exposes only immutable plain text without closing the grant',async t=>{
+test('completion check reminds up to three times and preserves the original plain-text draft',async t=>{
  const {q,binding,runtime,events}=fixture(t)
  events.splice(events.findIndex(e=>e.type==='turn/end'),1)
  events.find(e=>e.type==='assistant/message').data.message.content.unshift({type:'reasoning',text:'PRIVATE_REASONING'})
@@ -68,7 +68,15 @@ test('completion check reminds once and exposes only immutable plain text withou
  assert.equal(await communicationDraft(runtime,row.draft_id,exec),'Substantive final result')
  await assert.rejects(communicationDraft(runtime,row.draft_id,{...exec,communicationCausation:{causationDeliveryId:'another'}}),{code:'COMMUNICATION_DRAFT_UNAVAILABLE'})
  await checkCommunicationCompletion(runtime,{agent,turn:1})
- assert.equal(notices.length,1);assert.equal(runtime.errors.get(binding.id),'REPLY_DECISION_REQUIRED')
+ assert.equal(notices.length,1);assert.equal(runtime.errors.has(binding.id),false,'same stop boundary is not another attempt')
+ for(let attempt=2;attempt<=4;attempt++){
+  events.push({seq:3+attempt,type:'assistant/message',data:{turn:1,message:{id:'correction-'+attempt,content:[{type:'text',text:'Still only prose'}]}}})
+  await checkCommunicationCompletion(runtime,{agent,turn:1})
+  assert.equal(notices.length,Math.min(attempt,3))
+ }
+ assert.equal(runtime.errors.get(binding.id),'REPLY_DECISION_REQUIRED')
+ assert.equal(q.db.prepare('SELECT attempts FROM completion_reminders').get().attempts,3)
+ assert.equal(await communicationDraft(runtime,row.draft_id,exec),'Substantive final result','reminders do not overwrite the original draft')
  assert.equal(q.pendingOutbox().length,0);assert.equal(q.replyDeclined('task'),false)
  assert.equal(q.pendingReceipts().some(row=>row.payload.status==='noReply'),false)
  events.find(e=>e.type==='assistant/message').data.message.content.push({type:'text',text:'changed'})
@@ -268,4 +276,24 @@ test('an old Hub cannot receive updated Bot sends or no-reply receipts under leg
   if(decision==='send')assert.equal(q.outboxStatus('explicit').error,'EXPLICIT_REPLY_CAPABILITY_REQUIRED')
   else assert.equal(q.routingAudit().decisions[0].controlReceipt.error,'EXPLICIT_REPLY_CAPABILITY_REQUIRED')
  }
+})
+
+
+test('completion reminder budget survives restart and counts legacy one-reminder rows',async t=>{
+ const folder=mkdtempSync(join(tmpdir(),'comm-completion-'));t.after(()=>rmSync(folder,{recursive:true,force:true}))
+ const path=join(folder,'queue.sqlite'),{q,binding,runtime,events}=fixture(t,path)
+ events.pop();runtime.owners=new Map([['session',binding]]);runtime.authorize=async()=>{}
+ const notices=[],agent={id:'session',session:{},steer:notice=>notices.push(notice)}
+ await checkCommunicationCompletion(runtime,{agent,turn:1})
+ q.db.exec('DELETE FROM completion_reminders') // Upgrade from the previous one-reminder schema.
+ q.close()
+ const reopened=new CommunicationQueue(path,{instanceId:'b'});t.after(()=>reopened.close());runtime.queue=reopened
+ await checkCommunicationCompletion(runtime,{agent,turn:1})
+ assert.equal(notices.length,1)
+ for(let attempt=2;attempt<=4;attempt++){
+  events.push({seq:3+attempt,type:'assistant/message',data:{turn:1,message:{id:'retry-'+attempt,content:[{type:'text',text:'Unsubmitted answer'}]}}})
+  await checkCommunicationCompletion(runtime,{agent,turn:1})
+ }
+ assert.equal(notices.length,3);assert.equal(reopened.db.prepare('SELECT attempts FROM completion_reminders').get().attempts,3)
+ assert.equal(reopened.replyDeclined('task'),false)
 })

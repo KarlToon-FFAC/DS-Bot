@@ -30,6 +30,7 @@ export class CommunicationQueue {
       CREATE TABLE IF NOT EXISTS inbox (delivery_id TEXT PRIMARY KEY,message_id TEXT NOT NULL,conversation_id TEXT NOT NULL,principal_id TEXT NOT NULL,epoch TEXT NOT NULL,seq INTEGER NOT NULL,ai INTEGER NOT NULL,notify INTEGER NOT NULL,hash TEXT NOT NULL,body TEXT NOT NULL,ai_state TEXT NOT NULL DEFAULT 'pending',mapping TEXT,applied INTEGER NOT NULL DEFAULT 0,human_read INTEGER NOT NULL DEFAULT 0,revoked INTEGER NOT NULL DEFAULT 0);
       CREATE TABLE IF NOT EXISTS receipts (id TEXT PRIMARY KEY,payload TEXT NOT NULL,state TEXT NOT NULL DEFAULT 'pending',error TEXT);
       CREATE TABLE IF NOT EXISTS exports (source_key TEXT PRIMARY KEY,binding_id TEXT NOT NULL,source_hash TEXT NOT NULL,message_id TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS completion_reminders (delivery_id TEXT PRIMARY KEY,attempts INTEGER NOT NULL,last_output_key TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS completion_checks (delivery_id TEXT PRIMARY KEY,binding_id TEXT NOT NULL,session_id TEXT NOT NULL,turn INTEGER NOT NULL,draft_id TEXT UNIQUE,seq INTEGER NOT NULL,message_id TEXT NOT NULL,hash TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS outbound_decisions (source_key TEXT PRIMARY KEY,binding_id TEXT NOT NULL,delivery_id TEXT NOT NULL,outcome TEXT NOT NULL,metadata TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS outbound_decisions_delivery ON outbound_decisions(delivery_id,outcome);

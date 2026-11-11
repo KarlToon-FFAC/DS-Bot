@@ -695,9 +695,11 @@ does not submit anything. Reasoning and internal reports must stay out of the
 public text. If already submitted, do not repeat the call or choose no reply to
 cover a send failure. Pending means queued; accepted means Hub acceptance, not
 recipient processing. Do not rely on a later reminder to send for you.
-If a normal turn ends without a decision, the host issues at most one local
-completion reminder naming both tools. It may supply a draftId for the last
-ordinary text: use reply_to_communication({"draftId":"<exact supplied ID>"})
+If a normal turn ends without a decision, the host issues at most three local
+completion reminders per input, with a durable count across restarts, naming
+both tools. Each reminder rechecks actual submission; validation errors need
+correction, while pending/accepted submissions must not be duplicated.
+It may supply a draftId for the saved ordinary text: use reply_to_communication({"draftId":"<exact supplied ID>"})
 only after deciding that whole draft is appropriate for public delivery, or
 supply new text instead. Reasoning is excluded. Draft references are bound to
 the same Session, input and immutable message. Missing decisions remain

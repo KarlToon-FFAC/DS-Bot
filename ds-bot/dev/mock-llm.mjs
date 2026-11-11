@@ -135,7 +135,10 @@ function decide(body) {
     const publicReply = value => remote ? [tool('reply_to_communication',{text:value})] : [text(value)]
     const current = textOf(last?.content)
     if (remote && current.includes('[Local completion check')) {
-      const draftId = textOf(previous?.content).startsWith('Draft result ') && /reply_to_communication\(\{"draftId":"([^"]+)"\}\)/.exec(current)?.[1]
+      const retryCase=messages.some(message=>message.role==='user' && textOf(message.content).includes('COMM-MISSING-RETRY'))
+      if(retryCase && current.includes('reminder 1/3:'))return [tool('reply_to_communication',{draftId:'invalid-synthetic-draft'})]
+      if(retryCase && !current.includes('reminder 3/3:'))return [text('Still only prose; no tool submitted.')]
+      const draftId = (retryCase || textOf(previous?.content).startsWith('Draft result ')) && /reply_to_communication\(\{"draftId":"([^"]+)"\}\)/.exec(current)?.[1]
       return [tool(draftId ? 'reply_to_communication' : 'decline_communication_reply',draftId ? {draftId} : {})]
     }
     const relationshipInput = textOf(messages.findLast(message => message.role === 'user' && textOf(message.content).includes('[Communication delivery]'))?.content)
@@ -225,7 +228,7 @@ function decide(body) {
     if (!communicationResults && command === 'COMM-LIST') return [tool('list_communication_conversations', {})]
     if (/^COMM-MODEL-ERROR (\S+)$/.test(command)) return 'fail'
     const echo = /^COMM-ECHO ([^\n]+)$/.exec(command)
-    const missingReply = /^COMM-MISSING-REPLY (\S+)$/.exec(command)
+    const missingReply = /^COMM-MISSING-(?:REPLY|RETRY) (\S+)$/.exec(command)
     if (!communicationResults && missingReply) return [text(`Draft result ${missingReply[1]}`)]
       // Echoed mentions are quoted data; intentional delegation uses COMM-COLLAB.
       if (!communicationResults && echo) return [tool('reply_to_communication',{text:`${echo[1].includes('@') ? '> ' : ''}Communication reply ${echo[1]}`})]
