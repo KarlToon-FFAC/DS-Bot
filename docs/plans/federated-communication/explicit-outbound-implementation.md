@@ -1,5 +1,13 @@
 # Explicit outbound replies and bounded Bot dialogue
 
+**2026-11-11 follow-up:** V0.3.2 investigation confirmed that omitted/failed sends
+are incorrectly treated as no-reply, and the canonical user-output feed can emit
+intermediate text from turns with inherited user audience. The shipped behavior
+and original acceptance results below describe the earlier implementation, not
+a resolution of those defects. See the
+[completion and output authorization proposal](turn-completion-and-output-authorization.md)
+for the verified gaps and the proposed replacement contract; it is not yet implemented.
+
 This implements the approved [design](explicit-outbound-and-dialogue-control.md).
 Plugin and Hub release numbers remain **V0.3.1**. Update the Hub and both client
 plugins to use the complete behavior; restart the owned hosts after installation.

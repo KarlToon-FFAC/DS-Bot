@@ -1,0 +1,141 @@
+{
+  "date": "2026-11-11",
+  "baseline": "1982bec",
+  "implemented": [
+    "Remote quote contrast only; no host/Hub completion or audience changes in this patch"
+  ],
+  "ui": {
+    "themes": [
+      "deepseek",
+      "mono",
+      "paper",
+      "moonlight"
+    ],
+    "viewports": [
+      "1280x900",
+      "390x844"
+    ],
+    "cases": 20,
+    "contrastMeasurements": 88,
+    "minimumContrast": 4.717711550528491,
+    "browserErrors": [],
+    "components": "Production CommunicationSurface, ReferenceQuote, thread and composer; Markdown primitive stubbed as plain text",
+    "script": "ds-bot/dev/communication/quote-contrast-ui-acceptance.mjs",
+    "targetedTests": {
+      "passed": 92,
+      "failed": 0
+    }
+  },
+  "baselineDecisionProbe": [
+    {
+      "scenario": "omitted_decision",
+      "decisions": [
+        {
+          "outcome": "no_reply"
+        }
+      ],
+      "noReplyReceipts": 1,
+      "replyDeclined": true,
+      "outboxCount": 0
+    },
+    {
+      "scenario": "reasoning_only",
+      "decisions": [
+        {
+          "outcome": "no_reply"
+        }
+      ],
+      "noReplyReceipts": 1,
+      "replyDeclined": true,
+      "outboxCount": 0
+    },
+    {
+      "scenario": "explicit_decline",
+      "decisions": [
+        {
+          "outcome": "no_reply"
+        },
+        {
+          "outcome": "no_reply"
+        }
+      ],
+      "noReplyReceipts": 1,
+      "replyDeclined": true,
+      "outboxCount": 0
+    },
+    {
+      "scenario": "send_pending",
+      "decisions": [
+        {
+          "outcome": "pending",
+          "transport": "pending"
+        }
+      ],
+      "noReplyReceipts": 0,
+      "replyDeclined": false,
+      "outboxCount": 1
+    },
+    {
+      "scenario": "send_failed",
+      "decisions": [
+        {
+          "outcome": "no_reply",
+          "transport": "failed"
+        }
+      ],
+      "noReplyReceipts": 1,
+      "replyDeclined": true,
+      "outboxCount": 1
+    },
+    {
+      "scenario": "hub_accepted",
+      "decisions": [
+        {
+          "outcome": "sent",
+          "transport": "accepted"
+        }
+      ],
+      "noReplyReceipts": 0,
+      "replyDeclined": false,
+      "outboxCount": 1
+    }
+  ],
+  "limits": [
+    "Decision probe uses existing in-memory fixture with production runtime/queue; it is not a production Hub trace.",
+    "No real-model or external WeLink gateway test in this patch.",
+    "Native local Markdown rendering was not part of this remote quote probe."
+  ],
+  "checks": {
+    "plugin": {
+      "tests": 2119,
+      "passed": 2114,
+      "skipped": 5,
+      "failed": 0
+    },
+    "lint": "passed with existing warnings",
+    "generatedClient": "fresh",
+    "diffWhitespace": "passed"
+  },
+  "mirrorProbes": [
+    {
+      "scenario": "inherited_user_audience",
+      "fixture": "handoff-results.test.js; user delegates Chief to Writer, Writer replies, Chief emits an internal canary",
+      "observed": {
+        "audience": "user",
+        "triggerOrigin": "local-bot",
+        "protocol": "reply"
+      },
+      "defectReproduced": true
+    },
+    {
+      "scenario": "intermediate_sse_output",
+      "fixture": "feed.test.js; inherited user turn emits text plus a tool call before turn/end",
+      "observed": {
+        "emittedToUserOutput": true,
+        "beforeTurnEnd": true,
+        "hasToolCall": true
+      },
+      "defectReproduced": true
+    }
+  ]
+}
