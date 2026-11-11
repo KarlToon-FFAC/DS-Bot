@@ -24836,7 +24836,10 @@ var communicationCSS = `
 .bt-comm-completion button[aria-selected=true]{background:var(--bt-active)}
 .bt-comm-heading>.bt-comm-avatar{float:left;width:36px;height:36px}
 
-.bt-comm-log article .bt-comm-quote{display:flex;flex-direction:column;gap:2px;width:100%;margin:6px 0;padding:6px 10px;border:0;border-left:2px solid var(--bt-line-2);border-radius:6px;background:var(--bt-tag-bg);color:var(--bt-ink-2);font-size:12px;line-height:16px}
+.bt-comm-log article .bt-comm-quote{display:flex;flex-direction:column;gap:2px;width:100%;margin:6px 0;padding:6px 10px;border:0;border-left:2px solid color-mix(in srgb,currentColor 35%,transparent);border-radius:6px;background:var(--bt-tag-bg);color:inherit;font-size:12px;line-height:16px}
+/* Own bubbles can invert the page palette. Keep quoted text on that bubble's surface. */
+.bt-comm-log article[data-self=true] .bt-comm-quote,.bt-comm-frame .bt-comm-log article[data-self=true] .bt-comm-quote:is(:hover,:active){background:transparent}
+.bt-comm-frame .bt-comm-log article .bt-comm-quote:disabled{opacity:1}
 .bt-comm-quote-author{font-weight:500}
 .bt-comm-quote-text{overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow-wrap:anywhere}
 .bt-comm-kind-icon{display:inline-block;margin-left:5px;font-size:11px;color:var(--bt-ink-3)}
