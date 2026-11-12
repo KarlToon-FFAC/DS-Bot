@@ -22046,6 +22046,15 @@ function CommunicationPresence({ state, unavailable, children }) {
   const people = new Map([...state?.conversations ?? [], ...state?.botConversations ?? []].flatMap((item) => [...item.info?.members ?? [], ...item.info?.formerMembers ?? []]).concat(state?.contacts ?? []).map((person) => [person.principalId, person]));
   return (0, import_react56.createElement)(Presence.Provider, { value: { people, known: state?.connected === true && state?.presenceFresh !== false && !unavailable && now - checked < 15e3 } }, children);
 }
+function useCommunicationAvatarPerson(person) {
+  const current = (0, import_react56.useContext)(Presence)?.people.get(person.principalId);
+  if (!current || person.retired) return person;
+  return {
+    ...person,
+    displayName: current.displayName ?? person.displayName,
+    ...Object.hasOwn(current, "avatar") ? { avatar: current.avatar } : {}
+  };
+}
 function presenceState(person, context) {
   if (context && !context.known) return "unknown";
   const value = context?.people.get(person.principalId) ?? person;
@@ -22273,6 +22282,7 @@ function syncAvatarDirectory(contacts, scope = "legacy") {
   }
 }
 function CommunicationAvatar({ person, request, allowed: allowed2 = true, size = 28 }) {
+  person = useCommunicationAvatarPerson(person);
   const revision = allowed2 ? person.avatar?.imageRevision : null;
   const scope = avatarScope, key2 = JSON.stringify([scope, person.principalId, revision]);
   const [loaded, setLoaded] = (0, import_react57.useState)(null);
@@ -23425,7 +23435,7 @@ function CommunicationResizeHandle({ side, width, onChange }) {
 // package.json
 var package_default = {
   name: "ds-bot",
-  version: "0.3.5",
+  version: "0.3.5-T2",
   description: "DS Bot: a team of long-lived Bots for DeepSeek Harness, with Main Bots, Bot-to-Bot messages and group chats",
   keywords: [
     "dsh-plugin",
@@ -23547,7 +23557,7 @@ var package_default = {
 
 // src/shared/communication-version.js
 var COMMUNICATION_VERSION = package_default.version;
-var displayCommunicationVersion = (version) => /^\d+\.\d+\.\d+(?:[-+][a-zA-Z0-9.+-]+)?$/.test(version ?? "") ? `V${version}` : version;
+var displayCommunicationVersion = (version) => /^\d+\.\d+\.\d+(?:T\d+|[-+][a-zA-Z0-9.+-]+)?$/.test(version ?? "") ? `V${version.replace(/-T(\d+)$/, "T$1")}` : version;
 var incompatibilities = /* @__PURE__ */ new Set([
   "UNSUPPORTED_CAPABILITY",
   "PROTOCOL_VERSION_UNSUPPORTED",
@@ -23560,10 +23570,10 @@ var incompatibilities = /* @__PURE__ */ new Set([
 ]);
 var incompatibleCommunication = (code) => incompatibilities.has(code);
 function communicationReleaseRelation(client, hub) {
-  const parse2 = (value) => typeof value === "string" ? value.match(/^[vV]?(\d+)\.(\d+)\.(\d+)(?:\+[a-zA-Z0-9.-]+)?$/)?.slice(1).map(BigInt) : null;
+  const parse2 = (value) => typeof value === "string" ? value.match(/^[vV]?(\d+)\.(\d+)\.(\d+)(?:-?T(\d+))?(?:\+[a-zA-Z0-9.-]+)?$/)?.slice(1).map((value2) => BigInt(value2 ?? 0)) : null;
   const a = parse2(client), b = parse2(hub);
   if (!a || !b) return "unknown";
-  for (let index = 0; index < 3; index += 1) if (a[index] !== b[index]) return a[index] < b[index] ? "client-older" : "client-newer";
+  for (let index = 0; index < 4; index += 1) if (a[index] !== b[index]) return a[index] < b[index] ? "client-older" : "client-newer";
   return "same";
 }
 function communicationCompatibility(welcome, code) {
@@ -24408,7 +24418,8 @@ var import_react74 = require("react");
 var seats = (count, size) => count < 2 ? [[0, 0, size]] : count === 2 ? [[0, 0, size * 2 / 3], [size / 3, size / 3, size * 2 / 3]] : count === 3 ? [[size * 2 / 9, 0, size * 5 / 9], [0, size * 4 / 9, size * 5 / 9], [size * 4 / 9, size * 4 / 9, size * 5 / 9]] : [[0, 0, size / 2], [size / 2, 0, size / 2], [0, size / 2, size / 2], [size / 2, size / 2, size / 2]];
 function ConversationAvatar({ conversation, humanId, request, size = 36 }) {
   const members = conversation.info?.members ?? [];
-  const people = conversation.kind === "group" ? members : members.filter((person) => person.principalId !== humanId).slice(0, 1);
+  const viewerId = conversation.viewerPrincipalId ?? humanId;
+  const people = conversation.kind === "group" ? members : members.filter((person) => person.principalId !== viewerId).slice(0, 1);
   if (conversation.kind !== "group" && people.length) return (0, import_react74.createElement)(CommunicationAvatar, { person: people[0], request, size });
   if (!people.length) return (0, import_react74.createElement)("span", { className: "bt-comm-room-avatar bt-comm-room-empty", style: { width: size, height: size }, "aria-hidden": true }, (0, import_react74.createElement)("span", null, "◇"));
   const positions = seats(Math.min(people.length, 4), size), gap = size / 14;

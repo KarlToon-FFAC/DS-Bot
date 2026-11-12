@@ -157,7 +157,7 @@ export async function completeCommunicationWithdrawal(rt, key, hub) {
     const record = checkedRecord(current, hub, {instanceId:hub.instanceId})
     return {kind:'grant',payload:{...record,savedConfiguration:{...publicConfiguration(record.savedConfiguration ?? hub),
       publishedBotIds:[],publicationGenerations:{...record.savedConfiguration?.publicationGenerations,...hub.publicationGenerations},
-      remoteHubWithdrawalPending:false,remoteHubWithdrawalId:hub.remoteHubWithdrawalId}}}
+      remoteHubWithdrawalPending:false,...(hub.remoteHubWithdrawalId===undefined?{}:{remoteHubWithdrawalId:hub.remoteHubWithdrawalId})}}}
   })
 }
 export async function communicationQueueSettings(rt, key, hub) {
@@ -710,7 +710,10 @@ export class CommunicationOnboarding {
     await this.update(key, hub, value => {
       if (value.requestId !== requestId) fail('ENROLLMENT_CONFLICT')
       if (value.instanceId && result.instanceId && value.instanceId !== result.instanceId) fail('COMMUNICATION_PAIRING_CONFLICT')
-      return { ...value, remoteMissing:undefined, status: result.status, ...(result.instanceId ? { instanceId: result.instanceId } : {}) }
+      const updated = { ...value, status: result.status, ...(result.instanceId ? { instanceId: result.instanceId } : {}) }
+      // Credential grants must round-trip as JSON; undefined is rejected by DSH.
+      delete updated.remoteMissing
+      return updated
     })
     const record = checkedRecord(await credentialsOf(this.ctx).readRecord(key), hub)
     if (result.status === 'approved' && !record.paused && !record.requiresResume) await this.configure(hub, result.instanceId, key, record.displayName)

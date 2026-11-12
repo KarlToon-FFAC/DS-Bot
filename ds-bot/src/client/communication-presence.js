@@ -10,6 +10,13 @@ export function CommunicationPresence({state,unavailable,children}) {
     .concat(state?.contacts??[]).map(person=>[person.principalId,person]))
   return h(Presence.Provider,{value:{people,known:state?.connected===true&&state?.presenceFresh!==false&&!unavailable&&now-checked<15000}},children)
 }
+// Member snapshots can lag behind the current authorized contact directory.
+export function useCommunicationAvatarPerson(person) {
+  const current=useContext(Presence)?.people.get(person.principalId)
+  if(!current||person.retired)return person
+  return {...person,displayName:current.displayName??person.displayName,
+    ...(Object.hasOwn(current,'avatar')?{avatar:current.avatar}:{})}
+}
 export function presenceState(person,context) {
   if(context&&!context.known)return 'unknown'
   const value=context?.people.get(person.principalId)??person

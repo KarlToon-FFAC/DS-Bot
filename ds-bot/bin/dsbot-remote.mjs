@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { communicationError } from '../src/shared/communication-diagnostics.js'
-import { COMMUNICATION_VERSION } from '../src/shared/communication-version.js'
+import { COMMUNICATION_VERSION, displayCommunicationVersion } from '../src/shared/communication-version.js'
 import { readFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -211,7 +211,7 @@ const describeOperation = (name, fields) => ({ fields, required: required[name] 
   fieldDescriptions: Object.fromEntries(Object.keys(fields).filter(key => fieldDescriptions[key]).map(key => [key, fieldDescriptions[key]])) })
 
 export const help = operation => JSON.stringify({
-  name: 'dsbot-remote', version: `V${COMMUNICATION_VERSION}`, usage: 'dsbot-remote <operation> [--json] [--config <explicit-file>] < request.json',
+  name: 'dsbot-remote', version: displayCommunicationVersion(COMMUNICATION_VERSION), usage: 'dsbot-remote <operation> [--json] [--config <explicit-file>] < request.json',
   authentication: 'DSBOT_REMOTE_URL and DSBOT_REMOTE_COOKIE, or explicit --config JSON {url,cookie}. Local loopback only; no discovery. Never put a cookie in argv.',
   operations: operation && schemas[operation] ? { [operation]: describeOperation(operation, schemas[operation]) }
     : Object.fromEntries(Object.entries(schemas).map(([name, fields]) => [name, describeOperation(name, fields)])),

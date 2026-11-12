@@ -626,3 +626,13 @@ test('the local profile saves explicit per-call remote work confirmation without
   assert.match(doc.body.textContent,/does not expand the sandbox/)
  })
 })
+
+test('Bot private chat avatar always selects the counterpart, including title and search callers passing the Human viewer',async()=>{
+ await ui(async({exports:api,doc,render})=>{
+  const own={principalId:'bot:a:own',kind:'bot',displayName:'Own',avatar:{shape:'star'}}
+  const peer={principalId:'bot:b:peer',kind:'bot',displayName:'Peer',avatar:{shape:'fish'}}
+  const conversation={kind:'dm',viewerPrincipalId:own.principalId,info:{members:[own,peer]}}
+  await render(React.createElement(api.ConversationAvatar,{conversation,humanId:'human:a:owner',request:async()=>({})}))
+  assert.equal(doc.querySelector('[data-avatar-id]').dataset.avatarId,peer.principalId)
+ })
+})

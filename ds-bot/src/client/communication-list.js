@@ -8,7 +8,8 @@ import { contactLabels, conversationTitle } from './communication-model.js'
 const seats = (count, size) => count < 2 ? [[0, 0, size]] : count === 2 ? [[0, 0, size * 2 / 3], [size / 3, size / 3, size * 2 / 3]] : count === 3 ? [[size * 2 / 9, 0, size * 5 / 9], [0, size * 4 / 9, size * 5 / 9], [size * 4 / 9, size * 4 / 9, size * 5 / 9]] : [[0, 0, size / 2], [size / 2, 0, size / 2], [0, size / 2, size / 2], [size / 2, size / 2, size / 2]]
 export function ConversationAvatar({ conversation, humanId, request, size = 36 }) {
   const members = conversation.info?.members ?? []
-  const people = conversation.kind === 'group' ? members : members.filter(person => person.principalId !== humanId).slice(0, 1)
+  const viewerId = conversation.viewerPrincipalId ?? humanId
+  const people = conversation.kind === 'group' ? members : members.filter(person => person.principalId !== viewerId).slice(0, 1)
   if (conversation.kind !== 'group' && people.length) return h(CommunicationAvatar, { person: people[0], request, size })
   if (!people.length) return h('span', { className: 'bt-comm-room-avatar bt-comm-room-empty', style: { width: size, height: size }, 'aria-hidden': true }, h('span', null, '◇'))
   const positions = seats(Math.min(people.length, 4), size), gap = size / 14

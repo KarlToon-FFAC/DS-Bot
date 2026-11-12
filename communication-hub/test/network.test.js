@@ -350,7 +350,7 @@ test('an old client handshake receives specific protocol/capability upgrade diag
    assert.equal(result.ok,false)
    assert.equal(result.error.code,protocol===PROTOCOL?'UNSUPPORTED_CAPABILITY':'PROTOCOL_VERSION_UNSUPPORTED')
    assert.equal(result.error.details.compatibility.protocol,PROTOCOL)
-   assert.match(result.error.details.compatibility.communicationVersion,/^\d+\.\d+\.\d+$/)
+   assert.match(result.error.details.compatibility.communicationVersion,/^\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?$/)
    assert.equal(result.error.details.compatibility.updateTarget,protocol===PROTOCOL?'client':'both')
    assert.equal(JSON.stringify(result).includes(credentials.a),false)
    socket.terminate()

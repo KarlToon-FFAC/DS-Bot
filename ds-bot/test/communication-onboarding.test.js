@@ -3,6 +3,11 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { verify, generateKeyPairSync } from 'node:crypto'
 import { EventEmitter } from 'node:events'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { isDeepStrictEqual } from 'node:util'
+import LocalCredentials from '@deepseek-ai/dsh-credentials-local'
 import { Context } from '@deepseek-ai/cordis'
 import { CommunicationOnboarding, communicationAuthentication, communicationCredentialKey, communicationStorageStatus, communicationSocket, completeCommunicationWithdrawal,
   connectHubSocket, decodeHubCode, enrollmentSigningText, openEnrollmentSocket, validateHubUrl } from '../src/host/federation/onboarding.js'
@@ -25,7 +30,10 @@ function fixture({ current = {}, failSave = 0, challengeChange, responseStatus =
       saves++
       if (saves === failSave) throw Object.assign(new Error('synthetic storage failure'), { code: 'STORAGE_UNAVAILABLE' })
       const next = await change(clone(records.get(name)))
-      if (next !== undefined) records.set(name, clone(next))
+      if (next !== undefined) {
+        if (!isDeepStrictEqual(next, JSON.parse(JSON.stringify(next)))) throw new TypeError('Credential payload must survive a JSON round trip')
+        records.set(name, clone(next))
+      }
     },
   }
   const rt = { config: clone(current), ctx: { credentials, configEditor: {
@@ -34,7 +42,7 @@ function fixture({ current = {}, failSave = 0, challengeChange, responseStatus =
   } } }
   const connect = async () => {
     sockets++
-    assert.ok(records.get(key)?.payload.privateKey, 'private key must be durably stored before opening a connection')
+    assert.ok((await (rt.ctx.get ? rt.ctx.get('credentials') : rt.ctx.credentials).readRecord(key))?.payload.privateKey, 'private key must be durably stored before opening a connection')
     let challenge
     return { close: () => { closed++ }, request: async (type, payload) => {
       calls.push({ type, payload: clone(payload) })
@@ -45,8 +53,8 @@ function fixture({ current = {}, failSave = 0, challengeChange, responseStatus =
         return clone(challenge)
       }
       assert.equal(type, 'enrollment.prove')
-      if (challenge.purpose === 'join') assert.equal(records.get(key).payload.requestId, challenge.requestId, 'request identity must be stored before proof can leave')
-      assert.equal(verify(null, Buffer.from(enrollmentSigningText(challenge)), records.get(key).payload.publicKey, Buffer.from(payload.signature, 'base64url')), true)
+      if (challenge.purpose === 'join') assert.equal((await (rt.ctx.get ? rt.ctx.get('credentials') : rt.ctx.credentials).readRecord(key)).payload.requestId, challenge.requestId, 'request identity must be stored before proof can leave')
+      assert.equal(verify(null, Buffer.from(enrollmentSigningText(challenge)), (await (rt.ctx.get ? rt.ctx.get('credentials') : rt.ctx.credentials).readRecord(key)).payload.publicKey, Buffer.from(payload.signature, 'base64url')), true)
       if (challenge.purpose === 'login') return { instanceId: challenge.instanceId, capabilities: payload.capabilities }
       const status = challenge.purpose === 'cancel' ? 'cancelled' : responseStatus
       return { requestId: challenge.requestId, status, ...(status === 'approved' ? { instanceId: 'isolated-instance' } : {}) }
@@ -594,4 +602,38 @@ test('lost approval and administrator deletion recover against the real Hub stor
   }
   assert.equal(joinCalls,1,'status recovery never duplicates the application')
  }
+})
+
+
+test('real DSH credential provider persists automatic approval and recovers an already approved prepared request',async()=>{
+ const directory=await mkdtemp(join(tmpdir(),'.dsh-test-enrollment-credentials-'))
+ const root=new Context()
+ try {
+  await root.plugin(LocalCredentials,{path:join(directory,'.credentials.yaml'),watch:false})
+  const credentials=root.get('credentials'),f=fixture({responseStatus:'approved'})
+  f.rt.ctx.credentials=credentials
+  const result=await f.onboarding.handle('join',joinInput,human)
+  assert.equal(result.status,'approved')
+  assert.equal(f.rt.config.communication.enabled,true)
+  const approved=await credentials.readRecord(f.key)
+  assert.equal(Object.hasOwn(approved.payload,'remoteMissing'),false)
+  const identity=result.identityFingerprint,requestId=result.requestId
+  // The old version durably saved this state before receiving approval, then
+  // failed to persist the result. Upgrade must recover the same identity.
+  await credentials.modifyRecord(f.key,current=>{
+   const payload={...current.payload,status:'prepared',remoteMissing:'request'}
+   delete payload.instanceId
+   return {kind:'grant',payload}
+  })
+  f.rt.config={}
+  const before=f.calls.length
+  const restarted=new CommunicationOnboarding(f.rt,{connect:f.connect})
+  const recovered=await restarted.handle('reconcile-enrollment',{},human)
+  assert.equal(recovered.status,'approved')
+  assert.equal(recovered.identityFingerprint,identity)
+  assert.equal(recovered.requestId,requestId)
+  assert.equal(f.rt.config.communication.enabled,true)
+  assert.equal(Object.hasOwn((await credentials.readRecord(f.key)).payload,'remoteMissing'),false)
+  assert.deepEqual(f.calls.slice(before).filter(call=>call.type==='enrollment.challenge').map(call=>call.payload.purpose),['status'])
+ }finally{await root.fiber.dispose();await rm(directory,{recursive:true,force:true})}
 })

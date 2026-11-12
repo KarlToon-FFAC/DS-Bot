@@ -2011,3 +2011,24 @@ test('view reply chain does not select a quote; Reply selects it and all Bot ava
   assert.ok(doc.querySelector('[data-bot-status="online"]'))
  })
 })
+
+test('DM list, title and message avatars follow current contact revisions even while membership metadata is cached',async()=>{
+ for(const kind of ['human','bot']) {
+  const peer={principalId:`${kind}:b:peer`,displayName:'Peer',kind,avatar:{imageRevision:'a'.repeat(64)}}
+  const owner=membership.info.members[0]
+  const dm={...membership,conversationId:'dm',kind:'dm',info:{members:[owner,peer]}}
+  let snapshot={...state(),contacts:[owner,peer],conversations:[dm]}
+  const first='data:image/png;base64,YQ==',second='data:image/png;base64,Yg=='
+  const event={type:'message',conversationSeq:1,serverAcceptedAt:'2026-11-12T00:00:00Z',activatedBotPrincipalIds:[],message:{messageId:'hello',author:peer,content:{text:'Hello'},mentions:[],replyToMessageId:null}}
+  await pane({getState:()=>snapshot,history:[event],handle:async body=>body.endpoint==='avatar'?{principalId:peer.principalId,revision:body.revision,image:body.revision.startsWith('a')?first:second}:{}},async({doc,click,autoRefresh})=>{
+   await click('Peer')
+   const selectors=['[data-conversation-id="dm"]','.bt-comm-title-pill','.bt-comm-log']
+   for(const selector of selectors)assert.equal(doc.querySelector(selector+' [data-avatar-id="'+peer.principalId+'"] img')?.getAttribute('src'),first)
+   snapshot={...snapshot,contacts:[owner,{...peer,avatar:{imageRevision:'b'.repeat(64)}}]}
+   await autoRefresh()
+   for(const selector of selectors)assert.equal(doc.querySelector(selector+' [data-avatar-id="'+peer.principalId+'"] img')?.getAttribute('src'),second,selector+' follows the current directory without remount')
+   snapshot={...snapshot,contacts:[owner,{...peer,avatar:null}]};await autoRefresh()
+   for(const selector of selectors)assert.equal(Boolean(doc.querySelector(selector+' [data-avatar-id="'+peer.principalId+'"] img')),false,selector+' clears a removed avatar')
+  })
+ }
+})

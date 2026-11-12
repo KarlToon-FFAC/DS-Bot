@@ -386,7 +386,7 @@ test('CLI never loops through a second reset-generation rejection or sends while
 
 test('help describes native Bot ids and the string-to-object mention boundary beside each operation',()=>{
  const publish=JSON.parse(help('publish-bots'))
- assert.match(publish.version,/^V\d+\.\d+\.\d+$/)
+ assert.match(publish.version,/^V\d+\.\d+\.\d+(?:T\d+)?$/)
  assert.match(publish.operations['publish-bots'].fieldDescriptions.localBotIds,/available-bots.*session-/)
  assert.match(JSON.parse(help('bot-dm-history')).operations['bot-dm-history'].fieldDescriptions.localBotId,/Not a global/)
  assert.match(JSON.parse(help('send')).operations.send.fieldDescriptions.mentions,/protocol \{principalId\}/)

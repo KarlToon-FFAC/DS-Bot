@@ -16,15 +16,18 @@ test('Hub and client report their own releases and distinguish compatible differ
 
 test('both current versions use semantic package versions and render with a V prefix',async()=>{
  const {displayCommunicationVersion}=await import('../src/shared/communication-version.js')
- assert.match(COMMUNICATION_VERSION,/^\d+\.\d+\.\d+$/)
- assert.equal(displayCommunicationVersion(COMMUNICATION_VERSION),`V${COMMUNICATION_VERSION}`)
- assert.equal(displayCommunicationVersion(HUB_VERSION),`V${HUB_VERSION}`)
+ assert.match(COMMUNICATION_VERSION,/^\d+\.\d+\.\d+(?:-T\d+)?$/)
+ assert.equal(displayCommunicationVersion(COMMUNICATION_VERSION),`V${COMMUNICATION_VERSION.replace(/-T(\d+)$/, 'T$1')}`)
+ assert.equal(displayCommunicationVersion(HUB_VERSION),`V${HUB_VERSION.replace(/-T(\d+)$/, 'T$1')}`)
  assert.equal(displayCommunicationVersion(null),null)
 })
 
 test('release ordering is advisory and does not infer a protocol incompatibility',async()=>{
  const {communicationReleaseRelation:relation}=await import('../src/shared/communication-version.js')
  assert.equal(relation('0.2.8','0.2.9'),'client-older')
+ assert.equal(relation('0.3.5','0.3.5-T2'),'client-older')
+ assert.equal(relation('V0.3.5T2','0.3.5-T2'),'same')
+ assert.equal(relation('0.3.5-T10','0.3.5-T2'),'client-newer')
  assert.equal(relation('0.2.10','0.2.9'),'client-newer')
  assert.equal(relation('V0.2.8','0.2.8+gui'),'same')
  assert.equal(relation('0.2.8','2026.11.09.2'),'unknown')

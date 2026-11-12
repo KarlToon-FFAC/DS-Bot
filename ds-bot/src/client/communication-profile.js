@@ -1,4 +1,4 @@
-import {BotPresenceBadge} from './communication-presence.js'
+import {BotPresenceBadge,useCommunicationAvatarPerson} from './communication-presence.js'
 import { createElement as h, useEffect, useRef, useState } from 'react'
 import { BotMark } from './mark.js'
 import { avatarImage } from './avatar-library.js'
@@ -21,6 +21,7 @@ export function syncAvatarDirectory(contacts, scope = 'legacy') {
   }
 }
 export function CommunicationAvatar({ person, request, allowed = true, size = 28 }) {
+  person=useCommunicationAvatarPerson(person)
   const revision = allowed ? person.avatar?.imageRevision : null
   const scope = avatarScope, key = JSON.stringify([scope,person.principalId, revision])
   const [loaded, setLoaded] = useState(null)
