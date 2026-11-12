@@ -146,7 +146,7 @@ export function ThreadReplyComposer({ storageKey, member, target, request, onSen
     h(RecipientPreview,{member,draft:draft.attempt??draft,target:draft.replyTarget??target,request,directedReplies,replyMentionUnion}),
     h('p',{className:'bt-comm-reference'},t('Reply to'),' ',labels.get((draft.replyTarget??target)?.author?.principalId)??t('Participant'),': ',referenceExcerpt((draft.replyTarget??target)?.content?.text??'')),
     choices.length?h('div',{className:'bt-comm-completion',role:'listbox','aria-label':t('Mention participant')},choices.map((person,at)=>h('button',{type:'button',key:person.principalId,role:'option','aria-selected':index===at,onMouseDown:event=>event.preventDefault(),onClick:()=>complete(person)},h(MentionPerson,{person,members,request})))):null,
-    h('textarea',{ref:input,rows:2,'aria-label':t('Reply in this thread'),value:draft.text??'',disabled:busy||Boolean(draft.attempt),
+    h('textarea',{ref:input,rows:4,'aria-label':t('Reply in this thread'),value:draft.text??'',disabled:busy||Boolean(draft.attempt),
       onChange:event=>{update({text:event.target.value,mentions:retainedMentions(event.target.value,draft.mentions??[],members,draft.manualMentions??[])});if(!composing.current)query(event.target)},
       onClick:event=>query(event.target),onCompositionStart:()=>{composing.current=true;setCompletion(null)},onCompositionEnd:event=>{composing.current=false;query(event.target)},
       onKeyDown:event=>{event.stopPropagation();if(event.nativeEvent.isComposing||composing.current||event.keyCode===229)return

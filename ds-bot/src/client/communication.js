@@ -680,7 +680,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
         suggestions.length ? h('div', { className: 'bt-comm-completion', role: 'listbox', id: 'bt-comm-completion', 'aria-label': t('Mention participant') }, suggestions.map((person, index) =>
           h('button', { type: 'button', key: person.principalId, id: `bt-comm-option-${index}`, role: 'option', 'aria-selected': completionIndex === index,
             onMouseDown: event => event.preventDefault(), onClick: () => complete(person) }, h(MentionPerson,{person,members:currentMembers,request})))) : null,
-        h('label', { className: 'bt-comm-field bt-comm-compose-field' }, h('span', { className: 'bt-sr' }, t('Communication message')), h('textarea', { ref: input, value: draft.text, rows: 2, placeholder: t('Message {name}', { name: conversationTitle(member, state.humanPrincipalId, labels) }), disabled: !canSpeak || Boolean(attempts[key]),
+        h('label', { className: 'bt-comm-field bt-comm-compose-field' }, h('span', { className: 'bt-sr' }, t('Communication message')), h('textarea', { ref: input, value: draft.text, rows: 4, placeholder: t('Message {name}', { name: conversationTitle(member, state.humanPrincipalId, labels) }), disabled: !canSpeak || Boolean(attempts[key]),
           onChange: event => { changeDraft({ text: event.target.value, mentions: retainedMentions(event.target.value, draft.mentions, currentMembers, draft.manualMentions) }); if (!composing) updateCompletion(event.target) },
           onClick: event => updateCompletion(event.target), onCompositionStart: () => { setComposing(true); setCompletion(null) },
           onCompositionEnd: event => { setComposing(false); updateCompletion(event.target) },

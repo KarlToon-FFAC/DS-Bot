@@ -170,7 +170,7 @@ export function NewChat({ mode, roster, actions }) {
         h('div', { className: 'bt-nc-card' },
           h('span', { className: 'bt-nc-plus', 'aria-hidden': true }, h(PlusIcon)),
           h('textarea', {
-            rows: 1, value: message, placeholder, 'aria-label': placeholder,
+            rows: 4, value: message, placeholder, 'aria-label': placeholder,
             onChange: event => setMessage(event.target.value),
             onKeyDown: (event) => {
               if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); sendMessage() }

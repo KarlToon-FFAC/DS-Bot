@@ -309,9 +309,9 @@ export const communicationCSS = `
 .bt-comm-message-actions{grid-column:2;grid-row:4;justify-content:flex-start;gap:6px;min-height:24px;margin:0;padding-inline:6px;color:var(--bt-ink-3)}
 .bt-comm-message-actions button{border:0;background:none;min-height:24px;padding:2px 5px;color:var(--bt-ink-2);opacity:0;transition:opacity .12s}
 .bt-comm-log article:is(:hover,:focus-within) .bt-comm-message-actions button{opacity:1}
-.bt-comm-main>footer{margin-top:auto;position:relative;flex-shrink:0;width:calc(100% - 48px);max-width:960px;align-self:center;padding:10px 48px 10px 14px;border:.5px solid var(--bt-line-2);border-radius:22px;background:var(--bt-main);box-shadow:0 1px 4px color-mix(in srgb,var(--bt-ink) 4%,transparent)}
+.bt-comm-main>footer{margin-top:auto;position:relative;flex-shrink:0;width:calc(100% - 48px);max-width:960px;align-self:center;padding:8px 44px 8px 10px;border:.5px solid var(--bt-line-2);border-radius:22px;background:var(--bt-main);box-shadow:0 1px 4px color-mix(in srgb,var(--bt-ink) 4%,transparent)}
 .bt-comm-main footer .bt-comm-compose-field{margin:0;display:block}
-.bt-comm-frame .bt-comm-main footer textarea{border:0;background:none;min-height:46px;max-height:180px;padding:0;font-size:14px;line-height:23px;resize:vertical;border-radius:0}
+.bt-comm-frame .bt-comm-main footer .bt-comm-compose-field textarea{border:0;background:none;min-height:96px;max-height:240px;padding:0;font-size:14px;line-height:24px;resize:vertical;border-radius:0}
 .bt-comm-frame footer textarea:focus-visible{outline:0}
 .bt-comm-frame footer:focus-within{border-color:var(--bt-ink-3)}
 .bt-comm-main footer>.bt-comm-send{position:absolute;right:8px;bottom:8px;width:32px;height:32px;min-height:32px;border:0;border-radius:50%;padding:8px;display:grid;place-items:center;background:var(--bt-accent);color:var(--bt-accent-ink)}
@@ -331,7 +331,7 @@ export const communicationCSS = `
 .bt-comm-thread-popover>.bt-comm-thread-heading{padding-right:32px;flex-shrink:0}
 .bt-comm-thread-popover>.bt-comm-thread{overflow:auto;min-height:80px;flex:1}
 .bt-comm-thread-composer{position:relative;border-top:1px solid var(--bt-line);padding-top:8px;flex-shrink:0}
-.bt-comm-thread-composer textarea{resize:vertical;max-height:160px;padding-right:44px}
+.bt-comm-frame .bt-comm-thread-composer textarea[rows]{resize:vertical;box-sizing:border-box;min-height:110px;max-height:240px;padding:6px 44px 6px 8px;font-size:14px;line-height:24px}
 .bt-comm-thread-composer>.bt-comm-send{position:absolute;right:6px;bottom:6px;width:32px;height:32px;padding:8px;border:0;border-radius:50%;display:grid;place-items:center;background:var(--bt-accent);color:var(--bt-accent-ink)}
 .bt-comm-thread-composer .bt-comm-completion{z-index:2}
 .bt-comm-thread-send-error{font-size:12px;color:var(--bt-danger);padding-right:36px}

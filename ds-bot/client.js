@@ -3349,9 +3349,9 @@ button.bt-q-opt:active{background:var(--bt-active)}
 .bt-hint{padding:14px;text-align:center;font-size:13px;color:var(--bt-ink-2)}
 .bt-nc-spacer{flex:1}
 .bt-nc-compose{padding:0 16px 14px;display:flex;justify-content:center}
-.bt-nc-card{display:flex;align-items:flex-end;gap:6px;width:100%;max-width:var(--dsh-chat-content-width,748px);min-height:44px;padding:4px 6px;border-radius:22px;border:1px solid var(--bt-line-2);background:var(--bt-main);box-shadow:0 2px 8px -2px rgba(0,0,0,.06);box-sizing:border-box}
+.bt-nc-card{display:flex;align-items:flex-end;gap:6px;width:100%;max-width:var(--dsh-chat-content-width,748px);min-height:112px;padding:4px 6px;border-radius:18px;border:1px solid var(--bt-line-2);background:var(--bt-main);box-shadow:0 2px 8px -2px rgba(0,0,0,.06);box-sizing:border-box}
 .bt-nc-plus{width:34px;height:34px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:var(--bt-ink-2);background:var(--bt-hover);flex:none}
-.bt-nc-card textarea{flex:1;resize:none;border:0;outline:none;background:none;color:var(--bt-ink);font:inherit;font-size:14px;line-height:20px;padding:7px 4px;min-height:34px;max-height:140px;box-sizing:border-box}
+.bt-nc-card textarea{flex:1;resize:none;border:0;outline:none;background:none;color:var(--bt-ink);font:inherit;font-size:14px;line-height:24px;padding:4px 2px;min-height:104px;max-height:240px;box-sizing:border-box}
 .bt-nc-send{width:34px;height:34px;border-radius:50%;border:0;background:var(--bt-accent);color:var(--bt-accent-ink,#fff);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex:none}
 .bt-nc-send:disabled{opacity:.3;cursor:default}
 .bt-create{flex:1;display:flex;flex-direction:column;min-width:0}
@@ -4066,21 +4066,21 @@ html[data-platform=darwin] header[class*="_header"]:has(.bt-head) :is(a,button,i
 }
 @keyframes bt-fade-in{from{opacity:0}to{opacity:1}}
 @keyframes bt-fade-out{from{opacity:1}to{opacity:0}}
-[data-composer-card]{display:flex!important;flex-direction:row!important;flex-wrap:wrap!important;align-items:center!important;gap:0!important;min-height:44px!important;border-radius:22px!important;padding:7.5px!important;box-sizing:border-box;background:var(--bt-main)!important;border:.5px solid var(--bt-line-2)!important;box-shadow:0 2px 8px -1px rgba(0,0,0,.05),0 1px 2px rgba(0,0,0,.03),0 0 0 1px rgba(228,228,228,.04)!important;transition:border-color .15s ease,background-color .15s ease,${spring(SPRING_SHAPE, "border-radius")}!important}
+[data-composer-card]{display:flex!important;flex-direction:row!important;flex-wrap:wrap!important;align-items:center!important;gap:0!important;min-height:112px!important;border-radius:18px!important;padding:6px!important;box-sizing:border-box;background:var(--bt-main)!important;border:.5px solid var(--bt-line-2)!important;box-shadow:0 2px 8px -1px rgba(0,0,0,.05),0 1px 2px rgba(0,0,0,.03),0 0 0 1px rgba(228,228,228,.04)!important;transition:border-color .15s ease,background-color .15s ease,${spring(SPRING_SHAPE, "border-radius")}!important}
 [data-composer-card]:hover,[data-composer-card]:focus-within{border-color:color-mix(in srgb,var(--bt-ink) 30%,transparent)!important}
 [data-composer-card]:has(> [data-slot="conversation.input.attachments"] *),[data-composer-card]:has([data-composer-input] br + *),[data-composer-card]:has([data-composer-input] > :nth-child(2)){border-radius:18px!important}
 [class*="_root"]:has(> [data-composer-card]){padding:0 11px 13px 16px!important}
 [class*="_root"]:has(> [data-composer-card])>[data-composer-card]{max-width:min(992px,100%)!important}
 [data-composer-card]>[class*="_row"]{display:contents!important}
 [data-composer-card] [class*="_tools"]{order:1!important;flex:none!important;align-self:flex-end!important;margin:0!important}
-[data-composer-card]>[data-input-scroll]{order:2!important;flex:1 1 0!important;min-width:0!important;padding:0 8px!important;margin:0!important}
+[data-composer-card]>[data-input-scroll]{order:2!important;flex:1 1 0!important;min-width:0!important;padding:0 6px!important;margin:0!important}
 [data-composer-card] [class*="_trailing"]{order:3!important;flex:none!important;align-self:flex-end!important;margin:0!important}
 /* The slot anchor is display:contents, so the rail inside it is the flex item. */
 [data-composer-card]>[data-slot="conversation.input.attachments"]>[class*="_rail"]{order:0!important;flex:0 0 100%!important;margin:0!important;padding:2px 8px 6px!important}
 [data-composer-card]:has(> [data-slot="conversation.input.attachments"] > [class*="_rail"])>[data-input-scroll]{order:1!important;flex:0 0 100%!important;margin:0 0 6px!important}
 [data-composer-card]:has(> [data-slot="conversation.input.attachments"] > [class*="_rail"]) [class*="_tools"]{order:2!important}
 [data-composer-card]:has(> [data-slot="conversation.input.attachments"] > [class*="_rail"]) [class*="_trailing"]{margin-left:auto!important}
-[data-composer-card] [data-composer-input]{min-height:24px!important;padding:2px 0!important}
+[data-composer-card] [data-composer-input]{min-height:100px!important;padding:2px 0!important;line-height:24px!important}
 [data-composer-card] [data-composer-placeholder]{left:0!important;top:2px!important}
 [data-composer-placeholder]{font-size:0!important;line-height:0!important}
 /* The name sits on ::before so that ::after stays free for other composer skins. */
@@ -15464,7 +15464,7 @@ ${listed}`, { axis: "y", ...QUICK_EDGES });
           { className: "bt-nc-card" },
           (0, import_react34.createElement)("span", { className: "bt-nc-plus", "aria-hidden": true }, (0, import_react34.createElement)(PlusIcon)),
           (0, import_react34.createElement)("textarea", {
-            rows: 1,
+            rows: 4,
             value: message,
             placeholder,
             "aria-label": placeholder,
@@ -25066,7 +25066,7 @@ function ThreadReplyComposer({ storageKey, member, target, request, onSent, atta
     choices.length ? (0, import_react79.createElement)("div", { className: "bt-comm-completion", role: "listbox", "aria-label": t("Mention participant") }, choices.map((person, at) => (0, import_react79.createElement)("button", { type: "button", key: person.principalId, role: "option", "aria-selected": index === at, onMouseDown: (event) => event.preventDefault(), onClick: () => complete(person) }, (0, import_react79.createElement)(MentionPerson, { person, members, request })))) : null,
     (0, import_react79.createElement)("textarea", {
       ref: input,
-      rows: 2,
+      rows: 4,
       "aria-label": t("Reply in this thread"),
       value: draft.text ?? "",
       disabled: busy || Boolean(draft.attempt),
@@ -25514,9 +25514,9 @@ var communicationCSS = `
 .bt-comm-message-actions{grid-column:2;grid-row:4;justify-content:flex-start;gap:6px;min-height:24px;margin:0;padding-inline:6px;color:var(--bt-ink-3)}
 .bt-comm-message-actions button{border:0;background:none;min-height:24px;padding:2px 5px;color:var(--bt-ink-2);opacity:0;transition:opacity .12s}
 .bt-comm-log article:is(:hover,:focus-within) .bt-comm-message-actions button{opacity:1}
-.bt-comm-main>footer{margin-top:auto;position:relative;flex-shrink:0;width:calc(100% - 48px);max-width:960px;align-self:center;padding:10px 48px 10px 14px;border:.5px solid var(--bt-line-2);border-radius:22px;background:var(--bt-main);box-shadow:0 1px 4px color-mix(in srgb,var(--bt-ink) 4%,transparent)}
+.bt-comm-main>footer{margin-top:auto;position:relative;flex-shrink:0;width:calc(100% - 48px);max-width:960px;align-self:center;padding:8px 44px 8px 10px;border:.5px solid var(--bt-line-2);border-radius:22px;background:var(--bt-main);box-shadow:0 1px 4px color-mix(in srgb,var(--bt-ink) 4%,transparent)}
 .bt-comm-main footer .bt-comm-compose-field{margin:0;display:block}
-.bt-comm-frame .bt-comm-main footer textarea{border:0;background:none;min-height:46px;max-height:180px;padding:0;font-size:14px;line-height:23px;resize:vertical;border-radius:0}
+.bt-comm-frame .bt-comm-main footer .bt-comm-compose-field textarea{border:0;background:none;min-height:96px;max-height:240px;padding:0;font-size:14px;line-height:24px;resize:vertical;border-radius:0}
 .bt-comm-frame footer textarea:focus-visible{outline:0}
 .bt-comm-frame footer:focus-within{border-color:var(--bt-ink-3)}
 .bt-comm-main footer>.bt-comm-send{position:absolute;right:8px;bottom:8px;width:32px;height:32px;min-height:32px;border:0;border-radius:50%;padding:8px;display:grid;place-items:center;background:var(--bt-accent);color:var(--bt-accent-ink)}
@@ -25536,7 +25536,7 @@ var communicationCSS = `
 .bt-comm-thread-popover>.bt-comm-thread-heading{padding-right:32px;flex-shrink:0}
 .bt-comm-thread-popover>.bt-comm-thread{overflow:auto;min-height:80px;flex:1}
 .bt-comm-thread-composer{position:relative;border-top:1px solid var(--bt-line);padding-top:8px;flex-shrink:0}
-.bt-comm-thread-composer textarea{resize:vertical;max-height:160px;padding-right:44px}
+.bt-comm-frame .bt-comm-thread-composer textarea[rows]{resize:vertical;box-sizing:border-box;min-height:110px;max-height:240px;padding:6px 44px 6px 8px;font-size:14px;line-height:24px}
 .bt-comm-thread-composer>.bt-comm-send{position:absolute;right:6px;bottom:6px;width:32px;height:32px;padding:8px;border:0;border-radius:50%;display:grid;place-items:center;background:var(--bt-accent);color:var(--bt-accent-ink)}
 .bt-comm-thread-composer .bt-comm-completion{z-index:2}
 .bt-comm-thread-send-error{font-size:12px;color:var(--bt-danger);padding-right:36px}
@@ -26957,7 +26957,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
         (0, import_react81.createElement)("label", { className: "bt-comm-field bt-comm-compose-field" }, (0, import_react81.createElement)("span", { className: "bt-sr" }, t("Communication message")), (0, import_react81.createElement)("textarea", {
           ref: input,
           value: draft.text,
-          rows: 2,
+          rows: 4,
           placeholder: t("Message {name}", { name: conversationTitle(member, state.humanPrincipalId, labels) }),
           disabled: !canSpeak || Boolean(attempts[key2]),
           onChange: (event) => {
