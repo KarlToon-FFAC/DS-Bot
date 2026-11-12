@@ -4,7 +4,7 @@ import {request as httpsRequest} from 'node:https'
 import {readFile} from 'node:fs/promises'
 import {pathToFileURL} from 'node:url'
 
-const fields={state:[], 'hub-code':[],approve:['requestId','expectedVersion'],reject:['requestId','expectedVersion'],rename:['instanceId','label','expectedNameVersion'],revoke:['instanceId'],repair:['instanceId','expectedRevision'],delete:['instanceId','expectedPairingRevision','expectedNameVersion','ownedSharedGroups','confirmDelete'],'revoke-sessions':[]}
+const fields={'delete-join':['requestId','expectedVersion','confirmDelete'],state:[], 'hub-code':[],approve:['requestId','expectedVersion'],reject:['requestId','expectedVersion'],rename:['instanceId','label','expectedNameVersion'],revoke:['instanceId'],repair:['instanceId','expectedRevision'],delete:['instanceId','expectedPairingRevision','expectedNameVersion','ownedSharedGroups','confirmDelete'],'revoke-sessions':[]}
 const routes={approve:'decide',reject:'decide','hub-code':'state','revoke-sessions':'sessions/revoke'}
 const fail=(code,uncertain=false)=>{throw Object.assign(Error(code),{code,uncertain})}
 export const help=operation=>JSON.stringify({name:'dsbot-hub-admin',usage:'npm run admin -- <operation> < request.json',

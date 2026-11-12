@@ -106,3 +106,13 @@ test('device search, status filter and bounded pages preserve details and render
  const filter=d.querySelector('#device-filter');filter.value='revoked';filter.dispatchEvent(new f.window.Event('change'))
  assert.match(d.querySelector('#device-count').textContent,/32 \/ 63/)
 })
+
+test('a live absence observation dismisses stale device deletion dialogs after a lost receipt or another administrator cleanup',async t=>{
+ const f=fixture(t);await tick();await f.open();await f.action('Delete device permanently')
+ assert.equal(f.window.document.querySelector('#device-confirm').open,true)
+ f.state.instances=f.state.instances.filter(i=>i.instanceId!=='device-a');f.render()
+ assert.equal(f.window.document.querySelector('#device-confirm').open,false)
+ assert.equal(f.window.document.querySelector('#device-dialog').open,false)
+ assert.match(f.window.document.querySelector('#error').textContent,/no longer exists/)
+ assert.equal(f.calls.some(c=>c.action==='delete'),false)
+})

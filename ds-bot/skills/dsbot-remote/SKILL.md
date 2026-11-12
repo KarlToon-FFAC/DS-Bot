@@ -110,7 +110,14 @@ proof purposes require upgrading; never bypass authentication.
 
 `forget-hub` requires exact `hubId`/`confirmedUrl`, `confirmForget:true`, and an
 explicit `deleteLocalHistory` boolean. It requires approved devices to have
-confirmed revoked access; pending requests must be cancelled first. It deletes
+confirmed revoked access; pending requests must be cancelled first in ordinary mode.
+For an explicitly requested independent local cleanup, set `force:true` and copy
+`expectedIdentity` from the current `onboarding-storage.identityFingerprint`
+(or use its exact `expectedRequestId`). This works offline and with old orphaned
+requests, and does not revoke or delete server state. A stale identity fails
+without deleting its replacement. The GUI's pre-approval **Withdraw request**
+uses this local cleanup; after approval, it is **Force-forget this Hub**.
+A retry after successful deletion is idempotent. It deletes
 only this Hub's configuration, signing-key record and scoped CA trust. By default
 keep history (`deleteLocalHistory:false`). Permanent message/cache deletion
 additionally requires `deleteLocalHistory:true,confirmDeleteLocalHistory:true`.
@@ -161,7 +168,7 @@ separate confirmed `resume-hub`; old group rights stay removed.
 
 In the separate Hub package, use `npm run admin -- --help` or append
 `<operation> --help`. Commands cover state, hub-code, approve, reject, rename,
-revoke, repair and revoke-sessions. `DSBOT_HUB_ADMIN_URL` must be the explicitly
+revoke, repair, delete-join and revoke-sessions. `delete-join` requires the observed requestId/version and confirmDelete:true; an approved application with a device must be removed through the device deletion flow. `DSBOT_HUB_ADMIN_URL` must be the explicitly
 trusted admin origin; `DSBOT_HUB_ADMIN_PASSWORD` is supplied privately in the
 process environment and removed from that process environment after reading.
 For private CA HTTPS, `DSBOT_HUB_ADMIN_CA_FILE` contains public certificates only.

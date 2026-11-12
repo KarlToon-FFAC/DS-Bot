@@ -56,8 +56,11 @@ compatibility; starting that file alone does not enable an administrator page.
 Management is independent: open the printed `/admin/` URL directly. Client and
 DSH settings deliberately have no management-page entry. Opening the URL does
 not start the Hub or sign in. The standard login form supports your browser's
-password manager; DS Bot does not save the password. Sessions expire after 15
-minutes. Sign out, sign out all sessions, or rotate the admin password to revoke
+password manager; DS Bot does not save the password. Remembered logins persist in
+the Hub database across browser and Hub restarts.
+The server stores only hashes of session tokens. Persistent cookies renew on
+use (browser lifetime limits still apply); there is no 15-minute idle logout.
+Sign out, sign out all sessions, or rotate the admin password to revoke
 access. Browser HTTPS trust is separate from client-scoped Hub trust.
 
 Enable `management.enabled` and supply an administrator password of at least
@@ -102,6 +105,14 @@ provider. Its default provider is an OS-account-protected plaintext file, so do
 not mistake it for encryption or isolation from same-user processes. Configuration
 contains a credential reference, not the key. Existing configured pairings cannot
 be silently replaced with another Hub.
+
+Before approval, the client shows **Application pending** and **Withdraw request**.
+Withdrawal removes the local identity independently, even if the Hub is offline
+or already approved the request. The host polls the status of saved requests,
+with bounded backoff, so a lost approval reply does not require resubmission.
+Administrators can **Delete application** without contacting its client; approved
+applications link to the existing permanent device deletion flow. If either side
+has already removed the record, the other side can clean up independently.
 
 After approval, explicitly select local Bots to publish. Each instance's Human
 receives a unique user code. Use Manage contacts to request the other user's code;

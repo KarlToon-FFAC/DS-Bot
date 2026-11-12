@@ -652,3 +652,19 @@ test('optional automatic admission persists, verifies device proof and never cha
   restarted.setEnrollmentPolicy({autoApprove:false,expectedVersion:2})
   assert.equal(submit(restarted).status,'pending')
 })
+
+test('administrator deletes orphan applications independently and missing proofs return a domain error',t=>{
+ const {m}=fixture(t),key=keys(),socket={}
+ const challenge=m.challenge(socket,{purpose:'join',publicKey:key.publicKey})
+ const request=m.prove(socket,proof(key,challenge,{displayName:'Orphan'}))
+ const status=m.challenge(socket,{purpose:'status',requestId:request.requestId})
+ const input={requestId:request.requestId,expectedVersion:1,confirmDelete:true}
+ assert.throws(()=>m.deleteJoin({...input,confirmDelete:false}),{code:'JOIN_DELETE_CONFIRMATION_REQUIRED'})
+ assert.equal(m.deleteJoin(input).deleted,true)
+ assert.equal(m.deleteJoin(input).alreadyDeleted,true)
+ assert.throws(()=>m.prove(socket,proof(key,status)),{code:'JOIN_NOT_FOUND'})
+ assert.throws(()=>m.challenge(socket,{purpose:'cancel',requestId:request.requestId}),{code:'JOIN_NOT_FOUND'})
+ const active=enroll(m),row=m.joins().find(r=>r.requestId===active.requestId)
+ assert.throws(()=>m.deleteJoin({requestId:row.requestId,expectedVersion:row.version,confirmDelete:true}),{code:'JOIN_HAS_DEVICE'})
+ assert.throws(()=>m.challenge(socket,{purpose:'leave-status',instanceId:'missing-device'}),{code:'INSTANCE_NOT_FOUND'})
+})

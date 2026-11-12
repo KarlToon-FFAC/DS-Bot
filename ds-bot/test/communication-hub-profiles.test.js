@@ -323,3 +323,76 @@ test('local disconnect works after device revocation; verified repair alone neve
  assert.equal(f.records.get(key).payload.publicKey,originalKey)
  assert.equal(f.rt.config.communication.enabled,true)
 })
+
+test('old orphaned applications and approved connections can be force-forgotten offline and retried after response loss',async t=>{
+ for(const status of ['prepared','pending','approved']){
+  const f=fixture(t),a=hubs[0]
+  await f.api.handle('join',joinInput(a),human);f.activate()
+  const key=communicationCredentialKey(a.hubId),record=f.records.get(key)
+  record.payload.version=1;record.payload.status=status
+  if(status!=='approved'){delete record.payload.instanceId;delete f.rt.config.communication}
+  const oldKey=record.payload.publicKey,networkCount=f.network.length
+  const history=join(f.rt.home,'communication.sqlite');writeFileSync(history,'retained old identity')
+  const input={hubId:a.hubId,confirmedUrl:a.url,confirmForget:true,deleteLocalHistory:false,force:true,expectedIdentity:createHash('sha256').update(record.payload.publicKey).digest('hex')}
+  const result=await f.api.handle('forget-hub',input,human)
+  assert.equal(result.forgotten,true);assert.equal(result.localOnly,true);assert.equal(result.serverAccessRevoked,false)
+  assert.equal(f.records.has(key),false);assert.equal(f.rt.config.communication,undefined)
+  assert.equal(f.network.length,networkCount,'force cleanup never waits for the Hub')
+  assert.equal(readFileSync(history,'utf8'),'retained old identity')
+  assert.equal((await f.api.handle('forget-hub',input,human)).alreadyForgotten,true)
+  await f.api.handle('join',joinInput(a),human)
+  assert.notEqual(f.records.get(key).payload.publicKey,oldKey)
+  assert.notEqual(f.records.get(key).payload.queueScope,'legacy','new identity cannot reopen retained old queue')
+ }
+})
+
+test('force cleanup handles missing credentials without deleting another Hub or bypassing exact confirmations',async t=>{
+ const f=fixture(t),a=hubs[0];await f.api.handle('join',joinInput(a),human);f.activate()
+ const key=communicationCredentialKey(a.hubId);f.records.delete(key)
+ const input={hubId:a.hubId,confirmedUrl:a.url,confirmForget:true,deleteLocalHistory:false,force:true}
+ await assert.rejects(f.api.handle('forget-hub',{...input,confirmedUrl:hubs[1].url},human),{code:'HUB_CONFIRMATION_REQUIRED'})
+ assert.equal(f.rt.config.communication.hubId,a.hubId)
+ assert.equal((await f.api.handle('forget-hub',input,human)).forgotten,true)
+ assert.equal(f.rt.config.communication,undefined)
+})
+
+test('background reconciliation recovers saved pending approval without resubmitting a join and skips withdrawn identities',async t=>{
+ const f=fixture(t),a=hubs[0];await f.api.handle('join',joinInput(a),human)
+ const record=f.records.get(communicationCredentialKey(a.hubId));record.payload.status='pending';delete record.payload.instanceId;delete f.rt.config.communication
+ const joins=f.network.filter(c=>c.type==='enrollment.prove').length
+ assert.equal((await f.api.handle('reconcile-enrollment',{},human)).status,'approved')
+ assert.equal(f.rt.config.communication.enabled,true)
+ assert.equal(f.network.filter(c=>c.type==='enrollment.prove').length,joins+1)
+ await f.api.handle('forget-hub',{hubId:a.hubId,confirmedUrl:a.url,confirmForget:true,deleteLocalHistory:false,force:true,expectedRequestId:record.payload.requestId},human)
+ const requests=f.network.length
+ assert.deepEqual(await f.api.handle('reconcile-enrollment',{},human),{pending:false})
+ assert.equal(f.network.length,requests)
+})
+
+test('a stale forced cleanup cannot delete a replacement enrollment on the same Hub',async t=>{
+ const f=fixture(t),a=hubs[0],first=await f.api.handle('join',joinInput(a),human)
+ const input={hubId:a.hubId,confirmedUrl:a.url,confirmForget:true,deleteLocalHistory:false,force:true,expectedIdentity:first.identityFingerprint}
+ await f.api.handle('forget-hub',input,human)
+ const second=await f.api.handle('join',joinInput(a),human)
+ assert.notEqual(second.identityFingerprint,first.identityFingerprint)
+ await assert.rejects(f.api.handle('forget-hub',input,human),{code:'COMMUNICATION_PAIRING_CONFLICT'})
+ assert.equal(f.rt.config.communication.enabled,true)
+ assert.equal(f.records.size,1)
+})
+
+test('confirmed remote deletion clears the local access fence while outages and generic authentication failures do not claim absence',async t=>{
+ for(const code of ['INSTANCE_NOT_FOUND','CONNECTION_LOST','UNAUTHENTICATED']){
+  const f=fixture(t),a=hubs[0];await f.api.handle('join',joinInput(a),human);f.activate()
+  f.api.connect=async()=>({close(){},request:async()=>{throw Object.assign(Error(code),{code})}})
+  const input={hubId:a.hubId,confirmedUrl:a.url}
+  if(code==='INSTANCE_NOT_FOUND'){
+   const status=await f.api.handle('hub-leave-status',input,human)
+   assert.equal(status.remoteMissing,'instance');assert.equal(status.left,true)
+   assert.equal(f.rt.config.communication.enabled,false)
+   assert.equal((await f.api.handle('forget-hub',{...input,confirmForget:true,deleteLocalHistory:false},human)).forgotten,true)
+  }else{
+   await assert.rejects(f.api.handle('hub-leave-status',input,human),{code})
+   assert.notEqual(f.records.get(communicationCredentialKey(a.hubId)).payload.departed,true)
+  }
+ }
+})

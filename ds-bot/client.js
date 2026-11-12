@@ -534,8 +534,19 @@ var ZH = {
   "Send not confirmed. Retry the same message to avoid sending it twice.": "尚未确认发送结果，请重试原消息以避免重复发送。",
   "Enter to send · Shift+Enter for a new line": "Enter 发送 · Shift+Enter 换行",
   "Stored means the destination saved the message. Read means a Human opened it. Bot admitted means processing was accepted, not that a reply is complete.": "落盘表示目标端已保存；已读表示人已打开；Bot 入箱表示已接受处理，不代表已经完成回复。",
+  "Force-forget this Hub": "强制清理此 Hub",
+  "Confirm forced local cleanup": "确认强制清理本地连接",
+  "Withdraw request": "撤销申请",
+  "Confirm withdrawal": "确认撤销",
+  "This application no longer exists on the Hub. Withdraw it to clear local state and apply again.": "Hub 上已不存在此申请。可撤销申请清理本地状态，然后重新加入。",
+  "This device no longer exists on the Hub. You can forget this Hub and enroll with a new identity.": "Hub 上已不存在此设备。可清理本地连接，以新身份重新加入。",
+  "The remote request or device no longer exists. Local cleanup is available; joining again requires a new request.": "远端申请或设备已不存在，可清理本地状态后重新申请。",
+  "The saved Hub identity is missing. Clear the remaining local connection before joining again.": "本地 Hub 身份记录缺失。可清理残留连接后重新加入。",
+  "Remove this Hub configuration, device key and CA trust locally without contacting the Hub. Remote requests, devices and groups may remain; the Hub administrator can delete them separately. Rejoining creates a new identity. Other Hubs are unaffected.": "无需连接 Hub，清除此 Hub 的本机配置、设备密钥和 CA 信任。远端可能仍保留申请、设备和群组，可由管理员独立删除。重新加入将使用新身份，不影响其他 Hub。",
+  "Withdraw this application locally now, even if the Hub is offline or already approved it. Any remaining Hub request or device can be deleted by its administrator. A new application uses a new identity.": "立即在本地撤销申请，即使 Hub 离线或已经批准也能完成。Hub 侧残留申请或设备可由管理员独立删除。再次申请将使用新身份。",
   "Human": "人",
   "User{suffix}": "用户{suffix}",
+  "Application pending": "申请中",
   "Local": "本地",
   "Remote": "远程",
   "Private message": "私聊",
@@ -12411,6 +12422,7 @@ var communicationDescriptions = {
   OWNER_RECLAIM_REQUIRED: "Group ownership cannot be restored in this version. Create a new group if the owner is unavailable.",
   CONVERSATION_PENDING: "The conversation is waiting for a connection.",
   COMMUNICATION_READ_ONLY: "This instance is read-only.",
+  INSTANCE_NOT_FOUND: "This device no longer exists on the Hub. Clear the saved local connection and enroll again.",
   UNAUTHENTICATED: "The Hub rejected this device. Ask the Hub owner to check its pairing.",
   PEER_REVOKED: "This device was unpaired. Ask the Hub owner to pair it again.",
   AUTHORIZATION_PENDING: "Membership is still syncing. Wait briefly, then retry the same request.",
@@ -12646,6 +12658,7 @@ var knownCodes = /* @__PURE__ */ new Set([
   "INVALID_RESPONSE_GRANT",
   "JOIN_NOT_FOUND",
   "JOIN_NOT_SUBMITTED",
+  "INSTANCE_NOT_FOUND",
   "LEGACY_HUB_PROFILE_UNBOUND",
   "LEGACY_HUB_SWITCH_REQUIRES_REENROLLMENT",
   "LEGACY_RECONCILIATION_REQUIRED",
@@ -23632,7 +23645,8 @@ var enrollmentErrors = {
   TLS_REQUIRED: "The Hub requires a trusted WSS connection.",
   HUB_ADDRESS_FORBIDDEN: "The Hub address is not allowed. Ask its owner for a reachable trusted WSS address.",
   MANAGEMENT_DISABLED: "Hub enrollment is disabled. Ask its administrator to enable management.",
-  JOIN_NOT_FOUND: "The Hub has no saved request with this ID. You may explicitly request access again using the saved device identity.",
+  JOIN_NOT_FOUND: "This application no longer exists on the Hub. Withdraw it to clear local state and apply again.",
+  INSTANCE_NOT_FOUND: "This device no longer exists on the Hub. You can forget this Hub and enroll with a new identity.",
   JOIN_NOT_SUBMITTED: "No request has been submitted. Fix the reported local or connection problem before requesting access.",
   CREDENTIAL_STORAGE_UNAVAILABLE: "The local credential service is unavailable. Check the app version and credential provider.",
   CREDENTIAL_STORAGE_READ_ONLY: "The local credential store is read only. No new enrollment can be saved.",
@@ -23757,6 +23771,12 @@ function AddDevice({ request, displayName, revision }) {
     if (hub) setUncertainHub((current) => current === hub.hubId ? null : current);
     if (value.enrollments) setEnrollments(value.enrollments);
     else if (value.hubId) update(value);
+    if (lifecycle && ["withdraw", "forget", "force-forget"].includes(lifecycle.kind) && !(value.enrollments ?? (value.hubId ? [value] : [])).some((item) => item.hubId === lifecycle.item.hubId) && selected?.hubId !== lifecycle.item.hubId) {
+      setLifecycle(null);
+      setError("");
+      setHub(null);
+      setCode("");
+    }
     return { selectedHub: selected, enrollments: value.enrollments ?? (value.hubId ? [value] : []) };
   };
   const existingRequest = hub && enrollments.some((item) => item.hubId === hub.hubId && item.requestId && ["prepared", "pending", "approved"].includes(item.status)) && absentHub !== hub.hubId;
@@ -23775,60 +23795,65 @@ function AddDevice({ request, displayName, revision }) {
       await refreshStorage(token);
     }
   };
+  const awaiting = enrollments.some((item) => ["prepared", "pending"].includes(item.status));
   return (0, import_react70.createElement)(
     "div",
     { className: "bt-comm-onboarding" },
-    (0, import_react70.createElement)("p", null, t("Paste a Hub code from its owner. Review the actual address before requesting access. Devices are not discovered automatically.")),
-    (0, import_react70.createElement)("p", { className: "bt-comm-reference" }, t("Review only decodes the Hub code locally. It does not test network access or submit a request.")),
-    (0, import_react70.createElement)("label", { className: "bt-comm-field" }, t("Hub code"), (0, import_react70.createElement)("textarea", { value: code, rows: 2, maxLength: 65536, "aria-label": t("Hub code"), onChange: (event) => {
-      generation.current += 1;
-      loadOrder.current += 1;
-      setBusy(false);
-      setCode(event.target.value);
-      setHub(null);
-      setError("");
-    } })),
-    (0, import_react70.createElement)("button", { type: "button", disabled: busy || !code.trim(), onClick: () => {
-      void run2(async (token) => {
-        const value = await request({ endpoint: "decode-hub-code", hubCode: code });
-        if (value.version !== 2 || !value.trustFingerprint) throw Object.assign(new Error("HUB_V2_MIGRATION_REQUIRED"), { code: "HUB_V2_MIGRATION_REQUIRED" });
-        if (token === generation.current) setHub(value);
-      });
-    } }, t("Review Hub")),
-    hub ? (0, import_react70.createElement)(
-      "section",
-      { className: "bt-comm-set-card" },
-      (0, import_react70.createElement)("h3", null, t("Confirm the Hub")),
-      (0, import_react70.createElement)("p", null, t("Hub address"), ": ", (0, import_react70.createElement)("code", null, hub.url)),
-      (0, import_react70.createElement)("p", null, "Hub ID: ", (0, import_react70.createElement)("code", null, hub.hubId)),
-      (0, import_react70.createElement)("p", { className: "bt-comm-reference" }, t("Accept this code only from a trusted channel. Its own certificate cannot authenticate an untrusted source.")),
-      (0, import_react70.createElement)("p", null, t("Hub CA fingerprint"), ": ", (0, import_react70.createElement)("code", null, hub.trustFingerprint)),
-      (0, import_react70.createElement)("label", { className: "bt-comm-field" }, t("Device display name"), (0, import_react70.createElement)("input", { value: name, maxLength: 100, "aria-label": t("Device display name"), onChange: (event) => setName(event.target.value) })),
-      differentHub ? (0, import_react70.createElement)("p", { className: "bt-comm-reference" }, t("Switching pauses the current Hub and retains its data. A new Hub starts with a separate identity and no published Bots.")) : null,
-      differentHub && selectedHub?.legacy ? (0, import_react70.createElement)("p", { role: "status" }, t("Legacy shared-secret pairing cannot be safely assigned to another Hub. Keep this data and enroll through a separate profile first.")) : null,
-      differentHub ? (0, import_react70.createElement)("button", { type: "button", disabled: busy || !name.trim() || selectedHub?.legacy, onClick: () => {
-        void run2((token) => select(hub, token, code));
-      } }, t("Select this Hub")) : null,
-      (0, import_react70.createElement)("button", { type: "button", disabled: busy || differentHub || !name.trim() || !storage || existingRequest || uncertainHub === hub.hubId, onClick: () => {
+    !awaiting ? (0, import_react70.createElement)(
+      import_react70.Fragment,
+      null,
+      (0, import_react70.createElement)("p", null, t("Paste a Hub code from its owner. Review the actual address before requesting access. Devices are not discovered automatically.")),
+      (0, import_react70.createElement)("p", { className: "bt-comm-reference" }, t("Review only decodes the Hub code locally. It does not test network access or submit a request.")),
+      (0, import_react70.createElement)("label", { className: "bt-comm-field" }, t("Hub code"), (0, import_react70.createElement)("textarea", { value: code, rows: 2, maxLength: 65536, "aria-label": t("Hub code"), onChange: (event) => {
+        generation.current += 1;
+        loadOrder.current += 1;
+        setBusy(false);
+        setCode(event.target.value);
+        setHub(null);
+        setError("");
+      } })),
+      (0, import_react70.createElement)("button", { type: "button", disabled: busy || !code.trim(), onClick: () => {
         void run2(async (token) => {
-          setAbsentHub(null);
-          setUncertainHub(hub.hubId);
-          const value = await request({ endpoint: "join-hub", hubCode: code, displayName: name, confirmedHubId: hub.hubId, confirmedUrl: hub.url, ...hub.trustFingerprint ? { confirmedTrustFingerprint: hub.trustFingerprint } : {} });
-          if (token === generation.current) {
-            update(value);
-            setUncertainHub(null);
-          }
+          const value = await request({ endpoint: "decode-hub-code", hubCode: code });
+          if (value.version !== 2 || !value.trustFingerprint) throw Object.assign(new Error("HUB_V2_MIGRATION_REQUIRED"), { code: "HUB_V2_MIGRATION_REQUIRED" });
+          if (token === generation.current) setHub(value);
         });
-      } }, t("Confirm and request access")),
-      hub.trustFingerprint && enrollments.some((item) => item.hubId === hub.hubId && item.url === hub.url) ? (0, import_react70.createElement)("button", { type: "button", disabled: busy, onClick: () => {
-        void run2(async (token) => {
-          const value = await request({ endpoint: "update-hub-trust", hubCode: code, confirmedHubId: hub.hubId, confirmedUrl: hub.url, confirmedTrustFingerprint: hub.trustFingerprint });
-          if (token === generation.current) update(value);
-        });
-      } }, t("Update this Hub CA trust")) : null
+      } }, t("Review Hub")),
+      hub ? (0, import_react70.createElement)(
+        "section",
+        { className: "bt-comm-set-card" },
+        (0, import_react70.createElement)("h3", null, t("Confirm the Hub")),
+        (0, import_react70.createElement)("p", null, t("Hub address"), ": ", (0, import_react70.createElement)("code", null, hub.url)),
+        (0, import_react70.createElement)("p", null, "Hub ID: ", (0, import_react70.createElement)("code", null, hub.hubId)),
+        (0, import_react70.createElement)("p", { className: "bt-comm-reference" }, t("Accept this code only from a trusted channel. Its own certificate cannot authenticate an untrusted source.")),
+        (0, import_react70.createElement)("p", null, t("Hub CA fingerprint"), ": ", (0, import_react70.createElement)("code", null, hub.trustFingerprint)),
+        (0, import_react70.createElement)("label", { className: "bt-comm-field" }, t("Device display name"), (0, import_react70.createElement)("input", { value: name, maxLength: 100, "aria-label": t("Device display name"), onChange: (event) => setName(event.target.value) })),
+        differentHub ? (0, import_react70.createElement)("p", { className: "bt-comm-reference" }, t("Switching pauses the current Hub and retains its data. A new Hub starts with a separate identity and no published Bots.")) : null,
+        differentHub && selectedHub?.legacy ? (0, import_react70.createElement)("p", { role: "status" }, t("Legacy shared-secret pairing cannot be safely assigned to another Hub. Keep this data and enroll through a separate profile first.")) : null,
+        differentHub ? (0, import_react70.createElement)("button", { type: "button", disabled: busy || !name.trim() || selectedHub?.legacy, onClick: () => {
+          void run2((token) => select(hub, token, code));
+        } }, t("Select this Hub")) : null,
+        (0, import_react70.createElement)("button", { type: "button", disabled: busy || differentHub || !name.trim() || !storage || existingRequest || uncertainHub === hub.hubId, onClick: () => {
+          void run2(async (token) => {
+            setAbsentHub(null);
+            setUncertainHub(hub.hubId);
+            const value = await request({ endpoint: "join-hub", hubCode: code, displayName: name, confirmedHubId: hub.hubId, confirmedUrl: hub.url, ...hub.trustFingerprint ? { confirmedTrustFingerprint: hub.trustFingerprint } : {} });
+            if (token === generation.current) {
+              update(value);
+              setUncertainHub(null);
+            }
+          });
+        } }, t("Confirm and request access")),
+        hub.trustFingerprint && enrollments.some((item) => item.hubId === hub.hubId && item.url === hub.url) ? (0, import_react70.createElement)("button", { type: "button", disabled: busy, onClick: () => {
+          void run2(async (token) => {
+            const value = await request({ endpoint: "update-hub-trust", hubCode: code, confirmedHubId: hub.hubId, confirmedUrl: hub.url, confirmedTrustFingerprint: hub.trustFingerprint });
+            if (token === generation.current) update(value);
+          });
+        } }, t("Update this Hub CA trust")) : null
+      ) : null,
+      (0, import_react70.createElement)("p", { className: "bt-comm-storage-note" }, t("Confirming a new Hub selection or join creates its own device key. Disconnecting retains that key and Hub data; it does not revoke membership on the server. The default credential store is plaintext protected by your OS account permissions, not encrypted against the same user.")),
+      storage ? (0, import_react70.createElement)("p", { className: "bt-comm-reference" }, t("Credential storage"), ": ", storage.defaultProvider, " · ", t(storage.encryptedByDefault ? "Encrypted by provider" : "Not encrypted by default")) : null
     ) : null,
-    (0, import_react70.createElement)("p", { className: "bt-comm-storage-note" }, t("Confirming a new Hub selection or join creates its own device key. Disconnecting retains that key and Hub data; it does not revoke membership on the server. The default credential store is plaintext protected by your OS account permissions, not encrypted against the same user.")),
-    storage ? (0, import_react70.createElement)("p", { className: "bt-comm-reference" }, t("Credential storage"), ": ", storage.defaultProvider, " · ", t(storage.encryptedByDefault ? "Encrypted by provider" : "Not encrypted by default")) : null,
     selectedHub?.legacy ? (0, import_react70.createElement)(
       "section",
       { className: "bt-comm-address" },
@@ -23853,12 +23878,30 @@ function AddDevice({ request, displayName, revision }) {
         } }, t("Resume this Hub"))
       )
     ) : null,
-    enrollments.map((item) => (0, import_react70.createElement)(
+    selectedHub?.hubId && !enrollments.some((item) => item.hubId === selectedHub.hubId) ? (0, import_react70.createElement)(
+      "section",
+      { className: "bt-comm-address" },
+      (0, import_react70.createElement)("p", { role: "status" }, t("The saved Hub identity is missing. Clear the remaining local connection before joining again.")),
+      (0, import_react70.createElement)("button", { type: "button", disabled: busy, onClick: () => {
+        setDeleteHistory(false);
+        setLifecycle({ kind: "force-forget", item: selectedHub });
+      } }, t("Force-forget this Hub"))
+    ) : null,
+    enrollments.map((item) => item.status !== "approved" ? (0, import_react70.createElement)(
+      "section",
+      { key: item.hubId, className: "bt-comm-address" },
+      (0, import_react70.createElement)("p", { role: "status" }, ["prepared", "pending"].includes(item.status) ? t("Application pending") : statusLabel(item.status)),
+      (0, import_react70.createElement)("button", { type: "button", disabled: busy, onClick: () => {
+        setDeleteHistory(false);
+        setLifecycle({ kind: "withdraw", item });
+      } }, t("Withdraw request"))
+    ) : (0, import_react70.createElement)(
       "section",
       { key: item.hubId, className: "bt-comm-address" },
       (0, import_react70.createElement)("p", null, (0, import_react70.createElement)("code", null, item.hubId), " · ", statusLabel(item.status)),
       (0, import_react70.createElement)("p", { className: "bt-comm-reference" }, item.url),
       item.requestId ? (0, import_react70.createElement)("p", { className: "bt-comm-reference" }, t("Request ID"), ": ", (0, import_react70.createElement)("code", null, item.requestId)) : null,
+      item.remoteMissing ? (0, import_react70.createElement)("p", { role: "status" }, t("The remote request or device no longer exists. Local cleanup is available; joining again requires a new request.")) : null,
       item.restartRequired ? (0, import_react70.createElement)("p", { role: "status" }, t("Hub trust updated. Restart the host to use the new CA.")) : item.reconnectRequested ? (0, import_react70.createElement)("p", { role: "status" }, t("Hub trust updated. Reconnecting with the new CA.")) : null,
       item.departed ? (0, import_react70.createElement)("p", { role: "status" }, t("Access revoked. History is retained; this device cannot resume.")) : item.paused ? (0, import_react70.createElement)("p", { role: "status" }, t("Paused. Identity, trust and Hub history are retained separately.")) : item.status === "approved" ? (0, import_react70.createElement)("p", { role: "status" }, t("Saved approval. This is not a live connection check. The device configuration is saved through the app; current connection status is shown separately.")) : null,
       item.status === "approved" && !item.departed ? (0, import_react70.createElement)("button", { type: "button", disabled: busy, onClick: () => setLifecycle({ kind: "leave", item }) }, t("Leave this Hub")) : null,
@@ -23866,6 +23909,10 @@ function AddDevice({ request, displayName, revision }) {
         setDeleteHistory(false);
         setLifecycle({ kind: "forget", item });
       } }, t("Forget this Hub")),
+      (0, import_react70.createElement)("button", { type: "button", disabled: busy, onClick: () => {
+        setDeleteHistory(false);
+        setLifecycle({ kind: "force-forget", item });
+      } }, t("Force-forget this Hub")),
       selectedHub?.hubId !== item.hubId ? (0, import_react70.createElement)("button", { type: "button", disabled: busy, onClick: () => {
         void run2((token) => select(item, token));
       } }, t("Select this Hub")) : null,
@@ -23902,7 +23949,7 @@ function AddDevice({ request, displayName, revision }) {
       CommunicationDialog,
       {
         open: Boolean(lifecycle),
-        title: lifecycle?.kind === "leave" ? "Leave this Hub" : "Forget this Hub",
+        title: lifecycle?.kind === "leave" ? "Leave this Hub" : lifecycle?.kind === "withdraw" ? "Withdraw request" : lifecycle?.kind === "force-forget" ? "Force-forget this Hub" : "Forget this Hub",
         onClose: () => setLifecycle(null),
         busy,
         error,
@@ -23914,13 +23961,13 @@ function AddDevice({ request, displayName, revision }) {
           (0, import_react70.createElement)("button", { type: "button", className: "bt-comm-danger", disabled: busy, onClick: () => {
             void run2(async (token) => {
               const item = lifecycle.item;
-              await request(lifecycle.kind === "leave" ? { endpoint: "leave-hub", hubId: item.hubId, confirmedUrl: item.url, confirmLeave: true } : { endpoint: "forget-hub", hubId: item.hubId, confirmedUrl: item.url, confirmForget: true, deleteLocalHistory: deleteHistory, ...deleteHistory ? { confirmDeleteLocalHistory: true } : {} });
+              await request(lifecycle.kind === "leave" ? { endpoint: "leave-hub", hubId: item.hubId, confirmedUrl: item.url, confirmLeave: true } : { endpoint: "forget-hub", hubId: item.hubId, confirmedUrl: item.url, confirmForget: true, ...item.identityFingerprint ? { expectedIdentity: item.identityFingerprint } : item.requestId ? { expectedRequestId: item.requestId } : {}, ...["force-forget", "withdraw"].includes(lifecycle.kind) ? { force: true } : {}, deleteLocalHistory: deleteHistory, ...deleteHistory ? { confirmDeleteLocalHistory: true } : {} });
               if (token === generation.current) {
                 setLifecycle(null);
                 await refreshStorage(token);
               }
             });
-          } }, t(lifecycle?.kind === "leave" ? "Confirm leaving" : "Confirm forgetting"))
+          } }, t(lifecycle?.kind === "leave" ? "Confirm leaving" : lifecycle?.kind === "withdraw" ? "Confirm withdrawal" : lifecycle?.kind === "force-forget" ? "Confirm forced local cleanup" : "Confirm forgetting"))
         )
       },
       lifecycle ? (0, import_react70.createElement)(
@@ -23928,8 +23975,8 @@ function AddDevice({ request, displayName, revision }) {
         null,
         (0, import_react70.createElement)("code", null, lifecycle.item.hubId),
         (0, import_react70.createElement)("p", null, lifecycle.item.url),
-        (0, import_react70.createElement)("p", null, t(lifecycle.kind === "leave" ? "Revoke server access and group memberships. Chat history stays. Transfer or dissolve groups owned by this device first." : "Delete this Hub configuration, device key and saved CA trust. Leave or cancel pending approval first. Other Hubs are unaffected. Retained history cannot be attached to a new identity.")),
-        lifecycle.kind === "forget" ? (0, import_react70.createElement)("label", { className: "bt-comm-check" }, (0, import_react70.createElement)("input", { type: "checkbox", checked: deleteHistory, disabled: busy, onChange: (event) => setDeleteHistory(event.target.checked) }), t("Also permanently delete this Hub communication queue and cached files. DSH session journals and browser drafts are retained.")) : null
+        (0, import_react70.createElement)("p", null, t(lifecycle.kind === "withdraw" ? "Withdraw this application locally now, even if the Hub is offline or already approved it. Any remaining Hub request or device can be deleted by its administrator. A new application uses a new identity." : lifecycle.kind === "force-forget" ? "Remove this Hub configuration, device key and CA trust locally without contacting the Hub. Remote requests, devices and groups may remain; the Hub administrator can delete them separately. Rejoining creates a new identity. Other Hubs are unaffected." : lifecycle.kind === "leave" ? "Revoke server access and group memberships. Chat history stays. Transfer or dissolve groups owned by this device first." : "Delete this Hub configuration, device key and saved CA trust. Leave or cancel pending approval first. Other Hubs are unaffected. Retained history cannot be attached to a new identity.")),
+        ["forget", "force-forget"].includes(lifecycle.kind) ? (0, import_react70.createElement)("label", { className: "bt-comm-check" }, (0, import_react70.createElement)("input", { type: "checkbox", checked: deleteHistory, disabled: busy, onChange: (event) => setDeleteHistory(event.target.checked) }), t("Also permanently delete this Hub communication queue and cached files. DSH session journals and browser drafts are retained.")) : null
       ) : null
     ),
     liveError ? (0, import_react70.createElement)("p", { className: "bt-comm-reference", role: "status" }, t("Status may be out of date."), " ", liveError) : null,

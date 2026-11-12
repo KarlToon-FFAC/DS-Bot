@@ -246,8 +246,8 @@ export async function openEnrollmentSocket(url, options = {}) {
 
 export const communicationStorageStatus = Object.freeze({ kind: 'dsh-credential-record', defaultProvider: 'owner-acl-plaintext',
   encryptedByDefault: false, agentIsolation: false, explanation: 'The default DSH provider stores plaintext protected by your OS account permissions. Tools running as the same OS user can read it. Other providers may offer different protection.' })
-const safeStatus = record => ({ hubId: record.hubId, url: record.url, departed:record.departed===true, paused: record.paused === true || record.requiresResume === true, ...(record.trust ? { trustFingerprint: record.trust.fingerprint } : {}), requestId: record.requestId ?? null,
-  instanceId: record.instanceId ?? null, status: record.status, displayName: record.displayName, credentialKey: communicationCredentialKey(record.hubId), storage: communicationStorageStatus })
+const safeStatus = record => ({ identityFingerprint:typeof record.publicKey==='string'?createHash('sha256').update(record.publicKey).digest('hex'):undefined, hubId: record.hubId, url: record.url, departed:record.departed===true, paused: record.paused === true || record.requiresResume === true, ...(record.trust ? { trustFingerprint: record.trust.fingerprint } : {}), requestId: record.requestId ?? null,
+  instanceId: record.instanceId ?? null, status: record.status, ...(record.remoteMissing ? {remoteMissing:record.remoteMissing} : {}), displayName: record.displayName, credentialKey: communicationCredentialKey(record.hubId), storage: communicationStorageStatus })
 const operation = value => { if (!identifier(value)) fail('OPERATION_ID_REQUIRED'); return value }
 const version = value => { if (!Number.isSafeInteger(value) || value < 1) fail('INVALID_REQUEST'); return value }
 
@@ -283,6 +283,7 @@ export class CommunicationOnboarding {
     if (action === 'update-hub-trust') return this.updateTrust(input)
     if (action === 'status' || action === 'cancel') return this.enrollment(action, input)
     if (action === 'storage') return this.storage(input)
+    if (action === 'reconcile-enrollment') return this.reconcileEnrollment()
     if (action === 'memory-settings') return { localMemory: this.rt.config.communication?.localMemory !== false }
     if (action === 'set-memory-settings') return this.setMemorySettings(input)
     if (action === 'available-bots') return this.availableBots()
@@ -355,6 +356,14 @@ export class CommunicationOnboarding {
       return { ...current, communication: { ...latest, localMemory: input.localMemory } }
     }))
     return { localMemory: input.localMemory, reloadRequired: true }
+  }
+  async reconcileEnrollment() {
+    const {enrollments,selectedHub}=await this.storage({})
+    const pending=enrollments.find(item=>item.requestId&&!item.paused&&!item.departed
+      && (!selectedHub?.hubId||selectedHub.hubId===item.hubId)
+      && (['prepared','pending'].includes(item.status)||item.status==='approved'&&!selectedHub?.enabled))
+    // Read-only status recovery never resubmits a join or manufactures a key.
+    return pending ? this.enrollment('status',{hubId:pending.hubId}) : {pending:false}
   }
   async storage(input) {
     const hubId = input.hubId
@@ -508,14 +517,20 @@ export class CommunicationOnboarding {
     const purpose=statusOnly?'leave-status':'leave'
     const socket=await phase('ENROLLMENT_CONNECT_FAILED',()=>this.connect(hub.url,{allowLoopback:this.allowLoopback,hubId:hub.hubId,trust:record.trust}))
     try{
-      const challenge=checkChallenge(await phase('ENROLLMENT_CHALLENGE_FAILED',()=>socket.request('enrollment.challenge',{purpose,instanceId:record.instanceId})),{hubId:hub.hubId,purpose,instanceId:record.instanceId})
-      const result=await phase('ENROLLMENT_PROOF_FAILED',()=>socket.request('enrollment.prove',{challengeId:challenge.challengeId,signature:signature(record,challenge)}))
+      let result
+      try {
+        const challenge=checkChallenge(await phase('ENROLLMENT_CHALLENGE_FAILED',()=>socket.request('enrollment.challenge',{purpose,instanceId:record.instanceId})),{hubId:hub.hubId,purpose,instanceId:record.instanceId})
+        result=await phase('ENROLLMENT_PROOF_FAILED',()=>socket.request('enrollment.prove',{challengeId:challenge.challengeId,signature:signature(record,challenge)}))
+      } catch(error) {
+        if(error.code!=='INSTANCE_NOT_FOUND')throw error
+        result={instanceId:record.instanceId,left:true,remoteMissing:'instance'}
+      }
       if(result?.instanceId!==record.instanceId||typeof result.left!=='boolean')fail('INVALID_ENROLLMENT_RESPONSE')
       if(result.left){
         if(statusOnly&&this.rt.config.communication?.hubId===hub.hubId)await this.pauseCurrent(hub.hubId)
         await this.update(key,hub,value=>{
           if(value.publicKey!==record.publicKey||value.instanceId!==record.instanceId)fail('COMMUNICATION_PAIRING_CONFLICT')
-          return {...value,departed:true,paused:true,requiresResume:true}
+          return {...value,departed:true,paused:true,requiresResume:true,...(result.remoteMissing?{remoteMissing:result.remoteMissing}:{})}
         })
       }else if(statusOnly&&record.departed){
         // An administrator may deliberately restore this exact proved key.
@@ -525,18 +540,38 @@ export class CommunicationOnboarding {
           return {...value,departed:false,paused:true,requiresResume:true}
         })
       }
-      return {hubId:hub.hubId,instanceId:record.instanceId,left:result.left,historyRetained:true}
+      return {hubId:hub.hubId,instanceId:record.instanceId,left:result.left,historyRetained:true,...(result.remoteMissing?{remoteMissing:result.remoteMissing}:{})}
     }finally{socket.close()}
   }
   async forgetHub(input) {
+    if(this.rt.readOnly?.()!==undefined)fail('COMMUNICATION_READ_ONLY')
+    if(input.force!==undefined&&typeof input.force!=='boolean')fail('INVALID_REQUEST')
     if(input.confirmForget!==true||typeof input.deleteLocalHistory!=='boolean'||input.deleteLocalHistory&&input.confirmDeleteLocalHistory!==true)fail('HUB_FORGET_CONFIRMATION_REQUIRED')
     const credentials=credentialsOf(this.ctx),key=communicationCredentialKey(input.hubId)
     if(!credentials.deleteRecord)fail('CREDENTIAL_DELETE_UNAVAILABLE')
     const stored=await credentials.readRecord(key),hub={hubId:input.hubId,url:stored?.payload?.url}
+    if(!stored&&input.force){
+      validateHubUrl(input.confirmedUrl,{allowLoopback:this.allowLoopback})
+      const configured=this.rt.config.communication
+      if(configured?.hubId===input.hubId){
+        if(configured.url!==input.confirmedUrl)fail('HUB_CONFIRMATION_REQUIRED')
+        const expected=selection(configured),{editor,entry}=this.editor()
+        if(this.rt.communication?.settings?.hubId===input.hubId)await this.rt.communication.close?.()
+        await phase('COMMUNICATION_CONFIG_WRITE_FAILED',()=>editor.edit(entry,current=>{
+          if(selection(current.communication)!==expected)fail('HUB_SELECTION_CHANGED')
+          const next={...current};delete next.communication;return next
+        }))
+      }
+      return {hubId:input.hubId,forgotten:true,alreadyForgotten:true,forced:true,localOnly:true,historyRetained:true,
+        ...(input.deleteLocalHistory?{historyCleanupSkipped:'IDENTITY_NOT_AVAILABLE'}:{}),serverAccessRevoked:false}
+    }
     const record=checkedRecord(stored,hub),scope=checkedScope(record)
+    if(input.force&&input.expectedIdentity===undefined&&input.expectedRequestId===undefined)fail('HUB_FORGET_CONFIRMATION_REQUIRED')
+    if(input.expectedIdentity!==undefined&&input.expectedIdentity!==safeStatus(record).identityFingerprint
+      ||input.expectedRequestId!==undefined&&input.expectedRequestId!==record.requestId)fail('COMMUNICATION_PAIRING_CONFLICT')
     if(input.confirmedUrl!==hub.url)fail('HUB_CONFIRMATION_REQUIRED')
-    if(record.status==='approved'&&!record.departed)fail('HUB_LEAVE_REQUIRED')
-    if(record.status==='pending'||record.status==='prepared'&&record.requestId)fail('HUB_CANCEL_REQUIRED')
+    if(!input.force&&record.status==='approved'&&!record.departed)fail('HUB_LEAVE_REQUIRED')
+    if(!input.force&&(record.status==='pending'||record.status==='prepared'&&record.requestId))fail('HUB_CANCEL_REQUIRED')
     const selected=this.rt.config.communication?.hubId===hub.hubId,expected=selection(this.rt.config.communication)
     const assertIdentity=async()=>{
       if(this.rt.readOnly?.()!==undefined)fail('COMMUNICATION_READ_ONLY')
@@ -579,7 +614,7 @@ export class CommunicationOnboarding {
     }
     await assertIdentity()
     await credentials.deleteRecord(key)
-    return {hubId:hub.hubId,forgotten:true,historyRetained:!input.deleteLocalHistory,
+    return {hubId:hub.hubId,forgotten:true,forced:input.force===true,localOnly:true,historyRetained:!input.deleteLocalHistory,
       cleanupScope:'remote-communication-queue',modelSessionHistoryRetained:true,serverAccessRevoked:record.departed===true}
   }
   async join(input) {
@@ -657,6 +692,13 @@ export class CommunicationOnboarding {
       const challenge = checkChallenge(await phase('ENROLLMENT_CHALLENGE_FAILED', () => socket.request('enrollment.challenge', { purpose, requestId: record.requestId, publicKey: record.publicKey })), { hubId, purpose, requestId: record.requestId })
       const result = await phase('ENROLLMENT_PROOF_FAILED', () => socket.request('enrollment.prove', { challengeId: challenge.challengeId, signature: signature(record, challenge) }))
       return this.result(key, hub, record.requestId, result)
+    } catch(error) {
+      if(purpose!=='cancel'||error.code!=='JOIN_NOT_FOUND')throw error
+      await this.update(key,hub,value=>{
+        if(value.publicKey!==record.publicKey||value.requestId!==record.requestId)fail('ENROLLMENT_CONFLICT')
+        return {...value,status:'cancelled',remoteMissing:'request',paused:true,requiresResume:true}
+      })
+      return safeStatus(checkedRecord(await credentials.readRecord(key),hub))
     } finally { socket.close() }
   }
   async update(key, hub, change) {
@@ -668,7 +710,7 @@ export class CommunicationOnboarding {
     await this.update(key, hub, value => {
       if (value.requestId !== requestId) fail('ENROLLMENT_CONFLICT')
       if (value.instanceId && result.instanceId && value.instanceId !== result.instanceId) fail('COMMUNICATION_PAIRING_CONFLICT')
-      return { ...value, status: result.status, ...(result.instanceId ? { instanceId: result.instanceId } : {}) }
+      return { ...value, remoteMissing:undefined, status: result.status, ...(result.instanceId ? { instanceId: result.instanceId } : {}) }
     })
     const record = checkedRecord(await credentialsOf(this.ctx).readRecord(key), hub)
     if (result.status === 'approved' && !record.paused && !record.requiresResume) await this.configure(hub, result.instanceId, key, record.displayName)

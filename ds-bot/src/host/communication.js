@@ -208,7 +208,17 @@ export function install(rt) {
   if (ctx.systemPrompt?.section) ctx.effect(() => ctx.systemPrompt.section({ name: 'ds-bot-communication-availability', order: 645, interpolate: false,
     text: context => communicationAvailabilityPrompt(rt, diagnosticState(), context) }), 'ds-bot: communication availability')
   if (settings.enabled && remoteHub.appliedEnabled) rt.teamTools.push(...definitions, ...localManagementTools(rt, { ensure, enrollment }))
-  let retryStart
+  let retryStart, enrollmentTimer, enrollmentFailures=0
+  const reconcileEnrollment = async () => {
+    try {
+      if(!stopped&&remoteHub.status().enabled&&!remoteHub.status().withdrawalPending){
+        await rt.load();await rt.refresh()
+        if(!stopped&&rt.readOnly?.()===undefined)await (await enrollment()).handle('reconcile-enrollment',{}, {human:true,beforeDispatch:()=>{if(stopped)fail('COMMUNICATION_STOPPED')}})
+      }
+      enrollmentFailures=0
+    } catch { enrollmentFailures++; /* Retry status after outages; never resubmit a join. */ }
+    finally { if(!stopped){enrollmentTimer=setTimeout(reconcileEnrollment,Math.min(30000,5000*2**Math.min(enrollmentFailures,3)));enrollmentTimer.unref?.()} }
+  }
   const start = async () => {
     if (stopped || !remoteHub.status().enabled || remoteHub.status().withdrawalPending) return
     try { await ensure(); startupError = null } catch (error) {
@@ -218,7 +228,8 @@ export function install(rt) {
   }
   ctx.effect(() => {
     void remoteHub.apply().catch(error => { startupError = error.code ?? 'COMMUNICATION_UNAVAILABLE' })
-    return async () => { stopped = true; clearTimeout(retryStart); await remoteHub.close(); await starting?.catch(() => {}); await runtime?.close(); credential = undefined; await disposePreset?.() }
+    enrollmentTimer=setTimeout(reconcileEnrollment,5000);enrollmentTimer.unref?.()
+    return async () => { stopped = true; clearTimeout(enrollmentTimer); clearTimeout(retryStart); await remoteHub.close(); await starting?.catch(() => {}); await runtime?.close(); credential = undefined; await disposePreset?.() }
   }, 'ds-bot: communication')
   ctx.effect(() => ctx.connection.fetch.register({ path: '/api/communication', methods: ['POST'], requestBody: 'buffered',
     fetch: async request => {
@@ -251,7 +262,7 @@ export function install(rt) {
           await rt.load(); await rt.refresh()
           return Response.json({ ok: true, value: await diagnoseCommunication(rt, diagnosticState()) })
         }
-        if (!localReads.includes(body.endpoint)) {
+        if (!localReads.includes(body.endpoint) && !(body.endpoint==='forget-hub'&&body.force===true)) {
           if (!feature.enabled) fail('REMOTE_HUB_DISABLED')
           if (!['update-hub-trust','hub-join-status'].includes(body.endpoint)) remoteHub.assertAvailable()
         }

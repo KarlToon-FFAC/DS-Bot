@@ -535,3 +535,63 @@ test('a stale setup opt-out cannot disable a configured Hub when the owner expli
  assert.equal(f.rt.config.remoteHubEnabled, true)
  assert.equal(f.rt.config.communication.enabled, true)
 })
+
+test('cancellation treats a confirmed missing request as settled, while network errors remain uncertain',async()=>{
+ for(const code of ['JOIN_NOT_FOUND','CONNECTION_LOST']){
+  const f=fixture();await f.onboarding.handle('join',joinInput,human)
+  const original=f.records.get(f.key).payload.publicKey
+  const api=new CommunicationOnboarding(f.rt,{connect:async()=>({close(){},request:async()=>{throw Object.assign(Error(code),{code})}})})
+  if(code==='JOIN_NOT_FOUND'){
+   const result=await api.handle('cancel',{hubId:hub.hubId},human)
+   assert.equal(result.status,'cancelled');assert.equal(result.remoteMissing,'request')
+  }else{
+   await assert.rejects(api.handle('cancel',{hubId:hub.hubId},human),{code})
+   assert.equal(f.records.get(f.key).payload.status,'pending')
+  }
+  assert.equal(f.records.get(f.key).payload.publicKey,original)
+ }
+})
+
+test('lost approval and administrator deletion recover against the real Hub store after a client restart',async t=>{
+ const {HubStore}=await import('../../communication-hub/src/store.js')
+ const {HubManagement}=await import('../../communication-hub/src/management-store.js')
+ for(const deleted of [false,true]){
+  const store=new HubStore(':memory:');t.after(()=>store.close())
+  const m=new HubManagement(store);m.hubId=hub.hubId
+  const f=fixture();f.rt.ctx.credentials.deleteRecord=async key=>f.records.delete(key)
+  let loseReply=true,approved,joinCalls=0
+  const connect=async()=>{
+   const socket={};let purpose
+   return {close:()=>m.forget(socket),request:async(type,input)=>{
+    if(type==='enrollment.challenge'){purpose=input.purpose;return m.challenge(socket,input)}
+    const result=m.prove(socket,input)
+    if(purpose==='join'){
+     joinCalls++;approved=m.decide({requestId:result.requestId,expectedVersion:1,action:'approve'})
+     if(loseReply){loseReply=false;throw Object.assign(Error('simulated lost approval reply'),{code:'CONNECTION_LOST'})}
+    }
+    return result
+   }}
+  }
+  const first=new CommunicationOnboarding(f.rt,{connect})
+  await assert.rejects(first.handle('join',joinInput,human),{code:'CONNECTION_LOST'})
+  assert.equal(f.records.get(f.key).payload.status,'prepared')
+  if(deleted){
+   const instance=m.instances().find(i=>i.instanceId===approved.instanceId)
+   m.delete({instanceId:instance.instanceId,expectedPairingRevision:instance.pairingRevision,expectedNameVersion:instance.nameVersion,ownedSharedGroups:[],confirmDelete:true})
+  }
+  const restarted=new CommunicationOnboarding(f.rt,{connect})
+  if(deleted){
+   await assert.rejects(restarted.handle('reconcile-enrollment',{},human),{code:'JOIN_NOT_FOUND'})
+   const status=(await restarted.handle('storage',{},human)).enrollments[0]
+   const cleanup={hubId:hub.hubId,confirmedUrl:hub.url,force:true,confirmForget:true,deleteLocalHistory:false,expectedIdentity:status.identityFingerprint}
+   assert.equal((await restarted.handle('forget-hub',cleanup,human)).forgotten,true)
+   assert.equal((await restarted.handle('forget-hub',cleanup,human)).alreadyForgotten,true)
+   assert.equal(f.records.size,0)
+  }else{
+   assert.equal((await restarted.handle('reconcile-enrollment',{},human)).status,'approved')
+   assert.equal(f.rt.config.communication.instanceId,approved.instanceId)
+   assert.equal(f.rt.config.communication.enabled,true)
+  }
+  assert.equal(joinCalls,1,'status recovery never duplicates the application')
+ }
+})

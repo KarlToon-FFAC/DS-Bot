@@ -23,7 +23,8 @@ const enrollmentErrors = {
   TLS_REQUIRED: 'The Hub requires a trusted WSS connection.',
   HUB_ADDRESS_FORBIDDEN: 'The Hub address is not allowed. Ask its owner for a reachable trusted WSS address.',
   MANAGEMENT_DISABLED: 'Hub enrollment is disabled. Ask its administrator to enable management.',
-  JOIN_NOT_FOUND: 'The Hub has no saved request with this ID. You may explicitly request access again using the saved device identity.',
+  JOIN_NOT_FOUND: 'This application no longer exists on the Hub. Withdraw it to clear local state and apply again.',
+  INSTANCE_NOT_FOUND: 'This device no longer exists on the Hub. You can forget this Hub and enroll with a new identity.',
   JOIN_NOT_SUBMITTED: 'No request has been submitted. Fix the reported local or connection problem before requesting access.',
   CREDENTIAL_STORAGE_UNAVAILABLE: 'The local credential service is unavailable. Check the app version and credential provider.',
   CREDENTIAL_STORAGE_READ_ONLY: 'The local credential store is read only. No new enrollment can be saved.',
@@ -127,6 +128,10 @@ export function AddDevice({ request, displayName, revision }) {
     if (hub) setUncertainHub(current => current === hub.hubId ? null : current)
     if (value.enrollments) setEnrollments(value.enrollments)
     else if (value.hubId) update(value)
+    if(lifecycle&&['withdraw','forget','force-forget'].includes(lifecycle.kind)
+      && !(value.enrollments??(value.hubId?[value]:[])).some(item=>item.hubId===lifecycle.item.hubId)
+      && selected?.hubId!==lifecycle.item.hubId){setLifecycle(null);setError('');setHub(null);setCode('')}
+
     return { selectedHub: selected, enrollments: value.enrollments ?? (value.hubId ? [value] : []) }
   }
   const existingRequest = hub && enrollments.some(item => item.hubId === hub.hubId && item.requestId && ['prepared', 'pending', 'approved'].includes(item.status)) && absentHub !== hub.hubId
@@ -136,7 +141,9 @@ export function AddDevice({ request, displayName, revision }) {
       confirmedHubId:value.hubId,confirmedUrl:value.url,...(value.trustFingerprint?{confirmedTrustFingerprint:value.trustFingerprint}:{})})
     if(token===generation.current){setResumeConfirmed({});await refreshStorage(token)}
   }
+  const awaiting=enrollments.some(item=>['prepared','pending'].includes(item.status))
   return h('div', { className: 'bt-comm-onboarding' },
+    !awaiting?h(Fragment,null,
     h('p', null, t('Paste a Hub code from its owner. Review the actual address before requesting access. Devices are not discovered automatically.')),
     h('p', { className: 'bt-comm-reference' }, t('Review only decodes the Hub code locally. It does not test network access or submit a request.')),
     h('label', { className: 'bt-comm-field' }, t('Hub code'), h('textarea', { value: code, rows: 2, maxLength: 65536, 'aria-label': t('Hub code'), onChange: event => { generation.current += 1; loadOrder.current += 1; setBusy(false); setCode(event.target.value); setHub(null); setError('') } })),
@@ -159,18 +166,26 @@ export function AddDevice({ request, displayName, revision }) {
         if (token === generation.current) update(value)
       }) } }, t('Update this Hub CA trust')) : null) : null,
     h('p', { className: 'bt-comm-storage-note' }, t('Confirming a new Hub selection or join creates its own device key. Disconnecting retains that key and Hub data; it does not revoke membership on the server. The default credential store is plaintext protected by your OS account permissions, not encrypted against the same user.')),
-    storage ? h('p', { className: 'bt-comm-reference' }, t('Credential storage'), ': ', storage.defaultProvider, ' · ', t(storage.encryptedByDefault ? 'Encrypted by provider' : 'Not encrypted by default')) : null,
+    storage ? h('p', { className: 'bt-comm-reference' }, t('Credential storage'), ': ', storage.defaultProvider, ' · ', t(storage.encryptedByDefault ? 'Encrypted by provider' : 'Not encrypted by default')) : null) : null,
     selectedHub?.legacy?h('section',{className:'bt-comm-address'},h('h3',null,t('Current Hub')),h('code',null,selectedHub.url),
       h('p',{className:'bt-comm-reference'},t('Local disconnect preserves server membership and queued work.')),
       selectedHub.enabled?h('button',{type:'button',disabled:busy,onClick:()=>{void run(async token=>{await request({endpoint:'disconnect-hub',confirmedUrl:selectedHub.url,...(selectedHub.hubId?{hubId:selectedHub.hubId}:{})});await refreshStorage(token)})}},t('Disconnect this Hub')):h(Fragment,null,
         h('label',{className:'bt-comm-check'},h('input',{type:'checkbox',checked:Boolean(resumeConfirmed.legacy),onChange:event=>setResumeConfirmed({legacy:event.target.checked})}),t('Resume retained pending messages and work after the Hub checks authorization.')),
         h('button',{type:'button',disabled:busy||!resumeConfirmed.legacy,onClick:()=>{void run(async token=>{await request({endpoint:'resume-hub',confirmedUrl:selectedHub.url,confirmResume:true,...(selectedHub.hubId?{hubId:selectedHub.hubId}:{})});setResumeConfirmed({});await refreshStorage(token)})}},t('Resume this Hub')))):null,
-    enrollments.map(item => h('section', { key: item.hubId, className: 'bt-comm-address' }, h('p', null, h('code', null, item.hubId), ' · ', statusLabel(item.status)), h('p', { className: 'bt-comm-reference' }, item.url),
+    selectedHub?.hubId&&!enrollments.some(item=>item.hubId===selectedHub.hubId)?h('section',{className:'bt-comm-address'},
+      h('p',{role:'status'},t('The saved Hub identity is missing. Clear the remaining local connection before joining again.')),
+      h('button',{type:'button',disabled:busy,onClick:()=>{setDeleteHistory(false);setLifecycle({kind:'force-forget',item:selectedHub})}},t('Force-forget this Hub'))):null,
+    enrollments.map(item => item.status!=='approved' ? h('section',{key:item.hubId,className:'bt-comm-address'},
+      h('p',{role:'status'},['prepared','pending'].includes(item.status)?t('Application pending'):statusLabel(item.status)),
+      h('button',{type:'button',disabled:busy,onClick:()=>{setDeleteHistory(false);setLifecycle({kind:'withdraw',item})}},t('Withdraw request')))
+      : h('section', { key: item.hubId, className: 'bt-comm-address' }, h('p', null, h('code', null, item.hubId), ' · ', statusLabel(item.status)), h('p', { className: 'bt-comm-reference' }, item.url),
       item.requestId ? h('p', { className: 'bt-comm-reference' }, t('Request ID'), ': ', h('code', null, item.requestId)) : null,
+      item.remoteMissing?h('p',{role:'status'},t('The remote request or device no longer exists. Local cleanup is available; joining again requires a new request.')):null,
       item.restartRequired ? h('p',{role:'status'},t('Hub trust updated. Restart the host to use the new CA.')) : item.reconnectRequested ? h('p',{role:'status'},t('Hub trust updated. Reconnecting with the new CA.')) : null,
       item.departed?h('p',{role:'status'},t('Access revoked. History is retained; this device cannot resume.')):item.paused?h('p',{role:'status'},t('Paused. Identity, trust and Hub history are retained separately.')):item.status === 'approved' ? h('p', { role: 'status' }, t('Saved approval. This is not a live connection check. The device configuration is saved through the app; current connection status is shown separately.')) : null,
       item.status==='approved'&&!item.departed?h('button',{type:'button',disabled:busy,onClick:()=>setLifecycle({kind:'leave',item})},t('Leave this Hub')):null,
       h('button',{type:'button',disabled:busy,onClick:()=>{setDeleteHistory(false);setLifecycle({kind:'forget',item})}},t('Forget this Hub')),
+      h('button',{type:'button',disabled:busy,onClick:()=>{setDeleteHistory(false);setLifecycle({kind:'force-forget',item})}},t('Force-forget this Hub')),
       selectedHub?.hubId!==item.hubId?h('button',{type:'button',disabled:busy,onClick:()=>{void run(token=>select(item,token))}},t('Select this Hub')):null,
       selectedHub?.hubId===item.hubId&&selectedHub.enabled?h('button',{type:'button',disabled:busy,onClick:()=>{void run(async token=>{await request({endpoint:'disconnect-hub',hubId:item.hubId});if(token===generation.current)await refreshStorage(token)})}},t('Disconnect this Hub')):null,
       selectedHub?.hubId===item.hubId&&item.paused&&item.status==='approved'&&!item.departed?h(Fragment,null,
@@ -178,16 +193,16 @@ export function AddDevice({ request, displayName, revision }) {
         h('button',{type:'button',disabled:busy||!resumeConfirmed[item.hubId],onClick:()=>{void run(async token=>{const value=await request({endpoint:'resume-hub',hubId:item.hubId,confirmedUrl:item.url,confirmResume:true});if(token===generation.current){update(value);setResumeConfirmed({});await refreshStorage(token)}})}},t('Resume this Hub'))):null,
       !item.requestId ? h('p', { role: 'status' }, t('Device identity is saved locally. No request ID exists yet; access has not been requested from the Hub.')) : null,
       item.requestId && ['prepared', 'pending'].includes(item.status) ? h('button', { type: 'button', disabled: busy, onClick: () => { void run(async token => { const value = await request({ endpoint: 'cancel-hub-join', hubId: item.hubId }); if (token === generation.current) update(value) }) } }, t('Cancel request')) : null)),
-    h(CommunicationDialog, {open:Boolean(lifecycle),title:lifecycle?.kind === 'leave' ? 'Leave this Hub' : 'Forget this Hub',onClose:()=>setLifecycle(null),busy,error,alert:true,
+    h(CommunicationDialog, {open:Boolean(lifecycle),title:lifecycle?.kind === 'leave' ? 'Leave this Hub' : lifecycle?.kind === 'withdraw' ? 'Withdraw request' : lifecycle?.kind === 'force-forget' ? 'Force-forget this Hub' : 'Forget this Hub',onClose:()=>setLifecycle(null),busy,error,alert:true,
       actions:h('div',{className:'bt-comm-operation-buttons'},h('button',{type:'button',disabled:busy,onClick:()=>setLifecycle(null),'data-dialog-cancel':true},t('Cancel')),
         h('button',{type:'button',className:'bt-comm-danger',disabled:busy,onClick:()=>{void run(async token=>{
           const item=lifecycle.item
-          await request(lifecycle.kind==='leave'?{endpoint:'leave-hub',hubId:item.hubId,confirmedUrl:item.url,confirmLeave:true}:{endpoint:'forget-hub',hubId:item.hubId,confirmedUrl:item.url,confirmForget:true,deleteLocalHistory:deleteHistory,...(deleteHistory?{confirmDeleteLocalHistory:true}:{})})
+          await request(lifecycle.kind==='leave'?{endpoint:'leave-hub',hubId:item.hubId,confirmedUrl:item.url,confirmLeave:true}:{endpoint:'forget-hub',hubId:item.hubId,confirmedUrl:item.url,confirmForget:true,...(item.identityFingerprint?{expectedIdentity:item.identityFingerprint}:item.requestId?{expectedRequestId:item.requestId}:{}),...(['force-forget','withdraw'].includes(lifecycle.kind)?{force:true}:{}),deleteLocalHistory:deleteHistory,...(deleteHistory?{confirmDeleteLocalHistory:true}:{})})
           if(token===generation.current){setLifecycle(null);await refreshStorage(token)}
-        })}},t(lifecycle?.kind==='leave'?'Confirm leaving':'Confirm forgetting')))},
+        })}},t(lifecycle?.kind==='leave'?'Confirm leaving':lifecycle?.kind==='withdraw'?'Confirm withdrawal':lifecycle?.kind==='force-forget'?'Confirm forced local cleanup':'Confirm forgetting')))},
       lifecycle ? h(Fragment,null,h('code',null,lifecycle.item.hubId),h('p',null,lifecycle.item.url),
-        h('p',null,t(lifecycle.kind==='leave'?'Revoke server access and group memberships. Chat history stays. Transfer or dissolve groups owned by this device first.':'Delete this Hub configuration, device key and saved CA trust. Leave or cancel pending approval first. Other Hubs are unaffected. Retained history cannot be attached to a new identity.')),
-        lifecycle.kind==='forget'?h('label',{className:'bt-comm-check'},h('input',{type:'checkbox',checked:deleteHistory,disabled:busy,onChange:event=>setDeleteHistory(event.target.checked)}),t('Also permanently delete this Hub communication queue and cached files. DSH session journals and browser drafts are retained.')):null) : null),
+        h('p',null,t(lifecycle.kind==='withdraw'?'Withdraw this application locally now, even if the Hub is offline or already approved it. Any remaining Hub request or device can be deleted by its administrator. A new application uses a new identity.':lifecycle.kind==='force-forget'?'Remove this Hub configuration, device key and CA trust locally without contacting the Hub. Remote requests, devices and groups may remain; the Hub administrator can delete them separately. Rejoining creates a new identity. Other Hubs are unaffected.':lifecycle.kind==='leave'?'Revoke server access and group memberships. Chat history stays. Transfer or dissolve groups owned by this device first.':'Delete this Hub configuration, device key and saved CA trust. Leave or cancel pending approval first. Other Hubs are unaffected. Retained history cannot be attached to a new identity.')),
+        ['forget','force-forget'].includes(lifecycle.kind)?h('label',{className:'bt-comm-check'},h('input',{type:'checkbox',checked:deleteHistory,disabled:busy,onChange:event=>setDeleteHistory(event.target.checked)}),t('Also permanently delete this Hub communication queue and cached files. DSH session journals and browser drafts are retained.')):null) : null),
     liveError ? h('p', { className: 'bt-comm-reference', role: 'status' }, t('Status may be out of date.'), ' ', liveError) : null,
     error ? h('p', { className: 'bt-comm-error', role: 'alert' }, error) : null)
 }

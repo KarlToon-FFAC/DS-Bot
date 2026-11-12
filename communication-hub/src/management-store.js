@@ -77,6 +77,7 @@ export class HubManagement {
     } else if (['login','leave','leave-status'].includes(input.purpose)) {
       instanceId = identifier(input.instanceId)
       const peer = this.peer(instanceId)
+      requireThat(peer, input.purpose==='login'?'UNAUTHENTICATED':'INSTANCE_NOT_FOUND')
       requireThat(peer && (input.purpose!=='login'||this.db.prepare('SELECT trusted FROM instances WHERE id=?').get(instanceId)?.trusted === 1), 'UNAUTHENTICATED')
       publicKey = peer.public_key
       authRevision = peer.revision
@@ -101,6 +102,7 @@ export class HubManagement {
     this.cleanup()
     if (['login','leave','leave-status'].includes(item.purpose)) {
       const peer = this.peer(item.instanceId)
+      requireThat(peer, item.purpose==='login'?'UNAUTHENTICATED':'INSTANCE_NOT_FOUND')
       requireThat(peer?.public_key === item.publicKey && peer.revision === item.authRevision, 'UNAUTHENTICATED')
       const row = this.db.prepare('SELECT label,trusted FROM instances WHERE id=?').get(item.instanceId)
       if(item.purpose!=='login'){
@@ -133,6 +135,7 @@ export class HubManagement {
     }
     if (item.purpose === 'cancel') this.db.prepare("UPDATE hub_join_requests SET status='cancelled',version=version+1 WHERE id=? AND status='pending'").run(item.requestId)
     const row = this.db.prepare('SELECT * FROM hub_join_requests WHERE id=?').get(item.requestId)
+    requireThat(row, 'JOIN_NOT_FOUND')
     return { requestId: row.id, status: row.status, ...(row.instance_id ? { instanceId: row.instance_id } : {}) }
   }
   joins() {
@@ -183,6 +186,26 @@ export class HubManagement {
       this.audit('enrollment.policy', next.autoApprove ? 'auto-approve' : 'manual-approval')
       return next
     })
+  }
+  deleteJoin(input) {
+    requireThat(input && !Array.isArray(input) && Object.keys(input).every(key => ['requestId','expectedVersion','confirmDelete'].includes(key)), 'INVALID_REQUEST')
+    identifier(input.requestId)
+    requireThat(input.confirmDelete === true && Number.isSafeInteger(input.expectedVersion) && input.expectedVersion > 0, 'JOIN_DELETE_CONFIRMATION_REQUIRED')
+    let publicKey
+    const result = this.store.transaction(() => {
+      const row = this.db.prepare('SELECT * FROM hub_join_requests WHERE id=?').get(input.requestId)
+      if (!row) return {requestId:input.requestId,deleted:true,alreadyDeleted:true}
+      requireThat(row.version === input.expectedVersion, 'JOIN_VERSION_CONFLICT')
+      requireThat(!row.instance_id || !this.db.prepare('SELECT 1 FROM instances WHERE id=?').get(row.instance_id), 'JOIN_HAS_DEVICE')
+      publicKey=row.public_key
+      this.db.prepare('DELETE FROM hub_join_requests WHERE id=?').run(row.id)
+      this.audit('join.delete',row.id)
+      return {requestId:row.id,deleted:true}
+    })
+    for(const [id,challenge] of this.challenges)if(challenge.purpose==='join'&&challenge.publicKey===publicKey)this.challenges.delete(id)
+    // Retain outstanding status/cancel challenges until proof: they now return
+    // JOIN_NOT_FOUND, never an undefined-row exception or accidental recreation.
+    return result
   }
   instances() { return this.db.prepare('SELECT i.id instanceId,i.label,i.trusted,i.pairing_revision pairingRevision,p.revision,coalesce(n.version,0) nameVersion FROM instances i LEFT JOIN hub_enrolled_peers p ON p.instance_id=i.id LEFT JOIN hub_instance_names n ON n.instance_id=i.id WHERE NOT EXISTS(SELECT 1 FROM hub_instance_departures d WHERE d.instance_id=i.id) ORDER BY i.id').all().map(instance => ({ ...instance, connected: this.isInstanceConnected?.(instance.instanceId) === true, ownedSharedGroups: this.db.prepare("SELECT c.id conversationId,c.title,c.version FROM conversations c JOIN principals owner ON owner.id=c.owner_id WHERE owner.instance_id=? AND c.kind='group' AND c.closed=0 AND EXISTS (SELECT 1 FROM memberships m JOIN principals p ON p.id=m.principal_id WHERE m.conversation_id=c.id AND p.instance_id<>?) ORDER BY c.id").all(instance.instanceId, instance.instanceId) })) }
   participants() {

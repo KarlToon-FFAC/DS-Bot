@@ -133,7 +133,7 @@ test('Hub code review reveals the actual address and storage before a Human expl
       if (body.endpoint === 'onboarding-storage') return { storage: { defaultProvider: 'owner-acl-plaintext', encryptedByDefault: false, agentIsolation: false }, enrollments: [] }
       if (body.endpoint === 'decode-hub-code') return hub
       if (body.endpoint === 'join-hub') return { ...hub, status: 'pending', requestId: 'join-one' }
-      if (body.endpoint === 'cancel-hub-join') return { ...hub, status: 'cancelled', requestId: 'join-one' }
+      if (body.endpoint === 'forget-hub') return {hubId:hub.hubId,forgotten:true,localOnly:true}
       throw new Error('Unexpected endpoint')
     }
     await render(React.createElement(api.AddDevice, { request }))
@@ -154,9 +154,11 @@ test('Hub code review reveals the actual address and storage before a Human expl
     assert.equal(join.displayName, 'New machine')
     assert.equal(Object.hasOwn(join, 'credential'), false)
     assert.equal(Object.hasOwn(join, 'principalId'), false)
-    await click('Cancel request')
-    assert.equal(calls.at(-1).endpoint, 'cancel-hub-join')
-    assert.equal(calls.at(-1).hubId, hub.hubId)
+    await click('Withdraw request'); await click('Confirm withdrawal')
+    const cleanup=calls.find(call=>call.endpoint==='forget-hub')
+    assert.equal(cleanup.hubId,hub.hubId);assert.equal(cleanup.force,true)
+    assert.equal(cleanup.expectedRequestId,'join-one')
+    assert.equal(calls.some(call=>call.endpoint==='cancel-hub-join'),false)
     assert.equal(api.hubManagementAddress('http://untrusted.example/'), null)
   })
 })

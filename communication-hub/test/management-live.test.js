@@ -48,7 +48,7 @@ test('admin change hints require same-origin session and CSRF, carry no director
   assert.equal(immediate.result.revision, hint.result.revision)
 })
 
-test('admin long polls recheck logout, global revocation and expiry before responding', async t => {
+test('admin long polls recheck revocation while idle time does not expire remembered logins', async t => {
   for (const action of ['logout', 'sessions/revoke', 'expiry']) {
     await t.test(action, async t => {
       const { portal, auth, management } = await fixture(t)
@@ -56,7 +56,7 @@ test('admin long polls recheck logout, global revocation and expiry before respo
       await drain()
       if (action === 'expiry') { management.now = () => Date.now() + 901000; portal.changed() }
       else await call(portal, action, {}, auth)
-      assert.equal((await wait).status, 401)
+      assert.equal((await wait).status, action==='expiry'?200:401)
     })
   }
 })
@@ -86,4 +86,36 @@ test('admission policy requires admin authorization, CSRF and a current version 
   assert.notEqual(updated.result.revision,state.result.revision)
   assert.equal((await call(portal,'enrollment-policy',input,auth)).result.error.code,'ENROLLMENT_POLICY_VERSION_CONFLICT')
   assert.deepEqual((await call(portal,'state',{},auth)).result.value.enrollmentPolicy,updated.result.value)
+})
+
+test('remembered admin logins survive Hub restart and idle time but logout, revoke and changed passwords invalidate them',async t=>{
+ const {portal,auth,management}=await fixture(t)
+ const sessionHashRows=management.db.prepare("SELECT value FROM hub_management WHERE key GLOB 'adminSession:*'").all()
+ assert.equal(sessionHashRows.length,1)
+ assert.equal(JSON.stringify(sessionHashRows).includes(auth.cookie.split('=')[1]),false)
+ portal.close()
+ management.now=()=>Date.now()+365*86400000
+ const restored=createManagementHttp(management,{origin,password});t.after(()=>restored.close())
+ assert.equal((await call(restored,'session',{},auth)).status,200)
+ assert.equal((await call(restored,'state',{},auth)).status,200)
+ assert.equal((await call(restored,'logout',{},auth)).status,200)
+ restored.close()
+ const afterLogout=createManagementHttp(management,{origin,password});t.after(()=>afterLogout.close())
+ assert.equal((await call(afterLogout,'session',{},auth)).status,401)
+ const login=await call(afterLogout,'login',{password},{origin})
+ assert.match(login.headers['set-cookie'],/Max-Age=34560000/)
+ const next={...auth,cookie:login.headers['set-cookie'].split(';')[0],'x-csrf-token':login.result.csrf}
+ afterLogout.close()
+ const changed=createManagementHttp(management,{origin,password:password+'-changed'});t.after(()=>changed.close())
+ assert.equal((await call(changed,'session',{},next)).status,401)
+})
+
+test('Hub shutdown releases live polls as a retryable outage without logging out the remembered browser',async t=>{
+ const {portal,auth,management}=await fixture(t)
+ const poll=call(portal,'changes',{revision:portal.currentRevision()},auth)
+ await drain();portal.close()
+ const result=await poll
+ assert.equal(result.status,503);assert.equal(result.result.error.code,'MANAGEMENT_RESTARTING')
+ const restarted=createManagementHttp(management,{origin,password});t.after(()=>restarted.close())
+ assert.equal((await call(restarted,'session',{},auth)).status,200)
 })

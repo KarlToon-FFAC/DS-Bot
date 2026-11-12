@@ -5,8 +5,9 @@ import { directoryMarkup, directoryScript, directoryCSS } from './management-dir
 
 export const managementPage = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DS-Bot Hub</title>
 <style>${managementCSS}${directoryCSS}</style>
-<main><header class="hub-header"><span class="hub-mark" aria-hidden="true">↔</span><h1>DS-Bot Hub</h1><span class="hub-version" aria-label="Hub version">V${COMMUNICATION_VERSION}</span></header><p class="intro">Choose how new devices join and review their identity with their owners. Device names are unverified.</p><section id="login"><h2>Administrator sign in</h2><form id="sign-in" method="post" action="/admin/login" autocomplete="on"><label>Username <input name="username" value="admin" autocomplete="username" readonly></label><label>Password <input id="password" name="password" type="password" autocomplete="current-password" placeholder="Administrator password" required></label><button type="submit">Sign in</button></form><p>Your browser can remember this password in its password manager. DS-Bot does not save it in browser storage. Use only a trusted HTTPS address.</p></section><p id="error" role="status"></p><div id="content" hidden><p id="live-status" role="status"></p><button id="logout">Sign out</button><button id="revoke-sessions">Sign out all sessions</button>${devicesMarkup}${directoryMarkup}<section class="hub-code"><h2>Hub code</h2><p id="hub-code-status" role="status"></p><button id="copy-code" type="button" disabled>Copy Hub code</button><details><summary>Show code and trust details</summary><p>Give this code only through a trusted channel. A v2 code includes public CA trust bound to this Hub; do not accept a code from an unverified connection. New devices follow the admission policy below.</p><code id="code"></code></details></section><section class="device-requests"><label class="admission-control"><input id="auto-approve" type="checkbox"> Allow new devices to join without approval</label><p id="admission-status" role="status"></p><p>When enabled, devices with this Hub code and a valid device-key proof join automatically. Existing pending requests still need a decision. Contact and Bot permissions remain separate.</p><details id="device-requests-detail"><summary>Device requests <span id="request-count"></span></summary><div id="requests"></div></details></section></div></main><script src="/admin/app.js" defer></script></html>`
+<main><header class="hub-header"><span class="hub-mark" aria-hidden="true">↔</span><h1>DS-Bot Hub</h1><span class="hub-version" aria-label="Hub version">V${COMMUNICATION_VERSION}</span></header><p class="intro">Choose how new devices join and review their identity with their owners. Device names are unverified.</p><section id="login"><h2>Administrator sign in</h2><form id="sign-in" method="post" action="/admin/login" autocomplete="on"><label>Username <input name="username" value="admin" autocomplete="username" readonly></label><label>Password <input id="password" name="password" type="password" autocomplete="current-password" placeholder="Administrator password" required></label><button type="submit">Sign in</button></form><p>Your browser can remember this password in its password manager. DS-Bot does not save it in browser storage. Use only a trusted HTTPS address.</p></section><p id="error" role="status"></p><div id="content" hidden><p id="live-status" role="status"></p><button id="logout">Sign out</button><button id="revoke-sessions">Sign out all sessions</button>${devicesMarkup}${directoryMarkup}<section class="hub-code"><h2>Hub code</h2><p id="hub-code-status" role="status"></p><button id="copy-code" type="button" disabled>Copy Hub code</button><details><summary>Show code and trust details</summary><p>Give this code only through a trusted channel. A v2 code includes public CA trust bound to this Hub; do not accept a code from an unverified connection. New devices follow the admission policy below.</p><code id="code"></code></details></section><section class="device-requests"><label class="admission-control"><input id="auto-approve" type="checkbox"> Allow new devices to join without approval</label><p id="admission-status" role="status"></p><p>When enabled, devices with this Hub code and a valid device-key proof join automatically. Existing pending requests still need a decision. Contact and Bot permissions remain separate.</p><details id="device-requests-detail"><summary>Device requests <span id="request-count"></span></summary><div id="requests"></div></details></section></div><dialog id="join-delete-dialog" aria-labelledby="join-delete-title"><h2 id="join-delete-title">Delete application permanently</h2><p id="join-delete-target"></p><p>This removes the saved application from this Hub without contacting the applicant. Its client can withdraw the orphaned application independently.</p><p id="join-delete-error" role="alert"></p><button id="join-delete-cancel" type="button">Cancel</button><button id="join-delete-submit" type="button" class="danger">Delete application</button></dialog></main><script src="/admin/app.js" defer></script></html>`
 export const managementScript = `
+let deletingJoin;
 let admissionPolicy = {autoApprove:false,version:1}, admissionSaving = false;
 let csrf, revision = '', refreshFlight, refreshAgain = false, watchTimer, watchController, watchEpoch = 0, failures = 0;
 const $ = id => document.getElementById(id);
@@ -51,7 +52,25 @@ $('auto-approve').onchange = async () => {
   finally { admissionSaving = false; checkbox.disabled = false; checkbox.checked = admissionPolicy.autoApprove; }
   try { await refresh(); } catch(e) { error(e); }
 };
+function showJoinDelete(request) {
+  deletingJoin = {...request}; $('join-delete-target').textContent = request.label+' · '+request.requestId;
+  $('join-delete-error').textContent=''; $('join-delete-submit').disabled=false;
+  openDeviceDialog($('join-delete-dialog')); $('join-delete-cancel').focus();
+}
+$('join-delete-cancel').onclick=()=>{deletingJoin=undefined;closeDeviceDialog($('join-delete-dialog'));};
+$('join-delete-submit').onclick=async()=>{
+  const request=deletingJoin;if(!request||$('join-delete-submit').disabled)return;
+  $('join-delete-submit').disabled=true;
+  try{
+    await api('delete-join',{requestId:request.requestId,expectedVersion:request.version,confirmDelete:true});
+    deletingJoin=undefined;closeDeviceDialog($('join-delete-dialog'));await refresh();
+  }catch(e){$('join-delete-error').textContent=['JOIN_VERSION_CONFLICT','JOIN_HAS_DEVICE'].includes(e.message)?'This application changed or was approved. Review its current state; use Manage approved device to remove an existing device.':e.message;try{await refresh();}catch{} }
+  finally{$('join-delete-submit').disabled=false;}
+};
 function render(value) {
+  if(deletingJoin&&!value.requests.some(item=>item.requestId===deletingJoin.requestId)){
+    deletingJoin=undefined;closeDeviceDialog($('join-delete-dialog'));
+  }
   if (!admissionSaving) {
     admissionPolicy = value.enrollmentPolicy ?? {autoApprove:false,version:1};
     $('auto-approve').checked = admissionPolicy.autoApprove;
@@ -69,6 +88,8 @@ function render(value) {
       row = document.createElement('article'); row.dataset.requestId = r.requestId; row.dataset.signature = signature;
       row.append(text('strong', r.label + ' — ' + r.status), text('small', 'Fingerprint: ' + r.fingerprint));
       if (r.status === 'pending') for (const action of ['approve', 'reject']) row.append(button(action, () => api('decide', {requestId:r.requestId, expectedVersion:r.version, action})));
+      if(r.instanceId&&(value.instances??[]).some(i=>i.instanceId===r.instanceId)) row.append(button('Manage approved device',()=>showDeviceDetails(r.instanceId)));
+      else row.append(button('Delete application',()=>showJoinDelete(r)));
     }
     return row;
   });

@@ -332,16 +332,18 @@ test('uncertain enrollment restores its saved request, exposes safe diagnostics 
     await edit(doc.querySelector('[aria-label="Hub code"]'), 'synthetic-public-hub-code'); await click('Review Hub')
     assert.match(doc.querySelector('.bt-comm-onboarding').textContent, /does not test network access or submit/)
     await click('Confirm and request access')
-    assert.match(doc.querySelector('.bt-comm-onboarding').textContent, /same-request/)
+    assert.ok(button('Withdraw request'))
+    assert.equal(button('Forget this Hub'),undefined)
+    assert.equal(Boolean(doc.querySelector('[aria-label="Hub code"]')),false)
     assert.match(doc.querySelector('.bt-comm-error').textContent, /CONNECTION_LOST.*ENROLLMENT_PROOF_FAILED/)
     assert.doesNotMatch(doc.querySelector('.bt-comm-error').textContent, /DO_NOT_DISPLAY_RAW_FAILURE/)
-    assert.equal(button('Confirm and request access').disabled, true)
+    assert.equal(button('Confirm and request access'),undefined)
     assert.equal(calls.filter(call => call.endpoint === 'hub-join-status').length, 0)
     await autoRefresh()
     assert.equal(calls.filter(call => call.endpoint === 'join-hub').length, 1)
     assert.match(doc.querySelector('.bt-comm-onboarding').textContent, /pending/)
     absent = true; await autoRefresh()
-    assert.equal(button('Confirm and request access').disabled, false, 'explicit not-found status permits an explicit retry')
+    assert.equal(button('Withdraw request').disabled,false,'missing remote requests remain independently withdrawable')
     assert.equal(calls.filter(call => call.endpoint === 'join-hub').length, 1)
   })
 })
@@ -1955,5 +1957,31 @@ test('message activation uses Hub evidence rather than display mentions or pendi
   assert.match(doc.querySelector('[data-message-id=e0] .bt-comm-activation').textContent,/Dispatch not recorded/)
   assert.match(doc.querySelector('[data-message-id=e1] .bt-comm-activation').textContent,/No Bots activated/)
   assert.equal(doc.querySelectorAll('[data-message-id=e2] [data-activated-bot]').length,1)
+ })
+})
+
+test('an existing orphan application exposes only withdrawal and reconciles a lost local-cleanup response',async()=>{
+ const item={hubId:'old-hub',url:'wss://hub.example.test/communication',requestId:'old-orphan',status:'pending',identityFingerprint:'f'.repeat(64)}
+ let saved=true
+ await pane({enabled:false,handle:async body=>{
+  if(body.endpoint==='onboarding-storage')return {storage:{defaultProvider:'test'},enrollments:saved?[item]:[]}
+  if(body.endpoint==='hub-join-status')throw Object.assign(Error('missing'),{code:'JOIN_NOT_FOUND'})
+  if(body.endpoint==='forget-hub'){
+   assert.equal(body.force,true);assert.equal(body.expectedIdentity,item.identityFingerprint)
+   assert.equal(body.confirmForget,true);assert.equal(body.deleteLocalHistory,false)
+   saved=false;throw Object.assign(Error('lost local response'),{code:'CONNECTION_LOST'})
+  }
+  return {}
+ }},async({doc,click,button,calls,autoRefresh})=>{
+  await click('Personal settings');await click('Join Hub');await autoRefresh()
+  assert.equal(button('Forget this Hub'),undefined);assert.equal(button('Force-forget this Hub'),undefined)
+  assert.equal(Boolean(doc.querySelector('[aria-label="Hub code"]')),false)
+  assert.equal(button('Withdraw request').disabled,false)
+  await click('Withdraw request');await click('Confirm withdrawal')
+  assert.equal(Boolean(doc.querySelector('dialog[aria-label="Withdraw request"]')),false)
+  assert.ok(doc.querySelector('[aria-label="Hub code"]'))
+  assert.equal(button('Withdraw request'),undefined)
+  assert.equal(calls.filter(c=>c.endpoint==='forget-hub').length,1)
+  assert.equal(calls.some(c=>c.endpoint==='cancel-hub-join'||c.endpoint==='leave-hub'),false)
  })
 })

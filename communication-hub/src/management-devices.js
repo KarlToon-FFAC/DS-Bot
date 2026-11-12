@@ -80,7 +80,8 @@ function renderDevices() {
   renderDeviceDetails();
   if (deviceConfirmation && !deviceConfirmation.busy) {
     const current = deviceRows.find(i => i.instanceId === deviceConfirmation.instance.instanceId);
-    if (!current || deviceStamp(current) !== deviceConfirmation.stamp) {
+    if(!current){deviceConfirmation=undefined;closeDeviceDialog($('device-confirm'));closeDeviceDetails();$('error').textContent='This device no longer exists; its Hub entry has been cleared.';return;}
+    if (deviceStamp(current) !== deviceConfirmation.stamp) {
       $('device-confirm-error').textContent = 'Device or owned groups changed. Cancel and review current details before confirming.';
       $('device-confirm-submit').disabled = true;
     }

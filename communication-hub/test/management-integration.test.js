@@ -209,7 +209,7 @@ test('native password form supports browser autofill, safe session reload, logou
   const login=async()=>{
     const response=await fetch(origin+'/admin/login',{method:'POST',redirect:'manual',headers:{origin,'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({username:'admin',password:'mock-native-form-password-only'})})
     assert.equal(response.status,303);assert.equal(response.headers.get('location'),'/admin/')
-    const header=response.headers.getSetCookie()[0];assert.match(header,/HttpOnly; SameSite=Strict; Max-Age=900/)
+    const header=response.headers.getSetCookie()[0];assert.match(header,/HttpOnly; SameSite=Strict; Max-Age=34560000/)
     assert.equal(await response.text(),'');return header.split(';')[0]
   }
   const request=(cookie,action,input={},csrf,requestOrigin=origin)=>fetch(origin+'/admin/api/'+action,{method:'POST',headers:{origin:requestOrigin,cookie,'content-type':'application/json',...(csrf?{'x-csrf-token':csrf}:{})},body:JSON.stringify(input)})

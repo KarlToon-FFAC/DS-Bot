@@ -28,7 +28,11 @@ test('operator CLI covers Hub state/code, enrollment decisions, names, revoke/re
  assert.equal((await run('state')).requests.find(item=>item.requestId===two.requestId).status,'rejected')
  await run('revoke-sessions')
  await assert.rejects(execute(prepare('state'),{...options,password:'mock-wrong-synthetic-admin-password'}),{code:'UNAUTHENTICATED'})
- assert.equal(Object.keys(JSON.parse(help()).operations).length,9)
+ const rejected=(await run('state')).requests.find(item=>item.requestId===two.requestId)
+ const deletion={requestId:rejected.requestId,expectedVersion:rejected.version,confirmDelete:true}
+ assert.equal((await run('delete-join',deletion)).deleted,true)
+ assert.equal((await run('delete-join',deletion)).alreadyDeleted,true)
+ assert.equal(Object.keys(JSON.parse(help()).operations).length,10)
 })
 
 test('CLI keeps administrator credentials out of arguments/output, consumes private env and never follows redirects',async t=>{
