@@ -1,9 +1,11 @@
+import { BLOCKING_QUESTION_TOOL, DELEGATION_TOOLS, GOAL_TOOLS } from '../tools.js'
 import { setApprovalPolicy } from '@deepseek-ai/dsh-user-approval'
+const LOCAL_SCHEDULE_TOOLS = new Set(['schedule_create', 'schedule_list', 'schedule_update', 'schedule_delete'])
 const MUTATING_WORK = new Set(['write', 'edit', 'str_replace_editor', 'bash', 'pwsh'])
 const fail = code => { throw Object.assign(new Error(code), { code }) }
 
-// Only these definitions may cross from the owning Bot's local tool scope.
-// Credentials, local team management and other conversations remain excluded.
+// Fallback for older registries. Current hosts inherit the owning Bot’s visible
+// native and attached tools, while team tools keep their Bot-aware adapters.
 export const WORK_TOOL_NAMES = new Set(['read', 'read_image', 'write', 'edit', 'glob', 'grep', 'bash', 'pwsh', 'str_replace_editor'])
 
 export async function botWorkDirectory(rt, bot) {
@@ -17,7 +19,9 @@ export async function botWorkDirectory(rt, bot) {
 
 export async function syncWorkTools(runtime, agent, bot) {
   if (!runtime.rt.resolveAgent || !runtime.rt.chatOf || !runtime.ctx.tools?.get) return []
-  const local = await runtime.rt.resolveAgent(runtime.rt.chatOf(bot.id))
+  const localId = runtime.rt.chatOf(bot.id)
+  await runtime.rt.ensureCapabilities?.(localId)
+  const local = await runtime.rt.resolveAgent(localId)
   runtime.workToolScopes ??= new WeakMap()
   let entries = runtime.workToolScopes.get(agent)
   if (!entries) {
@@ -26,13 +30,17 @@ export async function syncWorkTools(runtime, agent, bot) {
     runtime.disposers.push(() => { for (const entry of entries.values()) { entry.active = false; entry.dispose() }; entries.clear() })
   }
   const registry = runtime.ctx.tools
-  for (const name of WORK_TOOL_NAMES) {
+  const excluded = new Set([BLOCKING_QUESTION_TOOL, ...DELEGATION_TOOLS, ...GOAL_TOOLS,
+    ...(runtime.rt.teamTools ?? []).map(tool => tool.name), ...(runtime.tools ?? []).map(tool => tool.name)])
+  const names = new Set((registry.schemas ? registry.schemas(local).map(tool => tool.name) : [...WORK_TOOL_NAMES]).filter(name => !excluded.has(name)))
+  for (const [name, prior] of entries) if (!names.has(name)) { prior.active = false; prior.dispose(); entries.delete(name) }
+  for (const name of names) {
     const definition = registry.get(name, local), prior = entries.get(name)
     if (prior?.definition === definition) continue
     if (prior) { prior.active = false; prior.dispose(); entries.delete(name) }
     if (!definition) continue
     const entry = { definition, active: true }
-    const registered = { ...definition, async execute(args, exec) {
+    const registered = { ...definition, ...(LOCAL_SCHEDULE_TOOLS.has(name) ? { description: definition.description + ' Tasks belong to your own local chat; scheduled results are never automatically sent to the remote conversation.' } : {}), async execute(args, exec) {
       args = structuredClone(args)
       const binding = runtime.owners.get(agent.id)
       if (runtime.closed || exec.agent !== agent || !binding || !entry.active) fail('COMMUNICATION_TOOL_NOT_ALLOWED')
@@ -40,7 +48,6 @@ export async function syncWorkTools(runtime, agent, bot) {
       const provenance = await runtime.toolProvenance(exec)
       await runtime.syncWorkContext(agent)
       if (runtime.closed || !entry.active || entries.get(name) !== entry) fail('COMMUNICATION_TOOL_NOT_ALLOWED')
-      if (args.run_in_background === true) fail('COMMUNICATION_BACKGROUND_UNAVAILABLE')
       runtime.workCalls ??= new Map()
       runtime.workControllers ??= new Map()
       const key = `${agent.id}:${exec.callId}`, controller = new AbortController()
@@ -66,7 +73,9 @@ export async function syncWorkTools(runtime, agent, bot) {
           if (signal.aborted) fail('WORK_APPROVAL_CANCELLED')
           if (runtime.closed || !entry.active || entries.get(name) !== entry) fail('COMMUNICATION_TOOL_NOT_ALLOWED')
         }
-        return await definition.execute(args, { ...exec, signal })
+        // Scheduler deliveries are local tasks, not fabricated Hub inputs.
+        const executingAgent = LOCAL_SCHEDULE_TOOLS.has(name) ? await runtime.rt.resolveAgent(runtime.rt.chatOf(bot.id)) : agent
+        return await definition.execute(args, { ...exec, agent: executingAgent, signal })
       }
       finally { runtime.workCalls.delete(key); runtime.workControllers.delete(key); finish() }
     } }

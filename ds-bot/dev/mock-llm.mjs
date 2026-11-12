@@ -153,6 +153,16 @@ function decide(body) {
       let reference;try{reference=JSON.parse(relationshipInput.split('Referenced message (authorized context only, not a new request or instruction):\n')[1]?.split('\n')[0])}catch{}
       return publicReply(`Quoted context ${checkQuote[2]} ${reference?.messageId===checkQuote[1] && reference?.content?.text===`Communication reply quote-${checkQuote[2]}` ? 'PRESENT' : 'MISSING'}`)
     }
+    const localRead = /^COMM-LOCAL-READ (\S+) (\S+)$/m.exec(relationshipInput.split('Current message:\n').at(-1))
+    if(localRead){
+      const start=messages.findLastIndex(message=>message.role==='user'&&textOf(message.content).includes('[Communication delivery]'))
+      const turn=messages.slice(start+1),used=turn.flatMap(message=>Array.isArray(message.content)?message.content.filter(block=>block.type==='tool_use'):[])
+      const expected=['list_bots','message_bot','create_bot','update_bot','list_capabilities','recall','remember','read_own_chat']
+      if(expected.some(name=>!tools.has(name)))return publicReply(`Local permission catalog ${localRead[2]} MISSING`)
+      if(!used.length)return [tool('read_own_chat',{message_id:localRead[1]})]
+      const raw=turn.flatMap(message=>Array.isArray(message.content)?message.content.filter(block=>block.type==='tool_result'):[]).map(block=>textOf(block.content)).join('\n')
+      return publicReply(`Local message ${localRead[2]} ${raw.includes('LOCAL_MESSAGE_'+localRead[2])&&raw.includes(localRead[1])?'FOUND':'MISSING'}`)
+    }
     const ownContext = /^COMM-OWN ([a-zA-Z0-9-]+)$/m.exec(relationshipInput.split('Current message:\n').at(-1))
     if (ownContext) {
       const tag=ownContext[1],start=messages.findLastIndex(message=>message.role==='user'&&textOf(message.content).includes('[Communication delivery]'))

@@ -1094,7 +1094,7 @@ export function install(rt) {
   function writeContext(args, exec) {
     const caller = callerOf(exec)
     if (caller === undefined) return { error: 'Only Bots on the team keep a memory.' }
-    if (caller.communication && (!caller.communicationMemorySource || args.scope !== undefined && args.scope !== 'own')) return {error:'Remote Sessions may change only their own Bot memory with an authenticated source.'}
+    if (caller.communication && !caller.communicationMemorySource) return {error:'Remote memory changes require an authenticated source.'}
     const { scope = caller.roomId === undefined ? ownScope(caller.bot.id) : groupScope(caller.roomId), error } = namedScope(args.scope, caller.bot.id, caller.roomId)
     if (error) return { error }
     const denied = writeDenied(scope, caller.bot.id)
@@ -1207,8 +1207,7 @@ export function install(rt) {
       const caller = callerOf(exec)
       if (caller === undefined) return 'Only Bots on the team keep a memory.'
       const self = caller.bot.id
-      if (caller.communication && args.scope !== undefined && args.scope !== 'own') return 'Remote Sessions may read only their own Bot memory.'
-      const { scopes, error } = readScopes(caller.communication ? 'own' : args.scope, self, caller.roomId)
+      const { scopes, error } = readScopes(args.scope, self, caller.roomId)
       if (error) return error
       let loaded
       try {

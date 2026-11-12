@@ -1322,3 +1322,40 @@ test('remote Skills reuse the local library and local creator/shared-Skill permi
  assert.throws(()=>readOwnSkill(comm,{name:'private-chief'},exec),{code:'OWN_SKILL_UNAVAILABLE'})
  await assert.rejects(saveOwnSkill(comm,{name:'private-chief',description:'x',content:'x'},exec),{code:'OWN_SKILL_UNAVAILABLE'})
 })
+
+
+test('remote local team tools use the same Bot privileges and keep local replies internal',async t=>{
+ const {agentOf,emit,stop}=await start(team());t.after(stop)
+ const {localIdentityTools}=await import('../src/host/federation/local-identity-tools.js')
+ const queue=new CommunicationQueue(':memory:',{instanceId:'remote-local-permissions'});t.after(()=>queue.close())
+ const principal=queue.localPrincipal('bot','b','Writer')
+ const binding={id:'permission-binding',localBotRef:'b',recipientPrincipalId:principal.principalId,conversationId:'remote-room',membershipEpoch:'epoch'}
+ const input={deliveryId:'input',messageId:'request',conversationId:binding.conversationId,recipientPrincipalId:principal.principalId,membershipEpoch:'epoch',ai:true,event:{type:'message',message:{messageId:'request',author:{principalId:'human:remote:owner'},content:{text:'Coordinate locally'}}}}
+ queue.applyMemberships({memberships:[{principalId:principal.principalId,conversationId:binding.conversationId,membershipEpoch:'epoch',active:true,joinSeq:1,watermark:1}]})
+ queue.receive({...input,routingVersion:1,notify:false,event:{...input.event,eventId:'request',conversationId:binding.conversationId,conversationSeq:1}})
+ const comm={rt,queue,owners:new Map([['remote-worker',binding],['remote-chief',{...binding,id:'chief-binding',localBotRef:'a'}]]),authorize:async()=>{},toolProvenance:async()=>({causationDeliveryId:'input',replyToMessageId:'request'}),tools:[]}
+ rt.communication=comm;t.after(()=>{rt.communication=undefined})
+ const invoke=(name,args,id='remote-worker')=>localIdentityTools(comm).find(tool=>tool.name===name).execute(args,{agent:{id}})
+ assert.equal(rt.selfOf('remote-worker'),'b')
+ assert.equal(rt.isBotSession('remote-worker'),false,'remote finals never enter the local relay loop')
+ assert.match(await invoke('list_bots',{}),/Chief.*Main Bot/)
+ assert.match(await invoke('create_bot',{name:'Unauthorized',role:'Worker',instructions:'Synthetic test'}),/Only the Main Bot/)
+ const original=rt.createBot;rt.createBot=async args=>({id:'new',name:args.name})
+ assert.match(await invoke('create_bot',{name:'Authorized',role:'Worker',instructions:'Synthetic test'},'remote-chief'),/Created Authorized/)
+ rt.createBot=original
+ await invoke('message_bot',{to:'Chief',message:'Please review local progress',request_id:'remote-progress'})
+ const incoming=agentOf('a').calls.at(-1)[1]
+ assert.equal(incoming.source.triggerOrigin,'remote-bot');assert.equal(incoming.source.audience,'internal')
+ assert.equal(incoming.source.remoteSource.messageId,'request')
+ assert.match(incoming.content[0].text,/not local-user authorization/)
+ emit('a','turn/start',{turn:1});emit('a','user/message',{source:incoming.source,content:incoming.content})
+ emit('a','assistant/message',{message:{role:'assistant',content:[{type:'text',text:'Local-only result'}]}})
+ emit('a','turn/end',{turn:1,reason:{kind:'completed'}});await delay(30)
+ const reply=agentOf('b').calls.at(-1)[1]
+ assert.equal(reply.source.remoteSource.messageId,'request')
+ assert.equal(reply.source.audience,'internal')
+ assert.equal(agentOf('remote-worker').calls.length,0,'local replies do not become remote messages')
+ assert.match(await invoke('ask_user',{question:'Local review?',options:[{label:'Approve'},{label:'Reject'}]}),/local chat with the owner/)
+ assert.equal(rt.state.questions.b.question,'Local review?')
+ assert.equal(rt.state.questions['remote-worker'],undefined)
+})

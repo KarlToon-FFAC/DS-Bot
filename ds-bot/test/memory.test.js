@@ -1526,7 +1526,7 @@ test('the remote identity reads and edits the same own memory as the local Bot w
   await remote('forget',{entry:'Reports Monday progress',topic:'collaboration'})
   assert.doesNotMatch(await f.tool('recall',{},'b2'),/Reports Monday progress/)
   await assert.rejects(remote('remember',{scope:'team',text:'Untrusted override'}))
-  assert.match(await remote('recall',{scope:'team'}),/only their own Bot memory/)
+  assert.equal(await remote('recall',{scope:'team'}),await f.tool('recall',{scope:'team'},'b2'))
   assert.doesNotMatch(await f.tool('recall',{},'b3'),/Reports Friday progress/)
  } finally {f.rt.communication=undefined;await f.stop()}
 })

@@ -457,8 +457,9 @@ export function install(rt) {
     rt.syncScopedTools?.()
   }
   // The Bot a Session speaks for: its own chat, one of its group Sessions, or an
-  // earlier segment of either.
-  const selfOf = id => chatOwners.get(id) ?? groupOwners.get(id)?.botId ?? pastOwners.get(id)?.botId
+  // earlier segment of either, or its authenticated remote work Session.
+  // isBotSession remains local-only: remote turn completion must not use local relays.
+  const selfOf = id => chatOwners.get(id) ?? groupOwners.get(id)?.botId ?? pastOwners.get(id)?.botId ?? rt.communication?.owners?.get(id)?.localBotRef
   // A Session where the Bot speaks now, as opposed to an archived segment.
   const isBotSession = id => chatOwners.has(id) || groupOwners.has(id)
   const groupSessionsOf = botId => Object.values(state.rooms).map(room => room.sessions?.[botId]).filter(Boolean)

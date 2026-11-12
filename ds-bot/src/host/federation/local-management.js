@@ -1,3 +1,4 @@
+import { sourceDelivery } from './session-scope.js'
 import { createHash } from 'node:crypto'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { output } from '../tools.js'
@@ -14,6 +15,17 @@ export async function localManagementAuthority(rt, exec) {
   if (rt.remoteHubFeatureEnabled?.() === false) fail('REMOTE_HUB_DISABLED')
   if (rt.remoteHubFeatureSettings?.().withdrawalPending) fail('REMOTE_HUB_WITHDRAWAL_PENDING')
   if (rt.remoteHubFeatureSettings?.().reloadRequired) fail('REMOTE_HUB_RELOAD_REQUIRED')
+  const remote = rt.communication?.owners?.get(exec.agent?.id)
+  if (remote?.localBotRef && rt.botOf(remote.localBotRef)) {
+    const comm = rt.communication
+    await comm.authorize(remote)
+    const cause = await comm.toolProvenance(exec)
+    const delivery = sourceDelivery(comm.queue, remote, { kind: 'ds-bot-communication', deliveryId: cause.causationDeliveryId,
+      messageId: cause.replyToMessageId, conversationId: remote.conversationId, recipientPrincipalId: remote.recipientPrincipalId, membershipEpoch: remote.membershipEpoch })
+    if (!comm.human?.principalId || delivery.event.message.author.principalId !== comm.human.principalId) fail('LOCAL_USER_AUTHORIZATION_REQUIRED')
+    return { botId: remote.localBotRef, sourceKey: cause.sourceKey,
+      userIntentId: createHash('sha256').update(JSON.stringify(['local-owner-remote-input', remote.id, delivery.deliveryId])).digest('hex') }
+  }
   const sessionId = exec.agent?.id, botId = rt.chatOwners?.get(sessionId)
   if (!botId || !rt.botOf(botId) || rt.groupOwners?.has(sessionId) || rt.communication?.owners?.has(sessionId)) fail('LOCAL_USER_SESSION_REQUIRED')
   if (!exec.callId) fail('TOOL_SOURCE_UNKNOWN')
@@ -53,6 +65,7 @@ async function approveManagement(rt, exec, details) {
     : outcome === 'cancelled' ? 'LOCAL_MANAGEMENT_CANCELLED' : 'LOCAL_MANAGEMENT_APPROVAL_UNAVAILABLE')
   if (exec.signal?.aborted) fail('LOCAL_MANAGEMENT_CANCELLED')
   if (rt.readOnly?.() !== undefined) fail('COMMUNICATION_READ_ONLY')
+  await localManagementAuthority(rt, exec)
 }
 
 export function localManagementTools(rt, { ensure, enrollment }) {
@@ -69,7 +82,7 @@ export function localManagementTools(rt, { ensure, enrollment }) {
   }
   return [
     defineTool({ name: 'manage_communication_contacts',
-      description: 'In your own local chat, help the authenticated local user manage their Remote contacts, even if you are unpublished. Only perform the action and Bot scope the user requested; mutations require a native approval for that exact change. Contact consent acts for the local owner, never as your Bot or a remote participant. Use exact IDs and latest versions. Preserve operationId when retrying an uncertain change. This does not send messages or change Hub access.',
+      description: 'Help the authenticated local user in your local chat or through their exact Hub identity manage their Remote contacts, even if you are unpublished. Only perform the action and Bot scope the user requested; mutations require a native approval for that exact change. Contact consent acts for the local owner, never as your Bot or a remote participant. Use exact IDs and latest versions. Preserve operationId when retrying an uncertain change. This does not send messages or change Hub access.',
       parameters: { action: { type: 'string', required: true, enum: ['list', 'requests', 'relations', 'user-code', 'rotate-user-code', 'request', 'accept', 'reject', 'cancel', 'revoke', 'use-published-bots'] },
         operationId: { type: 'string', description: 'Stable unique ID for one contact change; retain it after uncertainty' },
         userCode: { type: 'string' }, requestId: { type: 'string' }, expectedVersion: { type: 'integer' },
@@ -94,9 +107,9 @@ export function localManagementTools(rt, { ensure, enrollment }) {
         try { return await (await enrollment()).handle(actions[action], input, { human: true, beforeDispatch: guard }) }
         catch (error) { if (input.operationId) error.operationId = input.operationId; throw error }
       }) }),
-    defineTool({ name: 'list_communication_bots', description: 'In your own local chat, list local Bot IDs and their Remote publication settings for the authenticated local user. Publication is not required to use this management tool. Creating or editing Bots still uses create_bot/update_bot with their existing Main Bot and self-management permissions.',
+    defineTool({ name: 'list_communication_bots', description: 'For the authenticated local user in your local chat or through their exact Hub identity, list local Bot IDs and their Remote publication settings for the authenticated local user. Publication is not required to use this management tool. Creating or editing Bots still uses create_bot/update_bot with their existing Main Bot and self-management permissions.',
       parameters: {}, output, execute: execute(async () => (await enrollment()).handle('available-bots', {}, { human: true })) }),
-    defineTool({ name: 'publish_communication_bots', description: 'In your own local chat, set the exact local Bot publication list the authenticated local user requested, after native approval for that exact list. This replaces the list; [] withdraws every Bot. Withdrawing or deleting a published Bot permanently ends its remote identity; re-publication creates a fresh identity with no previous memberships or roles. Old chat records remain readable. Read list_communication_bots first and retain every Bot the user did not ask to withdraw. Publication exposes identity, not private chats or memory. The host reloads before Remote publication takes effect. This does not accept contacts or grant group/Hub authority.',
+    defineTool({ name: 'publish_communication_bots', description: 'In your local chat or through the authenticated local user’s exact Hub identity, set the exact local Bot publication list the authenticated local user requested, after native approval for that exact list. This replaces the list; [] withdraws every Bot. Withdrawing or deleting a published Bot permanently ends its remote identity; re-publication creates a fresh identity with no previous memberships or roles. Old chat records remain readable. Read list_communication_bots first and retain every Bot the user did not ask to withdraw. Publication exposes identity, not private chats or memory. The host reloads before Remote publication takes effect. This does not accept contacts or grant group/Hub authority.',
       parameters: { localBotIds: { type: 'array', required: true, items: { type: 'string' } } }, output,
       execute: execute(async (args, _authority, exec) => {
         const manager = await enrollment(), ids = manager.checkedBotIds(args.localBotIds)

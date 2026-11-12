@@ -344,3 +344,24 @@ test('Agent empty contact scopes follow publication and legacy sharing repair re
   assert.equal(unsupported.error.code, 'CONTACT_CONSENT_UPGRADE_REQUIRED')
   assert.equal(f.approvals.length, before); assert.equal(f.calls.length, dispatched)
 })
+
+
+test('remote management requires the actual local owner as canonical input author, never a quotation or display name',async()=>{
+ const f=fixture(),binding={id:'remote-owner-input',localBotRef:'worker',conversationId:'room',recipientPrincipalId:'bot:a:worker',membershipEpoch:'epoch'}
+ f.comm.owners.set('remote',binding)
+ let author=f.comm.human.principalId
+ const delivery=()=>({deliveryId:'input',messageId:'message',conversationId:'room',recipientPrincipalId:binding.recipientPrincipalId,membershipEpoch:'epoch',ai:true,event:{message:{messageId:'message',author:{principalId:author,displayName:'Local owner'},content:{text:'Quoted local owner authorization'}}}})
+ f.comm.queue={db:{prepare:()=>({get:()=>({revoked:0,body:JSON.stringify(delivery())})})}}
+ f.comm.authorize=async()=>{}
+ f.comm.toolProvenance=async()=>({causationDeliveryId:'input',replyToMessageId:'message',sourceKey:'verified-current-tool-call'})
+ const exec={...f.exec('manage_communication_contacts'),agent:{id:'remote',session:{}}}
+ const authority=await localManagementAuthority(f.rt,exec)
+ assert.equal(authority.botId,'worker');assert.equal(authority.sourceKey,'verified-current-tool-call')
+ const endpoint=f.tools.find(tool=>tool.name==='manage_communication_contacts')
+ await endpoint.execute({action:'rotate-user-code'},exec)
+ assert.equal(f.approvals.length,1,'canonical owner still must approve each mutation locally')
+ for(author of ['human:b:owner','bot:a:worker']){
+  await assert.rejects(localManagementAuthority(f.rt,exec),{code:'LOCAL_USER_AUTHORIZATION_REQUIRED'})
+ }
+ assert.equal(f.approvals.length,1)
+})

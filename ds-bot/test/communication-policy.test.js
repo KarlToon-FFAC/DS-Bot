@@ -57,7 +57,9 @@ test('federated prompt permits explicit local and remote Bot handoffs only withi
     assert.match(text, /fresh incoming result.*legitimate A-to-B-to-A/)
     assert.match(text, /never resend with new IDs or omit cause/)
     assert.match(text, /finished Bot reply needs no acknowledgement or thank-you loop/)
-    assert.match(text, /Local team-management, credential\/secret, other-Bot private-chat, subagent and workflow tools remain unavailable/)
+    assert.match(text, /same local identity and permission checks/)
+    assert.match(text, /Tools disabled for local Bots, including subagent\/workflow tools, stay disabled/)
+    assert.match(text, /message_id to retrieve an exact local message/)
     assert.match(text, /send only within this conversation/)
     assert.match(text, /Do not start subagents, goals or workflows/)
     assert.match(text, /Never disclose API keys, tokens, cookies/)
@@ -121,4 +123,20 @@ test('communication work uses the owning Bot directory and refuses a mismatched 
   wanted = '/new/work'
   await assert.rejects(CommunicationRuntime.prototype.syncWorkContext.call(runtime, agent), { code: 'COMMUNICATION_WORKSPACE_CHANGED' })
   assert.equal(cwd, '/owned/work')
+})
+
+
+test('remote assembly retains native programmatic tool transport and SDK while nested unauthorized calls stay blocked',async()=>{
+ const hooks=new Map(),binding={id:'binding'},runtime={tools:[{name:'read_communication_history'}],scoped:new WeakSet(),disposers:[],syncWorkContext:async()=>{},owners:new Map(),authorize:async owner=>assert.equal(owner,binding)}
+ const agent={id:'remote',ctx:{tools:{register:()=>()=>{}},on:(name,fn)=>{hooks.set(name,fn);return ()=>{}}}}
+ runtime.owners.set(agent.id,binding)
+ CommunicationRuntime.prototype.scope.call(runtime,agent)
+ const assembled=await hooks.get('system-prompt/assemble')({}, {}, async()=>({tools:[{name:'run_code'}],sections:[{name:'tools:sdk',text:'Native tool SDK'},{name:'tools:ptc-only',text:'Use programmatic tools'}]}))
+ assert.deepEqual(assembled.tools,[{name:'run_code'}])
+ assert.equal(assembled.sections.length,2)
+ let invoked=0
+ await hooks.get('tools/execute')({name:'run_code'},async()=>invoked++)
+ await hooks.get('tools/execute')({name:'read_communication_history'},async()=>invoked++)
+ await assert.rejects(hooks.get('tools/execute')({name:'workflow'},async()=>invoked++),{code:'COMMUNICATION_TOOL_NOT_ALLOWED'})
+ assert.equal(invoked,2)
 })

@@ -34,6 +34,8 @@ V0.3.0 新增 **设置 → 通用 → 启用远程 Hub**。新安装默认关闭
 
 远程群聊支持选择**多个默认接收 Bot**：在群信息侧栏点击「选择接收 Bot」，在弹窗中多选，确认后立即生效。成员角色和发言权限也会在修改后自动保存；小屏侧栏可独立滚动，并显示保存状态，失败时可以重试。未指定 @ 的用户消息会同时派给所选 Bot；@ 和直接回复仍按指定目标派发，Bot 的回答不会唤醒默认接收列表。多选需要更新 Hub。
 
+待发布的 **V0.3.8** 批次中，远程回合按同一个 Bot 的身份使用本地团队、记忆、原生工具和已挂载 MCP 工具的权限。`read_own_chat({"message_id":"…"})` 可跨会话分段读取指定 ID 的本地消息。本地 Main Bot、私有 Bot、沙箱和审批检查继续生效；本地卡片和定时任务落在该 Bot 的本地对话中，对外发布仍需显式调用通信工具。
+
 ![版本](https://img.shields.io/badge/版本-V0.3.7-blue) ![DSH](https://img.shields.io/badge/DSH-0.2.1--rc.4-4D6BFE) ![许可](https://img.shields.io/badge/许可-Apache_2.0-green)
 
 DS Bot 是一个基于 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（简称 dsh）的 bot 插件，插件将 dsh 改造为 bot 形式。你可以与自己创建的 bot 交流、工作。

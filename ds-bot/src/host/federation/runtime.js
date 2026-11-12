@@ -415,15 +415,17 @@ export class CommunicationRuntime {
         freshPrompt = this.promptFor(binding)
       }
       const assembled = await next()
-      const allowed = name => communicationNames.has(name) || this.workToolScopes?.get(agent)?.get(name)?.active === true
+      const allowed = name => name === 'run_code' || communicationNames.has(name) || this.workToolScopes?.get(agent)?.get(name)?.active === true
       return { ...assembled, tools: assembled.tools.filter(tool => allowed(tool.name)),
-        sections: assembled.sections.filter(section => ['deployment:persona-prefix', 'ds-bot-communication'].includes(section.name)
+        sections: assembled.sections.filter(section => ['deployment:persona-prefix', 'ds-bot-communication', 'tools:sdk', 'tools:ptc-only'].includes(section.name)
           || section.name.startsWith('tool:') && allowed(section.name.slice(5)))
           // Section functions ran before this async waterfall: replace their old
           // text only after the exact actor's fresh member read has completed.
           .map(section => freshPrompt !== undefined && section.name === 'ds-bot-communication' ? { ...section, text: freshPrompt } : section) }
     }))
     this.disposers.push(agent.ctx.on('tools/execute', async (exec, next) => {
+      // Native programmatic calls still cross this guard for every nested tool.
+      if (exec.name === 'run_code') { await this.authorize(this.owners.get(agent.id)); return next() }
       if (!communicationNames.has(exec.name) && this.workToolScopes?.get(agent)?.get(exec.name)?.active !== true) fail('COMMUNICATION_TOOL_NOT_ALLOWED')
       return next()
     }))

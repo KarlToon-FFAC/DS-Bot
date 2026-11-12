@@ -46,6 +46,7 @@ export function answerSender(rt, id, source, text, long) {
     text: long?.text ?? text,
     ...(long?.length === undefined ? {} : { files: long.files, length: long.length }),
     role: 'reply',
+    ...(source.remoteSource ? {remoteSource:source.remoteSource} : {}),
     ...(rootAudience ? {rootAudience} : {}),
     replyTo: source.exchangeId,
     exchangeId,

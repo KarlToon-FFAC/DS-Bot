@@ -244,6 +244,20 @@ export function install(rt) {
     return rows.reverse().map(row => rowLine(parts, row))
   }
 
+  async function ownChatMessage(botId, messageId, callerSignal) {
+    const signal = AbortSignal.any([callerSignal, AbortSignal.timeout(HISTORY_TIMEOUT_MS)].filter(Boolean))
+    for (const part of [...rt.partsOf(botId)].reverse()) {
+      for await (const event of eventsBackwards(part.sessionId, signal, Infinity)) {
+        const id = event.type === 'assistant/message' ? event.data?.message?.id : event.type === 'user/message' ? event.data?.id ?? event.data?.message?.id : undefined
+        if (id !== messageId) continue
+        const entry = rt.historyEntry(event, false)
+        if (!entry?.text) return undefined
+        return { messageId, sessionId: part.sessionId, part: part.number, seq: event.seq, role: entry.answer ? 'assistant' : entry.who,
+          text: entry.text, audience: 'internal', automaticRemoteReply: false }
+      }
+    }
+  }
+
   // The messages around an anchor, in its part.
   async function aroundOwnChat(botId, anchor) {
     const { index, parts } = await indexedParts(botId)
@@ -289,5 +303,5 @@ export function install(rt) {
     ].join('\n')
   }
 
-  Object.assign(rt, { eventsBackwards, searchOwnChat, latestOwnChat, aroundOwnChat, partIndex, ownChatBrief })
+  Object.assign(rt, { eventsBackwards, searchOwnChat, latestOwnChat, aroundOwnChat, ownChatMessage, partIndex, ownChatBrief })
 }

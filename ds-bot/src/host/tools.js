@@ -187,7 +187,7 @@ export function install(rt) {
       // The request the caller named: it is admitted once, and a repeat of it is not sent again.
       const request = name === '' ? undefined : rt.requestIdentity({
         caller: sender.id,
-        context: room === undefined ? 'chat' : `room:${room.id}`,
+        context: exec.communicationLocalSource ? `remote:${exec.agent.id}` : room === undefined ? 'chat' : `room:${room.id}`,
         name,
         payload: {
           to: target.id,
@@ -228,6 +228,7 @@ export function install(rt) {
       }
       const send = async () => {
         const toUser = args.reply_to === 'user'
+        const remoteSource = exec.communicationLocalSource
         const work = toUser ? undefined : works[0]
         const chat = rt.chatOf(target.id)
         const agent = await rt.resolveAgent(chat)
@@ -235,7 +236,7 @@ export function install(rt) {
         // A request it has not read yet, sent for the same work, takes this one in, so
         // messages to a Bot that cannot read them do not pile up.
         const earlier = unreadRequest(agent, sender.id, toUser)
-        const joinable = earlier !== undefined && (toUser || rt.sameWork(earlier.message.source.exchangeId, work))
+        const joinable = earlier !== undefined && !remoteSource && !earlier.message.source.remoteSource && (toUser || rt.sameWork(earlier.message.source.exchangeId, work))
         const before = joinable ? bodyOf(earlier.message) : undefined
         let long = await rt.attachLong(before ? `${before.text}\n\n${text}` : text, `Message from ${sender.name}.txt`)
         // Nothing went out, so a named request must not take this as a delivered
@@ -247,9 +248,9 @@ export function install(rt) {
         const steer = (args.when !== 'queue' && !toUser) || (joins && earlier.steered)
         const exchangeId = joins ? earlier.message.source.exchangeId : randomUUID()
         if (joins) rt.forgetDelivery?.(exchangeId)
-        else if (!toUser) rt.openWork(exchangeId, { from: sender.id, to: target.id, parent: work })
+        else if (!toUser) rt.openWork(exchangeId, { from: sender.id, to: target.id, parent: work, remoteSource })
         try {
-          await rt.deliver({ fromId: sender.id, toId: target.id, text: long.text, files: [...long.files, ...(joins ? before.files : [])], length: long.length, role: 'request', steer, exchangeId, ...(joins ? { merged: true } : {}), ...(toUser ? { audience: 'user' } : {}) })
+          await rt.deliver({ fromId: sender.id, toId: target.id, text: long.text, files: [...long.files, ...(joins ? before.files : [])], length: long.length, role: 'request', steer, exchangeId, remoteSource, ...(joins ? { merged: true } : {}), ...(toUser ? { audience: 'user' } : {}) })
         } catch (error) {
           // The delivery stays noted for the next start while its Bot exists
           // (resume.js), and the resent request still answers up the tree, so the
@@ -303,7 +304,7 @@ export function install(rt) {
         agent.cancel({ kind: 'hook', reason: 'ds-bot/stopped' })
       }
       const why = String(args.reason ?? '').trim() || 'Stop what you are doing; the previous turn was ended on purpose. Acknowledge briefly.'
-      await rt.deliver({ fromId: sender.id, toId: target.id, text: why, role: 'stopped', ...callerRoom(exec) })
+      await rt.deliver({ fromId: sender.id, toId: target.id, text: why, role: 'stopped', remoteSource: exec.communicationLocalSource, ...callerRoom(exec) })
       return `Stopped ${target.name} in ${running.map(whereOf).join(' and ')}. It is told why in a new turn, whose reply comes back to you.`
     },
   }))
@@ -687,7 +688,8 @@ export function install(rt) {
     output,
     async execute(args, exec) {
       await rt.load()
-      const id = exec.agent?.id
+      const remote = rt.communication?.owners?.get(exec.agent?.id)
+      const id = remote ? rt.chatOf(remote.localBotRef) : exec.agent?.id
       if (rt.groupOwners.has(id)) return 'Question cards only work in your own chat. In a group, ask in your message instead.'
       if (!rt.chatOwners.has(id)) return `Only Bots on the team can use ask_user. Use ${BLOCKING_QUESTION_TOOL} if it is available in this session, or ask the user in your reply.`
       const options = (Array.isArray(args.options) ? args.options : [])
@@ -705,7 +707,7 @@ export function install(rt) {
       const hidden = turn !== undefined && (state.exchangeTurns[id] ?? []).includes(turn)
       state.questions[id] = {
         id: randomUUID(),
-        ...(exec.callId && !hidden ? { callId: exec.callId } : {}),
+        ...(exec.callId && !hidden && !remote ? { callId: exec.callId } : {}),
         question: String(args.question ?? '').trim(),
         ...(args.detail ? { detail: String(args.detail).trim() } : {}),
         options,
@@ -714,7 +716,8 @@ export function install(rt) {
         askedAt: Date.now(),
       }
       await rt.save()
-      exec.concludeTurn?.()
+      if (!remote) exec.concludeTurn?.()
+      if (remote) return 'The question card is in your local chat with the owner. The answer arrives there, not in the remote conversation.'
       return 'The card is on screen; the user\'s answer arrives as their next message.'
     },
   }))
@@ -728,7 +731,8 @@ export function install(rt) {
     output,
     async execute(args, exec) {
       await rt.load()
-      const id = exec.agent?.id
+      const remote = rt.communication?.owners?.get(exec.agent?.id)
+      const id = remote ? rt.chatOf(remote.localBotRef) : exec.agent?.id
       if (rt.groupOwners.has(id)) return 'View cards only work in your own chat. In a group, ask in your message instead.'
       if (!rt.chatOwners.has(id)) return `Only Bots on the team can use show_view. Use ${BLOCKING_QUESTION_TOOL} if it is available in this session, or ask the user in your reply.`
       const checked = checkShownView(args.title, args.view)
@@ -738,20 +742,21 @@ export function install(rt) {
       if (!checked.interactive && args.await_reply === true) return 'This view has nothing to submit; call show_view with await_reply: false.'
       if (checked.interactive && args.await_reply === false) return 'This view has controls to submit, so it waits for the user\'s answer; call show_view without await_reply: false.'
       const awaitReply = args.await_reply ?? checked.interactive
-      if (!awaitReply) return 'The view is on screen.'
+      if (!awaitReply && !remote) return 'The view is on screen.'
       // A hidden Bot-to-Bot turn shows none of its calls, so its card goes to the
       // composer dock, which takes a card without a call.
       const turn = rt.live.get(id)?.turn
       const hidden = turn !== undefined && (state.exchangeTurns[id] ?? []).includes(turn)
       state.views[id] = {
         id: randomUUID(),
-        ...(exec.callId && !hidden ? { callId: exec.callId } : {}),
+        ...(exec.callId && !hidden && !remote ? { callId: exec.callId } : {}),
         title,
         view,
         askedAt: Date.now(),
       }
       await rt.save()
-      exec.concludeTurn?.()
+      if (!remote) exec.concludeTurn?.()
+      if (remote) return 'The view is in your local chat with the owner. Any answer arrives there; nothing was published remotely.'
       return 'The view is on screen; the user\'s answer arrives as their next message.'
     },
   }))

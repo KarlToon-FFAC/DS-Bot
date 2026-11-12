@@ -28,7 +28,8 @@ test('remote file and Shell work reuses only definitions actually visible to its
   assert.equal(await f.registered.get('bash').execute({ command: 'test command' }, { agent: f.agent, callId: 'call' }), 'work completed')
   assert.equal(f.calls[0].agent, f.agent)
   assert.equal(f.runtime.workCalls.size, 0)
-  await assert.rejects(f.registered.get('bash').execute({ run_in_background: true }, { agent: f.agent }), { code: 'COMMUNICATION_BACKGROUND_UNAVAILABLE' })
+  assert.equal(await f.registered.get('bash').execute({ run_in_background: true }, { agent: f.agent }), 'work completed')
+  assert.equal(f.calls.at(-1).args.run_in_background, true)
   await assert.rejects(f.registered.get('bash').execute({}, { agent: f.local }), { code: 'COMMUNICATION_TOOL_NOT_ALLOWED' })
 })
 
@@ -162,4 +163,32 @@ test('explicit confirmation exposes the full redacted command instead of approvi
  await syncWorkTools(f.runtime,f.agent,f.bot)
  await assert.rejects(f.registered.get('bash').execute({command},{agent:f.agent,callId:'long'}),{code:'WORK_APPROVAL_REJECTED'})
  assert.equal(f.calls.length,0)
+})
+
+
+test('remote scopes inherit the owning Bot native and MCP catalog, including exact history reads, and lose withdrawn tools',async()=>{
+ const f=fixture()
+ for(const name of ['read','session_event_read','session_search','mcp_project_lookup','write','workflow','create_goal','ask_user_question','create_bot'])f.define(name)
+ f.runtime.rt.teamTools=[{name:'create_bot'}]
+ f.runtime.ctx.tools.schemas=scope=>{assert.equal(scope,f.local);return [...f.native.values()].map(({name})=>({name}))}
+ const names=await syncWorkTools(f.runtime,f.agent,f.bot)
+ assert.deepEqual(names,['read','session_event_read','session_search','mcp_project_lookup','write'])
+ await f.registered.get('session_event_read').execute({session_id:'local',seq:42},{agent:f.agent,callId:'history'})
+ assert.deepEqual(f.calls[0].args,{session_id:'local',seq:42})
+ assert.equal(f.calls[0].agent,f.agent,'native policy sees the actual remote Session')
+ const stale=f.registered.get('mcp_project_lookup');f.native.delete('mcp_project_lookup')
+ await syncWorkTools(f.runtime,f.agent,f.bot)
+ assert.equal(f.registered.has('mcp_project_lookup'),false)
+ await assert.rejects(stale.execute({}, {agent:f.agent,callId:'stale'}),{code:'COMMUNICATION_TOOL_NOT_ALLOWED'})
+})
+
+
+test('inherited schedule tools target the owning local Bot so future tasks never impersonate Hub inputs',async()=>{
+ const f=fixture();f.define('schedule_create');f.define('schedule_list')
+ f.runtime.ctx.tools.schemas=()=>[...f.native.values()].map(({name})=>({name}))
+ await syncWorkTools(f.runtime,f.agent,f.bot)
+ await f.registered.get('schedule_create').execute({prompt:'Synthetic scheduled task'}, {agent:f.agent,callId:'schedule'})
+ assert.equal(f.calls[0].agent,f.local)
+ assert.equal(f.calls[0].args.prompt,'Synthetic scheduled task')
+ assert.match(f.registered.get('schedule_list').description,/own local chat/)
 })

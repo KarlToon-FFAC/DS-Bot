@@ -197,10 +197,11 @@ export function apply(ctx) {
     }
     if (body.operation === 'identity') return { instanceId: value.instanceId, humanId: value.humanId, botId: value.botId, displayName: 'Chief' }
     if (body.operation === 'view') return { identity: { instanceId: value.instanceId, humanId: value.humanId }, views: value.views ?? {} }
-    if (['metrics','native-tools'].includes(body.operation)) {
+    if (['metrics','native-tools','local-message-ids'].includes(body.operation)) {
       const team = JSON.parse(await readFile(join(root, 'bot', 'state.json'), 'utf8'))
       const chief = team.bots[value.botId]
       const inspection = await ctx.sessionController.inspect(chief.sessionId ?? chief.id, AbortSignal.timeout(15000))
+      if(body.operation==='local-message-ids')return {messages:inspection.events.filter(event=>event.type==='user/message'&&event.data.source?.kind==='user').map(event=>({messageId:event.data.id??event.data.message?.id,text:event.data.content.filter(block=>block.type==='text').map(block=>block.text).join('\n')}))}
       if(body.operation==='native-tools'){
         if(!Number.isSafeInteger(body.afterSeq)||body.afterSeq<0)throw new Error('Invalid watermark')
         return { passiveSendDenied: inspection.events.some(event=>event.seq>body.afterSeq&&JSON.stringify(event.data).includes('PASSIVE_REPLY_ONLY')) }

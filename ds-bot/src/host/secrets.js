@@ -430,7 +430,8 @@ export function install(rt) {
     async execute(args, exec) {
       await rt.load()
       await loadSecrets()
-      const id = exec.agent?.id
+      const remote = rt.communication?.owners?.get(exec.agent?.id)
+      const id = remote ? rt.chatOf(remote.localBotRef) : exec.agent?.id
       const bot = rt.botOf(callerOf(exec))
       if (bot === undefined) return 'Only Bots on the team can use request_secret.'
       const name = normalizeName(args.name)
@@ -451,7 +452,7 @@ export function install(rt) {
       }
       list.push({
         id: randomUUID(),
-        ...(exec.callId ? { callId: exec.callId } : {}),
+        ...(exec.callId && !remote ? { callId: exec.callId } : {}),
         sessionId: id,
         name,
         purpose: String(args.purpose ?? '').trim().slice(0, 300),
@@ -461,7 +462,8 @@ export function install(rt) {
       })
       trimRequests(list)
       await rt.save()
-      exec.concludeTurn?.()
+      if (!remote) exec.concludeTurn?.()
+      if (remote) return `A secure card is in your local chat with the owner for ${name}. Only the local owner may answer; the value is never returned to you or the remote conversation.`
       return secret
         ? `The card asking the user to let you use ${name} is on screen. A note arrives when the user answers; you will not see the value.`
         : `The card asking the user for ${name} is on screen. A note arrives when the user saves or cancels; you will not see the value.`

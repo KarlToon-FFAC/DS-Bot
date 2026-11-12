@@ -397,3 +397,19 @@ test('a secrets file that is not JSON is kept aside, and the store goes on', asy
   assert.deepEqual(broken.length, 1)
   assert.equal(readFileSync(join(home, broken[0]), 'utf8'), 'not a secrets file\n')
 })
+
+test('a remote Bot requests a secure card in its local chat without ending the remote turn or exposing the value',async t=>{
+ const bench=start();t.after(bench.stop)
+ await bench.view()
+ rt.communication={owners:new Map([['remote-worker',{id:'binding',localBotRef:'b2'}]])}
+ t.after(()=>{rt.communication=undefined})
+ const result=await bench.tool('request_secret',{name:'SYNTHETIC_REMOTE_TOKEN',purpose:'Synthetic local tool authorization'},'remote-worker')
+ assert.equal(result.concluded,false)
+ assert.match(result.text,/local chat with the owner/)
+ const team=await bench.view(),request=team.secretRequests.b2[0]
+ assert.equal(request.sessionId,'b2')
+ assert.equal(request.callId,undefined)
+ assert.equal(request.status,'pending')
+ assert.equal(team.secretRequests['remote-worker'],undefined)
+ assert.equal(bench.delivered.length,0)
+})

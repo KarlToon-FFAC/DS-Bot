@@ -955,8 +955,9 @@ export function install(rt) {
   // Private context enters a group only through this tool, and the group sees each use.
   rt.teamTools.push(defineTool({
     name: 'read_own_chat',
-    description: 'Read or search your own chat with the user, across all its parts, including earlier parts that left your working context. Each line starts with its anchor, such as [part 2 #1234 · 10-08 14:22]; long messages are cut. Pass the anchor as around to read that message in full, with what was said just before and after it. In a group chat the group sees that you looked, so share only what the group needs.',
+    description: 'Read or search your own chat with the user, locally or remotely. Use message_id to retrieve an exact local message by ID across all its parts, including earlier parts that left your working context. Each line starts with its anchor, such as [part 2 #1234 · 10-08 14:22]; long messages are cut. Pass the anchor as around to read that message in full, with what was said just before and after it. In a group chat the group sees that you looked, so share only what the group needs.',
     parameters: {
+      message_id: { type: 'string', description: 'Exact message ID from your local conversation; returns its full text and source anchor. Never a remote Hub message ID. Omit query/around/part when using this.' },
       query: { type: 'string', description: 'Words to look for in every part, separated by spaces. A message must have all of them; when none has, those with the most are shown. Omit for the latest messages' },
       around: { type: 'string', description: 'An anchor from an earlier result, such as "part 2 #1234": shows that message in full and the messages just before and after it' },
       part: { type: 'integer', description: 'Number of an earlier part: shows the handoff note you wrote when it ended' },
@@ -970,18 +971,25 @@ export function install(rt) {
       if (botId === undefined) return 'Only Bots on the team can use read_own_chat.'
       const member = rt.botOf(botId)
       const room = rt.roomOf(owner?.roomId)
+      if (args.message_id !== undefined) {
+        if (typeof args.message_id !== 'string' || !args.message_id.trim() || args.message_id.length > 256 || ['query','around','part'].some(key => args[key] !== undefined)) return 'Use one nonempty message_id without query, around or part.'
+      }
       const query = String(args.query ?? '').trim().slice(0, 80)
       const around = String(args.around ?? '').trim().slice(0, 40)
       const parts = rt.partsOf(botId)
       const number = Number.isInteger(args.part) ? args.part : undefined
       if (room !== undefined && member !== undefined) {
         ensureRoomLog(room)
-        const text = query !== '' ? query : around !== '' ? `around ${around}` : number !== undefined ? `part ${number}` : ''
+        const text = args.message_id !== undefined ? `message ${args.message_id}` : query !== '' ? query : around !== '' ? `around ${around}` : number !== undefined ? `part ${number}` : ''
         appendRoom(room, { who: member.name, botId: member.id, kind: 'lookup', text })
         for (const round of rt.roomProgress.values()) {
           if (round.roomId === room.id) round.replies.push({ kind: 'lookup', botId: member.id, name: member.name, color: member.color, text, time: Date.now() })
         }
         void rt.save().catch(() => {})
+      }
+      if (args.message_id !== undefined) {
+        const found = await rt.ownChatMessage(botId, args.message_id, exec.signal)
+        return JSON.stringify(found ?? { ok: false, error: { code: 'LOCAL_MESSAGE_NOT_FOUND' } })
       }
       const partsNote = parts.length > 1 ? `\n\nYour own chat has ${parts.length} parts: ${rt.partIndex(parts)}. Call read_own_chat with part N for the note that closed an earlier part, or with words to search all parts.` : ''
       if (query === '' && around !== '') {
@@ -1023,7 +1031,6 @@ export function install(rt) {
       if (rt.botOf(self) === undefined) return 'Only Bots on the team can read group chats.'
       const { room, error } = rt.pickRoom(args.group, self)
       if (error) return error
-      if (remote && !room.members.includes(self)) return 'Remote Sessions may read only local groups their own Bot belongs to.'
       ensureRoomLog(room)
       await loadGroupLines(room)
       if (args.seq !== undefined) {
