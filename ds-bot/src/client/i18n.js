@@ -11,6 +11,7 @@ const ZH = {
   'Close Bot list': '关闭 Bot 列表',
 
   'Bot working or replying': 'Bot 工作或回复中',
+  'Group members': '群成员',
   'No accessible local Chief matches this identity. Use list_local_chiefs; Hub publication is not required.': '找不到可接收汇报的本地 Chief，请使用 list_local_chiefs 获取；不要求 Chief 发布到 Hub。',
   'The local report outcome is uncertain. Check the local Chief conversation before sending another report.': '本地汇报的投递结果尚未确认，请先检查 Chief 的本地对话，避免重复汇报。',
   'No model configured': '未配置模型',

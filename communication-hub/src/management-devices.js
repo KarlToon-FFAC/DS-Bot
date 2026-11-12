@@ -1,4 +1,4 @@
-export const devicesMarkup = `<section class="hub-devices" aria-labelledby="devices-title"><div class="directory-heading"><h2 id="devices-title">Devices</h2><span id="device-count" class="directory-count"></span></div><div class="device-tools"><label>Find a device<input id="device-search" type="search" placeholder="Name, person or instance ID" autocomplete="off"></label><label>Status<select id="device-filter"><option value="all">All devices</option><option value="online">Connected</option><option value="offline">Disconnected</option><option value="revoked">Revoked</option></select></label></div><div id="instances" role="list" aria-label="Devices"></div><div class="device-pages"><button id="device-previous" type="button">Previous</button><span id="device-page" role="status"></span><button id="device-next" type="button">Next</button></div></section><dialog id="device-dialog" aria-labelledby="device-title"><header><h2 id="device-title">Device details</h2><button id="device-close" type="button" aria-label="Close device details">Close</button></header><p id="device-error" role="alert"></p><div id="device-details"></div></dialog><dialog id="device-confirm" aria-labelledby="device-confirm-title"><header><h2 id="device-confirm-title"></h2><button id="device-confirm-close" type="button" aria-label="Cancel device action">Cancel</button></header><div id="device-confirm-body"></div><p id="device-confirm-error" role="alert"></p><footer><button id="device-confirm-cancel" type="button">Cancel</button><button id="device-confirm-submit" type="button"></button></footer></dialog>`
+export const devicesMarkup = `<section class="hub-devices" aria-labelledby="devices-title"><div class="directory-heading"><h2 id="devices-title">设备</h2><span id="device-count" class="directory-count"></span></div><div class="device-tools"><label>查找设备<input id="device-search" type="search" placeholder="名称、用户或实例 ID" autocomplete="off"></label><label>状态<select id="device-filter"><option value="all">全部设备</option><option value="online">已连接</option><option value="offline">未连接</option><option value="revoked">已撤销</option></select></label></div><div id="instances" role="list" aria-label="设备"></div><div class="device-pages"><button id="device-previous" type="button">上一页</button><span id="device-page" role="status"></span><button id="device-next" type="button">下一页</button></div></section><dialog id="device-dialog" aria-labelledby="device-title"><header><h2 id="device-title">设备详情</h2><button id="device-close" type="button" aria-label="关闭设备详情">关闭</button></header><p id="device-error" role="alert"></p><div id="device-details"></div></dialog><dialog id="device-confirm" aria-labelledby="device-confirm-title"><header><h2 id="device-confirm-title"></h2><button id="device-confirm-close" type="button" aria-label="取消设备操作">取消</button></header><div id="device-confirm-body"></div><p id="device-confirm-error" role="alert"></p><footer><button id="device-confirm-cancel" type="button">取消</button><button id="device-confirm-submit" type="button"></button></footer></dialog>`
 
 export const devicesScript = `
 let deviceRows = [], devicePeople = [], devicePage = 0, selectedDevice, devicePanelSignature, deviceReturnFocus, deviceConfirmation;
@@ -12,14 +12,14 @@ function showDeviceAction(instance, action) {
   const i = JSON.parse(JSON.stringify(instance)), groups = i.ownedSharedGroups ?? [];
   deviceConfirmation = {instance:i,action,stamp:deviceStamp(i),busy:false};
   const deleting = action === 'delete';
-  $('device-confirm-title').textContent = deleting ? 'Delete device permanently' : action === 'revoke' ? 'Revoke access' : 'Repair original device';
-  $('device-confirm-submit').textContent = deleting ? 'Delete permanently' : action === 'revoke' ? 'Revoke access' : 'Restore same-key trust';
+  $('device-confirm-title').textContent = deleting ? '彻底删除设备' : action === 'revoke' ? '撤销访问权限' : '恢复原设备信任';
+  $('device-confirm-submit').textContent = deleting ? '彻底删除' : action === 'revoke' ? '撤销访问权限' : '恢复原密钥信任';
   $('device-confirm-submit').disabled = false; $('device-confirm-submit').className = action === 'repair' ? '' : 'danger';
   $('device-confirm-error').textContent = '';
   const body = $('device-confirm-body'); body.replaceChildren(text('strong',i.label),text('code',i.instanceId));
-  body.append(text('p',deleting ? 'This cannot be undone. Remove this device, its Human and Bots, contacts, private chats and device-only groups from this Hub. Other devices and shared history are retained. A reset client does not need to approve this administrator action.' : action === 'revoke' ? 'Stop this device’s access, group memberships and pending deliveries. Its identity and history remain available for explicit same-key repair.' : 'Restore trust only for the previously proved key. A reset client with a new key must enroll as a new device. Group memberships stay removed.'));
+  body.append(text('p',deleting ? '此操作不可撤销。将从 Hub 删除该设备及其用户、Bot、联系人、私聊和仅属于该设备的群组；保留其他设备与共享聊天记录。管理员可直接删除，无需已重置的客户端确认。' : action === 'revoke' ? '停止该设备的访问、群成员资格与待投递消息。身份和历史仍保留，后续可使用原密钥明确恢复信任。' : '只恢复已验证过的原密钥信任。重置后使用新密钥的客户端须作为新设备申请加入。此操作不会恢复群成员资格。'));
   if (deleting) {
-    body.append(text('p',groups.length ? 'These owned shared groups will be closed without assigning a new owner:' : 'No shared groups will be closed.'));
+    body.append(text('p',groups.length ? '以下由该设备拥有的共享群将被解散，不会自动转让群主：' : '不会解散任何共享群。'));
     for (const group of groups) { const item = text('p',group.title); item.append(text('code',group.conversationId)); body.append(item); }
   }
   openDeviceDialog($('device-confirm')); $('device-confirm-cancel').focus();
@@ -36,17 +36,17 @@ function renderDeviceDetails() {
   const retain = old && old.dataset.saved !== 'true' && (input.disabled || input.value !== old.dataset.base || old.contains(document.activeElement));
   const form = retain ? old : renameForm(i); if (!retain) form.dataset.base = i.label;
   $('device-title').textContent = i.label;
-  const connection = text('p',i.connected === true ? 'Connected to Hub' : i.connected === false ? 'Disconnected from Hub' : 'Connection status unavailable'); connection.className = 'instance-connection';
+  const connection = text('p',i.connected === true ? '已连接 Hub' : i.connected === false ? '未连接 Hub' : '连接状态未知'); connection.className = 'instance-connection';
   const id = text('code',i.instanceId); id.className = 'device-full-id';
-  pane.replaceChildren(connection,text('p',i.trusted ? 'Access approved' : 'Access revoked'),text('label','Instance ID'),id,form);
+  pane.replaceChildren(connection,text('p',i.trusted ? '访问已批准' : '访问已撤销'),text('label','实例 ID'),id,form);
   const people = devicePeople.filter(p => p.homeInstanceId === i.instanceId);
-  pane.append(text('p',people.filter(p => p.kind === 'human').map(p => p.displayName).join(', ') || 'No Human profile'));
-  const bots = people.filter(p => p.kind === 'bot'); pane.append(text('h3','Published Bots ('+bots.length+')'));
+  pane.append(text('p',people.filter(p => p.kind === 'human').map(p => p.displayName).join(', ') || '暂无用户资料'));
+  const bots = people.filter(p => p.kind === 'bot'); pane.append(text('h3','已发布的 Bot（'+bots.length+'）'));
   for (const bot of bots) pane.append(text('p',bot.displayName+' · '+(bot.publicProfile?.headline || 'Bot')));
   const actions = document.createElement('div'); actions.className = 'device-actions';
-  if (i.trusted) actions.append(deviceControl('Revoke access',()=>showDeviceAction(i,'revoke')));
-  actions.append(deviceControl('Delete device permanently',()=>showDeviceAction(i,'delete')));
-  if (!i.trusted && i.revision) actions.append(deviceControl('Repair original device',()=>showDeviceAction(i,'repair')));
+  if (i.trusted) actions.append(deviceControl('撤销访问权限',()=>showDeviceAction(i,'revoke')));
+  actions.append(deviceControl('彻底删除设备',()=>showDeviceAction(i,'delete')));
+  if (!i.trusted && i.revision) actions.append(deviceControl('恢复原设备信任',()=>showDeviceAction(i,'repair')));
   pane.append(actions); if (retain && focused?.isConnected) { focused.focus({preventScroll:true}); if (position) focused.setSelectionRange(...position); } devicePanelSignature = JSON.stringify(i);
 }
 function renderDevices() {
@@ -54,8 +54,8 @@ function renderDevices() {
   const rows = deviceRows.filter(i => (filter === 'all' || filter === 'revoked' && !i.trusted || filter === 'online' && i.connected === true || filter === 'offline' && i.connected === false)
     && (!query || [i.label,i.instanceId,...devicePeople.filter(p => p.homeInstanceId === i.instanceId).map(p => p.displayName)].join(' ').toLowerCase().includes(query)));
   const pages = Math.max(1,Math.ceil(rows.length/25)); devicePage = Math.min(devicePage,pages-1);
-  $('device-count').textContent = rows.length+' / '+deviceRows.length+' devices · '+deviceRows.filter(i => i.connected === true).length+' connected';
-  $('device-page').textContent = 'Page '+(devicePage+1)+' / '+pages;
+  $('device-count').textContent = rows.length+' / '+deviceRows.length+' 台设备 · '+deviceRows.filter(i => i.connected === true).length+' 台已连接';
+  $('device-page').textContent = '页码 '+(devicePage+1)+' / '+pages;
   $('device-previous').disabled = devicePage === 0; $('device-next').disabled = devicePage >= pages-1;
   const existing = new Map([...$('instances').children].map(row => [row.dataset.instanceId,row]));
   const visible = rows.slice(devicePage*25,devicePage*25+25).map(i => {
@@ -65,24 +65,24 @@ function renderDevices() {
       const copy = document.createElement('div'); copy.className = 'device-copy'; copy.append(text('strong',''),text('small',''));
       const health = document.createElement('div'); health.className = 'device-health';
       const connection = text('span',''); connection.className = 'instance-connection'; health.append(connection,text('span',''));
-      const manage = deviceControl('Manage',()=>showDeviceDetails(i.instanceId,manage)); manage.className = 'device-manage';
+      const manage = deviceControl('管理',()=>showDeviceDetails(i.instanceId,manage)); manage.className = 'device-manage';
       row.append(copy,health,manage);
     }
     row.querySelector('strong').textContent = i.label;
     const people = devicePeople.filter(p => p.homeInstanceId === i.instanceId), bots = people.filter(p => p.kind === 'bot'), owners = people.filter(p => p.kind === 'human' && p.displayName !== i.label);
-    const meta = row.querySelector('small'); meta.textContent = i.instanceId.slice(0,12)+' · '+bots.length+' Bots'+(owners.length ? ' · '+owners.map(p => p.displayName).join(', ') : ''); meta.title = i.instanceId;
-    row.querySelector('.instance-connection').textContent = i.connected === true ? 'Connected to Hub' : i.connected === false ? 'Disconnected from Hub' : 'Connection status unavailable';
-    row.querySelector('.device-health').lastChild.textContent = i.trusted ? 'Approved' : 'Revoked';
-    row.querySelector('button').setAttribute('aria-label','Manage '+i.label+' ('+i.instanceId+')');
+    const meta = row.querySelector('small'); meta.textContent = i.instanceId.slice(0,12)+' · '+bots.length+' 个 Bot'+(owners.length ? ' · '+owners.map(p => p.displayName).join(', ') : ''); meta.title = i.instanceId;
+    row.querySelector('.instance-connection').textContent = i.connected === true ? '已连接 Hub' : i.connected === false ? '未连接 Hub' : '连接状态未知';
+    row.querySelector('.device-health').lastChild.textContent = i.trusted ? '已批准' : '已撤销';
+    row.querySelector('button').setAttribute('aria-label','管理 '+i.label+' ('+i.instanceId+')');
     return row;
   });
-  reconcile($('instances'),visible,deviceRows.length ? 'No matching devices.' : 'No enrolled devices.');
+  reconcile($('instances'),visible,deviceRows.length ? '没有匹配的设备。' : '暂无已加入的设备。');
   renderDeviceDetails();
   if (deviceConfirmation && !deviceConfirmation.busy) {
     const current = deviceRows.find(i => i.instanceId === deviceConfirmation.instance.instanceId);
-    if(!current){deviceConfirmation=undefined;closeDeviceDialog($('device-confirm'));closeDeviceDetails();$('error').textContent='This device no longer exists; its Hub entry has been cleared.';return;}
+    if(!current){deviceConfirmation=undefined;closeDeviceDialog($('device-confirm'));closeDeviceDetails();$('error').textContent='该设备已不存在，Hub 中的记录已清理。';return;}
     if (deviceStamp(current) !== deviceConfirmation.stamp) {
-      $('device-confirm-error').textContent = 'Device or owned groups changed. Cancel and review current details before confirming.';
+      $('device-confirm-error').textContent = '设备或其拥有的群组已变化，请取消后查看最新详情再确认。';
       $('device-confirm-submit').disabled = true;
     }
   }
@@ -103,7 +103,7 @@ $('device-confirm-submit').onclick = async () => {
     const input = confirm.action === 'delete' ? {instanceId:i.instanceId,expectedPairingRevision:i.pairingRevision,expectedNameVersion:i.nameVersion,ownedSharedGroups:(i.ownedSharedGroups ?? []).map(g => ({conversationId:g.conversationId,version:g.version})),confirmDelete:true} : confirm.action === 'repair' ? {instanceId:i.instanceId,expectedRevision:i.revision} : {instanceId:i.instanceId};
     await api(confirm.action,input); deviceConfirmation = undefined; closeDeviceDialog($('device-confirm')); await refresh();
     if (confirm.action === 'delete') closeDeviceDetails();
-  } catch (e) { $('device-confirm-error').textContent = e.message; error(e); }
-  finally { if (deviceConfirmation === confirm) { confirm.busy = false; $('device-confirm-submit').disabled = true; $('device-confirm-error').textContent += ' Close and review current state before trying again.'; } }
+  } catch (e) { $('device-confirm-error').textContent = managementError(e); error(e); }
+  finally { if (deviceConfirmation === confirm) { confirm.busy = false; $('device-confirm-submit').disabled = true; $('device-confirm-error').textContent += ' 请关闭并查看最新状态后重试。'; } }
 };
 `

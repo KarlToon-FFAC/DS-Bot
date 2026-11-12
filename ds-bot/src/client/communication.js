@@ -13,7 +13,7 @@ import { communicationCompatibility, incompatibleCommunication, displayCommunica
 import { useMentionDismiss } from './communication-mentions.js'
 import { CommunicationActionDialog } from './communication-dialog.js'
 import { ParticipantInformation } from './communication-participant.js'
-import { GroupBotChoices, InvitationDetails, invitationGroups, groupMemberContacts } from './communication-group.js'
+import { GroupBotChoices, InvitationDetails, invitationGroups, rankedMemberContacts } from './communication-group.js'
 import { communicationBrowserResetPending, prepareCommunicationBrowserEpoch, readCommunicationBrowserState, saveCommunicationBrowserState } from './communication-reset.js'
 import { randomId } from './random-id.js'
 import { createElement as h, Fragment, useEffect, useLayoutEffect, useRef, useState, useMemo, useSyncExternalStore } from 'react'
@@ -95,6 +95,7 @@ function GroupSettings({ member, contacts, operation, pendingSettings, pendingIn
   const [open, setOpen] = useState(false), [base, setBase] = useState(null), [draft, setDraft] = useState(null)
   const [saving, setSaving] = useState(false), [failure, setFailure] = useState(''), [pending, setPending] = useState(null)
   const [newOwner, setNewOwner] = useState(''), [action, setAction] = useState(null)
+  const [membersExpanded, setMembersExpanded] = useState(true)
   const generation = useRef(0), revision = useRef(0), summary = useRef(null)
   useEffect(() => () => { generation.current += 1 }, [])
   useEffect(() => { if (pending && !pendingSettings(member.conversationId)) setPending(null) }, [operationPending, member.membershipVersion])
@@ -166,9 +167,11 @@ function GroupSettings({ member, contacts, operation, pendingSettings, pendingIn
       member.ownerPrincipalId && !members.some(person => person.principalId === member.ownerPrincipalId) ? h('p', { role: 'status' }, t('The owner is unavailable. Ownership stays with that identity.')) : null,
       !member.ownerPrincipalId ? h('p', { role: 'status' }, t('This legacy group has no retained owner. No automatic takeover is allowed.')) : null,
       canManage ? h('label', { className: 'bt-comm-field' }, t('Group name'), h('input', { value: values.title, onChange: event => edit({ title: event.target.value }), 'aria-label': t('Group name') })) : null,
-      h('div',{className:'bt-comm-member-groups'},groupMemberContacts(members,contacts).map((group,index)=>h('section',{key:group.person?.principalId ?? index,className:'bt-comm-member-contact','data-member-contact':group.person?.principalId ?? 'unavailable'},
+      h('details',{className:'bt-comm-member-section',open:membersExpanded},
+      h('summary',{onClick:event=>{event.preventDefault();setMembersExpanded(value=>!value)}},t('Group members'),' · ',members.length),
+      h('div',{className:'bt-comm-member-groups'},rankedMemberContacts(members,contacts).map((group,index)=>h('section',{key:group.person?.principalId ?? index,className:'bt-comm-member-contact','data-member-contact':group.person?.principalId ?? 'unavailable'},
         group.person ? memberRow(group.person) : h('p',{className:'bt-comm-reference'},t('Owner information unavailable')),
-        group.bots.length ? h('div',{className:'bt-comm-member-bots'},group.bots.map(memberRow)) : null))),
+        group.bots.length ? h('div',{className:'bt-comm-member-bots'},group.bots.map(memberRow)) : null)))),
       member.info?.formerMembers?.length ? h('details', null, h('summary', null, t('Former Bots')), member.info.formerMembers.map(person => btn(person.displayName, event => onInspect([person.principalId], event.currentTarget), { key: person.principalId, children: personLabel(person) }))) : null,
       h('p', { className: 'bt-comm-reference' }, t('Both Bot modes can explicitly reply to their current input or finish without a reply. Final prose stays local. Reply-only Bots cannot initiate messages. Active Bots may also initiate with tools. Explicit follow-ups stay within the server’s finite delegation limit.')),
       canManage ? h(Fragment, null,

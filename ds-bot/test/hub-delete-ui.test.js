@@ -44,13 +44,13 @@ test('compact device rows keep editing and deletion in separate dialogs with exa
  assert.equal(d.querySelector('#instances input'),null)
  assert.equal(d.querySelectorAll('#instances article').length,2)
  assert.equal(d.querySelector('#device-dialog').open,false)
- await f.open(); await f.action('Delete device permanently')
+ await f.open(); await f.action('彻底删除设备')
  assert.equal(d.querySelector('#device-confirm').open,true)
  const body=d.querySelector('#device-confirm-body').textContent
  assert.match(body,/<Untrusted device>.*device-a/)
- assert.match(body,/This cannot be undone/)
+ assert.match(body,/此操作不可撤销/)
  assert.match(body,/<Shared group>shared-one/)
- assert.match(body,/without assigning a new owner/)
+ assert.match(body,/不会自动转让群主/)
  assert.equal(d.querySelector('untrusted'),null)
  d.querySelector('#device-confirm-cancel').click(); await tick()
  assert.equal(f.calls.some(c=>c.action==='delete'),false)
@@ -59,7 +59,7 @@ test('compact device rows keep editing and deletion in separate dialogs with exa
 
 test('delete sends observed versions once and removes only the selected row after an acknowledged admin mutation',async t=>{
  const f=fixture(t),d=f.window.document;f.defer()
- await f.open(); await f.action('Delete device permanently')
+ await f.open(); await f.action('彻底删除设备')
  const submit=d.querySelector('#device-confirm-submit');submit.click();submit.click();await tick()
  assert.equal(f.calls.filter(c=>c.action==='delete').length,1)
  assert.equal(submit.disabled,true)
@@ -68,28 +68,28 @@ test('delete sends observed versions once and removes only the selected row afte
  assert.equal(d.querySelectorAll('#instances article').length,1)
  assert.match(d.querySelector('#instances').textContent,/Unrelated device/)
  await f.open('device-b')
- assert.ok([...d.querySelectorAll('#device-details button')].some(b=>b.textContent==='Repair original device'))
+ assert.ok([...d.querySelectorAll('#device-details button')].some(b=>b.textContent==='恢复原设备信任'))
 })
 
 test('same-name confirmations identify the exact instance and stale live impact disables confirmation before mutation',async t=>{
  const f=fixture(t),d=f.window.document
  for(const i of f.state.instances)i.label='Duplicate name';f.render()
- await f.open('device-b');await f.action('Delete device permanently')
+ await f.open('device-b');await f.action('彻底删除设备')
  const body=d.querySelector('#device-confirm-body').textContent
  assert.match(body,/device-b/);assert.doesNotMatch(body,/device-a|shared-one/)
  f.state.instances[1].pairingRevision++;f.render()
  assert.equal(d.querySelector('#device-confirm-submit').disabled,true)
- assert.match(d.querySelector('#device-confirm-error').textContent,/changed/)
+ assert.match(d.querySelector('#device-confirm-error').textContent,/已变化/)
  d.querySelector('#device-confirm-submit').click();await tick()
  assert.equal(f.calls.some(c=>c.action==='delete'),false)
 })
 
 test('uncertain deletion keeps the device visible, displays its error in the dialog and cannot resend automatically',async t=>{
  const f=fixture(t),d=f.window.document;f.fail('REQUEST_FAILED')
- await f.open();await f.action('Delete device permanently')
+ await f.open();await f.action('彻底删除设备')
  d.querySelector('#device-confirm-submit').click();for(let i=0;i<5;i++)await tick()
  assert.equal(d.querySelectorAll('#instances article').length,2)
- assert.match(d.querySelector('#device-confirm-error').textContent,/REQUEST_FAILED.*review current state/)
+ assert.match(d.querySelector('#device-confirm-error').textContent,/REQUEST_FAILED.*查看最新状态/)
  assert.equal(d.querySelector('#device-confirm-submit').disabled,true)
  assert.equal(f.calls.filter(c=>c.action==='delete').length,1)
 })
@@ -98,7 +98,7 @@ test('device search, status filter and bounded pages preserve details and render
  const f=fixture(t),d=f.window.document
  f.state.instances=Array.from({length:63},(_,n)=>({instanceId:'id-'+n,label:'Device '+n,trusted:n%2,connected:n%3===0,pairingRevision:1,nameVersion:0,ownedSharedGroups:[]}));f.render()
  assert.equal(d.querySelectorAll('#instances article').length,25)
- d.querySelector('#device-next').click();assert.match(d.querySelector('#device-page').textContent,/Page 2/)
+ d.querySelector('#device-next').click();assert.match(d.querySelector('#device-page').textContent,/页码 2/)
  const search=d.querySelector('#device-search');search.value='id-62';search.dispatchEvent(new f.window.Event('input'))
  assert.equal(d.querySelectorAll('#instances article').length,1)
  assert.match(d.querySelector('#instances').textContent,/Device 62/)
@@ -108,11 +108,11 @@ test('device search, status filter and bounded pages preserve details and render
 })
 
 test('a live absence observation dismisses stale device deletion dialogs after a lost receipt or another administrator cleanup',async t=>{
- const f=fixture(t);await tick();await f.open();await f.action('Delete device permanently')
+ const f=fixture(t);await tick();await f.open();await f.action('彻底删除设备')
  assert.equal(f.window.document.querySelector('#device-confirm').open,true)
  f.state.instances=f.state.instances.filter(i=>i.instanceId!=='device-a');f.render()
  assert.equal(f.window.document.querySelector('#device-confirm').open,false)
  assert.equal(f.window.document.querySelector('#device-dialog').open,false)
- assert.match(f.window.document.querySelector('#error').textContent,/no longer exists/)
+ assert.match(f.window.document.querySelector('#error').textContent,/已不存在/)
  assert.equal(f.calls.some(c=>c.action==='delete'),false)
 })

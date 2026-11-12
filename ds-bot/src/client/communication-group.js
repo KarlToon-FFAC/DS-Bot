@@ -53,3 +53,11 @@ export function groupMemberContacts(members, contacts = []) {
   if (unknown.length) groups.push({person:null,bots:unknown})
   return groups
 }
+
+export function rankedMemberContacts(members, contacts = []) {
+  const rank = person => ({owner:0,admin:1,member:2}[person?.role] ?? 2)
+  const groups = groupMemberContacts(members, contacts)
+  for (const group of groups) group.bots.sort((a,b) => rank(a)-rank(b))
+  const groupRank = group => Math.min(...[group.person,...group.bots].filter(Boolean).map(rank))
+  return groups.sort((a,b) => groupRank(a)-groupRank(b))
+}

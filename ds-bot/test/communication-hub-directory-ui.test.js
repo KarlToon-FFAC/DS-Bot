@@ -26,11 +26,24 @@ function fixture(t) {
 test('Hub contacts list shows each contact profile and only canonical owned Bots', t => {
   const window = fixture(t), doc = window.document
   assert.equal(doc.querySelectorAll('#directory-list [data-directory-id]').length, 1)
+  assert.equal(doc.querySelector('#directory-profile').hidden, true)
+  doc.querySelector('#directory-list [data-directory-id]').click()
   assert.equal(doc.querySelector('#directory-profile h3').textContent, 'Buddy')
   assert.match(doc.querySelector('#directory-profile').textContent, /Testing lead.*Coordinates release testing/s)
   assert.deepEqual([...doc.querySelectorAll('#directory-profile [data-directory-id]')].map(node => node.dataset.directoryId), ['bot:a:web'])
   assert.equal(doc.querySelector('#show-contacts').getAttribute('aria-pressed'), 'true')
   assert.equal(doc.querySelector('.directory-avatar').dataset.kind, 'human')
+  const row=()=>doc.querySelector('#directory-list [data-directory-id]')
+  assert.equal(row().getAttribute('aria-expanded'),'true')
+  window.showDirectory(participants)
+  assert.equal(row().getAttribute('aria-expanded'),'true','refresh retains expanded profile')
+  row().click()
+  assert.equal(doc.querySelector('#directory-profile').hidden,true)
+  window.showDirectory(participants)
+  assert.equal(row().getAttribute('aria-expanded'),'false','refresh must not reopen collapsed profile')
+  assert.equal(doc.documentElement.lang,'zh-CN')
+  assert.equal(doc.querySelector('#directory-title').textContent,'Hub 通讯录')
+  assert.equal(doc.querySelector('#show-contacts').textContent,'联系人')
 })
 
 test('public Bot list supports skill search and treats profile content as text', t => {
@@ -39,13 +52,14 @@ test('public Bot list supports skill search and treats profile content as text',
   assert.equal(doc.querySelectorAll('#directory-list [data-directory-id]').length, 2)
   const search = doc.querySelector('#directory-search')
   search.value = 'Playwright'; search.dispatchEvent(new window.Event('input'))
-  assert.equal(doc.querySelector('#directory-count').textContent, '1 Bots')
+  assert.equal(doc.querySelector('#directory-count').textContent, '1 个 Bot')
+  doc.querySelector('#directory-list [data-directory-id]').click()
   assert.equal(doc.querySelector('#directory-profile h3').textContent, 'Web Tester')
   assert.match(doc.querySelector('.directory-about').textContent, /<script>untrusted\(\)<\/script>/)
   assert.equal(doc.querySelector('#directory-profile script'), null)
   assert.equal(doc.querySelector('#show-bots').getAttribute('aria-pressed'), 'true')
   search.value = 'missing'; search.dispatchEvent(new window.Event('input'))
-  assert.match(doc.querySelector('#directory-list').textContent, /No matching/)
+  assert.match(doc.querySelector('#directory-list').textContent, /没有匹配/)
 })
 
 

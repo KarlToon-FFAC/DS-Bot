@@ -3,9 +3,9 @@ import { devicesMarkup, devicesScript } from './management-devices.js'
 import { managementCSS } from './management-style.js'
 import { directoryMarkup, directoryScript, directoryCSS } from './management-directory.js'
 
-export const managementPage = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DS-Bot Hub</title>
+export const managementPage = `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DS-Bot Hub</title>
 <style>${managementCSS}${directoryCSS}</style>
-<main><header class="hub-header"><span class="hub-mark" aria-hidden="true">↔</span><h1>DS-Bot Hub</h1><span class="hub-version" aria-label="Hub version">${COMMUNICATION_DISPLAY_VERSION}</span></header><p class="intro">Choose how new devices join and review their identity with their owners. Device names are unverified.</p><section id="login"><h2>Administrator sign in</h2><form id="sign-in" method="post" action="/admin/login" autocomplete="on"><label>Username <input name="username" value="admin" autocomplete="username" readonly></label><label>Password <input id="password" name="password" type="password" autocomplete="current-password" placeholder="Administrator password" required></label><button type="submit">Sign in</button></form><p>Your browser can remember this password in its password manager. DS-Bot does not save it in browser storage. Use only a trusted HTTPS address.</p></section><p id="error" role="status"></p><div id="content" hidden><p id="live-status" role="status"></p><button id="logout">Sign out</button><button id="revoke-sessions">Sign out all sessions</button>${devicesMarkup}${directoryMarkup}<section class="hub-code"><h2>Hub code</h2><p id="hub-code-status" role="status"></p><button id="copy-code" type="button" disabled>Copy Hub code</button><details><summary>Show code and trust details</summary><p>Give this code only through a trusted channel. A v2 code includes public CA trust bound to this Hub; do not accept a code from an unverified connection. New devices follow the admission policy below.</p><code id="code"></code></details></section><section class="device-requests"><label class="admission-control"><input id="auto-approve" type="checkbox"> Allow new devices to join without approval</label><p id="admission-status" role="status"></p><p>When enabled, devices with this Hub code and a valid device-key proof join automatically. Existing pending requests still need a decision. Contact and Bot permissions remain separate.</p><details id="device-requests-detail"><summary>Device requests <span id="request-count"></span></summary><div id="requests"></div></details></section></div><dialog id="join-delete-dialog" aria-labelledby="join-delete-title"><h2 id="join-delete-title">Delete application permanently</h2><p id="join-delete-target"></p><p>This removes the saved application from this Hub without contacting the applicant. Its client can withdraw the orphaned application independently.</p><p id="join-delete-error" role="alert"></p><button id="join-delete-cancel" type="button">Cancel</button><button id="join-delete-submit" type="button" class="danger">Delete application</button></dialog></main><script src="/admin/app.js" defer></script></html>`
+<main><header class="hub-header"><span class="hub-mark" aria-hidden="true">↔</span><h1>DS-Bot Hub</h1><span class="hub-version" aria-label="Hub 版本">${COMMUNICATION_DISPLAY_VERSION}</span></header><p class="intro">设置新设备的加入方式，并向设备所有者核实身份。设备名称未经身份验证。</p><section id="login"><h2>管理员登录</h2><form id="sign-in" method="post" action="/admin/login" autocomplete="on"><label>用户名 <input name="username" value="admin" autocomplete="username" readonly></label><label>密码 <input id="password" name="password" type="password" autocomplete="current-password" placeholder="管理员密码" required></label><button type="submit">登录</button></form><p>浏览器可通过密码管理器记住密码；DS-Bot 不会将密码保存在浏览器存储中。请只访问可信的 HTTPS 地址。</p></section><p id="error" role="status"></p><div id="content" hidden><p id="live-status" role="status"></p><button id="logout">退出登录</button><button id="revoke-sessions">退出所有登录会话</button>${devicesMarkup}${directoryMarkup}<section class="hub-code"><h2>Hub 码</h2><p id="hub-code-status" role="status"></p><button id="copy-code" type="button" disabled>复制 Hub 码</button><details><summary>查看 Hub 码与信任详情</summary><p>请只通过可信渠道分享此码。V2 码包含绑定到此 Hub 的公开 CA 信任信息，不要接受来源未经验证的 Hub 码。新设备按下方设置的规则加入。</p><code id="code"></code></details></section><section class="device-requests"><label class="admission-control"><input id="auto-approve" type="checkbox"> 允许新设备直接加入，无需批准</label><p id="admission-status" role="status"></p><p>开启后，持有此 Hub 码并通过设备密钥验证的新设备会自动加入。已有待处理申请仍需批准或拒绝。联系人和 Bot 的权限独立管理。</p><details id="device-requests-detail"><summary>设备申请 <span id="request-count"></span></summary><div id="requests"></div></details></section></div><dialog id="join-delete-dialog" aria-labelledby="join-delete-title"><h2 id="join-delete-title">彻底删除申请</h2><p id="join-delete-target"></p><p>直接从 Hub 删除已保存的申请，无需联系申请方。客户端也可独立撤销失效的申请。</p><p id="join-delete-error" role="alert"></p><button id="join-delete-cancel" type="button">取消</button><button id="join-delete-submit" type="button" class="danger">删除申请</button></dialog></main><script src="/admin/app.js" defer></script></html>`
 export const managementScript = `
 let deletingJoin;
 let admissionPolicy = {autoApprove:false,version:1}, admissionSaving = false;
@@ -19,8 +19,13 @@ async function api(action, input = {}, signal) {
   if (!r.ok || !value.ok) throw Error(value.error?.code || 'REQUEST_FAILED');
   return value;
 }
+function managementError(e) {
+  const code = e.message, labels = {UNAUTHENTICATED:'登录已失效，请重新登录',FORBIDDEN:'没有执行此操作的权限',RATE_LIMITED:'操作过于频繁，请稍后重试',REQUEST_FAILED:'请求失败，请检查连接后重试',INVALID_REQUEST:'请求内容无效',ENROLLMENT_POLICY_VERSION_CONFLICT:'加入规则已变化，请查看最新设置后重试',JOIN_NOT_FOUND:'申请已不存在，请查看最新状态',INSTANCE_NOT_FOUND:'设备已不存在，请查看最新状态'};
+  if (/^[A-Z][A-Z0-9_]{0,63}$/.test(code)) return (labels[code] ?? '操作失败，请刷新状态后重试') + ' [' + code + ']';
+  return /[\u4e00-\u9fff]/.test(code) ? code : '请求失败，请检查连接后重试';
+}
 function error(e) {
-  const message = e.message === 'STATIC_PEER_REMOVAL_REQUIRED' ? 'This device is declared in the Hub startup peers configuration. Remove its exact instance ID from that configuration and restart the Hub before permanent deletion.' : e.message === 'DEVICE_DELETE_VERSION_CONFLICT' ? 'Device identity changed. Close this dialog and review its current details before confirming again.' : e.message === 'DEVICE_DELETE_GROUPS_CHANGED' ? 'Owned groups changed. Current status updates automatically; review the deletion again. No data was deleted.' : e.message === 'INSTANCE_NAME_VERSION_CONFLICT' ? 'Device name changed elsewhere. Current status updates automatically; review it before editing again.' : e.message;
+  const message = e.message === 'STATIC_PEER_REMOVAL_REQUIRED' ? '该设备由 Hub 启动配置中的 peers 声明。请先从配置中移除对应实例 ID 并重启 Hub，再彻底删除。' : e.message === 'DEVICE_DELETE_VERSION_CONFLICT' ? '设备身份已变化，请关闭弹窗并核对最新详情后再确认。' : e.message === 'DEVICE_DELETE_GROUPS_CHANGED' ? '该设备拥有的群组已变化，当前状态会自动更新。请重新核对删除范围；本次未删除数据。' : e.message === 'INSTANCE_NAME_VERSION_CONFLICT' ? '设备名称已在其他位置修改，当前状态会自动更新。请核对后重新编辑。' : managementError(e);
   $('error').textContent = message;
   if ($('device-confirm').open) $('device-confirm-error').textContent = message;
   else if ($('device-dialog').open) $('device-error').textContent = message;
@@ -32,9 +37,9 @@ function button(label, run) {
   return b;
 }
 function renameForm(instance) {
-  const form = document.createElement('form'), label = text('label', 'Instance name'), input = document.createElement('input'), save = text('button', 'Save name');
+  const form = document.createElement('form'), label = text('label', '实例名称'), input = document.createElement('input'), save = text('button', '保存名称');
   form.className = 'instance-name-form'; input.value = instance.label; input.required = true; input.maxLength = 100;
-  input.setAttribute('aria-label', 'Instance name (' + instance.instanceId + ')'); save.type = 'submit'; label.append(input); form.append(label, save);
+  input.setAttribute('aria-label', '实例名称（' + instance.instanceId + '）'); save.type = 'submit'; label.append(input); form.append(label, save);
   form.onsubmit = async event => {
     event.preventDefault(); if (save.disabled) return; save.disabled = true; input.disabled = true; $('error').textContent = ''; $('device-error').textContent = '';
     try { await api('rename', {instanceId:instance.instanceId, label:input.value, expectedNameVersion:instance.nameVersion}); form.dataset.saved = 'true'; await refresh(); }
@@ -64,7 +69,7 @@ $('join-delete-submit').onclick=async()=>{
   try{
     await api('delete-join',{requestId:request.requestId,expectedVersion:request.version,confirmDelete:true});
     deletingJoin=undefined;closeDeviceDialog($('join-delete-dialog'));await refresh();
-  }catch(e){$('join-delete-error').textContent=['JOIN_VERSION_CONFLICT','JOIN_HAS_DEVICE'].includes(e.message)?'This application changed or was approved. Review its current state; use Manage approved device to remove an existing device.':e.message;try{await refresh();}catch{} }
+  }catch(e){$('join-delete-error').textContent=['JOIN_VERSION_CONFLICT','JOIN_HAS_DEVICE'].includes(e.message)?'申请已变化或已获批准。请查看最新状态；如需移除已加入的设备，请使用“管理已批准的设备”。':managementError(e);try{await refresh();}catch{} }
   finally{$('join-delete-submit').disabled=false;}
 };
 function render(value) {
@@ -74,28 +79,28 @@ function render(value) {
   if (!admissionSaving) {
     admissionPolicy = value.enrollmentPolicy ?? {autoApprove:false,version:1};
     $('auto-approve').checked = admissionPolicy.autoApprove;
-    $('admission-status').textContent = admissionPolicy.autoApprove ? 'New device requests are approved automatically.' : 'New device requests require administrator approval.';
+    $('admission-status').textContent = admissionPolicy.autoApprove ? '新设备申请将自动通过。' : '新设备申请需要管理员批准。';
   }
   updateDirectory(value.participants ?? []);
   const code = typeof value.code === 'string' && value.code.startsWith('dsbot-hub:2:') ? value.code : '';
-  $('hub-code-status').textContent = value.codeError || value.code && !code ? 'HUB_V2_MIGRATION_REQUIRED: Configure management.pairingCaFile with the public CA and a matching WSS certificate, then restart the Hub. Resetting data does not enable v2.' : code ? 'v2 pairing code — public CA included.' : 'Hub address is not configured.';
-  $('code').textContent = code || 'No v2 Hub code available.'; $('copy-code').disabled = !code;
+  $('hub-code-status').textContent = value.codeError || value.code && !code ? 'HUB_V2_MIGRATION_REQUIRED：请在 management.pairingCaFile 配置公开 CA，并使用匹配的 WSS 证书，然后重启 Hub。重置数据不会启用 V2。' : code ? 'V2 Hub 码，已包含公开 CA。' : '尚未配置 Hub 地址。';
+  $('code').textContent = code || '暂无可用的 V2 Hub 码。'; $('copy-code').disabled = !code;
   const requests = new Map([...$('requests').children].map(row => [row.dataset.requestId, row]));
   const requestRows = value.requests.map(r => {
     let row = requests.get(r.requestId);
     const signature = JSON.stringify(r);
     if (!row || row.dataset.signature !== signature) {
       row = document.createElement('article'); row.dataset.requestId = r.requestId; row.dataset.signature = signature;
-      row.append(text('strong', r.label + ' — ' + r.status), text('small', 'Fingerprint: ' + r.fingerprint));
-      if (r.status === 'pending') for (const action of ['approve', 'reject']) row.append(button(action, () => api('decide', {requestId:r.requestId, expectedVersion:r.version, action})));
-      if(r.instanceId&&(value.instances??[]).some(i=>i.instanceId===r.instanceId)) row.append(button('Manage approved device',()=>showDeviceDetails(r.instanceId)));
-      else row.append(button('Delete application',()=>showJoinDelete(r)));
+      row.append(text('strong', r.label + ' — ' + ({pending:'待审批',approved:'已批准',rejected:'已拒绝',cancelled:'已撤销',expired:'已过期'}[r.status] ?? r.status)), text('small', '指纹：' + r.fingerprint));
+      if (r.status === 'pending') for (const action of ['approve', 'reject']) row.append(button(action === 'approve' ? '批准' : '拒绝', () => api('decide', {requestId:r.requestId, expectedVersion:r.version, action})));
+      if(r.instanceId&&(value.instances??[]).some(i=>i.instanceId===r.instanceId)) row.append(button('管理已批准的设备',()=>showDeviceDetails(r.instanceId)));
+      else row.append(button('删除申请',()=>showJoinDelete(r)));
     }
     return row;
   });
-  reconcile($('requests'), requestRows, 'No pending requests.');
+  reconcile($('requests'), requestRows, '暂无申请记录。');
   updateDevices(value.instances ?? [],value.participants ?? []);
-  $('request-count').textContent = '('+(value.requests ?? []).filter(r => r.status === 'pending').length+' pending)';
+  $('request-count').textContent = '（'+(value.requests ?? []).filter(r => r.status === 'pending').length+' 项待处理）';
 }
 function reconcile(container, rows, empty) {
   const desired = new Set(rows);
@@ -109,7 +114,7 @@ function refresh() {
     do {
       refreshAgain = false;
       const result = await api('state');
-      if (!refreshAgain && csrf) { revision = result.revision ?? ''; render(result.value); $('live-status').textContent = 'Status is up to date.'; }
+      if (!refreshAgain && csrf) { revision = result.revision ?? ''; render(result.value); $('live-status').textContent = '状态已实时更新。'; }
     } while (refreshAgain && csrf);
   })().finally(() => { refreshFlight = null; });
   return refreshFlight;
@@ -127,9 +132,9 @@ function resume() {
       failures = 0;
     } catch(e) {
       if (epoch !== watchEpoch) return;
-      if (e.message === 'UNAUTHENTICATED') { csrf = undefined; deviceConfirmation = undefined; closeDeviceDialog($('device-confirm')); closeDeviceDetails(); $('content').hidden = true; $('login').hidden = false; error(Error('Sign in again to see current Hub status.')); return; }
-      $('live-status').textContent = 'Status may be out of date. Reconnecting… ' + (/^[A-Z][A-Z0-9_]{0,63}$/.test(e.message) ? '[' + e.message + ']' : 'Could not read Hub status.');
-      for (const node of document.querySelectorAll('.instance-connection,.directory-connection')) node.textContent = 'Connection status unavailable';
+      if (e.message === 'UNAUTHENTICATED') { csrf = undefined; deviceConfirmation = undefined; closeDeviceDialog($('device-confirm')); closeDeviceDetails(); $('content').hidden = true; $('login').hidden = false; error(Error('请重新登录以查看 Hub 最新状态。')); return; }
+      $('live-status').textContent = '状态可能已过期，正在重新连接… ' + (/^[A-Z][A-Z0-9_]{0,63}$/.test(e.message) ? '[' + e.message + ']' : '无法读取 Hub 状态。');
+      for (const node of document.querySelectorAll('.instance-connection,.directory-connection')) node.textContent = '连接状态未知';
       for (const node of document.querySelectorAll('.directory-presence')) node.dataset.connected = 'unknown';
       delay = Math.min(30000, 1000 * 2 ** Math.min(failures++, 5)) * (0.8 + Math.random() * 0.4);
     }
@@ -137,7 +142,7 @@ function resume() {
   };
   void watch();
 }
-$('copy-code').onclick = async () => { try { await navigator.clipboard.writeText($('code').textContent); $('error').textContent = 'Hub code copied. Share it only through a trusted channel.'; } catch { $('error').textContent = 'Copy is unavailable in this browser. Expand the code and copy it manually.'; } };
+$('copy-code').onclick = async () => { try { await navigator.clipboard.writeText($('code').textContent); $('error').textContent = 'Hub 码已复制，请只通过可信渠道分享。'; } catch { $('error').textContent = '浏览器无法自动复制，请展开 Hub 码后手动复制。'; } };
 $('logout').onclick = async () => { pause(); try { await api('logout'); } finally { csrf = undefined; location.reload(); } };
 $('revoke-sessions').onclick = async () => { pause(); try { await api('sessions/revoke'); } finally { csrf = undefined; location.reload(); } };
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') pause(); else resume(); });

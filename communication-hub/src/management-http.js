@@ -155,7 +155,7 @@ export function createManagementHttp(management, { password, origin, onRevoke = 
       const code = ['MANAGEMENT_RESTARTING', 'INVALID_REQUEST', 'UNAUTHENTICATED', 'ORIGIN_REJECTED', 'RATE_LIMITED', 'PAYLOAD_TOO_LARGE', 'JOIN_VERSION_CONFLICT', 'JOIN_DELETE_CONFIRMATION_REQUIRED', 'JOIN_HAS_DEVICE', 'ENROLLMENT_POLICY_VERSION_CONFLICT', 'PAIRING_REVISION_CONFLICT', 'INSTANCE_NOT_FOUND', 'INSTANCE_NAME_VERSION_CONFLICT', 'UNKNOWN_OPERATION', 'ALREADY_ENROLLED', 'DIRECTORY_FULL', 'DEVICE_DELETE_CONFIRMATION_REQUIRED', 'DEVICE_DELETE_VERSION_CONFLICT', 'DEVICE_DELETE_GROUPS_CHANGED', 'STATIC_PEER_REMOVAL_REQUIRED', 'OWNER_TRANSFER_REQUIRED', 'UNKNOWN_PRINCIPAL', 'INVALID_AVATAR_REVISION', 'INVALID_AVATAR_CHUNK', 'AVATAR_REVISION_MISMATCH'].includes(error.code) ? error.code : 'MANAGEMENT_UNAVAILABLE'
       if (path === '/admin/login') {
         res.writeHead(code === 'RATE_LIMITED' ? 429 : 401, { ...headers, 'content-type': 'text/html; charset=utf-8' })
-        res.end(managementPage.replace('<p id="error" role="status"></p>', '<p id="error" role="alert">Sign-in failed. Check the trusted address and password, or wait before trying again.</p>'))
+        res.end(managementPage.replace('<p id="error" role="status"></p>', '<p id="error" role="alert">登录失败。请核对可信地址和密码，或稍后重试。</p>'))
         return true
       }
       send(res, code === 'MANAGEMENT_RESTARTING' ? 503 : code === 'RATE_LIMITED' ? 429 : code === 'UNAUTHENTICATED' ? 401 : 400, { ok: false, error: { code } })

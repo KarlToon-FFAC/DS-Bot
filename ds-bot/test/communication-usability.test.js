@@ -1458,12 +1458,21 @@ test('group members are compact contact rows with nested Bots and invitation/rem
  const buddy={principalId:'human:b:buddy',displayName:'Buddy',kind:'human',role:'member',speakingMode:'readOnly'}
  const bot={principalId:'bot:b:tester',displayName:'Tester',kind:'bot',role:'member',speakingMode:'passive',ownerPrincipalId:buddy.principalId}
  const extra={...bot,principalId:'bot:b:extra',displayName:'Extra'}
- const snapshot={...state(),contacts:[buddy,bot,extra],conversations:[{...membership,info:{members:[...membership.info.members,buddy,bot]}}]}
+ const admin={principalId:'human:c:admin',displayName:'Admin',kind:'human',role:'admin',speakingMode:'speak'}
+ const snapshot={...state(),contacts:[buddy,bot,extra],conversations:[{...membership,info:{members:[buddy,bot,admin,...membership.info.members]}}]}
  let finish
  await pane({snapshot,handle:body=>body.endpoint==='invite'?new Promise(resolve=>{finish=resolve}):body.endpoint==='members'?{members:snapshot.conversations[0].info.members,membershipVersion:1}:{}},async({doc,click,calls})=>{
   await click('Shared group');await click('View conversation details')
   const group=doc.querySelector('[role="complementary"][aria-label="Group members and receiving rules"]')
   assert.ok(doc.querySelector('.bt-comm-main').contains(group))
+  assert.deepEqual([...group.querySelectorAll('[data-member-contact]')].map(node=>node.dataset.memberContact),['human:a:owner','human:c:admin','human:b:buddy'])
+  const membersSection=group.querySelector('.bt-comm-member-section')
+  assert.equal(membersSection.open,true)
+  await act(async()=>membersSection.querySelector('summary').click())
+  assert.equal(membersSection.open,false)
+  assert.match(membersSection.querySelector('summary').textContent,/Group members · 4/)
+  await act(async()=>membersSection.querySelector('summary').click())
+  assert.equal(membersSection.open,true)
   const contact=group.querySelector('[data-member-contact="human:b:buddy"]'),row=contact.querySelector('[data-principal-id="bot:b:tester"]')
   assert.ok(contact.querySelector('.bt-comm-member-bots').contains(row));assert.ok(row.querySelector('[aria-label="Speaking permission"]'))
   assert.ok(contact.querySelector('[data-principal-id="human:b:buddy"]'))

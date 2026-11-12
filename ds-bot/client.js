@@ -47,6 +47,7 @@ var ZH = {
   "All Bot recipients": "全部 Bot 接收对象",
   "Close Bot list": "关闭 Bot 列表",
   "Bot working or replying": "Bot 工作或回复中",
+  "Group members": "群成员",
   "No accessible local Chief matches this identity. Use list_local_chiefs; Hub publication is not required.": "找不到可接收汇报的本地 Chief，请使用 list_local_chiefs 获取；不要求 Chief 发布到 Hub。",
   "The local report outcome is uncertain. Check the local Chief conversation before sending another report.": "本地汇报的投递结果尚未确认，请先检查 Chief 的本地对话，避免重复汇报。",
   "No model configured": "未配置模型",
@@ -23195,6 +23196,13 @@ function groupMemberContacts(members, contacts = []) {
   if (unknown.length) groups.push({ person: null, bots: unknown });
   return groups;
 }
+function rankedMemberContacts(members, contacts = []) {
+  const rank = (person) => ({ owner: 0, admin: 1, member: 2 })[person?.role] ?? 2;
+  const groups = groupMemberContacts(members, contacts);
+  for (const group of groups) group.bots.sort((a, b) => rank(a) - rank(b));
+  const groupRank = (group) => Math.min(...[group.person, ...group.bots].filter(Boolean).map(rank));
+  return groups.sort((a, b) => groupRank(a) - groupRank(b));
+}
 
 // src/client/communication-invite.js
 var import_react66 = require("react");
@@ -25775,6 +25783,7 @@ function GroupSettings({ member, contacts, operation, pendingSettings, pendingIn
   const [open, setOpen] = (0, import_react81.useState)(false), [base, setBase] = (0, import_react81.useState)(null), [draft, setDraft] = (0, import_react81.useState)(null);
   const [saving, setSaving] = (0, import_react81.useState)(false), [failure, setFailure] = (0, import_react81.useState)(""), [pending, setPending] = (0, import_react81.useState)(null);
   const [newOwner, setNewOwner] = (0, import_react81.useState)(""), [action, setAction] = (0, import_react81.useState)(null);
+  const [membersExpanded, setMembersExpanded] = (0, import_react81.useState)(true);
   const generation = (0, import_react81.useRef)(0), revision = (0, import_react81.useRef)(0), summary = (0, import_react81.useRef)(null);
   (0, import_react81.useEffect)(() => () => {
     generation.current += 1;
@@ -25904,12 +25913,20 @@ function GroupSettings({ member, contacts, operation, pendingSettings, pendingIn
         member.ownerPrincipalId && !members.some((person) => person.principalId === member.ownerPrincipalId) ? (0, import_react81.createElement)("p", { role: "status" }, t("The owner is unavailable. Ownership stays with that identity.")) : null,
         !member.ownerPrincipalId ? (0, import_react81.createElement)("p", { role: "status" }, t("This legacy group has no retained owner. No automatic takeover is allowed.")) : null,
         canManage ? (0, import_react81.createElement)("label", { className: "bt-comm-field" }, t("Group name"), (0, import_react81.createElement)("input", { value: values.title, onChange: (event) => edit({ title: event.target.value }), "aria-label": t("Group name") })) : null,
-        (0, import_react81.createElement)("div", { className: "bt-comm-member-groups" }, groupMemberContacts(members, contacts).map((group, index) => (0, import_react81.createElement)(
-          "section",
-          { key: group.person?.principalId ?? index, className: "bt-comm-member-contact", "data-member-contact": group.person?.principalId ?? "unavailable" },
-          group.person ? memberRow(group.person) : (0, import_react81.createElement)("p", { className: "bt-comm-reference" }, t("Owner information unavailable")),
-          group.bots.length ? (0, import_react81.createElement)("div", { className: "bt-comm-member-bots" }, group.bots.map(memberRow)) : null
-        ))),
+        (0, import_react81.createElement)(
+          "details",
+          { className: "bt-comm-member-section", open: membersExpanded },
+          (0, import_react81.createElement)("summary", { onClick: (event) => {
+            event.preventDefault();
+            setMembersExpanded((value) => !value);
+          } }, t("Group members"), " · ", members.length),
+          (0, import_react81.createElement)("div", { className: "bt-comm-member-groups" }, rankedMemberContacts(members, contacts).map((group, index) => (0, import_react81.createElement)(
+            "section",
+            { key: group.person?.principalId ?? index, className: "bt-comm-member-contact", "data-member-contact": group.person?.principalId ?? "unavailable" },
+            group.person ? memberRow(group.person) : (0, import_react81.createElement)("p", { className: "bt-comm-reference" }, t("Owner information unavailable")),
+            group.bots.length ? (0, import_react81.createElement)("div", { className: "bt-comm-member-bots" }, group.bots.map(memberRow)) : null
+          )))
+        ),
         member.info?.formerMembers?.length ? (0, import_react81.createElement)("details", null, (0, import_react81.createElement)("summary", null, t("Former Bots")), member.info.formerMembers.map((person) => btn(person.displayName, (event) => onInspect([person.principalId], event.currentTarget), { key: person.principalId, children: personLabel(person) }))) : null,
         (0, import_react81.createElement)("p", { className: "bt-comm-reference" }, t("Both Bot modes can explicitly reply to their current input or finish without a reply. Final prose stays local. Reply-only Bots cannot initiate messages. Active Bots may also initiate with tools. Explicit follow-ups stay within the server’s finite delegation limit.")),
         canManage ? (0, import_react81.createElement)(
