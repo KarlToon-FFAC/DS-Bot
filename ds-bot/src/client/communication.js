@@ -1,5 +1,5 @@
 import {GroupProfileDialog} from './communication-group-profile.js'
-import {CommunicationPresence} from './communication-presence.js'
+import {CommunicationPresence,BotAvailabilityNotice} from './communication-presence.js'
 import {MentionPerson} from './communication-mention-person.js'
 import {CommunicationActivation} from './communication-activation.js'
 import {RecipientPreview} from './communication-recipient-preview.js'
@@ -140,7 +140,7 @@ function GroupSettings({ member, contacts, operation, pendingSettings, pendingIn
         const policy = values.policies[person.principalId] ?? { role: person.role, speakingMode: person.speakingMode }
         const changePolicy = change => edit({ policies: { ...values.policies, [person.principalId]: { ...policy, ...change } } })
     return h('div', {key:person.principalId,className:'bt-comm-member-row','data-principal-id':person.principalId},
-      h('span',{className:'bt-comm-member-name',title:person.displayName},personLabel(person,true),person.groupIdentity?h('small',{className:'bt-comm-reference',title:person.groupIdentity},' · '+[...person.groupIdentity].slice(0,24).join('')+(person.groupIdentity.length>24?'…':'')):null),
+      h('span',{className:'bt-comm-member-name',title:person.displayName},personLabel(person,true),h(BotAvailabilityNotice,{person}),person.groupIdentity?h('small',{className:'bt-comm-reference',title:person.groupIdentity},' · '+[...person.groupIdentity].slice(0,24).join('')+(person.groupIdentity.length>24?'…':'')):null),
       h('div',{className:'bt-comm-member-actions'},
         editable && isOwner && person.role!=='owner' ? h('select',{'aria-label':t('Group role'),title:t('Group role'),value:policy.role,onChange:event=>changePolicy({role:event.target.value})},h('option',{value:'member'},t('Member')),h('option',{value:'admin'},t('Admin'))) : h('span',{className:'bt-comm-role'},t(roleLabel(person.role))),
         editable ? h('select',{'aria-label':t('Speaking permission'),title:t('Speaking permission'),value:policy.speakingMode,onChange:event=>changePolicy({speakingMode:event.target.value})},

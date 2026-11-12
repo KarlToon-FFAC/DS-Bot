@@ -1,3 +1,4 @@
+import {BotAvailabilityNotice} from './communication-presence.js'
 import {GroupIdentityInformation} from './communication-group-profile.js'
 import { createElement as h, useEffect, useState } from 'react'
 import { CommunicationAvatar } from './communication-profile.js'
@@ -20,7 +21,7 @@ export function ParticipantInformation({ person, people, request, conversationId
   const ownerRows = ownerId ? people.filter(item => item.principalId === ownerId && item.kind === 'human') : []
   const owner = ownerRows.length ? ownerRows.reduce((known,item) => ({...known,...item}), {}) : null
   const profile = loaded ?? (person.publicProfile?.truncated ? contact?.publicProfile : person.publicProfile) ?? contact?.publicProfile
-  return h('section', { className: 'bt-comm-participant-profile' }, personLabel(person), h('p', null, t(person.retired ? 'Bot no longer exists' : roleLabel(person.role ?? 'member'))),
+  return h('section', { className: 'bt-comm-participant-profile' }, personLabel(person), h(BotAvailabilityNotice,{person}), h('p', null, t(person.retired ? 'Bot no longer exists' : roleLabel(person.role ?? 'member'))),
     person.kind === 'bot' ? h('div', { className: 'bt-comm-participant-owner' }, h('h3', null, t('From contact')),
       owner ? h('p', null, h(CommunicationAvatar, { person: owner, request, size: 28 }), owner.displayName,
         owner.ipAddress ? h('small', null, owner.ipAddress) : null) : h('p', null, t('Owner information unavailable'))) : null,

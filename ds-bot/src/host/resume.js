@@ -92,6 +92,7 @@ export function answeredIn(events, exchangeId) {
 // The trigger fields a resumed turn needs to answer the same sender.
 const triggerOf = info => ({
   role: info.role,
+  ...(info.remoteSource ? { remoteSource: info.remoteSource } : {}),
   ...(info.exchangeId ? { exchangeId: info.exchangeId } : {}),
   ...(info.senderSessionId ? { senderSessionId: info.senderSessionId } : {}),
   ...(info.roomId ? { roomId: info.roomId } : {}),
@@ -257,6 +258,12 @@ export function install(rt) {
     }
     if (record.resumed) return
     const trigger = record.trigger
+    if (trigger?.role === 'federation-report') {
+      await rt.deliver({ toId: bot.id, role: trigger.role, remoteSource: trigger.remoteSource,
+        ...(trigger.senderSessionId && rt.botOf(trigger.senderSessionId) ? { fromId: trigger.senderSessionId } : {}),
+        ...(trigger.exchangeId ? { exchangeId: trigger.exchangeId } : {}), resumed: true, text })
+      return
+    }
     if ((trigger?.role === 'request' || trigger?.role === 'stopped') && trigger.senderSessionId && trigger.audience !== 'user' && rt.botOf(trigger.senderSessionId)) {
       // The sender still waits for this turn's answer, so it goes on under the same exchange.
       await rt.deliver({ fromId: trigger.senderSessionId, toId: bot.id, role: trigger.role, ...(trigger.exchangeId ? { exchangeId: trigger.exchangeId } : {}), ...(trigger.senderRoomId ? { fromRoomId: trigger.senderRoomId } : {}), resumed: true, text })

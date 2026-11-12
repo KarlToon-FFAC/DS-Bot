@@ -1,3 +1,4 @@
+import {BotAvailabilityNotice} from './communication-presence.js'
 import {createElement as h,useEffect,useLayoutEffect,useRef,useState} from 'react'
 import {createPortal} from 'react-dom'
 import {CommunicationAvatar} from './communication-profile.js'
@@ -28,10 +29,10 @@ export function CompactBotList({people,request,attribute='data-recipient-id'}) {
   },[open])
   const avatar=(person,size)=>h(CommunicationAvatar,{person,request,allowed:person.avatarAllowed!==false,size})
   return h('span',{className:'bt-comm-bot-list'},people.slice(0,2).map(person=>h('span',{key:person.principalId,className:'bt-comm-bot-chip',[attribute]:person.principalId,
-    title:`${person.displayName}${person.receivingReason?' · '+t(person.receivingReason):''}`},avatar(person,18),h('span',null,person.displayName))),
+    title:`${person.displayName}${person.receivingReason?' · '+t(person.receivingReason):''}`},avatar(person,18),h('span',null,person.displayName,h(BotAvailabilityNotice,{person})))),
     people.length>2?h('button',{ref:trigger,type:'button',className:'bt-comm-bot-more','aria-label':t('View all {count} Bots',{count:people.length}),'aria-expanded':open,'aria-haspopup':'dialog',
       onMouseEnter:enter,onMouseLeave:leave,onClick:()=>{clearTimeout(timer.current);if(pinned)close();else{setPinned(true);setOpen(true)}}},t('{count} Bots in total',{count:people.length})):null,
     open&&position&&people.length>2?createPortal(h('section',{ref:popup,className:'bt-comm-bot-popover',role:'dialog','aria-label':t('All Bot recipients'),style:position,onMouseEnter:()=>clearTimeout(timer.current),onMouseLeave:leave},
       h('header',null,h('strong',null,t('{count} Bots in total',{count:people.length})),h('button',{type:'button','aria-label':t('Close Bot list'),onClick:close},'×')),
-      h('ul',null,people.map(person=>h('li',{key:person.principalId,[attribute]:person.principalId},avatar(person,24),h('span',null,person.displayName,person.receivingReason?h('small',null,t(person.receivingReason)):null))))),trigger.current?.closest('dialog')??trigger.current?.closest('.bt-comm-frame')??document.body):null)
+      h('ul',null,people.map(person=>h('li',{key:person.principalId,[attribute]:person.principalId},avatar(person,24),h('span',null,person.displayName,h(BotAvailabilityNotice,{person}),person.receivingReason?h('small',null,t(person.receivingReason)):null))))),trigger.current?.closest('dialog')??trigger.current?.closest('.bt-comm-frame')??document.body):null)
 }

@@ -47,6 +47,14 @@ var ZH = {
   "All Bot recipients": "全部 Bot 接收对象",
   "Close Bot list": "关闭 Bot 列表",
   "Bot working or replying": "Bot 工作或回复中",
+  "No accessible local Chief matches this identity. Use list_local_chiefs; Hub publication is not required.": "找不到可接收汇报的本地 Chief，请使用 list_local_chiefs 获取；不要求 Chief 发布到 Hub。",
+  "The local report outcome is uncertain. Check the local Chief conversation before sending another report.": "本地汇报的投递结果尚未确认，请先检查 Chief 的本地对话，避免重复汇报。",
+  "No model configured": "未配置模型",
+  "Model unavailable": "模型不可用",
+  "Model credential missing": "未配置模型密钥",
+  "This Bot has no model selected. Its owner must select a model in local Bot settings; pending messages will resume automatically.": "此 Bot 尚未选择模型，请所属用户在本地 Bot 设置中选择；待处理消息将在恢复后自动继续。",
+  "This Bot has no available model. Its owner must check local model and provider settings; pending messages will resume automatically.": "此 Bot 没有可用模型，请所属用户检查本地模型和服务商设置；待处理消息将在恢复后自动继续。",
+  "This Bot is missing a model credential. Its owner must configure it locally; pending messages will resume automatically.": "此 Bot 缺少模型密钥，请所属用户在本地配置；待处理消息将在恢复后自动继续。",
   "Bot online": "Bot 在线",
   "Bot offline": "Bot 离线",
   "Bot status unknown": "Bot 状态未知",
@@ -12480,6 +12488,11 @@ var communicationDescriptions = {
   INVALID_AVATAR: "The avatar image is invalid or unsupported. Refresh its current revision or choose a valid PNG, JPEG, WebP or GIF image.",
   GROUP_PROFILES_CAPABILITY_REQUIRED: "Update the Hub to use group avatars and group collaboration identities. Other communication remains available.",
   INVALID_GROUP_IDENTITY: "Use a group identity description of up to 4000 characters; multiple paragraphs are supported.",
+  LOCAL_CHIEF_UNAVAILABLE: "No accessible local Chief matches this identity. Use list_local_chiefs; Hub publication is not required.",
+  LOCAL_REPORT_UNCONFIRMED: "The local report outcome is uncertain. Check the local Chief conversation before sending another report.",
+  MODEL_NOT_CONFIGURED: "This Bot has no model selected. Its owner must select a model in local Bot settings; pending messages will resume automatically.",
+  MODEL_UNAVAILABLE: "This Bot has no available model. Its owner must check local model and provider settings; pending messages will resume automatically.",
+  MODEL_CREDENTIAL_MISSING: "This Bot is missing a model credential. Its owner must configure it locally; pending messages will resume automatically.",
   INVALID_AVATAR_RESPONSE: "The Hub returned an invalid avatar image or chunk. Refresh contacts and check that client and Hub are updated.",
   INVALID_AVATAR_CHUNK: "The Hub rejected the avatar chunk request. Update the client and Hub to matching versions.",
   INVALID_AVATAR_REVISION: "Use the current avatar imageRevision from contacts. A generated avatar has no downloadable image.",
@@ -12681,9 +12694,13 @@ var knownCodes = /* @__PURE__ */ new Set([
   "LOCAL_MANAGEMENT_APPROVAL_CANCELLED",
   "LOCAL_MANAGEMENT_APPROVAL_REJECTED",
   "LOCAL_MANAGEMENT_APPROVAL_UNAVAILABLE",
+  "LOCAL_CHIEF_UNAVAILABLE",
+  "LOCAL_REPORT_UNCONFIRMED",
   "LOCAL_USER_AUTHORIZATION_REQUIRED",
   "MEMBERSHIP_REVOKED",
   "MESSAGE_ID_CONFLICT",
+  "MODEL_NOT_CONFIGURED",
+  "MODEL_CREDENTIAL_MISSING",
   "MODEL_UNAVAILABLE",
   "NOT_A_MEMBER",
   "OPERATION_ID_REQUIRED",
@@ -22047,6 +22064,13 @@ function listedOpener({ list, open, refresh, current }) {
   };
 }
 
+// src/shared/communication-availability.js
+var modelAvailabilityLabels = {
+  MODEL_NOT_CONFIGURED: "No model configured",
+  MODEL_UNAVAILABLE: "Model unavailable",
+  MODEL_CREDENTIAL_MISSING: "Model credential missing"
+};
+
 // src/client/communication-presence.js
 var import_react56 = require("react");
 var Presence = (0, import_react56.createContext)(null);
@@ -22071,16 +22095,27 @@ function useCommunicationAvatarPerson(person, preferDirectory = true) {
     ...Object.hasOwn(current, "avatar") ? { avatar: current.avatar } : {}
   };
 }
+function availabilityLabel(person, context) {
+  if (context && !context.known) return null;
+  const value = context?.people.get(person.principalId) ?? person;
+  if (person.retired || value.retired || value.connected !== true) return null;
+  return modelAvailabilityLabels[value.availabilityError] ?? null;
+}
+function BotAvailabilityNotice({ person }) {
+  const label = availabilityLabel(person, (0, import_react56.useContext)(Presence));
+  return label ? (0, import_react56.createElement)("small", { className: "bt-comm-reference", "data-bot-unavailable": person.principalId }, " · " + t(label)) : null;
+}
 function presenceState(person, context) {
   if (context && !context.known) return "unknown";
   const value = context?.people.get(person.principalId) ?? person;
   if (person.retired || value.retired || value.connected === false) return "offline";
+  if (availabilityLabel(person, context)) return "unavailable";
   if (value.connected !== true || value.working === null) return "unknown";
   return value.working === true ? "working" : "online";
 }
 function BotPresenceBadge({ person }) {
-  const status = presenceState(person, (0, import_react56.useContext)(Presence));
-  const label = t(status === "working" ? "Bot working or replying" : status === "online" ? "Bot online" : status === "offline" ? "Bot offline" : "Bot status unknown");
+  const context = (0, import_react56.useContext)(Presence), status = presenceState(person, context);
+  const label = t(availabilityLabel(person, context) ?? (status === "working" ? "Bot working or replying" : status === "online" ? "Bot online" : status === "offline" ? "Bot offline" : "Bot status unknown"));
   return (0, import_react56.createElement)("span", { className: "bt-comm-presence", "data-bot-status": status, role: "img", "aria-label": label, title: label });
 }
 
@@ -22134,6 +22169,7 @@ function contactLabels(contacts) {
 }
 function deliveryPhase(delivery) {
   if (delivery.revoked) return "Revoked";
+  if (!delivery.aiAccepted && modelAvailabilityLabels[delivery.availabilityError]) return modelAvailabilityLabels[delivery.availabilityError];
   if (delivery.updateRead) return "Update read into task";
   if (delivery.inputUpdate && delivery.targetStored) return "Update stored; awaiting model step";
   if (delivery.aiAccepted) return "Bot admitted";
@@ -22755,7 +22791,7 @@ function MentionPerson({ person, members, request }) {
     "span",
     { className: "bt-comm-mention-person" },
     (0, import_react60.createElement)(CommunicationAvatar, { person, request, size: 24 }),
-    (0, import_react60.createElement)("span", { className: "bt-comm-mention-name" }, person.all ? t("All Bots") : person.displayName ?? person.principalId),
+    (0, import_react60.createElement)("span", { className: "bt-comm-mention-name" }, person.all ? t("All Bots") : person.displayName ?? person.principalId, (0, import_react60.createElement)(BotAvailabilityNotice, { person })),
     person.kind === "bot" ? (0, import_react60.createElement)("span", { className: "bt-comm-mention-owner" }, " - ", owner?.displayName ?? t("Owner information unavailable")) : null
   );
 }
@@ -22829,7 +22865,7 @@ function CompactBotList({ people, request, attribute = "data-recipient-id" }) {
       className: "bt-comm-bot-chip",
       [attribute]: person.principalId,
       title: `${person.displayName}${person.receivingReason ? " · " + t(person.receivingReason) : ""}`
-    }, avatar(person, 18), (0, import_react61.createElement)("span", null, person.displayName))),
+    }, avatar(person, 18), (0, import_react61.createElement)("span", null, person.displayName, (0, import_react61.createElement)(BotAvailabilityNotice, { person })))),
     people.length > 2 ? (0, import_react61.createElement)("button", {
       ref: trigger,
       type: "button",
@@ -22852,7 +22888,7 @@ function CompactBotList({ people, request, attribute = "data-recipient-id" }) {
       "section",
       { ref: popup, className: "bt-comm-bot-popover", role: "dialog", "aria-label": t("All Bot recipients"), style: position, onMouseEnter: () => clearTimeout(timer.current), onMouseLeave: leave },
       (0, import_react61.createElement)("header", null, (0, import_react61.createElement)("strong", null, t("{count} Bots in total", { count: people.length })), (0, import_react61.createElement)("button", { type: "button", "aria-label": t("Close Bot list"), onClick: close }, "×")),
-      (0, import_react61.createElement)("ul", null, people.map((person) => (0, import_react61.createElement)("li", { key: person.principalId, [attribute]: person.principalId }, avatar(person, 24), (0, import_react61.createElement)("span", null, person.displayName, person.receivingReason ? (0, import_react61.createElement)("small", null, t(person.receivingReason)) : null))))
+      (0, import_react61.createElement)("ul", null, people.map((person) => (0, import_react61.createElement)("li", { key: person.principalId, [attribute]: person.principalId }, avatar(person, 24), (0, import_react61.createElement)("span", null, person.displayName, (0, import_react61.createElement)(BotAvailabilityNotice, { person }), person.receivingReason ? (0, import_react61.createElement)("small", null, t(person.receivingReason)) : null))))
     ), trigger.current?.closest("dialog") ?? trigger.current?.closest(".bt-comm-frame") ?? document.body) : null
   );
 }
@@ -23007,6 +23043,7 @@ function ContactDirectory({ contacts, relations, humanPrincipalId, instanceId, r
       "span",
       null,
       (0, import_react64.createElement)("strong", null, labels.get(person.principalId) ?? person.displayName ?? person.principalId),
+      (0, import_react64.createElement)(BotAvailabilityNotice, { person }),
       person.publicProfile?.headline ? (0, import_react64.createElement)("span", { className: "bt-comm-directory-headline" }, person.publicProfile.headline) : null,
       (0, import_react64.createElement)(
         "small",
@@ -23857,6 +23894,7 @@ function ParticipantInformation({ person, people, request, conversationId, membe
     "section",
     { className: "bt-comm-participant-profile" },
     personLabel(person),
+    (0, import_react72.createElement)(BotAvailabilityNotice, { person }),
     (0, import_react72.createElement)("p", null, t(person.retired ? "Bot no longer exists" : roleLabel(person.role ?? "member"))),
     person.kind === "bot" ? (0, import_react72.createElement)(
       "div",
@@ -25817,7 +25855,7 @@ function GroupSettings({ member, contacts, operation, pendingSettings, pendingIn
     return (0, import_react81.createElement)(
       "div",
       { key: person.principalId, className: "bt-comm-member-row", "data-principal-id": person.principalId },
-      (0, import_react81.createElement)("span", { className: "bt-comm-member-name", title: person.displayName }, personLabel(person, true), person.groupIdentity ? (0, import_react81.createElement)("small", { className: "bt-comm-reference", title: person.groupIdentity }, " · " + [...person.groupIdentity].slice(0, 24).join("") + (person.groupIdentity.length > 24 ? "…" : "")) : null),
+      (0, import_react81.createElement)("span", { className: "bt-comm-member-name", title: person.displayName }, personLabel(person, true), (0, import_react81.createElement)(BotAvailabilityNotice, { person }), person.groupIdentity ? (0, import_react81.createElement)("small", { className: "bt-comm-reference", title: person.groupIdentity }, " · " + [...person.groupIdentity].slice(0, 24).join("") + (person.groupIdentity.length > 24 ? "…" : "")) : null),
       (0, import_react81.createElement)(
         "div",
         { className: "bt-comm-member-actions" },

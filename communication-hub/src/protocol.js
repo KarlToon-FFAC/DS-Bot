@@ -3,7 +3,7 @@ import { normalizeAttachments, ATTACHMENT_CAPABILITY } from './attachments.js'
 
 export const PROTOCOL = 'dsbot-communication/1'
 export const CAPABILITIES = ['text', 'markdown', 'mentions', 'group', 'dm', 'reply', 'history', 'group-policy', 'membership-epoch', 'explicit-bot-activation', 'bot-input-updates']
-export const HUB_CAPABILITIES = [...CAPABILITIES, 'bounded-bot-collaboration', 'principal-avatars', 'principal-publication', 'bot-publication-generations', 'public-profiles', 'published-contact-scope', 'contact-consent-v2', 'bot-work-events', 'state-invalidation', 'local-user-intent', 'proactive-bot-roots', 'explicit-bot-dialogue', 'multi-bot-default-receivers', 'group-progress-collection','directed-group-replies','reply-mention-union', 'bot-presence', 'group-profiles', ATTACHMENT_CAPABILITY]
+export const HUB_CAPABILITIES = [...CAPABILITIES, 'bounded-bot-collaboration', 'principal-avatars', 'principal-publication', 'bot-publication-generations', 'public-profiles', 'published-contact-scope', 'contact-consent-v2', 'bot-work-events', 'state-invalidation', 'local-user-intent', 'proactive-bot-roots', 'explicit-bot-dialogue', 'multi-bot-default-receivers', 'group-progress-collection','directed-group-replies','reply-mention-union', 'bot-presence', 'bot-model-status', 'bot-reply-activation', 'group-profiles', ATTACHMENT_CAPABILITY]
 export const DEFAULT_LIMITS = { maxTextBytes: 65536, maxEnvelopeBytes: 131072, maxMembers: 64, maxPendingDeliveries: 10000,
   maxPrincipals: 64, maxMembershipsPerInstance: 64, maxPendingInvitesPerInstance: 64, maxCausalDepth: 8, maxAiDeliveriesPerRoot: 32 }
 
@@ -82,6 +82,7 @@ export function normalizeMessage(input, author, limits) {
       && !input.causationDeliveryId && !input.responseToDeliveryId && !input.updateForMessageId, 'INVALID_CAUSATION_GRANT')
     identifier(intent.principalId); identifier(intent.intentId)
   }
+  requireThat(input.replyActivation===undefined||author.kind==='bot'&&['implicit','collect'].includes(input.replyActivation),'INVALID_REQUEST')
   requireThat(['causality','rootMessageId','parentMessageId','depth','dispatchSuppressed'].every(key => !Object.hasOwn(input,key)), 'INVALID_CAUSALITY')
   if (input.updateForMessageId !== undefined) {
     identifier(input.updateForMessageId); identifier(input.updateRecipientPrincipalId)
@@ -92,6 +93,7 @@ export function normalizeMessage(input, author, limits) {
   if (input.membershipEpoch !== undefined) identifier(input.membershipEpoch)
   return { protocol: PROTOCOL, type: 'message.publish', messageId: input.messageId, conversationId: input.conversationId,
     author, clientCreatedAt: input.clientCreatedAt, content: { format: input.content.format, text: input.content.text }, mentions,
+    ...(input.replyActivation===undefined?{}:{replyActivation:input.replyActivation}),
     ...(activationTargets === undefined ? {} : { activationTargets }),
     ...(attachments.length ? { attachments } : {}),
     ...(input.updateForMessageId ? { updateForMessageId: input.updateForMessageId, updateRecipientPrincipalId: input.updateRecipientPrincipalId } : {}),

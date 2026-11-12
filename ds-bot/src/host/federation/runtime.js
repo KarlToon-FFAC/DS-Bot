@@ -1,3 +1,4 @@
+import {communicationModel,communicationModelStates} from './model-availability.js'
 import {checkCommunicationCompletion,communicationDraft} from './turn-completion.js'
 import {searchHistory} from './history-search.js'
 import { groupRoutingPayload, usesDefaultBotList, MULTI_BOT_ROUTING_CAPABILITY } from '../../shared/communication-routing.js'
@@ -267,6 +268,7 @@ export class CommunicationRuntime {
     const member = this.queue.memberships().find(item => item.conversationId === binding.conversationId
       && item.principalId === binding.recipientPrincipalId && item.membershipEpoch === binding.membershipEpoch)
     return communicationPrompt(bot, binding, member, { ...(this.relationshipContexts?.get(binding.id) ?? this.conversations.get(binding.conversationId)),
+      botReplyActivation:this.transport?.welcome?.capabilities?.includes('bot-reply-activation')===true,
       localUserPrincipalId: this.human.principalId, remoteWorkApproval: this.settings.remoteWorkApproval ?? 'inherit', workToolNames: this.workToolNames?.get(binding.id) ?? [], localMemory: this.localMemoryFor(binding), relationshipMemory: this.relationshipMemoryFor(binding) })
   }
   async relationshipContext(principalId, input) {
@@ -485,7 +487,9 @@ export class CommunicationRuntime {
       const active = agent ? agent.status !== 'idle' : this.presenceTurns?.has(id)
       if (active && published.has(owner.recipientPrincipalId)) working.add(owner.recipientPrincipalId)
     }
-    await this.transport.request('presence.update', { workingBotPrincipalIds: [...working].sort() })
+    this.modelAvailability=await communicationModelStates(this)
+    await this.transport.request('presence.update', { workingBotPrincipalIds: [...working].sort(),
+      ...(this.transport.welcome?.capabilities?.includes('bot-model-status')?{unavailableBotModels:[...this.modelAvailability].filter(([,reason])=>reason).map(([principalId,reason])=>({principalId,reason}))}:{}) })
   }
   async refreshConversation(conversationId) {
     const member = this.queue.memberships().filter(item => item.conversationId === conversationId).sort((a,b) => Number(Boolean(a.retired)) - Number(Boolean(b.retired)) || Number(b.principalId === this.human.principalId) - Number(a.principalId === this.human.principalId))[0]
@@ -499,7 +503,7 @@ export class CommunicationRuntime {
       this.profileRefreshedAt.set(conversationId, Date.now())
     }
   }
-  message(principalId, conversationId, { text, mentions = [], activationTargets = [], replyToMessageId = null, responseToDeliveryId, causationDeliveryId, localUserIntent, membershipEpoch, messageId = randomUUID(), clientCreatedAt = new Date().toISOString(), attachments, files, updateForMessageId, updateRecipientPrincipalId, inputUpdateIds } = {}) {
+  message(principalId, conversationId, { text, mentions = [], activationTargets = [], replyToMessageId = null, responseToDeliveryId, causationDeliveryId, localUserIntent, membershipEpoch, messageId = randomUUID(), clientCreatedAt = new Date().toISOString(), attachments, files, replyActivation, updateForMessageId, updateRecipientPrincipalId, inputUpdateIds } = {}) {
     const lifetime = this.conversations?.get(conversationId)
     if (this.queue?.isRetiredBot?.(principalId) || lifetime?.kind === 'dm' && lifetime.members.some(person => person.retired)) fail('BOT_RETIRED')
     if (files) fail('UNSUPPORTED_CONTENT')
@@ -517,6 +521,7 @@ export class CommunicationRuntime {
     if (!bot && all && (!members || info.membershipVersion !== this.member(principalId, conversationId, membershipEpoch).membershipVersion)) fail('AUTHORIZATION_PENDING')
     return { protocol: PROTOCOL, type: 'message.publish', messageId, conversationId,
       author: { principalId, homeInstanceId: this.queue.instanceId, kind: principalId.startsWith('human:') ? 'human' : 'bot' },
+      ...(bot&&info?.kind==='group'&&this.transport?.welcome?.capabilities?.includes('bot-reply-activation')?{replyActivation:replyActivation??'implicit'}:{}),
       clientCreatedAt, content: { format: 'markdown', text },
       ...(admitted.length ? { attachments:admitted } : {}),
       ...(updateForMessageId ? { updateForMessageId, updateRecipientPrincipalId } : {}),
@@ -660,7 +665,7 @@ export class CommunicationRuntime {
     let requestMessageId=input.requestMessageId
     if(!requestMessageId){
       if(!Array.isArray(input.activationTargets)||!input.activationTargets.length)fail('INVALID_REQUEST')
-      const sent=await this.sendBot(actor,{conversationId,text:input.text,activationTargets:input.activationTargets,continueReply:true},{...exec,explicitReply:true})
+      const sent=await this.sendBot(actor,{conversationId,text:input.text,activationTargets:input.activationTargets,continueReply:true,replyActivation:'collect'},{...exec,explicitReply:true})
       requestMessageId=sent.messageId
     }
     const deadline=Date.now()+waitSeconds*1000
@@ -775,7 +780,7 @@ export class CommunicationRuntime {
       presenceFresh: Boolean(this.transport.lastSynchronizedAt && Date.now() - Date.parse(this.transport.lastSynchronizedAt) < 15000),
       managementRevision: this.managementRevision ?? 0, transport: this.transport.diagnostics?.() ?? null,
       compatibility: this.transport.compatibility, managementUrl, managementAvailable: managementUrl !== null,
-      lastConnectedAt: this.lastConnectedAt ?? null, error: this.transportError ?? this.lastError ?? null, avatarError: this.avatarError ?? null, contacts: this.contacts,
+      lastConnectedAt: this.lastConnectedAt ?? null, error: this.transportError ?? this.lastError ?? null, avatarError: this.avatarError ?? null, contacts: this.contacts.map(person=>this.modelAvailability?.has(person.principalId)?{...person,availabilityError:this.modelAvailability.get(person.principalId)}:person),
       limits: this.queue.limits, workApprovals: CommunicationRuntime.prototype.workApprovals.call(this),
       localBots: [...this.bots.values()].map(bot => ({ principalId: bot.principalId, displayName: this.rt.botOf(bot.localRef)?.name ?? bot.displayName })),
       conversations: memberships.map(member => ({ ...member, cachedWatermark:this.queue.cursor(member.conversationId,member.principalId,member.membershipEpoch),info: this.conversations.get(member.conversationId) ?? null,
@@ -829,8 +834,8 @@ export class CommunicationRuntime {
     return this.queue.setConversationArchived(input.conversationId, input.archived)
   }
   async ensureSession(binding, bot, { fresh = false } = {}) {
-    const ref = await this.rt.desiredModel(bot)
-    if (!ref) fail('MODEL_UNAVAILABLE')
+    const {ref,error}=await communicationModel(this.rt,bot)
+    if(error)fail(error)
     const cwd = await botWorkDirectory(this.rt, bot)
     if (binding.sessionIds.length && !fresh) {
       const resolved = await this.ctx.sessionController.resolveAgent(binding.sessionIds.at(-1))

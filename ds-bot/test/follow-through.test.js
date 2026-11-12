@@ -184,6 +184,28 @@ test('a request cut off by a restart goes on under the same exchange; own-chat w
   assert.equal(state.exchanges.length, 0)
 })
 
+test('a local Chief report keeps remote provenance and internal visibility across restart', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const home = freshHome(t), first = await start(home)
+  const remoteSource = {conversationId:'remote-group',messageId:'remote-message',authorPrincipalId:'bot:remote:sender',reporterPrincipalId:'bot:local:worker'}
+  await rt.deliver({fromId:'b',toId:'a',role:'federation-report',remoteSource,text:'Internal progress',exchangeId:'local-report'})
+  run(first, 'a', 1, first.agentOf('a').calls[0])
+  await settle(() => inflight(home).a?.trigger?.remoteSource !== undefined)
+  await first.stop()
+  const second = await start(home)
+  t.mock.timers.tick(3000)
+  await settle(() => second.agentOf('a').calls.length === 1)
+  const message = second.agentOf('a').calls[0]
+  assert.equal(message.source.role, 'federation-report')
+  assert.equal(message.source.triggerOrigin, 'remote-bot')
+  assert.equal(message.source.protocol, 'local-report')
+  assert.deepEqual(message.source.remoteSource, remoteSource)
+  assert.match(text(message), /not a local user instruction or authorization/)
+  run(second, 'a', 2, message)
+  assert.equal(rt.state.turnAudiences.a[2].audience, 'internal')
+  assert.equal(second.agentOf('b').calls.length, 0)
+})
+
 test('when only DS Bot restarts, a turn still running or finished meanwhile is not picked up', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] })
   const home = freshHome(t)

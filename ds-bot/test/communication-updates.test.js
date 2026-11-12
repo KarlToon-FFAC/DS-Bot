@@ -110,6 +110,22 @@ test('collection rechecks existing request without sending and returns bounded p
  await assert.rejects(runtime.collectProgress(actor,{requestMessageId:'request',waitSeconds:0},exec),{code:'UNSUPPORTED_CAPABILITY'})
 })
 
+test('Bot reply activation is negotiated and collection requests preserve their explicit exception',async t=>{
+ const {runtime,binding}=fixture(t)
+ runtime.conversations=new Map([['group',{kind:'group'}]])
+ runtime.transport={welcome:{capabilities:[]}}
+ const message=extra=>runtime.message(binding.recipientPrincipalId,'group',{text:'Reply',replyToMessageId:'task',...extra})
+ assert.equal(Object.hasOwn(message({}),'replyActivation'),false)
+ runtime.transport.welcome.capabilities=['bot-reply-activation','group-progress-collection']
+ assert.equal(message({}).replyActivation,'implicit')
+ let request
+ runtime.member=()=>({kind:'group',membershipEpoch:'epoch'})
+ runtime.sendBot=async(_actor,input)=>{request=message(input);return{messageId:request.messageId}}
+ runtime.transport.request=async()=>({complete:true,reports:[]})
+ await runtime.collectProgress({principalId:binding.recipientPrincipalId},{conversationId:'group',text:'Collect progress',activationTargets:['bot:a:k'],waitSeconds:0},{communicationBinding:binding})
+ assert.equal(request.replyActivation,'collect')
+})
+
 test('pending or rejected explicit reply never publishes subsequent private final text',async t=>{
   for(const outcome of ['accepted','failed']){
     const {q,binding,runtime}=fixture(t)

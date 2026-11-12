@@ -216,7 +216,7 @@ export class HubManagement {
       LEFT JOIN principal_publication pub ON pub.principal_id=p.id
       WHERE (p.kind='human' OR coalesce(pub.published,1)=1) AND NOT EXISTS(SELECT 1 FROM hub_instance_departures d WHERE d.instance_id=p.instance_id) ORDER BY p.id`).all()
       .map(person => ({ ...person, trusted: person.trusted === 1, published: this.store.isPublished(person.principalId),
-        avatar: this.store.avatarOf(person.principalId), connected: this.isInstanceConnected?.(person.homeInstanceId) === true }))
+        avatar: this.store.avatarOf(person.principalId), ...this.store.presenceOf?.(person), connected: this.isInstanceConnected?.(person.homeInstanceId) === true }))
     return this.store.participantProfiles(rows)
   }
   participantAvatar(input) {

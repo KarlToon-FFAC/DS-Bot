@@ -1,3 +1,5 @@
+import {CommunicationQueue} from '../src/host/federation/queue-store.js'
+import {localChiefs,reportToLocalChief} from '../src/host/federation/local-reports.js'
 import assert from 'node:assert/strict'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -1235,4 +1237,35 @@ test('without file storage a message past 20,000 characters is not sent', async 
   // 20,000 characters still go as they are.
   await tool('message_bot', { to: 'Writer', message: 'x'.repeat(20_000) }, 'a')
   assert.equal(agentOf('b').calls.length, 1)
+})
+
+
+test('a published worker can report to an unpublished local Chief without automatic remote replies or user-visible mirroring',async t=>{
+ const {agents,agentOf,emit,stop}=await start(team());t.after(stop)
+ const queue=new CommunicationQueue(':memory:',{instanceId:'local'});t.after(()=>queue.close())
+ const principal=queue.localPrincipal('bot','b','Writer'),binding={id:'remote-binding',localBotRef:'b',recipientPrincipalId:principal.principalId,conversationId:'remote-group',membershipEpoch:'epoch'}
+ queue.applyMemberships({memberships:[{principalId:principal.principalId,conversationId:'remote-group',membershipEpoch:'epoch',active:true,joinSeq:1,watermark:1}]})
+ queue.receive({deliveryId:'input',messageId:'request',conversationId:'remote-group',recipientPrincipalId:principal.principalId,membershipEpoch:'epoch',routingVersion:1,ai:true,notify:false,event:{type:'message',eventId:'request',conversationId:'remote-group',conversationSeq:1,message:{messageId:'request',author:{principalId:'human:remote:owner'}}}})
+ const comm={rt,queue,owners:new Map([['remote-session',binding]]),authorize:async()=>{}}
+ const exec={agent:{id:'remote-session'},communicationBinding:binding,communicationSource:'verified tool call',communicationCausation:{causationDeliveryId:'input',replyToMessageId:'request'}}
+ assert.deepEqual(localChiefs(comm,exec),[{id:'a',name:'Chief',role:'Boss'}])
+ const report=await reportToLocalChief(comm,{chiefId:'a',text:'Remote task completed; please review locally.'},exec)
+ assert.equal(report.status,'delivered');assert.equal(report.automaticRemoteReply,false)
+ const chief=agentOf('a'),message=chief.calls.at(-1)[1]
+ assert.equal(message.source.triggerOrigin,'remote-bot');assert.equal(message.source.protocol,'local-report')
+ assert.equal(message.source.remoteSource.authorPrincipalId,'human:remote:owner')
+ assert.match(message.content[0].text,/not a local user instruction or authorization/)
+ const repeat=await reportToLocalChief(comm,{chiefId:'a',text:'Remote task completed; please review locally.'},{...exec,communicationSource:'another tool call'})
+ assert.deepEqual(repeat,report);assert.equal(chief.calls.length,1)
+ await assert.rejects(reportToLocalChief(comm,{chiefId:'a',text:'changed report'},exec),{code:'OPERATION_ID_CONFLICT'})
+ emit('a','turn/start',{turn:1});emit('a','user/message',{source:message.source,content:message.content})
+ emit('a','assistant/message',{message:{role:'assistant',content:[{type:'text',text:'Internal review for the local team only.'}]}})
+ emit('a','turn/end',{turn:1,reason:{kind:'completed'}})
+ await delay(20)
+ assert.equal(rt.state.turnAudiences.a[1].audience,'internal')
+ assert.equal(rt.state.turnAudiences.a[1].triggerOrigin,'remote-bot')
+ assert.ok(rt.state.exchangeTurns.a.includes(1))
+ assert.equal(agents.get('b')?.calls.length??0,0,'no automatic return to the worker or remote conversation')
+ await assert.rejects(reportToLocalChief(comm,{chiefId:'b',text:'Self report'},exec),{code:'LOCAL_CHIEF_UNAVAILABLE'})
+ await assert.rejects(reportToLocalChief(comm,{chiefId:'a',text:'Bad provenance'},{...exec,communicationCausation:{causationDeliveryId:'forged',replyToMessageId:'request'}}),{code:'COMMUNICATION_INPUT_SOURCE_UNKNOWN'})
 })

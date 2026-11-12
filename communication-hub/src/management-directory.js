@@ -52,6 +52,7 @@ function directoryRow(person) {
   control.setAttribute('aria-pressed', String(person.principalId === directorySelection));
   const body = document.createElement('span'); body.className = 'directory-row-copy';
   body.append(text('strong', person.displayName || person.principalId), text('span', publicProfile(person).headline || (person.kind === 'bot' ? 'Bot' : 'Human')));
+  const unavailable = {MODEL_NOT_CONFIGURED:'No model configured',MODEL_UNAVAILABLE:'Model unavailable',MODEL_CREDENTIAL_MISSING:'Model credential missing'}[person.availabilityError]; if (person.connected && unavailable) body.append(text('small',unavailable));
   const source = text('small', person.instanceLabel || person.homeInstanceId || ''); source.className = 'directory-source'; body.append(source);
   const marker = text('span', ''); marker.className = 'directory-presence'; marker.dataset.connected = String(person.connected); marker.title = directoryConnection(person);
   control.append(directoryAvatar(person), body, marker); control.onclick = () => directorySelect(person); row.append(control); return row;

@@ -1,3 +1,4 @@
+import {BotAvailabilityNotice} from './communication-presence.js'
 import { createElement as h, Fragment, useState } from 'react'
 import { CommunicationAvatar } from './communication-profile.js'
 import { contactLabels } from './communication-model.js'
@@ -42,6 +43,7 @@ export function ContactDirectory({ contacts, relations, humanPrincipalId, instan
   const connection = person => t(connectionKnown === false || typeof person.connected !== 'boolean' ? 'Connection status unavailable' : person.connected ? 'Connected to Hub' : 'Disconnected from Hub')
   const identity = (person, allowed = true) => h('span', { className: 'bt-comm-directory-person' }, h(CommunicationAvatar, { person, request, allowed, size: 36 }),
     h('span', null, h('strong', null, labels.get(person.principalId) ?? person.displayName ?? person.principalId),
+      h(BotAvailabilityNotice,{person}),
       person.publicProfile?.headline ? h('span', { className: 'bt-comm-directory-headline' }, person.publicProfile.headline) : null,
       h('small', null, t(person.kind === 'bot' ? 'Bot' : 'Human'), person.homeInstanceId && instanceId ? ` · ${t(person.homeInstanceId === instanceId ? 'Local' : 'Remote')}` : '',
         person.instanceLabel ? ` · ${person.instanceLabel}` : '', ' · ', connection(person))))

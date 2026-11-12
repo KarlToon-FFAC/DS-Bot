@@ -8,7 +8,7 @@ import { build } from 'esbuild'
 
 const harness = createRequire(join(process.env.DSH_HARNESS, 'package.json'))
 const { JSDOM } = harness('jsdom'), React = harness('react'), { act } = React
-const { outputFiles } = await build({ stdin: { contents: "export * from './communication-presence.js'; export * from './communication-group-profile.js'; export * from './communication-work-approvals.js'; export * from './communication-group.js'; export * from './communication-live.js'; export * from './communication-contacts.js'; export * from './communication-profile.js'; export * from './communication-onboarding.js'; export * from './communication-list.js'; export { BotMark } from './mark.js'", resolveDir: fileURLToPath(new URL('../src/client/', import.meta.url)), loader: 'js' },
+const { outputFiles } = await build({ stdin: { contents: "export * from './communication-presence.js'; export * from './communication-bot-list.js'; export * from './communication-mention-person.js'; export * from './communication-group-profile.js'; export * from './communication-work-approvals.js'; export * from './communication-group.js'; export * from './communication-live.js'; export * from './communication-contacts.js'; export * from './communication-profile.js'; export * from './communication-onboarding.js'; export * from './communication-list.js'; export { BotMark } from './mark.js'", resolveDir: fileURLToPath(new URL('../src/client/', import.meta.url)), loader: 'js' },
   bundle: true, platform: 'browser', format: 'cjs', external: ['react', 'react-dom', '@deepseek-ai/dsh-client-ui-primitives'], write: false })
 
 async function ui(check) {
@@ -687,5 +687,23 @@ test('group profile dialogs submit independent identity and avatar changes with 
   await click('Reset avatar');await click('Save')
   assert.equal(calls[1].endpoint,'set-group-avatar');assert.equal(calls[1].image,null);assert.equal(calls[1].expectedVersion,4)
   assert.ok(doc.querySelector('dialog'))
+ })
+})
+
+
+test('missing model is visible in shared badges, mention candidates and recipient lists and clears on recovery',async()=>{
+ await ui(async({exports:api,doc,render})=>{
+  const person={principalId:'bot:b:worker',kind:'bot',displayName:'Worker',connected:true,working:false}
+  const draw=async(reason,connected=true)=>render(React.createElement(api.CommunicationPresence,{state:{connected,presenceFresh:true,contacts:[{...person,availabilityError:reason}],conversations:[]}},
+   React.createElement('div',null,React.createElement(api.MentionPerson,{person,members:[],request:async()=>({})}),React.createElement(api.CompactBotList,{people:[person],request:async()=>({})}))))
+  await draw('MODEL_NOT_CONFIGURED')
+  assert.ok(doc.querySelectorAll('[data-bot-status="unavailable"]').length>=2)
+  assert.match(doc.body.textContent,/No model configured/)
+  await draw('MODEL_CREDENTIAL_MISSING');assert.match(doc.body.textContent,/Model credential missing/)
+  await draw(null);assert.equal(doc.querySelectorAll('[data-bot-unavailable]').length,0)
+  assert.ok(doc.querySelector('[data-bot-status="online"]'))
+  await draw('MODEL_NOT_CONFIGURED',false)
+  assert.equal(doc.querySelectorAll('[data-bot-unavailable]').length,0)
+  assert.ok(doc.querySelector('[data-bot-status="unknown"]'))
  })
 })

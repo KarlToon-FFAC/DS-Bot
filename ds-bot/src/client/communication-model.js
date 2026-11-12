@@ -1,3 +1,4 @@
+import {modelAvailabilityLabels} from '../shared/communication-availability.js'
 import { t } from './i18n.js'
 import { mentionSpans } from '../shared/mentions.js'
 import { normalizeIpAddress } from '../shared/ip-address.js'
@@ -19,6 +20,7 @@ export function contactLabels(contacts) {
 
 export function deliveryPhase(delivery) {
   if (delivery.revoked) return 'Revoked'
+  if(!delivery.aiAccepted&&modelAvailabilityLabels[delivery.availabilityError])return modelAvailabilityLabels[delivery.availabilityError]
   if (delivery.updateRead) return 'Update read into task'
   if (delivery.inputUpdate && delivery.targetStored) return 'Update stored; awaiting model step'
   if (delivery.aiAccepted) return 'Bot admitted'

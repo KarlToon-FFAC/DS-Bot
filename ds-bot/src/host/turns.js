@@ -116,12 +116,13 @@ export function install(rt) {
   // The retry goes where the turn's trigger came from: a group round's waiter or a
   // Bot's request keeps its exchange; anything else is a nudge in the Bot's own chat.
   const retryTurn = (id, info, note, text) => {
-    const keeps = info !== undefined && (info.role === 'room' || expectsReply(info))
+    const keeps = info !== undefined && (info.role === 'room' || info.role === 'federation-report' || expectsReply(info))
     return rt.deliver({
       ...(keeps && info.senderSessionId ? { fromId: info.senderSessionId } : {}),
       toId: rt.selfOf(id),
       sessionId: id,
       role: keeps ? info.role : 'retry',
+      ...(keeps && info.remoteSource ? {remoteSource:info.remoteSource} : {}),
       ...(keeps && info.roomId ? { roomId: info.roomId } : {}),
       ...(keeps && info.exchangeId ? { exchangeId: info.exchangeId } : {}),
       ...(info?.work ? { work: info.work } : {}),
@@ -311,7 +312,7 @@ export function install(rt) {
   // A request whose audience is the user is answered in the recipient's own chat: that
   // turn stays visible there and its reply is not routed back to the sender.
   const answersUser = info => info.role === 'request' && info.audience === 'user'
-  const userAudience = info => answersUser(info) || info.protocol === 'reply' && info.rootAudience === 'user' || info.work && state.works?.[info.work]?.audience === 'user'
+  const userAudience = info => info.role!=='federation-report' && (answersUser(info) || info.protocol === 'reply' && info.rootAudience === 'user' || info.work && state.works?.[info.work]?.audience === 'user')
   // Roles whose turn owes the sender a reply: a 'stopped' notice asks the Bot to
   // acknowledge, exactly like a request.
   const expectsReply = info => info.role === 'request' || info.role === 'stopped'
@@ -365,14 +366,14 @@ export function install(rt) {
     entry.info = info
     const audience = userAudience(info) ? 'user' : 'internal'
     const ledger = (state.turnAudiences ??= {})[sessionId] ??= {}
-    ledger[entry.turn] = {audience,triggerOrigin:'local-bot',protocol:info.role === 'reply' ? 'reply' : 'request'}
+    ledger[entry.turn] = {audience,triggerOrigin:info.remoteSource?'remote-bot':'local-bot',protocol:info.role==='federation-report'?'local-report':info.role === 'reply' ? 'reply' : 'request'}
     void rt.save().catch(() => {})
     // A turn that was stopped for a part switch brings its joined requests along.
     if (Array.isArray(info.joined) && info.joined.length > 0) {
       entry.joined = info.joined.filter(item => item?.info !== undefined && item.info !== null)
     }
     if (rt.groupOwners.has(sessionId)) return
-    if ((expectsReply(info) && !answersUser(info)) || (info.role === 'reply' && audience !== 'user') || info.role === 'room' || (info.role === 'handoff' && info.resume !== true)) {
+    if (info.role==='federation-report' || (expectsReply(info) && !answersUser(info)) || (info.role === 'reply' && audience !== 'user') || info.role === 'room' || (info.role === 'handoff' && info.resume !== true)) {
       markExchangeTurn(sessionId, entry.turn)
     }
   }
@@ -650,7 +651,7 @@ export function install(rt) {
         const opened = entry.opened === true
         if (entry.turn !== undefined && opened && source?.kind === SOURCE_KIND && !bare(source) && !userAudience(source)) {
           const ledger = (state.turnAudiences ??= {})[id] ??= {}
-          ledger[entry.turn] = {...ledger[entry.turn],audience:'internal',triggerOrigin:'local-bot',mixed:true}
+          ledger[entry.turn] = {...ledger[entry.turn],audience:'internal',triggerOrigin:source.remoteSource||ledger[entry.turn]?.triggerOrigin==='remote-bot'?'remote-bot':'local-bot',mixed:true}
           void rt.save().catch(() => {})
         }
         if (entry.turn !== undefined && !bare(source)
