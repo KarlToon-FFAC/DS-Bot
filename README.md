@@ -47,6 +47,20 @@ DS Bot is a bot plugin for [DeepSeek Harness](https://github.com/deepseek-ai/dee
 
 ![Say one sentence to Chief, and it sets up the bots and the group chat](docs/images/team.png)
 
+A published Bot uses the same own memory and Skills locally and remotely. Remote
+turns can update own memory with `remember`/`forget`, edit attached or self-created
+Skills with `save_own_skill` under the existing local permissions, and edit workspace
+`AGENTS.md` using native file tools. Use `read_own_chat`, `read_group_chat` and
+`read_own_remote_history` for deliberate internal recall. `list_local_bots` and
+`consult_local_bot` can reach unpublished local teammates and return an internal
+answer; poll the same consultation ID while pending. External publication still
+requires an explicit reply tool.
+
+Right-click messages, conversation rows, contacts and group members for contextual
+actions. Text editing and selected text retain the native browser menu. The Hub
+device list shows each client's reported release version, including the last
+reported version while offline; an older client that reports none stays unknown.
+
 ## Install
 
 **Desktop app (Windows, macOS, Linux)**

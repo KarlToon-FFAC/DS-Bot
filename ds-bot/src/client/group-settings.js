@@ -85,7 +85,7 @@ export function GroupSettingsForm({ room, roster, actions, run, onDeleted }) {
       members.map((member) => {
         const leads = room.admin === member.id
         return h('div', { key: member.id, className: 'bt-set-row bt-bs-row bt-gs-member' },
-          h('button', { type: 'button', className: 'bt-gs-who', title: t("Open {name}'s chat", { name: member.name }), onClick: () => openBot(member.id) },
+          h('button', { type: 'button', className: 'bt-gs-who', onContextMenu:event=>{event.preventDefault();actions.openMenu({kind:'bot',id:member.id,x:event.clientX,y:event.clientY})}, title: t("Open {name}'s chat", { name: member.name }), onClick: () => openBot(member.id) },
             h(BotAvatar, { bot: member, size: 26, main: isMainOf(roster, member.id), admin: leads, live: false }),
             h('span', { className: 'bt-row-title' }, member.name),
             leads ? h('span', { className: 'bt-tag' }, t('Admin')) : null),

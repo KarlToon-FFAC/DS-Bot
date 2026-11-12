@@ -1,3 +1,4 @@
+import { useActionMenu } from './action-menu.js'
 import {GroupProfileDialog} from './communication-group-profile.js'
 import {CommunicationPresence,BotAvailabilityNotice} from './communication-presence.js'
 import {MentionPerson} from './communication-mention-person.js'
@@ -92,6 +93,7 @@ function ReferenceQuote({ conversationId, membershipEpoch, messageId, request, l
 }
 
 function GroupSettings({ member, contacts, operation, pendingSettings, pendingInvites, operationPending, busy, humanId, btn, personLabel, chooseContact, request, onInspect, columnWidth, onColumnWidth, multipleAvailable, groupProfilesAvailable }) {
+  const context = useActionMenu()
   const [open, setOpen] = useState(false), [base, setBase] = useState(null), [draft, setDraft] = useState(null)
   const [saving, setSaving] = useState(false), [failure, setFailure] = useState(''), [pending, setPending] = useState(null)
   const [newOwner, setNewOwner] = useState(''), [action, setAction] = useState(null)
@@ -140,7 +142,7 @@ function GroupSettings({ member, contacts, operation, pendingSettings, pendingIn
         const editable = isOwner || member.role === 'admin' && person.role === 'member'
         const policy = values.policies[person.principalId] ?? { role: person.role, speakingMode: person.speakingMode }
         const changePolicy = change => edit({ policies: { ...values.policies, [person.principalId]: { ...policy, ...change } } })
-    return h('div', {key:person.principalId,className:'bt-comm-member-row','data-principal-id':person.principalId},
+    return h('div', {key:person.principalId,className:'bt-comm-member-row','data-principal-id':person.principalId,onContextMenu:event=>context.open(event,[{label:t('View participant profile'),run:anchor=>onInspect([person.principalId],anchor)},{label:t('Copy identity'),run:()=>navigator.clipboard.writeText(person.principalId)},canManage&&groupProfilesAvailable&&{label:t('Edit group identity'),disabled:busy||saving,run:()=>setAction({kind:'identity',target:person})},canManage&&person.role!=='owner'&&(isOwner||person.role==='member')&&person.principalId!==humanId&&{label:t('Remove from group'),danger:true,disabled:busy||saving,run:()=>setAction({kind:'remove',target:person})}])},
       h('span',{className:'bt-comm-member-name',title:person.displayName},personLabel(person,true),h(BotAvailabilityNotice,{person}),person.groupIdentity?h('small',{className:'bt-comm-reference',title:person.groupIdentity},' · '+[...person.groupIdentity].slice(0,24).join('')+(person.groupIdentity.length>24?'…':'')):null),
       h('div',{className:'bt-comm-member-actions'},
         editable && isOwner && person.role!=='owner' ? h('select',{'aria-label':t('Group role'),title:t('Group role'),value:policy.role,onChange:event=>changePolicy({role:event.target.value})},h('option',{value:'member'},t('Member')),h('option',{value:'admin'},t('Admin'))) : h('span',{className:'bt-comm-role'},t(roleLabel(person.role))),
@@ -153,7 +155,7 @@ function GroupSettings({ member, contacts, operation, pendingSettings, pendingIn
   const settingsActions = h('div', {className:'bt-comm-operation-buttons'},canManage?btn('Invite participant',()=>setAction({kind:'invite'}),{disabled:busy||saving}):null,
     canManage?h('button',{type:'button',onClick:()=>{void saveSettings()},disabled:saving||!dirty&&!pending||invalidRouting&&!pending,'data-dirty':dirty,'aria-label':t('Save group settings')},t('Save')):null,
     h('button',{type:'button',onClick:close,'aria-label':t('Close member settings')},t('Close')))
-  return h('details', { id: 'bt-comm-members', className: 'bt-comm-members', open },
+  return h('details', { id: 'bt-comm-members', className: 'bt-comm-members', open },context.menu,
     h('summary', { ref: summary, tabIndex: open ? 0 : -1, onClick: event => { event.preventDefault(); if (open) close(); else begin() } }, t('Group members and receiving rules')),
     open ? h(CommunicationResizeHandle,{side:'right',width:columnWidth,onChange:onColumnWidth}) : null,
     open ? h('section',{className:'bt-comm-members-panel',role:'complementary','aria-label':t('Group members and receiving rules')},
@@ -320,7 +322,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
     const foreignDialog = node => !frame.current?.contains(node) && node?.closest?.('dialog,[role="dialog"],[role="alertdialog"]')
     const retain = event => { if (!foreignDialog(event.target) && !(activePanel ? chooser.current : frame.current)?.contains(event.target)) focusDefault() }
     const keys = event => {
-      if (foreignDialog(event.target)) return
+      if (foreignDialog(event.target) || event.target.closest?.('[data-action-menu]')) return
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault(); event.stopImmediatePropagation(); setNewMenuOpen(false); setSearchQuery(''); setSearchCursor(0); chooserTrigger.current = document.activeElement; setActivePanel('search'); return
       }
@@ -581,9 +583,9 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
         null),
       h('div', { className: 'bt-comm-section-title' }, t('Conversations'), h('span', null, visibleConversations.length)),
       h('nav', { 'aria-label': t('Communication conversations') }, visibleConversations.map(item =>
-        h(ConversationRow, { key: item.conversationId, conversation: item, humanId: state.humanPrincipalId, labels, request, selected: item.conversationId === selected, onChoose: choose, disabled: busy }))),
+        h(ConversationRow, { key: item.conversationId, conversation: item, humanId: state.humanPrincipalId, labels, request, selected: item.conversationId === selected, onChoose: choose, disabled: busy, onArchive:item.kind==='dm'?item=>act(()=>archiveConversation(item,true)):undefined }))),
       visibleBotConversations.length ? h(Fragment, null, h('div', { className: 'bt-comm-section-title' }, t('Bot private chats'), h('span', null, visibleBotConversations.length)),
-        h('nav', { 'aria-label': t('Bot private chats') }, visibleBotConversations.map(item => h(ConversationRow, { key: item.conversationId, conversation: item, humanId: item.viewerPrincipalId, labels, request, selected: item.conversationId === selected, onChoose: choose, disabled: busy })))) : null,
+        h('nav', { 'aria-label': t('Bot private chats') }, visibleBotConversations.map(item => h(ConversationRow, { key: item.conversationId, conversation: item, humanId: item.viewerPrincipalId, labels, request, selected: item.conversationId === selected, onChoose: choose, disabled: busy, onArchive:item.kind==='dm'?item=>act(()=>archiveConversation(item,true)):undefined })))) : null,
       archivedConversations.length ? btn('Archived private chats', event => showPanel('archives', event.currentTarget), {className:'bt-comm-archive-entry',children:h(Fragment,null,h(ArchiveIcon),t('Archived private chats'),h('span',{className:'bt-comm-count'},archivedConversations.length))}) : null,
       !visibleConversations.length && !visibleBotConversations.length ? h('p', { className: 'bt-comm-reference' }, t('Your cross-device conversations will appear here.')) : null,
       invitations.length ? h('div', { className: 'bt-comm-invitations' }, h('h3', null, t('Invitations')), invitations.map(item =>

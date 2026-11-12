@@ -2064,3 +2064,22 @@ test('Contacts and group views follow profile names, avatar changes and removals
   assert.equal(doc.querySelector('.bt-comm-modal').getAttribute('aria-label'),'Manage contacts')
  })
 })
+
+test('remote message context menu uses the visible reply action, stays inside the viewport and preserves native text editing',async()=>{
+ const snapshot={...state(),conversations:[membership]},message={messageId:'context-message',author:{principalId:'bot:b:worker',kind:'bot',displayName:'Worker'},content:{text:'Context action text',format:'markdown'}}
+ await pane({snapshot,history:[{type:'message',eventId:'context-message',conversationSeq:1,serverAcceptedAt:'2026-11-12T10:00:00Z',message}]},async({doc,dom,click})=>{
+  await click('Shared group')
+  const article=doc.querySelector('[data-message-id="context-message"]')
+  assert.ok(article)
+  await act(async()=>article.dispatchEvent(new dom.window.MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:1010,clientY:740})))
+  const menu=doc.querySelector('[role="menu"]');assert.ok(menu)
+  assert.ok([...menu.querySelectorAll('button')].some(b=>b.textContent==='Copy'))
+  assert.ok([...menu.querySelectorAll('button')].some(b=>b.textContent==='Reply'))
+  await act(async()=>[...menu.querySelectorAll('button')].find(b=>b.textContent==='Reply').click())
+  assert.ok(doc.querySelector('.bt-comm-thread-composer'))
+  const native=doc.querySelector('textarea')
+  const event=new dom.window.MouseEvent('contextmenu',{bubbles:true,cancelable:true})
+  await act(async()=>native.dispatchEvent(event))
+  assert.equal(event.defaultPrevented,false)
+ })
+})

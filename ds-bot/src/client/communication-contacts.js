@@ -1,3 +1,4 @@
+import { useActionMenu } from './action-menu.js'
 import {BotAvailabilityNotice} from './communication-presence.js'
 import { createElement as h, Fragment, useState } from 'react'
 import { CommunicationAvatar } from './communication-profile.js'
@@ -34,6 +35,7 @@ export function contactMatches(person, query, { label } = {}) {
 }
 
 export function ContactDirectory({ contacts, relations, humanPrincipalId, instanceId, request, busy, onMessage, onRemove, onUsePublished, connectionKnown }) {
+  const context = useActionMenu()
   const [query, setQuery] = useState(''), [view, setView] = useState('all')
   const labels = contactLabels(contacts), { people, otherBots } = contactDirectory(contacts, relations, humanPrincipalId, instanceId)
   const needle = query.trim(), matches = person => contactMatches(person, query, { label: labels.get(person.principalId) })
@@ -54,17 +56,17 @@ export function ContactDirectory({ contacts, relations, humanPrincipalId, instan
       value.summary ? h('p', { className: 'bt-comm-directory-summary' }, value.summary) : null,
       expertise.length ? h('ul', { className: 'bt-comm-directory-skills', 'aria-label': t('Expertise') }, expertise.map(item => h('li', { key: item }, item))) : null) : null
   }
-  const botRow = person => h('li', { key: person.principalId, 'data-principal-id': person.principalId, className: 'bt-comm-directory-bot' },
+  const botRow = person => h('li', { key: person.principalId, 'data-principal-id': person.principalId, className: 'bt-comm-directory-bot',onContextMenu:event=>context.open(event,[onMessage&&{label:t('Message'),disabled:busy,run:()=>onMessage(person.principalId)},{label:t('Copy identity'),run:()=>navigator.clipboard.writeText(person.principalId)}]) },
     h('div', { className: 'bt-comm-directory-row' }, identity(person), message(person)), profile(person))
   const filter = (value, label, count) => h('button', { key: value, type: 'button', 'aria-pressed': view === value, 'aria-label': t(label), onClick: () => setView(value) }, t(label), h('span', { className: 'bt-comm-count', 'aria-hidden': true }, count))
   const showPeople = view !== 'bots', showBots = view !== 'contacts'
-  return h('section', { className: 'bt-comm-directory bt-comm-directory-list', 'aria-label': t('Connected contacts') },
+  return h('section', { className: 'bt-comm-directory bt-comm-directory-list', 'aria-label': t('Connected contacts') },context.menu,
     h('div', { className: 'bt-comm-directory-heading' }, h('h3', null, t('Connected contacts')), h('span', { className: 'bt-comm-count' }, people.length)),
     h('label', { className: 'bt-comm-field' }, t('Find a contact or Bot'), h('input', { type: 'search', value: query, 'aria-label': t('Find a contact or Bot'), onChange: event => setQuery(event.target.value) })),
     h('div', { className: 'bt-comm-directory-filters', role: 'group', 'aria-label': t('Directory filter') }, filter('all', 'All', people.length + allBots.length), filter('contacts', 'Contacts', people.length), filter('bots', 'Published Bots', allBots.length)),
     showPeople ? shown.map(({ person, available, bots: ownedBots, relation }) => {
       const visibleBots = matches(person) ? ownedBots : ownedBots.filter(matches)
-      return h('article', { key: person.principalId, className: 'bt-comm-contact-card', 'data-contact-id': person.principalId },
+      return h('article', { key: person.principalId, className: 'bt-comm-contact-card', 'data-contact-id': person.principalId,onContextMenu:event=>context.open(event,[available&&onMessage&&{label:t('Message'),disabled:busy,run:()=>onMessage(person.principalId)},{label:t('Copy identity'),run:()=>navigator.clipboard.writeText(person.principalId)},relation&&onRemove&&{label:t('Remove contact'),danger:true,disabled:busy,run:()=>onRemove(relation)}]) },
         h('div', { className: 'bt-comm-contact-card-head' }, identity(person, available), available ? message(person) : null),
         !available ? h('p', { className: 'bt-comm-reference', role: 'status' }, t('Contact details are not available in the current directory.')) : null,
         relation?.botSharing === 'none' ? h('p', { className: 'bt-comm-error', role: 'status' }, t('Your contact scope shares no Bots. Group invitations and Bot DMs may be blocked.'), onUsePublished ? h('button', {type:'button',disabled:busy,onClick:()=>onUsePublished(relation)},t('Use published Bots for this contact')) : null) : null,

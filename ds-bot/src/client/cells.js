@@ -1,3 +1,4 @@
+import { useActionMenu } from './action-menu.js'
 import { createElement as h, Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { MarkdownText, writeClipboard } from './dsh-primitives.js'
@@ -81,6 +82,7 @@ const foldArea = (body, code, codeHead, actions) => (code === undefined ? body
     h(FoldCodeCopy, { code, actions })))
 
 function Bubble({ text, index, roster, selfId, actions, sessionId, msgKey, mentions, fold, picked, live, lead, whole }) {
+  const context = useActionMenu()
   const { shown, folded, control, code, codeHead } = useFold(text, { limit: fold, whole, live })
   const key = msgKey ? `${msgKey}:${index}` : undefined
   const body = shown === '' ? null : h(MarkdownText, { text: linkMentions(shown, roster.bots, selfId), streaming: live, labels: mdLabels(), variant: 'compact', fileMentions: mentions })
@@ -94,7 +96,7 @@ function Bubble({ text, index, roster, selfId, actions, sessionId, msgKey, menti
     setToolsOpen(value => !value)
   }
   const area = foldArea(body, code, codeHead, actions)
-  return h('div', { ref: row, className: 'bt-msg', onClick: tapTools },
+  return h('div', { ref: row, className: 'bt-msg', onClick: tapTools, onContextMenu: event => context.open(event, [{label:t('Copy'),run:()=>navigator.clipboard.writeText(text)}, !live && sessionId && {label:t('Reply'),run:()=>actions.quote(sessionId,text)}]) }, context.menu,
     h('div', { className: 'bt-msg-line' },
       lead,
       h('div', { className: 'bt-bubble', 'data-folded': folded || undefined },
@@ -324,7 +326,7 @@ function SpeakerHead({ bot, time }) {
 // and how long it took, bubble. The flat layout moves the avatar from beside the last
 // bubble to the head of the name row, so the text below runs the whole width.
 function GroupMessage({ bot, text, texts = [text], room, roster, actions, msgKey, useUi, whole, time, duration }) {
-  const lead = h('button', { type: 'button', className: 'bt-lead', 'aria-label': t("Open {name}'s chat", { name: bot.name }), onClick: () => actions.openSession(bot.id) },
+  const lead = h('button', { type: 'button', className: 'bt-lead', onContextMenu: event => {event.preventDefault();event.stopPropagation();actions.openMenu({kind:'bot',id:bot.id,x:event.clientX,y:event.clientY})}, 'aria-label': t("Open {name}'s chat", { name: bot.name }), onClick: () => actions.openSession(bot.id) },
     h(BotMark, { bot, size: 22 }))
   const flat = layoutOf(roster.prefs) === 'flat'
   const took = Number.isFinite(duration) ? elapsedLabel(duration) : undefined
@@ -421,10 +423,11 @@ const scrollParent = (node) => {
 }
 
 function EarlierUser({ row, actions }) {
+  const context = useActionMenu()
   const { shown, folded, control, code, codeHead } = useFold(row.text ?? '')
   const body = row.text && shown !== '' ? h(MarkdownText, { text: shown, labels: mdLabels(), variant: 'compact' }) : null
   const area = foldArea(body, code, codeHead, actions)
-  return h('div', { className: 'bt-urow' }, h('div', { className: 'bt-ububble', 'data-folded': folded || undefined },
+  return h('div', { className: 'bt-urow', onContextMenu:event=>context.open(event,[row.text&&{label:t('Copy'),run:()=>navigator.clipboard.writeText(row.text)}]) }, context.menu, h('div', { className: 'bt-ububble', 'data-folded': folded || undefined },
     control ? h('div', { className: 'bt-fold-body' }, area) : area,
     control,
     row.images ? h('span', { className: 'bt-uimages' }, row.images === 1 ? t('1 image') : t('{count} images', { count: row.images })) : null))

@@ -40,6 +40,18 @@ DS Bot 是一个基于 [DeepSeek Harness](https://github.com/deepseek-ai/deepsee
 
 ![和 Chief 说一句话，它就把 bot 和群聊建好](docs/images/team.zh.png)
 
+同一个 Bot 在本地和远程共享自身记忆与 Skill。远程回合可通过
+`remember`/`forget` 修改自身记忆，通过 `save_own_skill` 按原有本地权限
+编辑已挂载或自己创建的 Skill，通过原生文件工具修改工作目录的 `AGENTS.md`。
+`read_own_chat`、`read_group_chat`、`read_own_remote_history` 用于主动检索
+自己的本地对话、已加入的本地群和远程历史。`list_local_bots`、
+`consult_local_bot` 可联系未发布的本地同事并取回内部答复；等待中继续查询
+同一个咨询编号，不重复派单。对外发布仍须显式调用回复工具。
+
+消息、会话列表、联系人和群成员均可右键打开相关操作；输入区和已选中文本
+保留浏览器原生菜单。Hub 设备列表显示各客户端上报的版本，离线时保留上次
+上报值；未上报版本的老客户端显示未知，不影响兼容协议下的通信。
+
 ## 安装
 
 **桌面应用（Windows、macOS、Linux）**

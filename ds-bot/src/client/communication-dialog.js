@@ -18,7 +18,7 @@ export function CommunicationDialog({ open, title, onClose, children, actions, b
     else node.setAttribute('open', '')
     ;(node.querySelector('[data-dialog-cancel]') ?? node.querySelector('button,input,select,textarea') ?? node).focus()
     const keys = event => {
-      if (event.target.closest?.('dialog') !== node) return
+      if (event.target.closest?.('dialog') !== node || event.target.closest?.('[data-action-menu]')) return
       if (event.key === 'Escape') {
         event.preventDefault(); event.stopImmediatePropagation()
         if (!latest.current.busy) latest.current.onClose()

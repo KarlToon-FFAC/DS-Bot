@@ -54,7 +54,7 @@ export function ContextMenu({ menu, roster, actions, leaving = false }) {
       index > 0 ? h('div', { className: 'bt-menu-sep', role: 'separator' }) : null,
       group.map(([label, Icon, run, danger]) => h('button', {
         key: label, type: 'button', role: 'menuitem', className: danger ? 'bt-danger' : undefined,
-        onClick: () => { actions.closeMenu(); void Promise.resolve(run()).catch(error => actions.reportError(error, 'menu')) },
+        onClick: () => { actions.closeMenu(); void Promise.resolve().then(run).catch(error => actions.reportError(error, 'menu')) },
       }, h(Icon), label)))))
 }
 
@@ -92,6 +92,6 @@ function AgentMenu({ menu, roster, actions, leaving }) {
       index > 0 ? h('div', { className: 'bt-menu-sep', role: 'separator' }) : null,
       group.map(([label, Icon, run, danger]) => h('button', {
         key: label, type: 'button', role: 'menuitem', className: danger ? 'bt-danger' : undefined,
-        onClick: () => { actions.closeMenu(); void Promise.resolve(run()).catch(error => console.warn('[ds-bot]', error)) },
+        onClick: () => { actions.closeMenu(); void Promise.resolve().then(run).catch(error => console.warn('[ds-bot]', error)) },
       }, h(Icon), label)))))
 }

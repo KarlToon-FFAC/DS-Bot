@@ -55,7 +55,14 @@ try{
    if(theme==='deepseek')await page.screenshot({path:join(output,'quotes-'+size+'-'+(dark?'dark':'light')+'.png'),animations:'disabled'})
   }
   await page.evaluate(()=>window.fixture.theme('deepseek',true))
-  await page.locator('[data-message-id="message-2"]').getByRole('button',{name:'Reply',exact:true}).click()
+  await page.locator('[data-message-id="message-2"] .bt-comm-body').click({button:'right'})
+  let context=page.locator('[data-action-menu]:not([data-leaving])')
+  await context.waitFor();assert.ok(await context.getByRole('menuitem',{name:'Copy',exact:true}).count())
+  const menuBox=await context.boundingBox();assert.ok(menuBox.x>=0&&menuBox.y>=0&&menuBox.x+menuBox.width<=viewport.width&&menuBox.y+menuBox.height<=viewport.height)
+  await page.keyboard.press('ArrowDown');assert.equal(await context.evaluate(node=>node.contains(document.activeElement)),true)
+  await page.screenshot({path:join(output,'message-context-menu-'+size+'.png'),animations:'disabled'})
+  await context.getByRole('menuitem',{name:'Reply',exact:true}).click()
+
   const original=page.locator('[data-thread-message-id="message-1"] .bt-comm-body'),composer=page.locator('.bt-comm-thread-composer .bt-comm-reference')
   await original.waitFor();await composer.waitFor()
   for(const dark of [false,true]){
@@ -65,6 +72,11 @@ try{
    evidence.cases.push({size,dark,surface:'thread',samples})
    await page.screenshot({path:join(output,'thread-quotes-'+size+'-'+(dark?'dark':'light')+'.png'),animations:'disabled'})
   }
+  await page.locator('[data-thread-message-id="message-1"] .bt-comm-body').click({button:'right'})
+  context=page.locator('[data-action-menu]:not([data-leaving])');await context.waitFor()
+  await page.keyboard.press('Escape');await context.waitFor({state:'hidden'})
+  assert.equal(await page.locator('.bt-comm-thread-popover').count(),1,'Escape dismisses only the menu')
+  evidence.cases.push({size,surface:'message-and-thread-context-menu',keyboard:true,insideViewport:true})
   await page.close();console.log('PASS '+size+' four themes/light-dark: own, received, unavailable, hover, focus, reply chain and composer quotes meet 4.5:1')
  }
  assert.deepEqual(evidence.errors,[]);writeFileSync(join(output,'evidence.json'),JSON.stringify(evidence,null,2))
