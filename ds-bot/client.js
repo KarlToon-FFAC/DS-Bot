@@ -26637,7 +26637,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
     const contact = contacts.find((person) => person.principalId === id);
     return (0, import_react82.createElement)(CommunicationAvatar, { person: contact ?? { principalId: id, displayName: name ?? id, kind: id?.startsWith("bot:") ? "bot" : id?.startsWith("human:") ? "human" : "group" }, request, allowed: Boolean(contact) });
   };
-  const messageAvatar = (id, name) => member?.kind === "group" && [...currentMembers, ...member.info?.formerMembers ?? []].some((person) => person.principalId === id) ? (0, import_react82.createElement)("button", { type: "button", className: "bt-comm-avatar-button", "aria-label": t("View profile of {name}", { name: labels.get(id) ?? name ?? t("Participant") }), onClick: (event) => inspect([id], event.currentTarget) }, avatar(id, name)) : avatar(id, name);
+  const messageAvatar = (id, name) => member?.kind === "group" && [...currentMembers, ...member.info?.formerMembers ?? []].some((person) => person.principalId === id) ? (0, import_react82.createElement)("button", { type: "button", className: "bt-comm-avatar-button", "data-context-action": true, "aria-label": t("View profile of {name}", { name: labels.get(id) ?? name ?? t("Participant") }), onClick: (event) => inspect([id], event.currentTarget) }, avatar(id, name)) : avatar(id, name);
   const identityIcons = (person) => {
     const kind = person.kind ?? (person.principalId?.startsWith("bot:") ? "bot" : "human");
     const instanceId = person.homeInstanceId ?? person.principalId?.split(":")[1];
