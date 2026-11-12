@@ -1,3 +1,4 @@
+import { COMMUNICATION_VERSION } from '../../shared/communication-version.js'
 import { recordPublicationSave } from './publication-state.js'
 import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, sign, randomUUID } from 'node:crypto'
 import { lookup } from 'node:dns/promises'
@@ -138,7 +139,7 @@ export function communicationAuthentication(rtOrCtx, key, hub, { withdrawalOnly 
     if (record.status !== 'approved' || !identifier(hub.instanceId)) fail('COMMUNICATION_NOT_APPROVED')
     const challenge = checkChallenge(await send('enrollment.challenge', { purpose: 'login', instanceId: hub.instanceId, publicKey: record.publicKey }),
       { hubId: hub.hubId, purpose: 'login', instanceId: hub.instanceId })
-    return send('enrollment.prove', { challengeId: challenge.challengeId, signature: signature(record, challenge), capabilities })
+    return send('enrollment.prove', { challengeId: challenge.challengeId, signature: signature(record, challenge), capabilities, clientVersion: COMMUNICATION_VERSION })
   }
 }
 
@@ -496,7 +497,7 @@ export class CommunicationOnboarding {
     const socket=await phase('ENROLLMENT_CONNECT_FAILED',()=>this.connect(hub.url,{allowLoopback:this.allowLoopback,hubId:hub.hubId,trust:record.trust}))
     try{
       const challenge=checkChallenge(await socket.request('enrollment.challenge',{purpose:'login',instanceId:record.instanceId,publicKey:record.publicKey}),{hubId:hub.hubId,purpose:'login',instanceId:record.instanceId})
-      const welcome=await socket.request('enrollment.prove',{challengeId:challenge.challengeId,signature:signature(record,challenge),capabilities:communicationCapabilities()})
+      const welcome=await socket.request('enrollment.prove',{challengeId:challenge.challengeId,signature:signature(record,challenge),capabilities:communicationCapabilities(),clientVersion:COMMUNICATION_VERSION})
       if(welcome.instanceId!==record.instanceId||welcome.hubId!==hub.hubId)fail('INVALID_ENROLLMENT_RESPONSE')
     }finally{socket.close()}
     await credentials.modifyRecord(key,current=>({kind:'grant',payload:{...checkedRecord(current,hub),paused:false,requiresResume:true,version:3}}))

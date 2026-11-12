@@ -699,3 +699,16 @@ test('profile names replace enrollment labels across devices, directories, membe
   store.renameHuman(a.auth,{principalId:a.principalId,displayName:'Third profile'})
   check('Third profile','Admin device alias')
 })
+
+test('device versions are optional authenticated metadata, survive disconnect and never gate compatible releases', t => {
+ const {store,m}=fixture(t)
+ const auth=store.connect('version-client','Version client',CAPABILITIES,'0.3.6')
+ assert.equal(m.instances().find(i=>i.instanceId===auth.instanceId).clientVersion,'0.3.6')
+ assert.equal(m.instances()[0].connected,false)
+ store.connect('version-client','Version client',CAPABILITIES,'9.2.1-T2')
+ assert.equal(m.instances()[0].clientVersion,'9.2.1-T2')
+ store.connect('version-client','Version client',CAPABILITIES)
+ assert.equal(m.instances()[0].clientVersion,null,'a legacy reconnect clears an obsolete version claim')
+ store.connect('version-client','Version client',CAPABILITIES,'<script>')
+ assert.equal(m.instances()[0].clientVersion,null)
+})

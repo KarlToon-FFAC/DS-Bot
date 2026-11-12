@@ -56,6 +56,7 @@ export class HubStore {
       CREATE TABLE IF NOT EXISTS input_updates (message_id TEXT PRIMARY KEY,parent_delivery_id TEXT NOT NULL,recipient_id TEXT NOT NULL,epoch TEXT NOT NULL,read INTEGER NOT NULL DEFAULT 0);
       CREATE TABLE IF NOT EXISTS bot_dispatches (cause_key TEXT NOT NULL,author_id TEXT NOT NULL,target_id TEXT NOT NULL,PRIMARY KEY(cause_key,author_id,target_id));
       `)
+    if (!this.db.prepare('PRAGMA table_info(instances)').all().some(column => column.name === 'client_version')) this.db.exec('ALTER TABLE instances ADD COLUMN client_version TEXT')
     if (!this.db.prepare('PRAGMA table_info(conversations)').all().some(column => column.name === 'default_bots')) this.db.exec('ALTER TABLE conversations ADD COLUMN default_bots TEXT')
     if(version<2)this.transaction(()=>{
       this.db.exec(`ALTER TABLE conversations ADD COLUMN owner_id TEXT;
@@ -107,7 +108,7 @@ export class HubStore {
     try { const result = work(); this.beforeCommit?.(); this.db.exec('COMMIT'); return result }
     catch (error) { this.db.exec('ROLLBACK'); throw error }
   }
-  connect(instanceId, label, capabilities) {
+  connect(instanceId, label, capabilities, clientVersion) {
     identifier(instanceId)
     requireThat(!instanceId.includes(':')&&instanceId.length<=100, 'INVALID_REQUEST')
     requireThat(Array.isArray(capabilities)&&CAPABILITIES.filter(value=>value!=='explicit-bot-activation').every(capability => capabilities.includes(capability)), 'UNSUPPORTED_CAPABILITY')
@@ -116,7 +117,7 @@ export class HubStore {
       requireThat(this.db.prepare('SELECT trusted FROM instances WHERE id=?').get(instanceId)?.trusted!==0,'UNAUTHENTICATED')
       const named = this.db.prepare('SELECT label FROM hub_instance_names WHERE instance_id=?').get(instanceId)
       this.db.prepare('INSERT INTO instances(id,label) VALUES (?,?) ON CONFLICT(id) DO UPDATE SET label=excluded.label').run(instanceId, named?.label ?? String(label ?? instanceId).slice(0,256))
-      this.db.prepare('UPDATE instances SET epoch=epoch+1 WHERE id=?').run(instanceId)
+      this.db.prepare('UPDATE instances SET epoch=epoch+1,client_version=? WHERE id=?').run(typeof clientVersion === 'string' && /^\d+\.\d+\.\d+(?:T\d+|[-+][a-zA-Z0-9.+-]+)?$/.test(clientVersion) && clientVersion.length <= 64 ? clientVersion : null, instanceId)
       this.db.prepare('INSERT INTO instance_features VALUES (?,?) ON CONFLICT(instance_id) DO UPDATE SET attachments=excluded.attachments').run(instanceId, Number(capabilities.includes(ATTACHMENT_CAPABILITY)))
       if(!capabilities.includes(ATTACHMENT_CAPABILITY))requireThat(!this.db.prepare("SELECT 1 FROM memberships m JOIN messages msg ON msg.conversation_id=m.conversation_id JOIN principals p ON p.id=m.principal_id WHERE p.instance_id=? AND m.active=1 AND msg.seq>=m.join_seq AND json_array_length(msg.body,'$.attachments')>0 LIMIT 1").get(instanceId),'ATTACHMENT_CAPABILITY_REQUIRED')
       return { instanceId, epoch: this.db.prepare('SELECT epoch FROM instances WHERE id=?').get(instanceId).epoch,

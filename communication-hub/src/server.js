@@ -138,14 +138,14 @@ export async function startHub({ databasePath, databaseLock, peers, host='127.0.
             enrollmentPurpose=management.challenges.get(frame.payload.challengeId)?.purpose
             const proof=management.prove(socket,frame.payload)
             if(proof.instanceId&&proof.label!==undefined){
-              value=store.connect(proof.instanceId,proof.label,frame.payload.capabilities)
+              value=store.connect(proof.instanceId,proof.label,frame.payload.capabilities,frame.payload.clientVersion)
               auth={instanceId:value.instanceId,epoch:value.epoch}
             }else value=proof
           }else{
           requireThat(frame.type==='hello','UNAUTHENTICATED')
           const peer=allowed.get(frame.payload?.instanceId)
           requireThat(peer&&!management.peer(frame.payload.instanceId)&&typeof frame.payload.credential==='string'&&timingSafeEqual(peer.credentialHash,digest(frame.payload.credential)),'UNAUTHENTICATED')
-          value=store.connect(frame.payload.instanceId,peer.label,frame.payload.capabilities)
+          value=store.connect(frame.payload.instanceId,peer.label,frame.payload.capabilities,frame.payload.clientVersion)
           auth={instanceId:value.instanceId,epoch:value.epoch}
           }
           if(auth){

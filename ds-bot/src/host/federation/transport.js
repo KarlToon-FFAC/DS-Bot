@@ -1,4 +1,4 @@
-import { communicationCompatibility, incompatibleCommunication } from '../../shared/communication-version.js'
+import { COMMUNICATION_VERSION, communicationCompatibility, incompatibleCommunication } from '../../shared/communication-version.js'
 import { usesDefaultBotList, MULTI_BOT_ROUTING_CAPABILITY } from '../../shared/communication-routing.js'
 import { randomUUID } from 'node:crypto'
 import { AsyncLocalStorage } from 'node:async_hooks'
@@ -152,7 +152,7 @@ export class CommunicationTransport {
       const capabilities = communicationCapabilities()
       const welcome = typeof credential?.authenticate === 'function'
         ? await credential.authenticate(send, capabilities)
-        : await send('hello', { instanceId: this.queue.instanceId, credential, capabilities })
+        : await send('hello', { instanceId: this.queue.instanceId, credential, capabilities, clientVersion: COMMUNICATION_VERSION })
       this.assertCurrent(generation, socket)
       handshake = welcome
       this.compatibility = communicationCompatibility(welcome)

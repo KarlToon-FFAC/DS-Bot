@@ -2,6 +2,7 @@ export const devicesMarkup = `<section class="hub-devices" aria-labelledby="devi
 
 export const devicesScript = `
 let deviceRows = [], devicePeople = [], devicePage = 0, selectedDevice, devicePanelSignature, deviceReturnFocus, deviceConfirmation;
+const deviceVersion = i => i.clientVersion ? 'V'+i.clientVersion.replace(/-T([0-9]+)$/, 'T$1') : '版本未上报';
 const deviceStamp = i => JSON.stringify([i.instanceId,i.pairingRevision,i.nameVersion,i.revision,i.trusted,(i.ownedSharedGroups ?? []).map(g => [g.conversationId,g.version]).sort()]);
 function deviceControl(label,run) { const control = text('button',label); control.type = 'button'; control.onclick = run; return control; }
 function openDeviceDialog(dialog) { if (dialog.open) return; if (typeof dialog.showModal === 'function') dialog.showModal(); else dialog.setAttribute('open',''); }
@@ -38,7 +39,7 @@ function renderDeviceDetails() {
   $('device-title').textContent = i.label;
   const connection = text('p',i.connected === true ? '已连接 Hub' : i.connected === false ? '未连接 Hub' : '连接状态未知'); connection.className = 'instance-connection';
   const id = text('code',i.instanceId); id.className = 'device-full-id';
-  pane.replaceChildren(connection,text('p',i.trusted ? '访问已批准' : '访问已撤销'),text('label','实例 ID'),id,form);
+  pane.replaceChildren(connection,text('p','客户端版本：'+deviceVersion(i)+(i.connected ? '' : '（上次连接上报）')),text('p',i.trusted ? '访问已批准' : '访问已撤销'),text('label','实例 ID'),id,form);
   const people = devicePeople.filter(p => p.homeInstanceId === i.instanceId);
   pane.append(text('p',people.filter(p => p.kind === 'human').map(p => p.displayName).join(', ') || '暂无用户资料'));
   const bots = people.filter(p => p.kind === 'bot'); pane.append(text('h3','已发布的 Bot（'+bots.length+'）'));
@@ -52,7 +53,7 @@ function renderDeviceDetails() {
 function renderDevices() {
   const query = $('device-search').value.trim().toLowerCase(), filter = $('device-filter').value;
   const rows = deviceRows.filter(i => (filter === 'all' || filter === 'revoked' && !i.trusted || filter === 'online' && i.connected === true || filter === 'offline' && i.connected === false)
-    && (!query || [i.label,i.instanceId,...devicePeople.filter(p => p.homeInstanceId === i.instanceId).map(p => p.displayName)].join(' ').toLowerCase().includes(query)));
+    && (!query || [i.label,i.instanceId,i.clientVersion,...devicePeople.filter(p => p.homeInstanceId === i.instanceId).map(p => p.displayName)].join(' ').toLowerCase().includes(query)));
   const pages = Math.max(1,Math.ceil(rows.length/25)); devicePage = Math.min(devicePage,pages-1);
   $('device-count').textContent = rows.length+' / '+deviceRows.length+' 台设备 · '+deviceRows.filter(i => i.connected === true).length+' 台已连接';
   $('device-page').textContent = '页码 '+(devicePage+1)+' / '+pages;
@@ -70,7 +71,7 @@ function renderDevices() {
     }
     row.querySelector('strong').textContent = i.label;
     const people = devicePeople.filter(p => p.homeInstanceId === i.instanceId), bots = people.filter(p => p.kind === 'bot'), owners = people.filter(p => p.kind === 'human' && p.displayName !== i.label);
-    const meta = row.querySelector('small'); meta.textContent = i.instanceId.slice(0,12)+' · '+bots.length+' 个 Bot'+(owners.length ? ' · '+owners.map(p => p.displayName).join(', ') : ''); meta.title = i.instanceId;
+    const meta = row.querySelector('small'); meta.textContent = deviceVersion(i)+' · '+i.instanceId.slice(0,12)+' · '+bots.length+' 个 Bot'+(owners.length ? ' · '+owners.map(p => p.displayName).join(', ') : ''); meta.title = i.instanceId+' · '+(i.connected ? '当前连接上报版本' : '上次连接上报版本');
     row.querySelector('.instance-connection').textContent = i.connected === true ? '已连接 Hub' : i.connected === false ? '未连接 Hub' : '连接状态未知';
     row.querySelector('.device-health').lastChild.textContent = i.trusted ? '已批准' : '已撤销';
     row.querySelector('button').setAttribute('aria-label','管理 '+i.label+' ('+i.instanceId+')');
