@@ -519,6 +519,7 @@ const ZH = {
   'Enter to send · Shift+Enter for a new line': 'Enter 发送 · Shift+Enter 换行',
   'Stored means the destination saved the message. Read means a Human opened it. Bot admitted means processing was accepted, not that a reply is complete.': '落盘表示目标端已保存；已读表示人已打开；Bot 入箱表示已接受处理，不代表已经完成回复。',
   "Human": "人",
+  'User{suffix}': '用户{suffix}',
   "Local": "本地",
   "Remote": "远程",
   "Private message": "私聊",

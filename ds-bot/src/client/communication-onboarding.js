@@ -63,8 +63,8 @@ export function hubManagementAddress(value) {
   } catch { return null }
 }
 
-export function AddDevice({ request, displayName = 'Human', revision }) {
-  const [code, setCode] = useState(''), [name, setName] = useState(displayName), [hub, setHub] = useState(null)
+export function AddDevice({ request, displayName, revision }) {
+  const [code, setCode] = useState(''), [name, setName] = useState(() => displayName?.trim() || t('User{suffix}', { suffix: Array.from(crypto.getRandomValues(new Uint8Array(6)), byte => String.fromCharCode(65 + byte % 26)).join('') })), [hub, setHub] = useState(null)
   const [storage, setStorage] = useState(null), [enrollments, setEnrollments] = useState([]), [busy, setBusy] = useState(false), [error, setError] = useState('')
   const [absentHub, setAbsentHub] = useState(null)
   const [uncertainHub, setUncertainHub] = useState(null)

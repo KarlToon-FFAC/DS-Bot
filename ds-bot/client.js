@@ -535,6 +535,7 @@ var ZH = {
   "Enter to send · Shift+Enter for a new line": "Enter 发送 · Shift+Enter 换行",
   "Stored means the destination saved the message. Read means a Human opened it. Bot admitted means processing was accepted, not that a reply is complete.": "落盘表示目标端已保存；已读表示人已打开；Bot 入箱表示已接受处理，不代表已经完成回复。",
   "Human": "人",
+  "User{suffix}": "用户{suffix}",
   "Local": "本地",
   "Remote": "远程",
   "Private message": "私聊",
@@ -23672,8 +23673,8 @@ function hubManagementAddress(value) {
     return null;
   }
 }
-function AddDevice({ request, displayName = "Human", revision }) {
-  const [code, setCode] = (0, import_react70.useState)(""), [name, setName] = (0, import_react70.useState)(displayName), [hub, setHub] = (0, import_react70.useState)(null);
+function AddDevice({ request, displayName, revision }) {
+  const [code, setCode] = (0, import_react70.useState)(""), [name, setName] = (0, import_react70.useState)(() => displayName?.trim() || t("User{suffix}", { suffix: Array.from(crypto.getRandomValues(new Uint8Array(6)), (byte) => String.fromCharCode(65 + byte % 26)).join("") })), [hub, setHub] = (0, import_react70.useState)(null);
   const [storage, setStorage] = (0, import_react70.useState)(null), [enrollments, setEnrollments] = (0, import_react70.useState)([]), [busy, setBusy] = (0, import_react70.useState)(false), [error, setError] = (0, import_react70.useState)("");
   const [absentHub, setAbsentHub] = (0, import_react70.useState)(null);
   const [uncertainHub, setUncertainHub] = (0, import_react70.useState)(null);
@@ -26446,7 +26447,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
             setActivePanel("");
             input.current?.focus();
           }
-        }) : activePanel === "participant" ? (0, import_react79.createElement)("div", { className: "bt-comm-participant-information" }, [...currentMembers, ...member?.info?.formerMembers ?? []].filter((person) => inspectedIds.includes(person.principalId)).map((person) => (0, import_react79.createElement)(ParticipantInformation, { key: person.principalId, person, people: [...currentMembers, ...member?.info?.formerMembers ?? [], ...contacts], request, conversationId: selected, membershipEpoch: member.membershipEpoch, localBotId: member.viewerBotId, roleLabel, personLabel }))) : activePanel === "manage-contacts" ? (0, import_react79.createElement)(ContactManager, { key: scope, request, operation, contacts, connectionKnown: state?.connected === true && !pollError, revision: `${state?.managementRevision ?? ""}:${state?.connected ?? false}`, humanPrincipalId: state?.humanPrincipalId, instanceId: state?.instanceId, onMessage: messageContact, messageBusy: busy }) : activePanel === "profile" ? (0, import_react79.createElement)(HumanProfile, { key: scope, human: contacts.find((person) => person.principalId === state?.humanPrincipalId) ?? { principalId: state?.humanPrincipalId ?? "human:local", displayName: t("You"), kind: "human" }, request, operation }) : activePanel === "pairing" ? (0, import_react79.createElement)(AddDevice, { request, revision: `${team.communicationEnabled}:${team.communicationHubId}:${state?.managementRevision ?? ""}:${state?.connected ?? false}`, displayName: contacts.find((person) => person.principalId === state?.humanPrincipalId)?.displayName ?? t("You") }) : (0, import_react79.createElement)(
+        }) : activePanel === "participant" ? (0, import_react79.createElement)("div", { className: "bt-comm-participant-information" }, [...currentMembers, ...member?.info?.formerMembers ?? []].filter((person) => inspectedIds.includes(person.principalId)).map((person) => (0, import_react79.createElement)(ParticipantInformation, { key: person.principalId, person, people: [...currentMembers, ...member?.info?.formerMembers ?? [], ...contacts], request, conversationId: selected, membershipEpoch: member.membershipEpoch, localBotId: member.viewerBotId, roleLabel, personLabel }))) : activePanel === "manage-contacts" ? (0, import_react79.createElement)(ContactManager, { key: scope, request, operation, contacts, connectionKnown: state?.connected === true && !pollError, revision: `${state?.managementRevision ?? ""}:${state?.connected ?? false}`, humanPrincipalId: state?.humanPrincipalId, instanceId: state?.instanceId, onMessage: messageContact, messageBusy: busy }) : activePanel === "profile" ? (0, import_react79.createElement)(HumanProfile, { key: scope, human: contacts.find((person) => person.principalId === state?.humanPrincipalId) ?? { principalId: state?.humanPrincipalId ?? "human:local", displayName: t("You"), kind: "human" }, request, operation }) : activePanel === "pairing" ? (0, import_react79.createElement)(AddDevice, { request, revision: `${team.communicationEnabled}:${team.communicationHubId}:${state?.managementRevision ?? ""}:${state?.connected ?? false}`, displayName: contacts.find((person) => person.principalId === state?.humanPrincipalId)?.displayName }) : (0, import_react79.createElement)(
           import_react79.Fragment,
           null,
           activePanel === "group" ? (0, import_react79.createElement)("label", { className: "bt-comm-field" }, t("Group name"), (0, import_react79.createElement)("input", { value: title, onChange: (event) => setTitle(event.target.value), "aria-label": t("Group name") })) : null,
