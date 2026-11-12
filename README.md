@@ -39,7 +39,7 @@ identity. Local Bot roles and all Hub membership/permission checks stay unchange
 
 English | [中文](README.zh.md)
 
-Remote groups can select **multiple default receiving Bots** from the group sidebar. Use **Choose receiving Bots**, confirm the multi-selection, then Save. Unmentioned user messages go to every selected Bot; explicit mentions/replies keep their targets, and Bot answers do not activate the default list. Multiple defaults require an updated Hub.
+Remote groups can select **multiple default receiving Bots** from the group sidebar. Use **Choose receiving Bots**, confirm the multi-selection to apply it immediately. Member roles and speaking permissions also apply on change; the sidebar scrolls independently on small screens and shows save status with retry on failure. Unmentioned user messages go to every selected Bot; explicit mentions/replies keep their targets, and Bot answers do not activate the default list. Multiple defaults require an updated Hub.
 
 ![version](https://img.shields.io/badge/version-V0.3.7-blue) ![DSH](https://img.shields.io/badge/DSH-0.2.1--rc.4-4D6BFE) ![license](https://img.shields.io/badge/license-Apache_2.0-green)
 

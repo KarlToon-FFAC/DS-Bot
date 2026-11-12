@@ -22,7 +22,7 @@ import { createPortal } from 'react-dom'
 import { createSource } from './sources.js'
 import { t } from './i18n.js'
 import { useLinger, useViewport, viewBottom, SPRING_TAP } from './motion.js'
-import { contactLabels, conversationTitle, contactsByAddress, mentionQuery, mentionChoices, insertMention, retainedMentions, groupSettingsValues, groupSettingsChanges, referenceExcerpt, communicationLogEvents, communicationScope } from './communication-model.js'
+import { contactLabels, conversationTitle, contactsByAddress, mentionQuery, mentionChoices, insertMention, retainedMentions, groupSettingsValues, groupSettingsChanges, applyGroupSettingsChanges, referenceExcerpt, communicationLogEvents, communicationScope } from './communication-model.js'
 import { AddDevice, ContactManager, OwnRemoteProfile } from './communication-onboarding.js'
 import { CommunicationAvatar, HumanProfile, syncAvatarDirectory } from './communication-profile.js'
 import { CommunicationMessage, BotWorkStatus } from './communication-message.js'
@@ -92,68 +92,100 @@ function ReferenceQuote({ conversationId, membershipEpoch, messageId, request, l
       h('span', { className: 'bt-comm-quote-text' }, referenceExcerpt(source.content.text))) : t(unavailable ? 'Earlier message unavailable' : 'Loading reference…'))
 }
 
-function GroupSettings({ member, contacts, operation, pendingSettings, pendingInvites, operationPending, busy, humanId, btn, personLabel, chooseContact, request, onInspect, columnWidth, onColumnWidth, multipleAvailable, groupProfilesAvailable }) {
+function GroupSettings({ member, contacts, operation, pendingSettings, pendingInvites, busy, humanId, btn, personLabel, chooseContact, request, onInspect, columnWidth, onColumnWidth, multipleAvailable, groupProfilesAvailable }) {
   const context = useActionMenu()
   const [open, setOpen] = useState(false), [base, setBase] = useState(null), [draft, setDraft] = useState(null)
   const [saving, setSaving] = useState(false), [failure, setFailure] = useState(''), [pending, setPending] = useState(null)
   const [newOwner, setNewOwner] = useState(''), [action, setAction] = useState(null)
   const [membersExpanded, setMembersExpanded] = useState(true)
-  const generation = useRef(0), revision = useRef(0), summary = useRef(null)
+  const [composing, setComposing] = useState(false), [saved, setSaved] = useState(false)
+  const generation = useRef(0), flight = useRef(false), delay = useRef(0), summary = useRef(null)
   useEffect(() => () => { generation.current += 1 }, [])
-  useEffect(() => { if (pending && !pendingSettings(member.conversationId)) setPending(null) }, [operationPending, member.membershipVersion])
   const isOwner = member.role === 'owner', canManage = ['owner', 'admin'].includes(member.role)
   const members = member.info?.members ?? []
-  const close = () => { generation.current += 1; setOpen(false); setAction(null); setBase(null); setDraft(null); setFailure(''); setSaving(false); setPending(null); summary.current?.closest('main')?.querySelector('.bt-comm-title-pill')?.focus() }
-  const begin = () => {
-    generation.current += 1; revision.current = 0
-    const values = groupSettingsValues(member)
-    setBase({ values, expectedVersion: member.membershipVersion, membershipEpoch: member.membershipEpoch })
-    setDraft(values); setFailure(''); setPending(pendingSettings(member.conversationId)); setSaving(false); setOpen(true)
-  }
-  const edit = values => { revision.current += 1; setDraft(current => ({ ...current, ...values })) }
+  const values = draft ?? groupSettingsValues(member)
+  const receivingIds = values.routing.defaultBotPrincipalIds
+  const invalidRouting = values.routing.mode === 'admin' && !receivingIds.length
   const changes = base && draft ? groupSettingsChanges(base.values, draft) : {}
   const dirty = Object.keys(changes).length > 0
+  const validChanges = { ...changes }
+  if (invalidRouting) delete validChanges.routing
+  if (!values.title.trim() || composing) delete validChanges.title
+  const canSave = Object.keys(validChanges).length > 0
+  const blocked = saving || dirty || Boolean(pending)
+  const reset = () => {
+    const current = groupSettingsValues(member)
+    setBase({ values: current, expectedVersion: member.membershipVersion, membershipEpoch: member.membershipEpoch })
+    setDraft(current); setFailure(''); setSaved(false)
+  }
+  const close = () => {
+    if (!failure && !pending) void saveSettings()
+    setOpen(false); setAction(null)
+    summary.current?.closest('main')?.querySelector('.bt-comm-title-pill')?.focus()
+  }
+  const begin = () => {
+    if (!base) {
+      reset()
+      const previous = pendingSettings(member.conversationId)
+      setPending(previous)
+      if (previous) setDraft(applyGroupSettingsChanges(groupSettingsValues(member), previous))
+    }
+    setOpen(true)
+  }
+  const edit = values => {
+    delay.current = Object.hasOwn(values, 'title') ? 450 : 0
+    setSaved(false); setDraft(current => ({ ...current, ...values }))
+  }
   const saveSettings = async () => {
-    if (saving || !base || !draft || !dirty && !pending) return
-    const token = generation.current, editedAt = revision.current
-    const intent = pending ?? { conversationId: member.conversationId, membershipEpoch: base.membershipEpoch, expectedVersion: base.expectedVersion, ...changes }
-    setSaving(true); setFailure('')
+    if (flight.current || !canManage || !base || !draft || !canSave && !pending) return
+    const token = generation.current
+    const intent = pending ?? { conversationId: member.conversationId, membershipEpoch: base.membershipEpoch, expectedVersion: base.expectedVersion, ...validChanges }
+    const submitted = applyGroupSettingsChanges(base.values, intent)
+    flight.current = true; setSaving(true); setFailure('')
     try {
       const result = await operation('save-settings', intent)
       if (token !== generation.current) return
       if (result.status === 'queued') { setPending(intent); return }
       const canonical = result.refreshedState?.conversations?.find(item => item.conversationId === member.conversationId && item.membershipVersion === result.membershipVersion)
-      const savedValues = canonical ? groupSettingsValues(canonical) : {
-        ...base.values, ...(intent.title === undefined ? {} : { title: intent.title }), ...(intent.routing ? { routing: intent.routing } : {}),
-        policies: { ...base.values.policies, ...Object.fromEntries((intent.policies ?? []).map(policy => [policy.targetPrincipalId, { ...base.values.policies[policy.targetPrincipalId], ...policy }])) },
-      }
+      const savedValues = canonical ? groupSettingsValues(canonical) : submitted
       setBase({ values: savedValues, expectedVersion: result.membershipVersion, membershipEpoch: intent.membershipEpoch })
-      if (revision.current === editedAt && (!pending || editedAt === 0)) setDraft(savedValues)
-      setPending(null)
+      // Keep only edits made after this request, without reverting other canonical fields.
+      setDraft(current => applyGroupSettingsChanges(savedValues, groupSettingsChanges(submitted, current)))
+      setPending(null); setSaved(true)
     } catch (error) {
       if (token === generation.current) { setFailure(friendly(error)); setPending(operationOutcomeUncertain(error) ? intent : null) }
-    } finally { if (token === generation.current) setSaving(false) }
+    } finally { if (token === generation.current) { flight.current = false; setSaving(false) } }
   }
-  const values = draft ?? groupSettingsValues(member)
-  const receivingIds = values.routing.defaultBotPrincipalIds
-  const invalidRouting = values.routing.mode === 'admin' && !receivingIds.length
+  useEffect(() => {
+    if (!canManage || !canSave || saving || pending || failure || composing) return
+    if (!delay.current) { void saveSettings(); return }
+    const timer = setTimeout(() => { void saveSettings() }, delay.current)
+    return () => clearTimeout(timer)
+  }, [base, draft, canManage, canSave, saving, pending, failure, composing])
+  useEffect(() => {
+    if (base && !dirty && !saving && !pending && member.membershipVersion > base.expectedVersion) reset()
+  }, [member.membershipVersion, base, dirty, saving, pending])
+  // A queued request is retried explicitly with its original identity; polling must
+  // never clear it merely because another operation finished.
+  const saveStatus = saving ? 'Saving…' : pending ? 'Waiting for confirmation' : failure ? 'Changes not saved' : dirty ? 'Changes not saved' : saved ? 'Saved.' : 'Changes apply automatically.'
   const roleLabel = role => role === 'owner' ? 'Group owner' : role === 'admin' ? 'Group admin' : 'Group member'
   const memberRow = person => {
         const editable = isOwner || member.role === 'admin' && person.role === 'member'
         const policy = values.policies[person.principalId] ?? { role: person.role, speakingMode: person.speakingMode }
         const changePolicy = change => edit({ policies: { ...values.policies, [person.principalId]: { ...policy, ...change } } })
-    return h('div', {key:person.principalId,className:'bt-comm-member-row','data-principal-id':person.principalId,onContextMenu:event=>context.open(event,[{label:t('View participant profile'),run:anchor=>onInspect([person.principalId],anchor)},{label:t('Copy identity'),run:()=>navigator.clipboard.writeText(person.principalId)},canManage&&groupProfilesAvailable&&{label:t('Edit group identity'),disabled:busy||saving,run:()=>setAction({kind:'identity',target:person})},canManage&&person.role!=='owner'&&(isOwner||person.role==='member')&&person.principalId!==humanId&&{label:t('Remove from group'),danger:true,disabled:busy||saving,run:()=>setAction({kind:'remove',target:person})}])},
+    return h('div', {key:person.principalId,className:'bt-comm-member-row','data-principal-id':person.principalId,onContextMenu:event=>context.open(event,[{label:t('View participant profile'),run:anchor=>onInspect([person.principalId],anchor)},{label:t('Copy identity'),run:()=>navigator.clipboard.writeText(person.principalId)},canManage&&groupProfilesAvailable&&{label:t('Edit group identity'),disabled:busy||blocked,run:()=>setAction({kind:'identity',target:person})},canManage&&person.role!=='owner'&&(isOwner||person.role==='member')&&person.principalId!==humanId&&{label:t('Remove from group'),danger:true,disabled:busy||blocked,run:()=>setAction({kind:'remove',target:person})}])},
       h('span',{className:'bt-comm-member-name',title:person.displayName},personLabel(person,true),h(BotAvailabilityNotice,{person}),person.groupIdentity?h('small',{className:'bt-comm-reference',title:person.groupIdentity},' · '+[...person.groupIdentity].slice(0,24).join('')+(person.groupIdentity.length>24?'…':'')):null),
       h('div',{className:'bt-comm-member-actions'},
-        editable && isOwner && person.role!=='owner' ? h('select',{'aria-label':t('Group role'),title:t('Group role'),value:policy.role,onChange:event=>changePolicy({role:event.target.value})},h('option',{value:'member'},t('Member')),h('option',{value:'admin'},t('Admin'))) : h('span',{className:'bt-comm-role'},t(roleLabel(person.role))),
-        editable ? h('select',{'aria-label':t('Speaking permission'),title:t('Speaking permission'),value:policy.speakingMode,onChange:event=>changePolicy({speakingMode:event.target.value})},
+        editable && isOwner && person.role!=='owner' ? h('select',{'aria-label':t('Group role'),title:t('Group role'),disabled:saving||Boolean(pending),value:policy.role,onChange:event=>changePolicy({role:event.target.value})},h('option',{value:'member'},t('Member')),h('option',{value:'admin'},t('Admin'))) : h('span',{className:'bt-comm-role'},t(roleLabel(person.role))),
+        editable ? h('select',{'aria-label':t('Speaking permission'),title:t('Speaking permission'),disabled:saving||Boolean(pending),value:policy.speakingMode,onChange:event=>changePolicy({speakingMode:event.target.value})},
           (person.kind==='human'?[['readOnly','Read only'],['speak','Can speak']]:[['passive','Reply only'],['active','Can speak']]).map(([value,label])=>h('option',{key:value,value},t(label)))) : h('span',{className:'bt-comm-role'},t(['readOnly','passive'].includes(person.speakingMode)?person.kind==='human'?'Read only':'Reply only':'Can speak')),
-        canManage && person.role!=='owner' && (isOwner || person.role==='member') && person.principalId!==humanId ? btn('Remove from group',()=>setAction({kind:'remove',target:person}),{className:'bt-comm-member-icon bt-comm-danger',title:t('Remove from group'),children:h(CloseIcon)}) : null,
-        canManage&&groupProfilesAvailable?btn('Edit group identity',()=>setAction({kind:'identity',target:person}),{disabled:busy||saving,className:'bt-comm-member-icon',title:t('Edit group identity'),children:'✎'}):null,
+        canManage && person.role!=='owner' && (isOwner || person.role==='member') && person.principalId!==humanId ? btn('Remove from group',()=>setAction({kind:'remove',target:person}),{disabled:busy||blocked,className:'bt-comm-member-icon bt-comm-danger',title:t('Remove from group'),children:h(CloseIcon)}) : null,
+        canManage&&groupProfilesAvailable?btn('Edit group identity',()=>setAction({kind:'identity',target:person}),{disabled:busy||blocked,className:'bt-comm-member-icon',title:t('Edit group identity'),children:'✎'}):null,
         btn('View participant profile',event=>onInspect([person.principalId],event.currentTarget),{className:'bt-comm-member-icon',title:t('View participant profile'),children:'›'})))
   }
-  const settingsActions = h('div', {className:'bt-comm-operation-buttons'},canManage?btn('Invite participant',()=>setAction({kind:'invite'}),{disabled:busy||saving}):null,
-    canManage?h('button',{type:'button',onClick:()=>{void saveSettings()},disabled:saving||!dirty&&!pending||invalidRouting&&!pending,'data-dirty':dirty,'aria-label':t('Save group settings')},t('Save')):null,
+  const settingsActions = h('div', {className:'bt-comm-operation-buttons'},canManage?btn('Invite participant',()=>setAction({kind:'invite'}),{disabled:busy||blocked}):null,
+    canManage ? h('span',{className:'bt-comm-save-status',role:'status'},t(saveStatus)) : null,
+    canManage && (failure || pending) ? btn('Retry saving changes',()=>{void saveSettings()},{disabled:saving||!canSave&&!pending}) : null,
     h('button',{type:'button',onClick:close,'aria-label':t('Close member settings')},t('Close')))
   return h('details', { id: 'bt-comm-members', className: 'bt-comm-members', open },context.menu,
     h('summary', { ref: summary, tabIndex: open ? 0 : -1, onClick: event => { event.preventDefault(); if (open) close(); else begin() } }, t('Group members and receiving rules')),
@@ -163,12 +195,14 @@ function GroupSettings({ member, contacts, operation, pendingSettings, pendingIn
       h('div',{className:'bt-comm-members-body'},
       failure ? h('p', { className: 'bt-comm-error', role: 'alert' }, t(failure)) : null,
       pending ? h('p', { role: 'status' }, t('An operation is not confirmed. Check status, then retry the same action.')) : null,
-      base && member.membershipVersion > base.expectedVersion ? h('p', { role: 'status' }, t('Group settings changed elsewhere. Your edits are retained. Close and reopen to review the current settings.')) : null,
-      canManage&&groupProfilesAvailable?btn('Change group avatar',()=>setAction({kind:'avatar'}),{disabled:busy||saving}):null,
+      base && !saving && member.membershipVersion > base.expectedVersion ? h('p', { role: 'status' }, t('Group settings changed elsewhere. Review the latest settings before retrying.')) : null,
+      canManage && failure && !pending ? btn('Discard edits and reload settings',reset,{disabled:saving}) : null,
+      canManage&&groupProfilesAvailable?btn('Change group avatar',()=>setAction({kind:'avatar'}),{disabled:busy||blocked}):null,
       h('p', { className: 'bt-comm-reference' }, t('Roles control group management. Speaking permissions control who can send.')),
       member.ownerPrincipalId && !members.some(person => person.principalId === member.ownerPrincipalId) ? h('p', { role: 'status' }, t('The owner is unavailable. Ownership stays with that identity.')) : null,
       !member.ownerPrincipalId ? h('p', { role: 'status' }, t('This legacy group has no retained owner. No automatic takeover is allowed.')) : null,
-      canManage ? h('label', { className: 'bt-comm-field' }, t('Group name'), h('input', { value: values.title, onChange: event => edit({ title: event.target.value }), 'aria-label': t('Group name') })) : null,
+      canManage ? h('label', { className: 'bt-comm-field' }, t('Group name'), h('input', { disabled:saving||Boolean(pending), value: values.title, onChange: event => edit({ title: event.target.value }), onBlur: () => { if (!failure && !pending) void saveSettings() }, onCompositionStart: () => setComposing(true), onCompositionEnd: () => setComposing(false), 'aria-label': t('Group name') })) : null,
+      canManage && changes.title !== undefined && !values.title.trim() ? h('p',{role:'status'},t('Enter a group name to apply the change.')) : null,
       h('details',{className:'bt-comm-member-section',open:membersExpanded},
       h('summary',{onClick:event=>{event.preventDefault();setMembersExpanded(value=>!value)}},t('Group members'),' · ',members.length),
       h('div',{className:'bt-comm-member-groups'},rankedMemberContacts(members,contacts).map((group,index)=>h('section',{key:group.person?.principalId ?? index,className:'bt-comm-member-contact','data-member-contact':group.person?.principalId ?? 'unavailable'},
@@ -177,14 +211,14 @@ function GroupSettings({ member, contacts, operation, pendingSettings, pendingIn
       member.info?.formerMembers?.length ? h('details', null, h('summary', null, t('Former Bots')), member.info.formerMembers.map(person => btn(person.displayName, event => onInspect([person.principalId], event.currentTarget), { key: person.principalId, children: personLabel(person) }))) : null,
       h('p', { className: 'bt-comm-reference' }, t('Both Bot modes can explicitly reply to their current input or finish without a reply. Final prose stays local. Reply-only Bots cannot initiate messages. Active Bots may also initiate with tools. Explicit follow-ups stay within the server’s finite delegation limit.')),
       canManage ? h(Fragment, null,
-        h('label', { className: 'bt-comm-field' }, t('Receiving rule'), h('select', { value: values.routing.mode, onChange: event => edit({ routing: { mode: event.target.value, defaultBotPrincipalIds: event.target.value === 'admin' ? receivingIds : [] } }), 'aria-label': t('Receiving rule') },
+        h('label', { className: 'bt-comm-field' }, t('Receiving rule'), h('select', { disabled:saving||Boolean(pending), value: values.routing.mode, onChange: event => edit({ routing: { mode: event.target.value, defaultBotPrincipalIds: event.target.value === 'admin' ? receivingIds : [] } }), 'aria-label': t('Receiving rule') },
           h('option', { value: 'mentionsOnly' }, t('Mentions only')), h('option', { value: 'admin' }, t('Plain messages go to selected Bots')))),
-        values.routing.mode === 'admin' ? btn('Choose receiving Bots',()=>setAction({kind:'receivers'}),{disabled:busy||saving}) : null,
-        invalidRouting ? h('p',{role:'status'},t('Choose at least one receiving Bot before saving.')) : null) : h('p', null, t(member.routingMode === 'admin' ? 'Plain messages go to selected Bots' : 'Mentions only')),
+        values.routing.mode === 'admin' ? btn('Choose receiving Bots',()=>setAction({kind:'receivers'}),{disabled:busy||saving||Boolean(pending)}) : null,
+        invalidRouting ? h('p',{role:'status'},t('Choose at least one receiving Bot to apply this rule.')) : null) : h('p', null, t(member.routingMode === 'admin' ? 'Plain messages go to selected Bots' : 'Mentions only')),
       values.routing.mode === 'admin' && receivingIds.length ? h('p',{className:'bt-comm-reference','aria-label':t('Default receiving Bots')},receivingIds.map(id=>members.find(person=>person.principalId===id)?.displayName ?? id).join(', ')) : null,
-      isOwner ? btn('Transfer ownership', () => { setNewOwner(''); setAction({ kind: 'transfer' }) }, {disabled:busy}) : null,
-      btn('Leave group', () => setAction({kind:'leave'}), { disabled: busy || isOwner, title: isOwner ? t('Transfer ownership before leaving') : undefined }),
-      isOwner ? btn('End group for everyone', () => setAction({kind:'dissolve'}), {className:'bt-comm-danger',disabled:busy}) : null,
+      isOwner ? btn('Transfer ownership', () => { setNewOwner(''); setAction({ kind: 'transfer' }) }, {disabled:busy||blocked}) : null,
+      btn('Leave group', () => setAction({kind:'leave'}), { disabled: busy || blocked || isOwner, title: isOwner ? t('Transfer ownership before leaving') : undefined }),
+      isOwner ? btn('End group for everyone', () => setAction({kind:'dissolve'}), {className:'bt-comm-danger',disabled:busy||blocked}) : null,
       ['avatar','identity'].includes(action?.kind)?h(GroupProfileDialog,{key:action.kind+(action.target?.principalId??''),kind:action.kind,person:action.target,member,operation,request,onClose:result=>{setAction(null);if(result?.membershipVersion)setBase(current=>current?{...current,expectedVersion:result.membershipVersion}:current)}}):null,
       h(GroupInviteDialog,{open:action?.kind==='invite',onClose:()=>setAction(null),member,contacts,humanId,request,operation,pendingInvites,busy}),
       h(ReceivingBotsDialog,{open:action?.kind==='receivers',onClose:()=>setAction(null),members,contacts,selected:receivingIds,request,multipleAvailable,onConfirm:ids=>edit({routing:{mode:'admin',defaultBotPrincipalIds:ids}})}),

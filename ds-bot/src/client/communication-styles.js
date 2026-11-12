@@ -443,7 +443,7 @@ export const communicationCSS = `
 .bt-comm-member-icon svg{width:14px;height:14px}
 .bt-comm-members[open]{padding:0;overflow:hidden}
 .bt-comm-members[open]>summary{display:none}
-.bt-comm-members-panel{height:100%;display:flex;flex-direction:column;min-height:0}
+.bt-comm-members-panel{position:absolute;inset:0;display:grid;grid-template-rows:auto minmax(0,1fr) auto;min-height:0;overflow:hidden;container:communication-members / inline-size}
 .bt-comm-members-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:16px;border-bottom:1px solid var(--bt-line);flex:none}
 .bt-comm-members-heading h2{font-size:13px}
 .bt-comm-members-heading button{display:grid;place-items:center;width:28px;padding:4px;border:0}
@@ -452,6 +452,8 @@ export const communicationCSS = `
 .bt-comm-members-footer{flex:none;padding:12px;border-top:1px solid var(--bt-line)}
 .bt-comm-members-footer .bt-comm-operation-buttons{gap:4px}
 .bt-comm-members-footer button{font-size:12px}
+.bt-comm-save-status{font-size:11px;color:var(--bt-ink-2);flex:1;min-width:90px}
+@container communication-members (max-width:360px){.bt-comm-member-row{flex-wrap:wrap}.bt-comm-member-name{flex-basis:100%}.bt-comm-member-actions{max-width:100%;flex-wrap:wrap;justify-content:flex-end;margin-left:auto}.bt-comm-frame .bt-comm-member-actions select{max-width:76px}}
 @media(max-width:600px){.bt-comm-members-body{padding:8px}.bt-comm-member-bots{margin-left:12px;padding-left:6px}.bt-comm-member-actions select{max-width:80px}}
 
 `

@@ -485,6 +485,14 @@ var ZH = {
   "Close dialog": "关闭对话框",
   "No published Bots": "暂无已发布 Bot",
   "Offline": "离线",
+  "Enter a group name to apply the change.": "请填写群名后再应用修改。",
+  "Choose at least one receiving Bot to apply this rule.": "请至少选择一个接收 Bot，接收规则才会生效。",
+  "Changes apply automatically.": "修改后自动保存。",
+  "Changes not saved": "修改尚未保存",
+  "Waiting for confirmation": "等待保存确认",
+  "Retry saving changes": "重试保存",
+  "Discard edits and reload settings": "放弃修改并重新加载",
+  "Group settings changed elsewhere. Review the latest settings before retrying.": "群设置已在别处更改，请核对最新设置后重试。",
   "Save group settings": "保存群设置",
   "Group settings changed elsewhere. Your edits are retained. Close and reopen to review the current settings.": "群设置已在别处更改。你的编辑已保留；请关闭后重新打开以核对当前设置。",
   "Jump to source message": "跳转到原消息",
@@ -22392,6 +22400,13 @@ function groupSettingsChanges(base, draft) {
   if (policies.length) changes.policies = policies;
   return changes;
 }
+function applyGroupSettingsChanges(base, changes) {
+  const policies = { ...base.policies };
+  for (const { targetPrincipalId, ...policy } of changes.policies ?? []) {
+    if (policies[targetPrincipalId]) policies[targetPrincipalId] = { ...policies[targetPrincipalId], ...policy };
+  }
+  return { title: changes.title ?? base.title, routing: changes.routing ?? base.routing, policies };
+}
 function referenceExcerpt(text, limit = 160) {
   const chars = [...String(text ?? "").replace(/\s+/g, " ").trim()];
   return chars.length > limit ? chars.slice(0, limit - 1).join("") + "…" : chars.join("");
@@ -25777,7 +25792,7 @@ var communicationCSS = `
 .bt-comm-member-icon svg{width:14px;height:14px}
 .bt-comm-members[open]{padding:0;overflow:hidden}
 .bt-comm-members[open]>summary{display:none}
-.bt-comm-members-panel{height:100%;display:flex;flex-direction:column;min-height:0}
+.bt-comm-members-panel{position:absolute;inset:0;display:grid;grid-template-rows:auto minmax(0,1fr) auto;min-height:0;overflow:hidden;container:communication-members / inline-size}
 .bt-comm-members-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:16px;border-bottom:1px solid var(--bt-line);flex:none}
 .bt-comm-members-heading h2{font-size:13px}
 .bt-comm-members-heading button{display:grid;place-items:center;width:28px;padding:4px;border:0}
@@ -25786,6 +25801,8 @@ var communicationCSS = `
 .bt-comm-members-footer{flex:none;padding:12px;border-top:1px solid var(--bt-line)}
 .bt-comm-members-footer .bt-comm-operation-buttons{gap:4px}
 .bt-comm-members-footer button{font-size:12px}
+.bt-comm-save-status{font-size:11px;color:var(--bt-ink-2);flex:1;min-width:90px}
+@container communication-members (max-width:360px){.bt-comm-member-row{flex-wrap:wrap}.bt-comm-member-name{flex-basis:100%}.bt-comm-member-actions{max-width:100%;flex-wrap:wrap;justify-content:flex-end;margin-left:auto}.bt-comm-frame .bt-comm-member-actions select{max-width:76px}}
 @media(max-width:600px){.bt-comm-members-body{padding:8px}.bt-comm-member-bots{margin-left:12px;padding-left:6px}.bt-comm-member-actions select{max-width:80px}}
 
 `;
@@ -25908,53 +25925,62 @@ function ReferenceQuote({ conversationId, membershipEpoch, messageId, request, l
     ) : t(unavailable ? "Earlier message unavailable" : "Loading reference…")
   );
 }
-function GroupSettings({ member, contacts, operation, pendingSettings, pendingInvites, operationPending, busy, humanId, btn, personLabel, chooseContact, request, onInspect, columnWidth, onColumnWidth, multipleAvailable, groupProfilesAvailable }) {
+function GroupSettings({ member, contacts, operation, pendingSettings, pendingInvites, busy, humanId, btn, personLabel, chooseContact, request, onInspect, columnWidth, onColumnWidth, multipleAvailable, groupProfilesAvailable }) {
   const context = useActionMenu();
   const [open, setOpen] = (0, import_react82.useState)(false), [base, setBase] = (0, import_react82.useState)(null), [draft, setDraft] = (0, import_react82.useState)(null);
   const [saving, setSaving] = (0, import_react82.useState)(false), [failure, setFailure] = (0, import_react82.useState)(""), [pending, setPending] = (0, import_react82.useState)(null);
   const [newOwner, setNewOwner] = (0, import_react82.useState)(""), [action, setAction] = (0, import_react82.useState)(null);
   const [membersExpanded, setMembersExpanded] = (0, import_react82.useState)(true);
-  const generation = (0, import_react82.useRef)(0), revision = (0, import_react82.useRef)(0), summary = (0, import_react82.useRef)(null);
+  const [composing, setComposing] = (0, import_react82.useState)(false), [saved, setSaved] = (0, import_react82.useState)(false);
+  const generation = (0, import_react82.useRef)(0), flight = (0, import_react82.useRef)(false), delay = (0, import_react82.useRef)(0), summary = (0, import_react82.useRef)(null);
   (0, import_react82.useEffect)(() => () => {
     generation.current += 1;
   }, []);
-  (0, import_react82.useEffect)(() => {
-    if (pending && !pendingSettings(member.conversationId)) setPending(null);
-  }, [operationPending, member.membershipVersion]);
   const isOwner = member.role === "owner", canManage = ["owner", "admin"].includes(member.role);
   const members = member.info?.members ?? [];
+  const values = draft ?? groupSettingsValues(member);
+  const receivingIds = values.routing.defaultBotPrincipalIds;
+  const invalidRouting = values.routing.mode === "admin" && !receivingIds.length;
+  const changes = base && draft ? groupSettingsChanges(base.values, draft) : {};
+  const dirty = Object.keys(changes).length > 0;
+  const validChanges = { ...changes };
+  if (invalidRouting) delete validChanges.routing;
+  if (!values.title.trim() || composing) delete validChanges.title;
+  const canSave = Object.keys(validChanges).length > 0;
+  const blocked = saving || dirty || Boolean(pending);
+  const reset = () => {
+    const current = groupSettingsValues(member);
+    setBase({ values: current, expectedVersion: member.membershipVersion, membershipEpoch: member.membershipEpoch });
+    setDraft(current);
+    setFailure("");
+    setSaved(false);
+  };
   const close = () => {
-    generation.current += 1;
+    if (!failure && !pending) void saveSettings();
     setOpen(false);
     setAction(null);
-    setBase(null);
-    setDraft(null);
-    setFailure("");
-    setSaving(false);
-    setPending(null);
     summary.current?.closest("main")?.querySelector(".bt-comm-title-pill")?.focus();
   };
   const begin = () => {
-    generation.current += 1;
-    revision.current = 0;
-    const values2 = groupSettingsValues(member);
-    setBase({ values: values2, expectedVersion: member.membershipVersion, membershipEpoch: member.membershipEpoch });
-    setDraft(values2);
-    setFailure("");
-    setPending(pendingSettings(member.conversationId));
-    setSaving(false);
+    if (!base) {
+      reset();
+      const previous = pendingSettings(member.conversationId);
+      setPending(previous);
+      if (previous) setDraft(applyGroupSettingsChanges(groupSettingsValues(member), previous));
+    }
     setOpen(true);
   };
   const edit = (values2) => {
-    revision.current += 1;
+    delay.current = Object.hasOwn(values2, "title") ? 450 : 0;
+    setSaved(false);
     setDraft((current) => ({ ...current, ...values2 }));
   };
-  const changes = base && draft ? groupSettingsChanges(base.values, draft) : {};
-  const dirty = Object.keys(changes).length > 0;
   const saveSettings = async () => {
-    if (saving || !base || !draft || !dirty && !pending) return;
-    const token = generation.current, editedAt = revision.current;
-    const intent = pending ?? { conversationId: member.conversationId, membershipEpoch: base.membershipEpoch, expectedVersion: base.expectedVersion, ...changes };
+    if (flight.current || !canManage || !base || !draft || !canSave && !pending) return;
+    const token = generation.current;
+    const intent = pending ?? { conversationId: member.conversationId, membershipEpoch: base.membershipEpoch, expectedVersion: base.expectedVersion, ...validChanges };
+    const submitted = applyGroupSettingsChanges(base.values, intent);
+    flight.current = true;
     setSaving(true);
     setFailure("");
     try {
@@ -25965,27 +25991,38 @@ function GroupSettings({ member, contacts, operation, pendingSettings, pendingIn
         return;
       }
       const canonical = result.refreshedState?.conversations?.find((item) => item.conversationId === member.conversationId && item.membershipVersion === result.membershipVersion);
-      const savedValues = canonical ? groupSettingsValues(canonical) : {
-        ...base.values,
-        ...intent.title === void 0 ? {} : { title: intent.title },
-        ...intent.routing ? { routing: intent.routing } : {},
-        policies: { ...base.values.policies, ...Object.fromEntries((intent.policies ?? []).map((policy) => [policy.targetPrincipalId, { ...base.values.policies[policy.targetPrincipalId], ...policy }])) }
-      };
+      const savedValues = canonical ? groupSettingsValues(canonical) : submitted;
       setBase({ values: savedValues, expectedVersion: result.membershipVersion, membershipEpoch: intent.membershipEpoch });
-      if (revision.current === editedAt && (!pending || editedAt === 0)) setDraft(savedValues);
+      setDraft((current) => applyGroupSettingsChanges(savedValues, groupSettingsChanges(submitted, current)));
       setPending(null);
+      setSaved(true);
     } catch (error) {
       if (token === generation.current) {
         setFailure(communicationFailure(error));
         setPending(operationOutcomeUncertain(error) ? intent : null);
       }
     } finally {
-      if (token === generation.current) setSaving(false);
+      if (token === generation.current) {
+        flight.current = false;
+        setSaving(false);
+      }
     }
   };
-  const values = draft ?? groupSettingsValues(member);
-  const receivingIds = values.routing.defaultBotPrincipalIds;
-  const invalidRouting = values.routing.mode === "admin" && !receivingIds.length;
+  (0, import_react82.useEffect)(() => {
+    if (!canManage || !canSave || saving || pending || failure || composing) return;
+    if (!delay.current) {
+      void saveSettings();
+      return;
+    }
+    const timer = setTimeout(() => {
+      void saveSettings();
+    }, delay.current);
+    return () => clearTimeout(timer);
+  }, [base, draft, canManage, canSave, saving, pending, failure, composing]);
+  (0, import_react82.useEffect)(() => {
+    if (base && !dirty && !saving && !pending && member.membershipVersion > base.expectedVersion) reset();
+  }, [member.membershipVersion, base, dirty, saving, pending]);
+  const saveStatus = saving ? "Saving…" : pending ? "Waiting for confirmation" : failure ? "Changes not saved" : dirty ? "Changes not saved" : saved ? "Saved." : "Changes apply automatically.";
   const roleLabel = (role) => role === "owner" ? "Group owner" : role === "admin" ? "Group admin" : "Group member";
   const memberRow = (person) => {
     const editable = isOwner || member.role === "admin" && person.role === "member";
@@ -25993,19 +26030,19 @@ function GroupSettings({ member, contacts, operation, pendingSettings, pendingIn
     const changePolicy = (change) => edit({ policies: { ...values.policies, [person.principalId]: { ...policy, ...change } } });
     return (0, import_react82.createElement)(
       "div",
-      { key: person.principalId, className: "bt-comm-member-row", "data-principal-id": person.principalId, onContextMenu: (event) => context.open(event, [{ label: t("View participant profile"), run: (anchor) => onInspect([person.principalId], anchor) }, { label: t("Copy identity"), run: () => navigator.clipboard.writeText(person.principalId) }, canManage && groupProfilesAvailable && { label: t("Edit group identity"), disabled: busy || saving, run: () => setAction({ kind: "identity", target: person }) }, canManage && person.role !== "owner" && (isOwner || person.role === "member") && person.principalId !== humanId && { label: t("Remove from group"), danger: true, disabled: busy || saving, run: () => setAction({ kind: "remove", target: person }) }]) },
+      { key: person.principalId, className: "bt-comm-member-row", "data-principal-id": person.principalId, onContextMenu: (event) => context.open(event, [{ label: t("View participant profile"), run: (anchor) => onInspect([person.principalId], anchor) }, { label: t("Copy identity"), run: () => navigator.clipboard.writeText(person.principalId) }, canManage && groupProfilesAvailable && { label: t("Edit group identity"), disabled: busy || blocked, run: () => setAction({ kind: "identity", target: person }) }, canManage && person.role !== "owner" && (isOwner || person.role === "member") && person.principalId !== humanId && { label: t("Remove from group"), danger: true, disabled: busy || blocked, run: () => setAction({ kind: "remove", target: person }) }]) },
       (0, import_react82.createElement)("span", { className: "bt-comm-member-name", title: person.displayName }, personLabel(person, true), (0, import_react82.createElement)(BotAvailabilityNotice, { person }), person.groupIdentity ? (0, import_react82.createElement)("small", { className: "bt-comm-reference", title: person.groupIdentity }, " · " + [...person.groupIdentity].slice(0, 24).join("") + (person.groupIdentity.length > 24 ? "…" : "")) : null),
       (0, import_react82.createElement)(
         "div",
         { className: "bt-comm-member-actions" },
-        editable && isOwner && person.role !== "owner" ? (0, import_react82.createElement)("select", { "aria-label": t("Group role"), title: t("Group role"), value: policy.role, onChange: (event) => changePolicy({ role: event.target.value }) }, (0, import_react82.createElement)("option", { value: "member" }, t("Member")), (0, import_react82.createElement)("option", { value: "admin" }, t("Admin"))) : (0, import_react82.createElement)("span", { className: "bt-comm-role" }, t(roleLabel(person.role))),
+        editable && isOwner && person.role !== "owner" ? (0, import_react82.createElement)("select", { "aria-label": t("Group role"), title: t("Group role"), disabled: saving || Boolean(pending), value: policy.role, onChange: (event) => changePolicy({ role: event.target.value }) }, (0, import_react82.createElement)("option", { value: "member" }, t("Member")), (0, import_react82.createElement)("option", { value: "admin" }, t("Admin"))) : (0, import_react82.createElement)("span", { className: "bt-comm-role" }, t(roleLabel(person.role))),
         editable ? (0, import_react82.createElement)(
           "select",
-          { "aria-label": t("Speaking permission"), title: t("Speaking permission"), value: policy.speakingMode, onChange: (event) => changePolicy({ speakingMode: event.target.value }) },
+          { "aria-label": t("Speaking permission"), title: t("Speaking permission"), disabled: saving || Boolean(pending), value: policy.speakingMode, onChange: (event) => changePolicy({ speakingMode: event.target.value }) },
           (person.kind === "human" ? [["readOnly", "Read only"], ["speak", "Can speak"]] : [["passive", "Reply only"], ["active", "Can speak"]]).map(([value, label]) => (0, import_react82.createElement)("option", { key: value, value }, t(label)))
         ) : (0, import_react82.createElement)("span", { className: "bt-comm-role" }, t(["readOnly", "passive"].includes(person.speakingMode) ? person.kind === "human" ? "Read only" : "Reply only" : "Can speak")),
-        canManage && person.role !== "owner" && (isOwner || person.role === "member") && person.principalId !== humanId ? btn("Remove from group", () => setAction({ kind: "remove", target: person }), { className: "bt-comm-member-icon bt-comm-danger", title: t("Remove from group"), children: (0, import_react82.createElement)(CloseIcon) }) : null,
-        canManage && groupProfilesAvailable ? btn("Edit group identity", () => setAction({ kind: "identity", target: person }), { disabled: busy || saving, className: "bt-comm-member-icon", title: t("Edit group identity"), children: "✎" }) : null,
+        canManage && person.role !== "owner" && (isOwner || person.role === "member") && person.principalId !== humanId ? btn("Remove from group", () => setAction({ kind: "remove", target: person }), { disabled: busy || blocked, className: "bt-comm-member-icon bt-comm-danger", title: t("Remove from group"), children: (0, import_react82.createElement)(CloseIcon) }) : null,
+        canManage && groupProfilesAvailable ? btn("Edit group identity", () => setAction({ kind: "identity", target: person }), { disabled: busy || blocked, className: "bt-comm-member-icon", title: t("Edit group identity"), children: "✎" }) : null,
         btn("View participant profile", (event) => onInspect([person.principalId], event.currentTarget), { className: "bt-comm-member-icon", title: t("View participant profile"), children: "›" })
       )
     );
@@ -26013,10 +26050,11 @@ function GroupSettings({ member, contacts, operation, pendingSettings, pendingIn
   const settingsActions = (0, import_react82.createElement)(
     "div",
     { className: "bt-comm-operation-buttons" },
-    canManage ? btn("Invite participant", () => setAction({ kind: "invite" }), { disabled: busy || saving }) : null,
-    canManage ? (0, import_react82.createElement)("button", { type: "button", onClick: () => {
+    canManage ? btn("Invite participant", () => setAction({ kind: "invite" }), { disabled: busy || blocked }) : null,
+    canManage ? (0, import_react82.createElement)("span", { className: "bt-comm-save-status", role: "status" }, t(saveStatus)) : null,
+    canManage && (failure || pending) ? btn("Retry saving changes", () => {
       void saveSettings();
-    }, disabled: saving || !dirty && !pending || invalidRouting && !pending, "data-dirty": dirty, "aria-label": t("Save group settings") }, t("Save")) : null,
+    }, { disabled: saving || !canSave && !pending }) : null,
     (0, import_react82.createElement)("button", { type: "button", onClick: close, "aria-label": t("Close member settings") }, t("Close"))
   );
   return (0, import_react82.createElement)(
@@ -26038,12 +26076,16 @@ function GroupSettings({ member, contacts, operation, pendingSettings, pendingIn
         { className: "bt-comm-members-body" },
         failure ? (0, import_react82.createElement)("p", { className: "bt-comm-error", role: "alert" }, t(failure)) : null,
         pending ? (0, import_react82.createElement)("p", { role: "status" }, t("An operation is not confirmed. Check status, then retry the same action.")) : null,
-        base && member.membershipVersion > base.expectedVersion ? (0, import_react82.createElement)("p", { role: "status" }, t("Group settings changed elsewhere. Your edits are retained. Close and reopen to review the current settings.")) : null,
-        canManage && groupProfilesAvailable ? btn("Change group avatar", () => setAction({ kind: "avatar" }), { disabled: busy || saving }) : null,
+        base && !saving && member.membershipVersion > base.expectedVersion ? (0, import_react82.createElement)("p", { role: "status" }, t("Group settings changed elsewhere. Review the latest settings before retrying.")) : null,
+        canManage && failure && !pending ? btn("Discard edits and reload settings", reset, { disabled: saving }) : null,
+        canManage && groupProfilesAvailable ? btn("Change group avatar", () => setAction({ kind: "avatar" }), { disabled: busy || blocked }) : null,
         (0, import_react82.createElement)("p", { className: "bt-comm-reference" }, t("Roles control group management. Speaking permissions control who can send.")),
         member.ownerPrincipalId && !members.some((person) => person.principalId === member.ownerPrincipalId) ? (0, import_react82.createElement)("p", { role: "status" }, t("The owner is unavailable. Ownership stays with that identity.")) : null,
         !member.ownerPrincipalId ? (0, import_react82.createElement)("p", { role: "status" }, t("This legacy group has no retained owner. No automatic takeover is allowed.")) : null,
-        canManage ? (0, import_react82.createElement)("label", { className: "bt-comm-field" }, t("Group name"), (0, import_react82.createElement)("input", { value: values.title, onChange: (event) => edit({ title: event.target.value }), "aria-label": t("Group name") })) : null,
+        canManage ? (0, import_react82.createElement)("label", { className: "bt-comm-field" }, t("Group name"), (0, import_react82.createElement)("input", { disabled: saving || Boolean(pending), value: values.title, onChange: (event) => edit({ title: event.target.value }), onBlur: () => {
+          if (!failure && !pending) void saveSettings();
+        }, onCompositionStart: () => setComposing(true), onCompositionEnd: () => setComposing(false), "aria-label": t("Group name") })) : null,
+        canManage && changes.title !== void 0 && !values.title.trim() ? (0, import_react82.createElement)("p", { role: "status" }, t("Enter a group name to apply the change.")) : null,
         (0, import_react82.createElement)(
           "details",
           { className: "bt-comm-member-section", open: membersExpanded },
@@ -26065,20 +26107,20 @@ function GroupSettings({ member, contacts, operation, pendingSettings, pendingIn
           null,
           (0, import_react82.createElement)("label", { className: "bt-comm-field" }, t("Receiving rule"), (0, import_react82.createElement)(
             "select",
-            { value: values.routing.mode, onChange: (event) => edit({ routing: { mode: event.target.value, defaultBotPrincipalIds: event.target.value === "admin" ? receivingIds : [] } }), "aria-label": t("Receiving rule") },
+            { disabled: saving || Boolean(pending), value: values.routing.mode, onChange: (event) => edit({ routing: { mode: event.target.value, defaultBotPrincipalIds: event.target.value === "admin" ? receivingIds : [] } }), "aria-label": t("Receiving rule") },
             (0, import_react82.createElement)("option", { value: "mentionsOnly" }, t("Mentions only")),
             (0, import_react82.createElement)("option", { value: "admin" }, t("Plain messages go to selected Bots"))
           )),
-          values.routing.mode === "admin" ? btn("Choose receiving Bots", () => setAction({ kind: "receivers" }), { disabled: busy || saving }) : null,
-          invalidRouting ? (0, import_react82.createElement)("p", { role: "status" }, t("Choose at least one receiving Bot before saving.")) : null
+          values.routing.mode === "admin" ? btn("Choose receiving Bots", () => setAction({ kind: "receivers" }), { disabled: busy || saving || Boolean(pending) }) : null,
+          invalidRouting ? (0, import_react82.createElement)("p", { role: "status" }, t("Choose at least one receiving Bot to apply this rule.")) : null
         ) : (0, import_react82.createElement)("p", null, t(member.routingMode === "admin" ? "Plain messages go to selected Bots" : "Mentions only")),
         values.routing.mode === "admin" && receivingIds.length ? (0, import_react82.createElement)("p", { className: "bt-comm-reference", "aria-label": t("Default receiving Bots") }, receivingIds.map((id) => members.find((person) => person.principalId === id)?.displayName ?? id).join(", ")) : null,
         isOwner ? btn("Transfer ownership", () => {
           setNewOwner("");
           setAction({ kind: "transfer" });
-        }, { disabled: busy }) : null,
-        btn("Leave group", () => setAction({ kind: "leave" }), { disabled: busy || isOwner, title: isOwner ? t("Transfer ownership before leaving") : void 0 }),
-        isOwner ? btn("End group for everyone", () => setAction({ kind: "dissolve" }), { className: "bt-comm-danger", disabled: busy }) : null,
+        }, { disabled: busy || blocked }) : null,
+        btn("Leave group", () => setAction({ kind: "leave" }), { disabled: busy || blocked || isOwner, title: isOwner ? t("Transfer ownership before leaving") : void 0 }),
+        isOwner ? btn("End group for everyone", () => setAction({ kind: "dissolve" }), { className: "bt-comm-danger", disabled: busy || blocked }) : null,
         ["avatar", "identity"].includes(action?.kind) ? (0, import_react82.createElement)(GroupProfileDialog, { key: action.kind + (action.target?.principalId ?? ""), kind: action.kind, person: action.target, member, operation, request, onClose: (result) => {
           setAction(null);
           if (result?.membershipVersion) setBase((current) => current ? { ...current, expectedVersion: result.membershipVersion } : current);

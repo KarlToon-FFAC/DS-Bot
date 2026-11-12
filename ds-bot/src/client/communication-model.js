@@ -133,6 +133,14 @@ export function groupSettingsChanges(base, draft) {
   return changes
 }
 
+export function applyGroupSettingsChanges(base, changes) {
+  const policies = { ...base.policies }
+  for (const { targetPrincipalId, ...policy } of changes.policies ?? []) {
+    if (policies[targetPrincipalId]) policies[targetPrincipalId] = { ...policies[targetPrincipalId], ...policy }
+  }
+  return { title: changes.title ?? base.title, routing: changes.routing ?? base.routing, policies }
+}
+
 export function referenceExcerpt(text, limit = 160) {
   const chars = [...String(text ?? '').replace(/\s+/g, ' ').trim()]
   return chars.length > limit ? chars.slice(0, limit - 1).join('') + '…' : chars.join('')
