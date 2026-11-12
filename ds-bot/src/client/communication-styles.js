@@ -1,4 +1,8 @@
 export const communicationCSS = `
+.bt-comm-presence{position:absolute;right:0;bottom:0;width:7px;height:7px;border-radius:50%;background:var(--bt-ink-3);box-shadow:0 0 0 1.5px var(--bt-main);z-index:1}
+.bt-comm-presence[data-bot-status=online]{background:var(--bt-green)}
+.bt-comm-presence[data-bot-status=working]{background:var(--bt-danger)}
+
 .bt-comm-participant-owner>p{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .bt-comm-participant-owner small{color:var(--bt-ink-2)}
 .bt-comm-participant-profile{padding:8px 0}
@@ -120,7 +124,7 @@ export const communicationCSS = `
 .bt-comm-check input{flex:0 0 16px;width:16px;height:16px;flex-shrink:0;margin-top:1px}
 .bt-comm-recipient-preview{display:flex;align-items:center;flex-wrap:nowrap;gap:4px 8px;max-height:108px;overflow:auto;margin-bottom:6px;font-size:12px;color:var(--bt-ink-2)}
 .bt-comm-recipient-heading{flex:none}
-.bt-comm-activation>span:first-child{flex:none}
+
 .bt-comm-recipient-chip{display:inline-flex;align-items:center;gap:4px;max-width:100%;min-width:0;padding:2px 6px;border:.5px solid var(--bt-line);border-radius:12px;background:var(--bt-card)}
 .bt-comm-recipient-chip>span:not(.bt-comm-avatar){overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bt-comm-recipient-chip small{flex:none;color:var(--bt-ink-3)}

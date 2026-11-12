@@ -1,3 +1,4 @@
+import {BotPresenceBadge} from './communication-presence.js'
 import { createElement as h, useEffect, useRef, useState } from 'react'
 import { BotMark } from './mark.js'
 import { avatarImage } from './avatar-library.js'
@@ -44,9 +45,9 @@ export function CommunicationAvatar({ person, request, allowed = true, size = 28
   const bot = person.kind === 'bot' || person.principalId?.startsWith('bot:')
   const value = principalAvatar(person.kind === 'human' || person.principalId?.startsWith('human:') ? person.displayName ?? 'Human' : person.principalId, person.displayName ?? '')
   return h('span', { className: 'bt-comm-avatar', 'data-avatar': value.variant, 'data-kind': bot ? 'bot' : person.kind, 'data-avatar-id': person.principalId, 'data-initials': !bot && !image ? value.initials : undefined,
-    'data-has-image': Boolean(image), 'aria-hidden': true, style: { width: size, height: size, flexBasis: size, fontSize: Math.min(11, size * .45), lineHeight: 1, overflow: 'hidden' } },
+    'data-has-image': Boolean(image), style: { width: size, height: size, flexBasis: size, fontSize: Math.min(11, size * .45), lineHeight: 1, position: 'relative', overflow: bot ? 'visible' : 'hidden' } },
     bot ? h(BotMark, { bot: { id: person.avatar?.seed ?? person.principalId, color: person.avatar?.color, avatar: { shape: person.avatar?.shape, ...(image ? { image } : {}) } }, size }) :
-      image ? h('img', { src: image, alt: '', width: size, height: size, draggable: false }) : null)
+      image ? h('img', { src: image, alt: '', width: size, height: size, draggable: false }) : null, bot ? h(BotPresenceBadge,{person}) : null)
 }
 
 const profileValues = value => ({ headline: value?.headline ?? '', summary: value?.summary ?? '',

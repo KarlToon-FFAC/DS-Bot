@@ -10,6 +10,10 @@ const ZH = {
   'All Bot recipients': '全部 Bot 接收对象',
   'Close Bot list': '关闭 Bot 列表',
 
+  'Bot working or replying': 'Bot 工作或回复中',
+  'Bot online': 'Bot 在线',
+  'Bot offline': 'Bot 离线',
+  'Bot status unknown': 'Bot 状态未知',
   'Bot dispatch': '唤醒对象',
   'No Bots activated': '未唤醒 Bot',
   'Dispatch not recorded': '未记录唤醒对象',

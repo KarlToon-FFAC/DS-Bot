@@ -1,3 +1,4 @@
+import {CommunicationPresence} from './communication-presence.js'
 import {MentionPerson} from './communication-mention-person.js'
 import {CommunicationActivation} from './communication-activation.js'
 import {RecipientPreview} from './communication-recipient-preview.js'
@@ -256,10 +257,10 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
   useEffect(() => { setThreadMessageId(null); setActivePanel(current => ['thread', 'participant'].includes(current) ? '' : current) }, [scope, selected, member?.membershipEpoch])
   const draft = drafts[key] ?? { text: '', mentions: [] }
   const changeDraft = value => setDrafts(current => { const next = { ...current, [key]: { ...(current[key] ?? {text:'',mentions:[]}), ...value } }; save(DRAFTS, next); return next })
-  const openThread=(message,trigger)=>{
+  const openThread=(message,trigger,reply=true)=>{
     chooserTrigger.current=trigger??document.activeElement
     threadAnchor.current=trigger?.getBoundingClientRect?.()??{left:window.innerWidth/2,top:window.innerHeight/3,bottom:window.innerHeight/3}
-    setThreadMessageId(message.messageId);setThreadReplyTarget(message);setActivePanel('thread');setError('')
+    setThreadMessageId(message.messageId);setThreadReplyTarget(reply?message:null);setActivePanel('thread');setError('')
   }
   useLayoutEffect(()=>{
     if(activePanel!=='thread'||!chooser.current)return
@@ -541,7 +542,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
   ].slice(0,50)
   const searchIndex = Math.max(0, Math.min(searchCursor, searchResults.length-1))
 
-  return createPortal(h('section', { ref: frame, className: 'bt-comm-frame', style:{'--bt-comm-left-width':`${columnWidths.left}px`,'--bt-comm-right-width':`${shownRightWidth}px`,'--bt-tap-duration':`${SPRING_TAP.duration}ms`,'--bt-tap-easing':SPRING_TAP.easing}, role: 'dialog', 'aria-modal': true, 'data-closing': closing, 'data-collapsed': sidebarHidden, 'data-browse': browse || !member, 'data-setup': !team.communicationEnabled, 'aria-label': t('Remote communication') },
+  return createPortal(h(CommunicationPresence,{state,unavailable:Boolean(pollError)},h('section', { ref: frame, className: 'bt-comm-frame', style:{'--bt-comm-left-width':`${columnWidths.left}px`,'--bt-comm-right-width':`${shownRightWidth}px`,'--bt-tap-duration':`${SPRING_TAP.duration}ms`,'--bt-tap-easing':SPRING_TAP.easing}, role: 'dialog', 'aria-modal': true, 'data-closing': closing, 'data-collapsed': sidebarHidden, 'data-browse': browse || !member, 'data-setup': !team.communicationEnabled, 'aria-label': t('Remote communication') },
     h('aside', { id:'bt-comm-nav', className: 'bt-comm-nav' },
       h('div', { className: 'bt-comm-nav-heading' }, h('h2', {title:t('Remote communication')}, t('Remote communication')),
         h('div', { className:'bt-comm-nav-actions' },
@@ -606,7 +607,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
           h(OwnRemoteProfile, { key: `own:${scope}`, request, operation, bots: team.bots, revision: `${state?.managementRevision}:${team.revision}` }),
           h(CommunicationMemory, { key: scope, request, revision:state?.managementRevision }),
           h('details', {className:'bt-comm-contact-section bt-comm-profile-section'}, h('summary', null, t('Hub connection')), btn('Join Hub', () => { setPanelBack('settings'); setActivePanel('pairing') }, { 'data-open-panel': 'pairing' }))) : activePanel === 'thread' ? member && threadMessageId ? h(Fragment,null,h(CommunicationThread, { key: `view:${contextKey.current}:${threadMessageId}`, member, messageId: threadMessageId, request, canSpeak, onInspect: inspect,
-          chronological:true,onReply:setThreadReplyTarget }),canSpeak?h(ThreadReplyComposer,{key:`composer:${contextKey.current}:${threadMessageId}`,storageKey:`ds-bot:communication:thread:${contextKey.current}:${threadMessageId}`,member,target:threadReplyTarget,request,replyMentionUnion:state.replyMentionUnionAvailable===true,directedReplies:state.directedGroupRepliesAvailable===true,onSent:refresh,attachmentsAvailable:state.attachmentsAvailable}):null) : null : activePanel === 'activity' ? h(CommunicationActivity, { state, member, events, outbox: activityOutbox, operations, operationPending: pendingForConversation, pendingAttempt: attempts[key], error, pollError: pollError || (syncError?.conversationId === selected ? syncError.message : ''), friendly, labels, busy,
+          chronological:true,onReply:setThreadReplyTarget }),canSpeak&&threadReplyTarget?h(ThreadReplyComposer,{key:`composer:${contextKey.current}:${threadMessageId}`,storageKey:`ds-bot:communication:thread:${contextKey.current}:${threadMessageId}`,member,target:threadReplyTarget,request,replyMentionUnion:state.replyMentionUnionAvailable===true,directedReplies:state.directedGroupRepliesAvailable===true,onSent:refresh,attachmentsAvailable:state.attachmentsAvailable}):null) : null : activePanel === 'activity' ? h(CommunicationActivity, { state, member, events, outbox: activityOutbox, operations, operationPending: pendingForConversation, pendingAttempt: attempts[key], error, pollError: pollError || (syncError?.conversationId === selected ? syncError.message : ''), friendly, labels, busy,
           onRetry: () => { setActivePanel(''); void send() }, copyDisabled: Boolean(draft.text) || Boolean(attempts[key]) || !member,
           onCopy: item => { if (draft.text || attempts[key] || !member) return; changeDraft({ text: item.text, mentions: [], manualMentions: [] }); setActivePanel(''); input.current?.focus() } }) : activePanel === 'participant' ? h('div', { className: 'bt-comm-participant-information' }, [...currentMembers, ...(member?.info?.formerMembers ?? [])].filter(person => inspectedIds.includes(person.principalId)).map(person => h(ParticipantInformation, { key: person.principalId, person, people: [...currentMembers, ...(member?.info?.formerMembers ?? []), ...contacts], request, conversationId: selected, membershipEpoch: member.membershipEpoch, localBotId: member.viewerBotId, roleLabel, personLabel }))) : activePanel === 'manage-contacts' ? h(ContactManager, { key: scope, request, operation, contacts, connectionKnown: state?.connected === true && !pollError, revision: `${state?.managementRevision ?? ''}:${state?.connected ?? false}`, humanPrincipalId: state?.humanPrincipalId, instanceId: state?.instanceId, onMessage: messageContact, messageBusy: busy }) : activePanel === 'profile' ? h(HumanProfile, { key: scope, human: contacts.find(person => person.principalId === state?.humanPrincipalId) ?? { principalId: state?.humanPrincipalId ?? 'human:local', displayName: t('You'), kind: 'human' }, request, operation }) : activePanel === 'pairing' ? h(AddDevice, { request, revision: `${team.communicationEnabled}:${team.communicationHubId}:${state?.managementRevision ?? ''}:${state?.connected ?? false}`, displayName: contacts.find(person => person.principalId === state?.humanPrincipalId)?.displayName }) : h(Fragment, null,
         activePanel === 'group' ? h('label', { className: 'bt-comm-field' }, t('Group name'), h('input', { value: title, onChange: event => setTitle(event.target.value), 'aria-label': t('Group name') })) : null,
@@ -660,7 +661,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
           h('div', { className: 'bt-comm-body' }, h(CommunicationMessage, { message: event.message, members: knownMembers, request, onInspect: inspect }))),
           h(CommunicationActivation,{event,members:[...currentMembers,...(member.info?.formerMembers??[])],request:conversationRequest}),
         h(CommunicationMessageActions,{message:event.message,onReply:canSpeak?openThread:undefined,
-            onThread:member.kind==='group'?openThread:undefined},
+            onThread:member.kind==='group'?(message,trigger)=>openThread(message,trigger,false):undefined},
             h('time', { title: new Date(event.serverAcceptedAt).toLocaleString() }, new Date(event.serverAcceptedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))))),
         ownOutbox.filter(item => item.state !== 'failed' && !visibleIds.has(item.id) && (item.state !== 'accepted' || older === null && item.result?.conversationSeq > (page?.watermark ?? 0))).map(item => h('article', { key: item.id, 'data-message-id': item.id, 'data-self': true, 'data-failed': item.state === 'failed' },
           messageAvatar(state.humanPrincipalId, contacts.find(person => person.principalId === state.humanPrincipalId)?.displayName), h('strong', { title: state.humanPrincipalId }, contacts.find(person => person.principalId === state.humanPrincipalId)?.displayName ?? t('You'), identityIcons({ principalId: state.humanPrincipalId, kind: 'human', homeInstanceId: state.instanceId })), h('p', { className: 'bt-comm-pending-text' }, item.text), h(CommunicationActivation,{event:item.result,members:currentMembers,request:conversationRequest,pending:true}), h('p', { role: 'status' }, t(item.state === 'accepted' ? 'Hub accepted' : 'Queued on this device'))))),
@@ -693,7 +694,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
         draft.attachments?.length ? h('div',{className:'bt-comm-attachment-drafts'},draft.attachments.map((file,index)=>h('span',{key:index},file.name,h('button',{type:'button',disabled:busy||attaching||Boolean(attempts[key]),'aria-label':t('Remove {name}',{name:file.name}),onClick:()=>changeDraft({attachments:draft.attachments.filter((_,i)=>i!==index)})},h(CloseIcon))))) : null,
         btn(attempts[key] ? 'Retry same send' : 'Send message', () => { void send() }, { className: 'bt-comm-send', 'aria-label': t(attempts[key] ? 'Retry same send' : 'Send message'), title: t('Enter to send · Shift+Enter for a new line'), children: h(Fragment, null, h(ArrowUpIcon), h('span', { className: 'bt-sr' }, t(attempts[key] ? 'Retry same send' : 'Send message'))), disabled: busy || attaching || !canSpeak || !draft.text.trim() && !draft.attachments?.length }),
         h('span', { className: 'bt-sr' }, t('Enter to send · Shift+Enter for a new line')),
-        null) : null)), document.body)
+        null) : null))), document.body)
 }
 
 export function installCommunication(ctx, { roster, surface }) {

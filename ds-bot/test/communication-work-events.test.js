@@ -119,3 +119,25 @@ test('real DSH order associates inputs recorded after step/start and retries whe
   f.hooks.get('session/event')({ id: 'session' }, { seq: 16, type: 'turn/end', data: { turn: 1 } })
   assert.equal(f.runtime.workInputs.has('session'), false)
 })
+
+test('presence reports actual local and federation turns, clears on end, and skips old Hubs',async t=>{
+  const f=fixture(t,['bot-presence'])
+  const local={localRef:'local',principalId:'bot:a:local'},remote={localRef:'worker',principalId:f.binding.recipientPrincipalId}
+  f.runtime.bots=new Map([[local.localRef,local],[remote.localRef,remote]])
+  f.runtime.rt={workView:()=>({local:{since:1}})}
+  const calls=[]
+  f.runtime.transport.request=async(type,payload)=>{calls.push({type,...payload})}
+  const report=()=>CommunicationRuntime.prototype.reportPresence.call(f.runtime)
+  await report();assert.deepEqual(calls.at(-1).workingBotPrincipalIds,[local.principalId])
+  f.hooks.get('session/event')({id:'session'},{type:'turn/start'})
+  await report();assert.deepEqual(calls.at(-1).workingBotPrincipalIds,[local.principalId,remote.principalId].sort())
+  f.hooks.get('session/event')({id:'session'},{type:'turn/end'})
+  await report();assert.deepEqual(calls.at(-1).workingBotPrincipalIds,[local.principalId])
+  f.hooks.get('session/event')({id:'session'},{type:'turn/start'})
+  f.hooks.get('agent/status')({agent:{id:'session'},status:'idle'})
+  await report();assert.deepEqual(calls.at(-1).workingBotPrincipalIds,[local.principalId],'failed pre-step without turn/end clears working')
+  f.runtime.ctx.get=()=>new Map([['session',{status:'running'}]])
+  await report();assert.ok(calls.at(-1).workingBotPrincipalIds.includes(remote.principalId),'a live turn survives runtime reload')
+  f.runtime.transport.welcome.capabilities=[]
+  await report();assert.equal(calls.length,5)
+})

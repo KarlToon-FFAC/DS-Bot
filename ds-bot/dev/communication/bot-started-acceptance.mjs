@@ -112,13 +112,18 @@ try{
   record('unmentioned-Human-and-readOnly-send-have-no-start-event',{messageId:plain.messageId,rejectedMessageId:deniedId})
 
   stage('queued remote delivery is not started until real DSH enter')
+  await until(async()=>{const state=await a.api({endpoint:'state'});const bot=state.contacts.find(person=>person.principalId===b.bot);return state.presenceFresh&&bot?.connected===true&&typeof bot.working==='boolean'},'fresh remote Bot online presence')
+  record('socket-authenticated-online-presence')
   await topology.bench(b,'stop')
+  await until(async()=>{const state=await a.api({endpoint:'state'});const bot=state.conversations.find(item=>item.conversationId===group)?.info?.members.find(person=>person.principalId===b.bot);return bot?.connected===false},'group roster reports remote offline without page reload')
+  record('group-roster-presence-clears-after-disconnect')
   const queued=await topology.send(a,group,`COMM-COLLAB DONE remote-${nonce} @StartedB`,[b.bot])
   await until(async()=> (await topology.hub('stats')).deliveries.find(delivery=>delivery.message_id===queued.messageId&&delivery.recipient_id===b.bot&&delivery.ai),'canonical AI delivery queued while remote DSH offline')
   assert.equal(starts(queued.messageId).length,0,'AI delivery alone cannot announce work started')
   record('offline-queued-AI-delivery-does-not-announce-start',{messageId:queued.messageId})
   await topology.startPeer(b)
   const started=await verifyStarted(b,group,queued.messageId)
+  await until(async()=>{const state=await a.api({endpoint:'state'});return state.contacts.find(person=>person.principalId===b.bot)?.connected===true},'reconnected same Bot online')
   await finalReply(b,group,`Collaboration done remote-${nonce}`)
   record('remote-real-DSH-enter-correlates-delivery-message-recipient-current-epoch-and-shared-history',{eventId:started.eventId,messageId:queued.messageId,deliveryId:started.deliveryId})
 

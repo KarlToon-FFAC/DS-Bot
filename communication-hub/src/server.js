@@ -1,3 +1,4 @@
+import {botPresence} from './presence.js'
 import { createServer as createHttpServer } from 'node:http'
 import { createServer as createHttpsServer } from 'node:https'
 import { createHash, timingSafeEqual } from 'node:crypto'
@@ -88,6 +89,8 @@ export async function startHub({ databasePath, databaseLock, peers, host='127.0.
     return false
   }
   store.isInstanceConnected=management.isInstanceConnected
+  const presence=botPresence(store,authenticated)
+  store.presenceOf=presence.read
   let invalidationTimer, directoryDirty=false, closing=false
   const invalidate=(scope='directory')=>{
     if(closing)return
@@ -158,7 +161,10 @@ export async function startHub({ databasePath, databaseLock, peers, host='127.0.
           const contactRoutes={'contact.code':'code','contact.code.rotate':'rotateCode','contact.request':'requestContact','contact.requests':'contactRequests','contact.relations':'relations',
             'contact.accept':'accept','contact.reject':'reject','contact.cancel':'cancel','contact.revoke':'revokeContact','contact.use-published-bots':'usePublishedBots'}
           const contact=contactRoutes[frame.type]
-          if(contact){
+          if(frame.type==='presence.update'){
+            if(presence.update(socket,auth,frame.payload))changed()
+            value={updated:true}
+          }else if(contact){
             value=['accept','reject','cancel'].includes(contact)?management.respondContact(auth,frame.payload,contact):management[contact](auth,frame.payload)
           }else{
           const method=Object.hasOwn(routes,frame.type)?routes[frame.type]:null

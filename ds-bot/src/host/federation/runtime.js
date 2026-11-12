@@ -71,7 +71,7 @@ export class CommunicationRuntime {
         conversationId: delivery.conversationId, messageId: delivery.messageId, deliveryId: delivery.deliveryId }),
       afterReceive: delivery => this.ctx.parallel('ds-bot/communication-checkpoint', { point: 'after-receive',
         conversationId: delivery.conversationId, messageId: delivery.messageId, deliveryId: delivery.deliveryId }),
-      onInvalidate: scope => { if (scope !== 'messages') this.managementRevision += 1 },
+      onInvalidate: scope => { if (scope !== 'messages') { this.managementRevision += 1; this.profileRefreshedAt?.clear() } },
       onConnect: async welcome => {
         this.managementRevision += 1
         if (!welcome?.capabilities?.includes('bot-publication-generations')) fail('BOT_PUBLICATION_MIGRATION_REQUIRED')
@@ -88,6 +88,7 @@ export class CommunicationRuntime {
         await this.reconcileDeletedBots()
         cancelRevokedWork(this)
         const generation = this.transport.generation, socket = this.transport.socket
+        try { await this.reportPresence() } catch { /* Optional presence cannot block durable delivery. Its lease expires. */ }
         const contacts = await this.transport.request('contacts.list')
         if (JSON.stringify(contacts) !== JSON.stringify(this.contacts)) this.managementRevision += 1
         this.contacts = contacts
@@ -307,6 +308,11 @@ export class CommunicationRuntime {
     this.workSteps ??= new Map()
     this.workEvents ??= Promise.resolve()
     this.relationshipContexts ??= new Map()
+    this.disposers.push(this.ctx.on('agent/status', ({agent,status}) => {
+      if (!this.owners.has(agent.id)) return
+      if (status === 'idle') this.presenceTurns?.delete(agent.id)
+      this.transport.wake?.()
+    }))
     this.disposers.push(this.ctx.on('agent/created', ({ agent }) => { if (this.owners.has(agent.id)) this.scope(agent) }))
     const recordWork = (sessionId, owner, event, staged) => {
       this.workEvents = this.workEvents.catch(() => {}).then(async () => {
@@ -321,6 +327,12 @@ export class CommunicationRuntime {
     this.disposers.push(this.ctx.on('session/event', (session, event) => {
       const owner = this.owners.get(session?.id)
       if (!owner) return
+      if (event.type === 'turn/start' || event.type === 'turn/end') {
+        this.presenceTurns ??= new Set()
+        if (event.type === 'turn/start') this.presenceTurns.add(session.id)
+        else this.presenceTurns.delete(session.id)
+        this.transport.wake?.()
+      }
       if (event.type === 'turn/end') { this.workInputs.delete(session.id); this.workSteps.delete(session.id) }
       if (!['step/start', 'user/message'].includes(event.type) || !this.transport?.welcome?.capabilities?.includes('bot-work-events')) return
       if (event.type === 'step/start') this.workSteps.set(session.id, event)
@@ -461,6 +473,19 @@ export class CommunicationRuntime {
       this.lastError = error.code ?? 'COMMUNICATION_UNAVAILABLE'
     }
     return result
+  }
+  async reportPresence() {
+    if (!this.transport.welcome?.capabilities?.includes('bot-presence')) return
+    const local = this.rt.workView?.() ?? {}
+    const working = new Set([...this.bots.values()].filter(bot => local[bot.localRef]).map(bot => bot.principalId))
+    const agents = this.ctx.get('agents')
+    const published = new Set([...this.bots.values()].map(bot => bot.principalId))
+    for (const [id,owner] of this.owners) {
+      const agent = agents?.get?.(id)
+      const active = agent ? agent.status !== 'idle' : this.presenceTurns?.has(id)
+      if (active && published.has(owner.recipientPrincipalId)) working.add(owner.recipientPrincipalId)
+    }
+    await this.transport.request('presence.update', { workingBotPrincipalIds: [...working].sort() })
   }
   async refreshConversation(conversationId) {
     const member = this.queue.memberships().filter(item => item.conversationId === conversationId).sort((a,b) => Number(Boolean(a.retired)) - Number(Boolean(b.retired)) || Number(b.principalId === this.human.principalId) - Number(a.principalId === this.human.principalId))[0]
@@ -746,6 +771,7 @@ export class CommunicationRuntime {
       replyMentionUnionAvailable: this.transport.welcome?.capabilities?.includes('reply-mention-union') === true,
       directedGroupRepliesAvailable: this.transport.welcome?.capabilities?.includes('directed-group-replies') === true,
       multipleDefaultBotsAvailable: this.transport.welcome?.capabilities?.includes(MULTI_BOT_ROUTING_CAPABILITY) === true,
+      presenceFresh: Boolean(this.transport.lastSynchronizedAt && Date.now() - Date.parse(this.transport.lastSynchronizedAt) < 15000),
       managementRevision: this.managementRevision ?? 0, transport: this.transport.diagnostics?.() ?? null,
       compatibility: this.transport.compatibility, managementUrl, managementAvailable: managementUrl !== null,
       lastConnectedAt: this.lastConnectedAt ?? null, error: this.transportError ?? this.lastError ?? null, avatarError: this.avatarError ?? null, contacts: this.contacts,

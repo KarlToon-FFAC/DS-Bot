@@ -1955,7 +1955,7 @@ test('message activation uses Hub evidence rather than display mentions or pendi
  await pane({snapshot:{...state(),conversations:[member]},history},async({doc,click})=>{
   await click('Shared group')
   assert.match(doc.querySelector('[data-message-id=e0] .bt-comm-activation').textContent,/Dispatch not recorded/)
-  assert.match(doc.querySelector('[data-message-id=e1] .bt-comm-activation').textContent,/No Bots activated/)
+  assert.equal(Boolean(doc.querySelector('[data-message-id=e1] .bt-comm-activation')),false)
   assert.equal(doc.querySelectorAll('[data-message-id=e2] [data-activated-bot]').length,1)
  })
 })
@@ -1983,5 +1983,31 @@ test('an existing orphan application exposes only withdrawal and reconciles a lo
   assert.equal(button('Withdraw request'),undefined)
   assert.equal(calls.filter(c=>c.endpoint==='forget-hub').length,1)
   assert.equal(calls.some(c=>c.endpoint==='cancel-hub-join'||c.endpoint==='leave-hub'),false)
+ })
+})
+
+test('view reply chain does not select a quote; Reply selects it and all Bot avatars share live presence',async()=>{
+ const bot={principalId:'bot:b:peer',displayName:'Peer',kind:'bot',speakingMode:'passive',published:true,connected:true,working:true}
+ const group={...membership,info:{...membership.info,membershipVersion:1,members:[...membership.info.members,bot]}}
+ let snapshot={...state(),directedGroupRepliesAvailable:true,replyMentionUnionAvailable:true,conversations:[group]}
+ const event={type:'message',conversationSeq:1,serverAcceptedAt:'2026-11-12T00:00:00Z',activatedBotPrincipalIds:[bot.principalId],message:{messageId:'result',author:bot,content:{text:'Progress report'},mentions:[],replyToMessageId:null}}
+ await pane({getState:()=>snapshot,history:[event],handle:async body=>body.endpoint==='thread'?{conversationId:'group',membershipEpoch:'epoch',messageId:'result',rootMessageId:'result',events:[event],watermark:1}:{}},async({doc,click,edit,autoRefresh})=>{
+  await click('Shared group')
+  assert.ok(doc.querySelector('[data-avatar-id="bot:b:peer"] [data-bot-status="working"]'))
+  assert.equal(doc.querySelector('.bt-comm-activation').textContent.includes('Bot dispatch'),false)
+  await click('View replies')
+  assert.equal(Boolean(doc.querySelector('.bt-comm-thread-composer')),false)
+  await click('Close replies')
+  await click('Reply')
+  assert.match(doc.querySelector('.bt-comm-thread-composer .bt-comm-reference').textContent,/Progress report/)
+  assert.ok(doc.querySelector('.bt-comm-thread-composer [data-bot-status="working"]'))
+  await click('Close replies')
+  await edit(doc.querySelector('footer textarea'),'@')
+  assert.ok(doc.querySelector('[role=listbox] [data-bot-status="working"]'))
+  snapshot={...snapshot,connected:false};await autoRefresh()
+  assert.equal(doc.querySelectorAll('[data-bot-status="working"],[data-bot-status="online"]').length,0)
+  assert.ok(doc.querySelector('[data-bot-status="unknown"]'))
+  snapshot={...snapshot,connected:true,conversations:[{...group,info:{...group.info,members:[group.info.members[0],{...bot,working:false}]}}]};await autoRefresh()
+  assert.ok(doc.querySelector('[data-bot-status="online"]'))
  })
 })
