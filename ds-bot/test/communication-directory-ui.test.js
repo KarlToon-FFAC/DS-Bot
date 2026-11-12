@@ -8,7 +8,7 @@ import { build } from 'esbuild'
 
 const harness = createRequire(join(process.env.DSH_HARNESS, 'package.json'))
 const { JSDOM } = harness('jsdom'), React = harness('react'), { act } = React
-const { outputFiles } = await build({ stdin: { contents: "export * from './communication-work-approvals.js'; export * from './communication-group.js'; export * from './communication-live.js'; export * from './communication-contacts.js'; export * from './communication-profile.js'; export * from './communication-onboarding.js'; export * from './communication-list.js'; export { BotMark } from './mark.js'", resolveDir: fileURLToPath(new URL('../src/client/', import.meta.url)), loader: 'js' },
+const { outputFiles } = await build({ stdin: { contents: "export * from './communication-presence.js'; export * from './communication-group-profile.js'; export * from './communication-work-approvals.js'; export * from './communication-group.js'; export * from './communication-live.js'; export * from './communication-contacts.js'; export * from './communication-profile.js'; export * from './communication-onboarding.js'; export * from './communication-list.js'; export { BotMark } from './mark.js'", resolveDir: fileURLToPath(new URL('../src/client/', import.meta.url)), loader: 'js' },
   bundle: true, platform: 'browser', format: 'cjs', external: ['react', 'react-dom', '@deepseek-ai/dsh-client-ui-primitives'], write: false })
 
 async function ui(check) {
@@ -634,5 +634,58 @@ test('Bot private chat avatar always selects the counterpart, including title an
   const conversation={kind:'dm',viewerPrincipalId:own.principalId,info:{members:[own,peer]}}
   await render(React.createElement(api.ConversationAvatar,{conversation,humanId:'human:a:owner',request:async()=>({})}))
   assert.equal(doc.querySelector('[data-avatar-id]').dataset.avatarId,peer.principalId)
+ })
+})
+
+
+test('contact avatar failures recover without remounting and every visible copy shares the same revision request',async()=>{
+ await ui(async({exports:api,doc,render})=>{
+  const person={principalId:'human:peer:owner',kind:'human',displayName:'Peer',avatar:{imageRevision:'a'.repeat(64)}}
+  let calls=0
+  const request=async()=>{if(++calls===1)throw new Error('temporary disconnect');return {image:imageA}}
+  api.syncAvatarDirectory([person])
+  await render(React.createElement(React.Fragment,null,
+   React.createElement(api.ContactDirectory,{contacts:[person],request,humanPrincipalId:'human:local:owner'}),
+   React.createElement(api.CommunicationAvatar,{person,request})))
+  assert.equal(calls,1)
+  assert.equal(doc.querySelectorAll('[data-avatar-id] img').length,0)
+  await act(async()=>{await new Promise(resolve=>setTimeout(resolve,1150))})
+  assert.equal(calls,2,'one retry is shared by the contact card and other copies')
+  assert.equal(doc.querySelectorAll('[data-avatar-id] img').length,2)
+  for(const node of doc.querySelectorAll('[data-avatar-id] img'))assert.equal(node.getAttribute('src'),imageA)
+ })
+})
+
+test('profile draft reset and edited name stay local while directory avatars keep the saved identity',async()=>{
+ await ui(async({exports:api,doc,render,click,edit})=>{
+  const human={principalId:'human:a:owner',kind:'human',displayName:'Alice',avatar:{imageRevision:'a'.repeat(64)}}
+  const request=async body=>body.endpoint==='avatar'?{image:imageA}:{principalId:human.principalId,publicProfile:{version:1,headline:'',summary:'',expertise:[],languages:[]}}
+  api.syncAvatarDirectory([human])
+  await render(React.createElement(api.CommunicationPresence,{state:{connected:true,contacts:[human]}},
+   React.createElement(api.HumanProfile,{human,request,operation:async()=>({})}),
+   React.createElement(api.CommunicationAvatar,{person:human,request})))
+  assert.equal(doc.querySelectorAll('[data-avatar-id] img').length,2)
+  await click('Reset avatar')
+  assert.equal(Boolean(doc.querySelector('.bt-comm-profile-preview img')),false)
+  assert.equal(doc.querySelectorAll('[data-avatar-id] img').length,1,'unsaved reset does not change the saved directory image')
+  await edit('Human name','Bob')
+  assert.equal(doc.querySelector('.bt-comm-profile-preview [data-initials]').dataset.initials,'BO')
+ })
+})
+
+
+test('group profile dialogs submit independent identity and avatar changes with captured group versions',async()=>{
+ await ui(async({exports:api,doc,render,click,edit})=>{
+  const member={conversationId:'group',kind:'group',title:'Project',membershipEpoch:'epoch',membershipVersion:4,info:{members:[]}},calls=[]
+  const operation=async(endpoint,value)=>{calls.push({endpoint,...value});return {membershipVersion:5}}
+  let closed
+  await render(React.createElement(api.GroupProfileDialog,{member,person:{principalId:'bot:a:1',displayName:'Bot',groupIdentity:'Developer'},kind:'identity',operation,request:async()=>({}),onClose:result=>{closed=result}}))
+  await edit('Group identity description','You coordinate this group.\nCollect progress and arrange delivery.');await click('Save')
+  assert.deepEqual(JSON.parse(JSON.stringify(calls[0])),{endpoint:'set-group-identity',conversationId:'group',membershipEpoch:'epoch',expectedVersion:4,targetPrincipalId:'bot:a:1',identity:'You coordinate this group.\nCollect progress and arrange delivery.'})
+  assert.equal(closed.membershipVersion,5)
+  await render(React.createElement(api.GroupProfileDialog,{key:'avatar',member,kind:'avatar',operation,request:async()=>({}),onClose:()=>{}}))
+  await click('Reset avatar');await click('Save')
+  assert.equal(calls[1].endpoint,'set-group-avatar');assert.equal(calls[1].image,null);assert.equal(calls[1].expectedVersion,4)
+  assert.ok(doc.querySelector('dialog'))
  })
 })

@@ -668,3 +668,34 @@ test('administrator deletes orphan applications independently and missing proofs
  assert.throws(()=>m.deleteJoin({requestId:row.requestId,expectedVersion:row.version,confirmDelete:true}),{code:'JOIN_HAS_DEVICE'})
  assert.throws(()=>m.challenge(socket,{purpose:'leave-status',instanceId:'missing-device'}),{code:'INSTANCE_NOT_FOUND'})
 })
+
+test('profile names replace enrollment labels across devices, directories, members and approved requests', t => {
+  const {store,m}=fixture(t),a=enroll(m,'Original enrollment name')
+  store.register(a.auth,{localId:'local-user',kind:'human',displayName:'Original enrollment name'})
+  const bot=store.register(a.auth,{localId:'helper',kind:'bot',displayName:'Helper'})
+  const group=store.createGroup(a.auth,{principalId:a.principalId,title:'Name regression',operationId:randomUUID()})
+  const epoch=store.db.prepare('SELECT epoch FROM memberships WHERE conversation_id=? AND principal_id=?').get(group.conversationId,a.principalId).epoch
+  const profile=displayName=>store.profile(a.auth,{principalId:a.principalId,displayName,operationId:randomUUID()})
+  const check=(name,label)=>{
+    assert.equal(m.instances()[0].label,label)
+    for(const people of [m.participants(),store.contacts(a.auth),store.members(a.auth,{principalId:a.principalId,conversationId:group.conversationId,membershipEpoch:epoch}).members]){
+      assert.equal(people.find(p=>p.principalId===a.principalId).displayName,name)
+      assert.ok(people.every(p=>p.instanceLabel===label))
+    }
+    assert.equal(m.participants().find(p=>p.principalId===bot.principalId).instanceLabel,label)
+    const request=m.joins().find(row=>row.requestId===a.requestId)
+    assert.equal(request.label,name);assert.equal(request.enrollmentLabel,'Original enrollment name')
+    const socket={},challenge=m.challenge(socket,{purpose:'login',instanceId:a.auth.instanceId})
+    assert.equal(m.prove(socket,proof(a.key,challenge)).label,label)
+  }
+  profile('Current profile');check('Current profile','Current profile')
+  // Old databases keep the enrollment label; no migration or reconnect is needed.
+  assert.equal(store.db.prepare('SELECT label FROM instances WHERE id=?').get(a.auth.instanceId).label,'Original enrollment name')
+  store.register(a.auth,{localId:'local-user',kind:'human',displayName:'Original enrollment name'})
+  check('Current profile','Current profile')
+  profile(null);check('Original enrollment name','Original enrollment name')
+  m.rename({instanceId:a.auth.instanceId,label:'Admin device alias',expectedNameVersion:0})
+  profile('Second profile');check('Second profile','Admin device alias')
+  store.renameHuman(a.auth,{principalId:a.principalId,displayName:'Third profile'})
+  check('Third profile','Admin device alias')
+})

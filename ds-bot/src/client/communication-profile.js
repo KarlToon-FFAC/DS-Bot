@@ -14,33 +14,57 @@ export function safeAvatarImage(value) {
 export function syncAvatarDirectory(contacts, scope = 'legacy') {
   if(scope !== avatarScope){avatarScope=scope;images.clear();requests.clear()}
   authorized.clear()
-  for (const person of contacts) if (person.avatar?.imageRevision) authorized.set(person.principalId, person.avatar.imageRevision)
+  for (const person of contacts) {
+    if (person.avatar?.imageRevision) authorized.set(person.principalId, person.avatar.imageRevision)
+    else authorized.delete(person.principalId)
+  }
   for (const key of images.keys()) {
     const [,principalId, revision] = JSON.parse(key)
     if (authorized.get(principalId) !== revision) images.delete(key)
   }
 }
-export function CommunicationAvatar({ person, request, allowed = true, size = 28 }) {
-  person=useCommunicationAvatarPerson(person)
+export function CommunicationAvatar({ person, request, allowed = true, size = 28, preferDirectory = true }) {
+  person=useCommunicationAvatarPerson(person,preferDirectory)
   const revision = allowed ? person.avatar?.imageRevision : null
   const scope = avatarScope, key = JSON.stringify([scope,person.principalId, revision])
   const [loaded, setLoaded] = useState(null)
   useEffect(() => {
-    let active = true
+    let active = true, timer, attempts = 0, loading = false, complete = false
     setLoaded(null)
     if (!revision) return undefined
-    const cached = images.get(key)
-    if (cached) { setLoaded({ key, image: cached }); return undefined }
-    if (!requests.has(key)) {
-      const promise = request({ endpoint: 'avatar', principalId: person.principalId, revision }).then(value => {
-        const image = value.principalId && value.principalId !== person.principalId || value.revision && value.revision !== revision ? null : safeAvatarImage(value.image)
-        if (image && scope === avatarScope && authorized.get(person.principalId) === revision) images.set(key, image)
-        return image
-      }).catch(() => null).finally(() => requests.delete(key))
-      requests.set(key, promise)
+    const load = async () => {
+      if (!active || loading || complete || scope !== avatarScope) return
+      loading = true
+      try {
+        let image = images.get(key)
+        if (!image) {
+          if (!requests.has(key)) {
+            const promise = Promise.resolve().then(() => request({ endpoint: 'avatar', principalId: person.principalId, revision })).then(value => {
+              const image = value.principalId && value.principalId !== person.principalId || value.revision && value.revision !== revision ? null : safeAvatarImage(value.image)
+              if (image && scope === avatarScope && authorized.get(person.principalId) === revision) images.set(key, image)
+              return image
+            }).finally(() => { if (requests.get(key) === promise) requests.delete(key) })
+            requests.set(key, promise)
+          }
+          image = await requests.get(key)
+        }
+        if (active && scope === avatarScope && image) { complete = true; setLoaded({ key, image }) }
+      } catch { /* A transient fetch failure must not freeze the default avatar. */ }
+      finally {
+        loading = false
+        if (active && !complete && scope === avatarScope) timer = setTimeout(() => {
+          if (document.visibilityState === 'hidden') { timer = setTimeout(wake, 5000); return }
+          void load()
+        }, Math.min(30000, 1000 * 2 ** Math.min(attempts++, 5)))
+      }
     }
-    void requests.get(key).then(image => { if (active && image) setLoaded({ key, image }) })
-    return () => { active = false }
+    const wake = () => {
+      if (document.visibilityState === 'hidden' || loading || complete) return
+      clearTimeout(timer); void load()
+    }
+    void load()
+    window.addEventListener('online',wake);window.addEventListener('focus',wake);document.addEventListener('visibilitychange',wake)
+    return () => { active = false; clearTimeout(timer);window.removeEventListener('online',wake);window.removeEventListener('focus',wake);document.removeEventListener('visibilitychange',wake) }
   }, [key, request, revision, person.principalId])
   const image = loaded?.key === key ? loaded.image : null
   const bot = person.kind === 'bot' || person.principalId?.startsWith('bot:')
@@ -168,7 +192,7 @@ export function HumanProfile({ human, request, operation, onSaved, convertImage 
   }
   return h('section', { className: 'bt-comm-profile' },
     h('div', { className: 'bt-comm-profile-preview' }, avatar?.image ? h('img', { src: avatar.image, alt: t('Avatar preview'), width: 64, height: 64 }) :
-      h(CommunicationAvatar, { person: { ...human, displayName: name, ...(avatar === null ? { avatar: {} } : {}) }, request, size: 64 })),
+      h(CommunicationAvatar, { person: { ...human, displayName: name, ...(avatar === null ? { avatar: {} } : {}) }, request, size: 64, preferDirectory: false })),
     h('label', { className: 'bt-comm-field' }, t('Human name'), h('input', { value: name, 'aria-label': t('Human name'), onChange: event => { edits.current += 1; setName(event.target.value) } })),
     h('label', { className: 'bt-comm-field' }, t('Upload avatar'), h('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp,image/gif', 'aria-label': t('Upload avatar'), onChange: event => { void upload(event.target.files?.[0]); event.target.value = '' } })),
     h('button', { type: 'button', onClick: () => { fileOrder.current += 1; edits.current += 1; setAvatar(null) } }, t('Reset avatar')),

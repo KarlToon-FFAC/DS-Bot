@@ -770,6 +770,7 @@ export class CommunicationRuntime {
       attachmentsAvailable: this.transport.welcome?.capabilities?.includes(ATTACHMENT_CAPABILITY) === true,
       replyMentionUnionAvailable: this.transport.welcome?.capabilities?.includes('reply-mention-union') === true,
       directedGroupRepliesAvailable: this.transport.welcome?.capabilities?.includes('directed-group-replies') === true,
+      groupProfilesAvailable: this.transport.welcome?.capabilities?.includes('group-profiles') === true,
       multipleDefaultBotsAvailable: this.transport.welcome?.capabilities?.includes(MULTI_BOT_ROUTING_CAPABILITY) === true,
       presenceFresh: Boolean(this.transport.lastSynchronizedAt && Date.now() - Date.parse(this.transport.lastSynchronizedAt) < 15000),
       managementRevision: this.managementRevision ?? 0, transport: this.transport.diagnostics?.() ?? null,

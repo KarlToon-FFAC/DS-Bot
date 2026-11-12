@@ -1,3 +1,4 @@
+import {setGroupAvatar,readGroupAvatar,setGroupIdentity,readGroupIdentity,groupIdentity} from './group-profiles.js'
 import { humanReceivingBots } from './human-routing.js'
 import { COMMUNICATION_VERSION } from './version.js'
 import { retireBot } from './bot-retirement.js'
@@ -45,6 +46,8 @@ export class HubStore {
       CREATE TABLE IF NOT EXISTS principal_retirements (principal_id TEXT PRIMARY KEY REFERENCES principals(id),retired_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS retired_memberships (conversation_id TEXT NOT NULL REFERENCES conversations(id),principal_id TEXT NOT NULL REFERENCES principals(id),epoch TEXT NOT NULL,last_seq INTEGER NOT NULL,PRIMARY KEY(conversation_id,principal_id));
       CREATE TABLE IF NOT EXISTS principal_publication (principal_id TEXT PRIMARY KEY REFERENCES principals(id), published INTEGER NOT NULL CHECK(published IN (0,1)));
+      CREATE TABLE IF NOT EXISTS group_avatars (conversation_id TEXT PRIMARY KEY REFERENCES conversations(id) ON DELETE CASCADE,revision TEXT NOT NULL,image TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS group_identities (conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,principal_id TEXT NOT NULL REFERENCES principals(id) ON DELETE CASCADE,epoch TEXT NOT NULL,body TEXT NOT NULL,PRIMARY KEY(conversation_id,principal_id));
       CREATE TABLE IF NOT EXISTS principal_avatar (principal_id TEXT PRIMARY KEY REFERENCES principals(id), descriptor TEXT NOT NULL, image_revision TEXT, image TEXT);
       CREATE TABLE IF NOT EXISTS avatar_uploads (principal_id TEXT PRIMARY KEY REFERENCES principals(id), upload_id TEXT NOT NULL, revision TEXT NOT NULL, total_length INTEGER NOT NULL, data TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS causal_roots (id TEXT PRIMARY KEY, conversation_id TEXT NOT NULL REFERENCES conversations(id), ai_deliveries INTEGER NOT NULL DEFAULT 0);
@@ -184,15 +187,26 @@ export class HubStore {
     return row ? { ...JSON.parse(row.body), version: row.version, updatedAt: row.updated_at }
       : { headline: '', summary: '', expertise: [], languages: [], version: 0, updatedAt: null }
   }
+  instanceLabel(instanceId) {
+    // Explicit device aliases remain independent; otherwise a saved Human name
+    // supersedes the enrollment label, including for databases from older releases.
+    return this.db.prepare(`SELECT coalesce(n.label,(
+      SELECT pref.display_name FROM principals p JOIN principal_preferences pref ON pref.principal_id=p.id
+      WHERE p.instance_id=i.id AND p.kind='human' ORDER BY (p.local_id='local-user') DESC,p.id LIMIT 1
+    ),i.label) label FROM instances i LEFT JOIN hub_instance_names n ON n.instance_id=i.id WHERE i.id=?`).get(instanceId)?.label
+  }
   participantProfiles(rows, { maxBytes } = {}) {
     const visible = new Set(rows.map(person => person.principalId))
+    const labels = new Map(rows.map(person => [person.homeInstanceId, null]))
+    for (const id of labels.keys()) labels.set(id, this.instanceLabel(id))
     const result = rows.map(person => {
       const owner = person.kind === 'human' ? person.principalId : this.ownerOfPrincipal(person.principalId)
-      return { ...person, ...(this.retirementOf(person.principalId) ?? {}), ownerPrincipalId: visible.has(owner) ? owner : null }
+      return { ...person, ...(labels.get(person.homeInstanceId) ? { instanceLabel: labels.get(person.homeInstanceId) } : {}), ...(this.retirementOf(person.principalId) ?? {}), ownerPrincipalId: visible.has(owner) ? owner : null }
     })
     if (maxBytes === undefined) return result.map(person => ({ ...person, publicProfile: this.publicProfileOf(person.principalId) }))
+    if(responseBytes(result)>maxBytes)for(const person of result)if(person.groupIdentity){person.groupIdentity=[...person.groupIdentity].slice(0,120).join('');person.groupIdentityTruncated=true}
     // Optional presentation metadata must not make an otherwise readable identity list overflow.
-    for (const field of ['ipAddress', 'instanceLabel', 'avatar']) {
+    for (const field of ['ipAddress', 'instanceLabel', 'avatar', 'groupIdentity']) {
       if (responseBytes(result) <= maxBytes) break
       for (const person of result) delete person[field]
     }
@@ -599,6 +613,10 @@ export class HubStore {
     requireThat(Number.isSafeInteger(input.expectedVersion)&&input.expectedVersion===group.version,'GROUP_VERSION_CONFLICT')
     return {caller,group}
   }
+  setGroupAvatar(auth,input) { return setGroupAvatar(this,auth,input) }
+  readGroupAvatar(auth,input) { return readGroupAvatar(this,auth,input) }
+  setGroupIdentity(auth,input) { return setGroupIdentity(this,auth,input) }
+  readGroupIdentity(auth,input) { return readGroupIdentity(this,auth,input) }
   configureGroup(auth,input) {
     return this.operation(auth,input.operationId,input,()=>{
       const {caller}=this.groupActor(auth,input)
@@ -919,8 +937,9 @@ export class HubStore {
     }
     const conversation=this.db.prepare('SELECT title,kind,version,routing_mode,admin_bot,default_bots,owner_id FROM conversations WHERE id=?').get(input.conversationId)
     const result = {conversationId:input.conversationId,title:conversation.title,kind:conversation.kind,membershipVersion:conversation.version,routingMode:conversation.routing_mode,adminBotPrincipalId:conversation.admin_bot,defaultBotPrincipalIds:defaultReceivingBots(conversation),ownerPrincipalId:conversation.owner_id,members:[],formerMembers:[]}
+    if(conversation.kind==='group')result.avatar={imageRevision:this.db.prepare('SELECT revision FROM group_avatars WHERE conversation_id=?').get(input.conversationId)?.revision??null}
     const maxBytes = this.limits.maxEnvelopeBytes - responseBytes(result) + responseBytes([])
-    result.members=this.participantProfiles(this.db.prepare('SELECT p.id principalId,p.kind,p.name displayName,p.instance_id homeInstanceId,i.label instanceLabel,m.manager,m.role,m.speaking_mode speakingMode FROM memberships m JOIN principals p ON p.id=m.principal_id JOIN instances i ON i.id=p.instance_id WHERE m.conversation_id=? AND (m.active=1 OR EXISTS(SELECT 1 FROM principal_retirements r WHERE r.principal_id=p.id)) AND m.join_seq<=? ORDER BY p.id').all(input.conversationId,reader.read_until ?? Number.MAX_SAFE_INTEGER).map(person=>({...person,published:this.isPublished(person.principalId),avatar:this.avatarOf(person.principalId),...this.presenceOf?.(person)})), { maxBytes })
+    result.members=this.participantProfiles(this.db.prepare('SELECT p.id principalId,p.kind,p.name displayName,p.instance_id homeInstanceId,i.label instanceLabel,m.manager,m.role,m.speaking_mode speakingMode FROM memberships m JOIN principals p ON p.id=m.principal_id JOIN instances i ON i.id=p.instance_id WHERE m.conversation_id=? AND (m.active=1 OR EXISTS(SELECT 1 FROM principal_retirements r WHERE r.principal_id=p.id)) AND m.join_seq<=? ORDER BY p.id').all(input.conversationId,reader.read_until ?? Number.MAX_SAFE_INTEGER).map(person=>({...person,...(conversation.kind==='group'?{groupIdentity:groupIdentity(this,input.conversationId,person.principalId)}:{}),published:this.isPublished(person.principalId),avatar:this.avatarOf(person.principalId),...this.presenceOf?.(person)})), { maxBytes })
     if(conversation.kind==='group'){result.formerMembers=result.members.filter(person=>person.retired);result.members=result.members.filter(person=>!person.retired)}
     return result
   }

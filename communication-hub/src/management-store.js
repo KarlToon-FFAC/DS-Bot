@@ -119,7 +119,7 @@ export class HubManagement {
         return {instanceId:item.instanceId,left:item.purpose==='leave'||row.trusted===0}
       }
       requireThat(row?.trusted === 1, 'UNAUTHENTICATED')
-      return { instanceId: item.instanceId, label: row.label }
+      return { instanceId: item.instanceId, label: this.store.instanceLabel(item.instanceId) }
     }
     if (item.purpose === 'join') {
       requireThat(typeof input.displayName === 'string' && input.displayName.trim() && input.displayName.length <= 100, 'INVALID_REQUEST')
@@ -141,7 +141,9 @@ export class HubManagement {
   joins() {
     this.cleanup()
     return this.db.prepare('SELECT id requestId,label,status,created_at createdAt,expires_at expiresAt,version,instance_id instanceId,public_key FROM hub_join_requests WHERE NOT EXISTS(SELECT 1 FROM hub_instance_departures d WHERE d.instance_id=hub_join_requests.instance_id) ORDER BY created_at DESC LIMIT 200').all()
-      .map(({ public_key, ...row }) => ({ ...row, fingerprint: digest(public_key) }))
+      .map(({ public_key, ...row }) => ({ ...row, enrollmentLabel: row.label,
+        label: row.instanceId ? this.db.prepare("SELECT name FROM principals WHERE instance_id=? AND kind='human' ORDER BY (local_id='local-user') DESC,id LIMIT 1").get(row.instanceId)?.name ?? row.label : row.label,
+        fingerprint: digest(public_key) }))
   }
   audit(action, subject) { this.db.prepare('INSERT INTO hub_admin_audit(at,action,subject) VALUES (?,?,?)').run(this.now(), action, subject) }
   decide(input) {
@@ -207,7 +209,7 @@ export class HubManagement {
     // JOIN_NOT_FOUND, never an undefined-row exception or accidental recreation.
     return result
   }
-  instances() { return this.db.prepare('SELECT i.id instanceId,i.label,i.trusted,i.pairing_revision pairingRevision,p.revision,coalesce(n.version,0) nameVersion FROM instances i LEFT JOIN hub_enrolled_peers p ON p.instance_id=i.id LEFT JOIN hub_instance_names n ON n.instance_id=i.id WHERE NOT EXISTS(SELECT 1 FROM hub_instance_departures d WHERE d.instance_id=i.id) ORDER BY i.id').all().map(instance => ({ ...instance, connected: this.isInstanceConnected?.(instance.instanceId) === true, ownedSharedGroups: this.db.prepare("SELECT c.id conversationId,c.title,c.version FROM conversations c JOIN principals owner ON owner.id=c.owner_id WHERE owner.instance_id=? AND c.kind='group' AND c.closed=0 AND EXISTS (SELECT 1 FROM memberships m JOIN principals p ON p.id=m.principal_id WHERE m.conversation_id=c.id AND p.instance_id<>?) ORDER BY c.id").all(instance.instanceId, instance.instanceId) })) }
+  instances() { return this.db.prepare('SELECT i.id instanceId,i.label,i.trusted,i.pairing_revision pairingRevision,p.revision,coalesce(n.version,0) nameVersion FROM instances i LEFT JOIN hub_enrolled_peers p ON p.instance_id=i.id LEFT JOIN hub_instance_names n ON n.instance_id=i.id WHERE NOT EXISTS(SELECT 1 FROM hub_instance_departures d WHERE d.instance_id=i.id) ORDER BY i.id').all().map(instance => ({ ...instance, label: this.store.instanceLabel(instance.instanceId), connected: this.isInstanceConnected?.(instance.instanceId) === true, ownedSharedGroups: this.db.prepare("SELECT c.id conversationId,c.title,c.version FROM conversations c JOIN principals owner ON owner.id=c.owner_id WHERE owner.instance_id=? AND c.kind='group' AND c.closed=0 AND EXISTS (SELECT 1 FROM memberships m JOIN principals p ON p.id=m.principal_id WHERE m.conversation_id=c.id AND p.instance_id<>?) ORDER BY c.id").all(instance.instanceId, instance.instanceId) })) }
   participants() {
     const rows = this.db.prepare(`SELECT p.id principalId,p.instance_id homeInstanceId,p.kind,p.name displayName,
       i.label instanceLabel,i.trusted FROM principals p JOIN instances i ON i.id=p.instance_id

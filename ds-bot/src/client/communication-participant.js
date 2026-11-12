@@ -1,3 +1,4 @@
+import {GroupIdentityInformation} from './communication-group-profile.js'
 import { createElement as h, useEffect, useState } from 'react'
 import { CommunicationAvatar } from './communication-profile.js'
 import { t } from './i18n.js'
@@ -23,6 +24,7 @@ export function ParticipantInformation({ person, people, request, conversationId
     person.kind === 'bot' ? h('div', { className: 'bt-comm-participant-owner' }, h('h3', null, t('From contact')),
       owner ? h('p', null, h(CommunicationAvatar, { person: owner, request, size: 28 }), owner.displayName,
         owner.ipAddress ? h('small', null, owner.ipAddress) : null) : h('p', null, t('Owner information unavailable'))) : null,
+    h(GroupIdentityInformation,{person,conversationId,membershipEpoch,request}),
     h('h3', null, t('Public profile')), profile?.headline ? h('strong', null, profile.headline) : null,
     profile?.summary ? h('p', { className: 'bt-comm-participant-summary' }, profile.summary) : null,
     profile?.expertise?.length ? h('ul', { className: 'bt-comm-directory-skills' }, profile.expertise.map(term => h('li', { key: term }, term))) : null,

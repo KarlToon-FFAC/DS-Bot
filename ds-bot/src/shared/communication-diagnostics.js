@@ -128,6 +128,8 @@ export const communicationDescriptions = {
   COMMUNICATION_RELOAD_REQUIRED: 'The saved communication configuration has not loaded yet. Wait for the plugin reload, then refresh state and use the current Bot identity and membership epoch.',
   AVATAR_REVISION_MISMATCH: 'This avatar has changed or has no custom image. Refresh contacts and use its current imageRevision; a generated avatar has no image to download.',
   INVALID_AVATAR: 'The avatar image is invalid or unsupported. Refresh its current revision or choose a valid PNG, JPEG, WebP or GIF image.',
+  GROUP_PROFILES_CAPABILITY_REQUIRED: 'Update the Hub to use group avatars and group collaboration identities. Other communication remains available.',
+  INVALID_GROUP_IDENTITY: 'Use a group identity description of up to 4000 characters; multiple paragraphs are supported.',
   INVALID_AVATAR_RESPONSE: 'The Hub returned an invalid avatar image or chunk. Refresh contacts and check that client and Hub are updated.',
   INVALID_AVATAR_CHUNK: 'The Hub rejected the avatar chunk request. Update the client and Hub to matching versions.',
   INVALID_AVATAR_REVISION: 'Use the current avatar imageRevision from contacts. A generated avatar has no downloadable image.',
@@ -193,7 +195,7 @@ const phases = new Set(['ENROLLMENT_CONNECT_FAILED', 'ENROLLMENT_CHALLENGE_FAILE
 // Fixed public codes only; exception messages, causes and unrecognized codes stay private.
 const knownCodes = new Set([...Object.keys(communicationDescriptions), ...phases,
   'AI_MAPPING_CONFLICT', 'ATTACHMENT_CAPABILITY_REQUIRED', 'ATTACHMENT_SERVICE_UNAVAILABLE', 'AUTHORIZATION_PENDING', 'AUTHOR_MISMATCH',
-  'AVATAR_CAPABILITY_REQUIRED', 'AVATAR_SYNC_FAILED', 'BACKPRESSURE', 'BOT_NOT_FOUND', 'BOT_NOT_PUBLISHED', 'BOUNDED_COLLABORATION_REQUIRED',
+  'GROUP_PROFILES_CAPABILITY_REQUIRED', 'INVALID_GROUP_IDENTITY', 'AVATAR_CAPABILITY_REQUIRED', 'AVATAR_SYNC_FAILED', 'BACKPRESSURE', 'BOT_NOT_FOUND', 'BOT_NOT_PUBLISHED', 'BOUNDED_COLLABORATION_REQUIRED',
   'COMMUNICATION_AUTHORIZATION_UNKNOWN', 'COMMUNICATION_CACHE_DELETE_FAILED', 'COMMUNICATION_CONFIG_WRITE_FAILED', 'COMMUNICATION_CREDENTIAL_DELETE_FAILED', 'COMMUNICATION_CREDENTIAL_DESCRIBE_FAILED',
   'COMMUNICATION_CREDENTIAL_LIST_FAILED', 'COMMUNICATION_CREDENTIAL_MISMATCH', 'COMMUNICATION_CREDENTIAL_READ_FAILED', 'COMMUNICATION_CREDENTIAL_WRITE_FAILED', 'COMMUNICATION_INPUT_SOURCE_UNKNOWN', 'COMMUNICATION_NOT_APPROVED',
   'COMMUNICATION_RESET_INCOMPLETE', 'COMMUNICATION_BROWSER_RESET_REQUIRED', 'COMMUNICATION_NOT_CONFIGURED', 'COMMUNICATION_OUTPUT_SOURCE_UNKNOWN', 'COMMUNICATION_PAIRING_CONFLICT', 'COMMUNICATION_PRESET_CONFLICT', 'COMMUNICATION_PRESET_UNAVAILABLE', 'COMMUNICATION_READ_ONLY',

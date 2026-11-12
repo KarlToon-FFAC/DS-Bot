@@ -1,4 +1,4 @@
-import { createElement as h } from 'react'
+import { createElement as h, useCallback } from 'react'
 import { t } from './i18n.js'
 import { CommunicationAvatar } from './communication-profile.js'
 import { contactLabels, conversationTitle } from './communication-model.js'
@@ -7,7 +7,13 @@ import { contactLabels, conversationTitle } from './communication-model.js'
 // triangle or four corners. Unlike a local room, each seat may also be a Human.
 const seats = (count, size) => count < 2 ? [[0, 0, size]] : count === 2 ? [[0, 0, size * 2 / 3], [size / 3, size / 3, size * 2 / 3]] : count === 3 ? [[size * 2 / 9, 0, size * 5 / 9], [0, size * 4 / 9, size * 5 / 9], [size * 4 / 9, size * 4 / 9, size * 5 / 9]] : [[0, 0, size / 2], [size / 2, 0, size / 2], [0, size / 2, size / 2], [size / 2, size / 2, size / 2]]
 export function ConversationAvatar({ conversation, humanId, request, size = 36 }) {
+  const groupId='group:'+conversation.conversationId
+  const groupRequest=useCallback(async body=>{
+    const value=await request({endpoint:'group-avatar',conversationId:conversation.conversationId,membershipEpoch:conversation.membershipEpoch,revision:body.revision})
+    return {...value,principalId:groupId}
+  },[request,conversation.conversationId,conversation.membershipEpoch,groupId])
   const members = conversation.info?.members ?? []
+  if(conversation.kind==='group'&&conversation.info?.avatar?.imageRevision)return h(CommunicationAvatar,{person:{principalId:groupId,kind:'group',displayName:conversation.title,avatar:conversation.info.avatar},request:groupRequest,size})
   const viewerId = conversation.viewerPrincipalId ?? humanId
   const people = conversation.kind === 'group' ? members : members.filter(person => person.principalId !== viewerId).slice(0, 1)
   if (conversation.kind !== 'group' && people.length) return h(CommunicationAvatar, { person: people[0], request, size })
@@ -27,7 +33,7 @@ export function ConversationRow({ conversation, humanId, labels, selected, reque
   const author = conversation.lastMessage?.author
   const people = [...(conversation.info?.members ?? []), ...(conversation.info?.formerMembers ?? [])]
   const current = people.find(person => person.principalId === author?.principalId)
-  const sender = current ? contactLabels(people).get(current.principalId) : null
+  const sender = current ? labels.get(current.principalId) ?? contactLabels(people).get(current.principalId) : null
   const summary = preview && conversation.kind === 'group' && sender ? `${sender}: ${preview}` : preview
   const accessibleName = [name, summary, conversation.unread > 0 ? `${conversation.unread} ${t('Unread')}` : ''].filter(Boolean).join(', ')
   return h('button', { type: 'button', className: 'bt-comm-conversation-row', disabled, 'aria-label': accessibleName, 'aria-pressed': selected, 'aria-current': selected ? 'page' : undefined,

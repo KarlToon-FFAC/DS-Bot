@@ -11,9 +11,9 @@ export function CommunicationPresence({state,unavailable,children}) {
   return h(Presence.Provider,{value:{people,known:state?.connected===true&&state?.presenceFresh!==false&&!unavailable&&now-checked<15000}},children)
 }
 // Member snapshots can lag behind the current authorized contact directory.
-export function useCommunicationAvatarPerson(person) {
+export function useCommunicationAvatarPerson(person, preferDirectory = true) {
   const current=useContext(Presence)?.people.get(person.principalId)
-  if(!current||person.retired)return person
+  if(!preferDirectory||!current||person.retired)return person
   return {...person,displayName:current.displayName??person.displayName,
     ...(Object.hasOwn(current,'avatar')?{avatar:current.avatar}:{})}
 }

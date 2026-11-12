@@ -8,7 +8,7 @@ const CHUNK = 20
 const PAGE = 24
 
 // Uploaded avatars are center-cropped to a small square so state.json stays light.
-export async function avatarImage(file) {
+export async function avatarImage(file, { maxLength = 150000 } = {}) {
   if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type)) throw new Error(t('Choose a PNG, JPEG, WebP, or GIF image'))
   if (file.size > 25 * 1024 * 1024) throw new Error(t('Choose an image smaller than 25 MB'))
   const bitmap = await createImageBitmap(file)
@@ -23,10 +23,10 @@ export async function avatarImage(file) {
   bitmap.close?.()
   for (const quality of [0.9, 0.75, 0.6]) {
     const url = canvas.toDataURL('image/webp', quality)
-    if (url.startsWith('data:image/webp') && url.length < 150000) return url
+    if (url.startsWith('data:image/webp') && url.length < maxLength) return url
   }
   const png = canvas.toDataURL('image/png')
-  if (png.length < 150000) return png
+  if (png.length < maxLength) return png
   throw new Error(t('That image is too large'))
 }
 

@@ -2032,3 +2032,26 @@ test('DM list, title and message avatars follow current contact revisions even w
   })
  }
 })
+
+
+test('Contacts and group views follow profile names, avatar changes and removals without closing the modal',async()=>{
+ const peer={principalId:'human:b:peer',kind:'human',displayName:'Peer',avatar:{imageRevision:'a'.repeat(64)}}
+ const owner=membership.info.members[0]
+ const group={...membership,info:{...membership.info,members:[owner,peer]}}
+ let snapshot={...state(),contacts:[owner,peer],conversations:[group]}
+ const images={a:'data:image/png;base64,YQ==',b:'data:image/png;base64,Yg=='}
+ const event={type:'message',conversationSeq:1,serverAcceptedAt:'2026-11-12T00:00:00Z',activatedBotPrincipalIds:[],message:{messageId:'hello',author:peer,content:{text:'Hello'},mentions:[],replyToMessageId:null}}
+ await pane({getState:()=>snapshot,history:[event],handle:async body=>body.endpoint==='avatar'?{principalId:peer.principalId,revision:body.revision,image:images[body.revision[0]]}:[]},async({doc,click,autoRefresh})=>{
+  await click('Shared group');await click('Contacts')
+  const avatar=()=>doc.querySelector('[data-contact-id="human:b:peer"] img')
+  assert.equal(avatar()?.getAttribute('src'),images.a)
+  snapshot={...snapshot,contacts:[owner,{...peer,displayName:'Current name',instanceLabel:'Current name',avatar:{imageRevision:'b'.repeat(64)}}]};await autoRefresh()
+  assert.equal(avatar()?.getAttribute('src'),images.b)
+  assert.match(doc.querySelector('[data-contact-id="human:b:peer"]').textContent,/Current name/)
+  assert.doesNotMatch(doc.querySelector('[data-contact-id="human:b:peer"]').textContent,/Peer/)
+  for(const image of doc.querySelectorAll('[data-avatar-id="human:b:peer"] img'))assert.equal(image.getAttribute('src'),images.b)
+  snapshot={...snapshot,contacts:[owner,{...peer,avatar:null}]};await autoRefresh()
+  assert.equal(doc.querySelectorAll('[data-avatar-id="human:b:peer"] img').length,0)
+  assert.equal(doc.querySelector('.bt-comm-modal').getAttribute('aria-label'),'Manage contacts')
+ })
+})

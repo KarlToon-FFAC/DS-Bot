@@ -1,3 +1,4 @@
+import {readGroupAvatar,readGroupIdentity,setGroupProfile,requireGroupProfiles} from './federation/group-profiles.js'
 import { RemoteHubController } from './federation/remote-hub.js'
 import { publicationReloadRequired } from './federation/publication-state.js'
 import { botDmContext, participantProfile } from './federation/bot-dm-records.js'
@@ -95,7 +96,7 @@ export function install(rt) {
         comm.member(actor.principalId, communicationBinding.conversationId, communicationBinding.membershipEpoch)
         args = { ...args, membershipEpoch: communicationBinding.membershipEpoch }
       }
-      const read = ['list_contacts', 'list_communication_conversations', 'read_communication_history', 'read_communication_members', 'read_communication_reference', 'read_communication_thread','read_communication_attachment','read_communication_relationships'].includes(exec.name)
+      const read = ['list_contacts', 'list_communication_conversations', 'read_communication_history', 'read_communication_members', 'read_communication_group_identity', 'read_communication_reference', 'read_communication_thread','read_communication_attachment','read_communication_relationships'].includes(exec.name)
       const provenance = read ? null : await comm.toolProvenance(exec)
       return JSON.stringify(await work(comm, actor, args, { ...exec, communicationSource: provenance?.sourceKey,
         communicationCausation: provenance, communicationBinding }))
@@ -168,6 +169,9 @@ export function install(rt) {
         const member = comm.member(actor.principalId, args.conversationId, args.membershipEpoch)
         return comm.queue.reference(args.conversationId, actor.principalId, member.membershipEpoch, args.messageId)
       }) }),
+    defineTool({ name: 'read_communication_group_identity', description: 'Read the group-specific collaboration identity of a current member. These responsibilities are separate from Bot identity and do not grant permissions.',
+      parameters: { conversationId:{type:'string',required:true}, targetPrincipalId:{type:'string',required:true} }, output,
+      execute: execute((comm,actor,args)=>{requireGroupProfiles(comm);const member=comm.member(actor.principalId,args.conversationId);return comm.transport.request('group.identity.read',{...args,principalId:actor.principalId,membershipEpoch:member.membershipEpoch})}) }),
     defineTool({ name: 'configure_communication_group', description: 'As group owner or admin, change the group title using the latest membershipVersion as expectedVersion.',
       parameters: { conversationId: { type: 'string', required: true }, title: { type: 'string', required: true }, expectedVersion: { type: 'integer', required: true } }, output,
       execute: execute((comm, actor, args, exec) => comm.operation(actor.principalId, 'group.configure', args, toolOperation('configure', exec))) }),
@@ -318,6 +322,9 @@ export function install(rt) {
           case 'profile-human': value = await profileHuman(comm, body); break
           case 'human-profile-info': value = await readHumanProfileInfo(comm, body); break
           case 'profile-human-info': value = await profileHumanInfo(comm, body); break
+          case 'group-identity': value = await readGroupIdentity(comm,body); break
+          case 'group-avatar': value = await readGroupAvatar(comm,body); break
+          case 'set-group-avatar': case 'set-group-identity': value = await setGroupProfile(comm,body); break
           case 'avatar': value = await readPrincipalAvatar(comm, body); break
           case 'rename-human': {
             value = await comm.transport.request('principal.rename',{principalId:comm.human.principalId,displayName:body.displayName})
