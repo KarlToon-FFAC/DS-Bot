@@ -1,4 +1,6 @@
 import {localChiefs,reportToLocalChief} from './federation/local-reports.js'
+import {localTeammates,consultLocalBot} from './federation/local-consultations.js'
+import {readOwnSkill,saveOwnSkill,ownRemoteHistory} from './federation/own-context.js'
 import {readGroupAvatar,readGroupIdentity,setGroupProfile,requireGroupProfiles} from './federation/group-profiles.js'
 import { RemoteHubController } from './federation/remote-hub.js'
 import { publicationReloadRequired } from './federation/publication-state.js'
@@ -97,7 +99,7 @@ export function install(rt) {
         comm.member(actor.principalId, communicationBinding.conversationId, communicationBinding.membershipEpoch)
         args = { ...args, membershipEpoch: communicationBinding.membershipEpoch }
       }
-      const read = ['list_local_chiefs','list_contacts', 'list_communication_conversations', 'read_communication_history', 'read_communication_members', 'read_communication_group_identity', 'read_communication_reference', 'read_communication_thread','read_communication_attachment','read_communication_relationships'].includes(exec.name)
+      const read = ['list_local_bots','read_own_skill','read_own_remote_history','list_local_chiefs','list_contacts', 'list_communication_conversations', 'read_communication_history', 'read_communication_members', 'read_communication_group_identity', 'read_communication_reference', 'read_communication_thread','read_communication_attachment','read_communication_relationships'].includes(exec.name)
       const provenance = read ? null : await comm.toolProvenance(exec)
       return JSON.stringify(await work(comm, actor, args, { ...exec, communicationSource: provenance?.sourceKey,
         communicationCausation: provenance, communicationBinding }))
@@ -105,6 +107,16 @@ export function install(rt) {
     catch (error) { return JSON.stringify({ ok: false, error: communicationError(error, { bot: rt.botOf?.(rt.chatOwners?.get(exec.agent?.id)), reloadRequired: communicationReloadRequired(rt, appliedSettings) }) }) }
   }
   const definitions = [
+    defineTool({name:'list_local_bots',description:'List local teammates, including unpublished Bots, for internal two-way collaboration. The Hub member list is not the local team.',parameters:{},output,
+      execute:execute((comm,_actor,_args,exec)=>({bots:localTeammates(comm,exec)}))}),
+    defineTool({name:'consult_local_bot',description:'Request local teammate work and receive its internal answer, without Hub publication or automatic forwarding. Supply botId and text once; retries of the same requestId return the same consultation. To keep waiting, supply only consultationId and waitSeconds. pending is not completion: wait again with that ID. After receiving the answer, decide what can be shared and call reply_to_communication or decline_communication_reply for the original remote input.',parameters:{botId:{type:'string'},text:{type:'string'},requestId:{type:'string'},consultationId:{type:'string'},waitSeconds:{type:'integer',description:'0–30 seconds per wait; default 30.'}},output,
+      execute:execute((comm,_actor,args,exec)=>consultLocalBot(comm,args,exec))}),
+    defineTool({name:'read_own_remote_history',description:'Read your own Bot remote history across conversations. Omit arguments to list your conversations, use query to search them, or conversationId to read one. This is internal recall, not permission to disclose another conversation. Never returns another local Bot’s private history.',parameters:{conversationId:{type:'string'},query:{type:'string'},cursor:{type:'string'},before:{type:'integer'},limit:{type:'integer'}},output,
+      execute:execute((comm,_actor,args,exec)=>ownRemoteHistory(comm,args,exec))}),
+    defineTool({name:'read_own_skill',description:'List your attached Skills, or read one by name. The same Skill content is used locally and remotely.',parameters:{name:{type:'string'}},output,
+      execute:execute((comm,_actor,args,exec)=>readOwnSkill(comm,args,exec))}),
+    defineTool({name:'save_own_skill',description:'Create or update and attach a Skill to your own Bot using the same creator/Main Bot permissions as local capability editing. Changes are available to local and remote Sessions. This grants no authority to change other Bots or disclose private data.',parameters:{name:{type:'string',required:true},description:{type:'string',required:true},content:{type:'string',required:true}},output,
+      execute:execute((comm,_actor,args,exec)=>saveOwnSkill(comm,args,exec))}),
     defineTool({name:'list_local_chiefs',description:'In a communication Session, list local Main Bots that can receive an internal report. Publication to the Hub is not required. This is a local roster, not remote contacts.',parameters:{},output,
       execute:execute((comm,_actor,_args,exec)=>({chiefs:localChiefs(comm,exec)}))}),
     defineTool({name:'report_to_local_chief',description:'Send one consolidated internal report per current remote input to a local Chief from list_local_chiefs. No Hub publication is needed. The report retains remote provenance and grants no user authority. Neither this report nor the Chief final is forwarded to the remote conversation. Retries return the same receipt; changed content for the same input/Chief conflicts.',

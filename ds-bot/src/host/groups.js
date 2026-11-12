@@ -966,7 +966,7 @@ export function install(rt) {
       await rt.load()
       const id = exec.agent?.id
       const owner = rt.groupOwners.get(id)
-      const botId = owner?.botId ?? rt.chatOwners.get(id)
+      const botId = owner?.botId ?? rt.chatOwners.get(id) ?? rt.communication?.owners.get(id)?.localBotRef
       if (botId === undefined) return 'Only Bots on the team can use read_own_chat.'
       const member = rt.botOf(botId)
       const room = rt.roomOf(owner?.roomId)
@@ -1018,10 +1018,12 @@ export function install(rt) {
     output,
     async execute(args, exec) {
       await rt.load()
-      const self = rt.selfOf(exec.agent?.id)
+      const remote = rt.communication?.owners.get(exec.agent?.id)
+      const self = remote?.localBotRef ?? rt.selfOf(exec.agent?.id)
       if (rt.botOf(self) === undefined) return 'Only Bots on the team can read group chats.'
       const { room, error } = rt.pickRoom(args.group, self)
       if (error) return error
+      if (remote && !room.members.includes(self)) return 'Remote Sessions may read only local groups their own Bot belongs to.'
       ensureRoomLog(room)
       await loadGroupLines(room)
       if (args.seq !== undefined) {

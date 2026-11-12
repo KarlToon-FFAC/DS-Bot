@@ -52,3 +52,18 @@ test('search pages reject changed scopes/cursors and cannot see beyond a contigu
  assert.throws(()=>runtime.searchHistory({query:'Needle',cursor:first.nextCursor}),{code:'HISTORY_SEARCH_CHANGED'})
  for(const query of ['', '   ', 'a'.repeat(201)])assert.throws(()=>runtime.searchHistory({query}),{code:'INVALID_REQUEST'})
 })
+
+test('same-Bot remote recall crosses its own conversations but excludes another Bot private DM and Human-only scopes',async t=>{
+ const {ownRemoteHistory}=await import('../src/host/federation/own-context.js')
+ const {assertConversationToolScope}=await import('../src/host/federation/tool-scope.js')
+ const {runtime}=fixture(t),binding={localBotRef:'worker',conversationId:'group'}
+ runtime.owners=new Map([['remote-worker',binding]])
+ const exec={agent:{id:'remote-worker'}}
+ const conversations=ownRemoteHistory(runtime,{},exec).conversations
+ assert.deepEqual(conversations.map(x=>x.conversationId).sort(),['group','owned-dm'])
+ assert.match(ownRemoteHistory(runtime,{conversationId:'owned-dm'},exec).events[0].message.content.text,/owned Bot private help/)
+ assert.throws(()=>ownRemoteHistory(runtime,{conversationId:'hidden-dm'},exec),{code:'NOT_A_MEMBER'})
+ assert.ok(ownRemoteHistory(runtime,{query:'Needle'},exec).results.every(row=>row.conversationId!=='hidden-dm'))
+ assert.doesNotThrow(()=>assertConversationToolScope(binding,'read_own_remote_history',{conversationId:'owned-dm'}))
+ assert.throws(()=>assertConversationToolScope(binding,'read_communication_history',{conversationId:'owned-dm'}),{code:'CONVERSATION_SCOPE_MISMATCH'})
+})

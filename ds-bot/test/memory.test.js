@@ -1488,7 +1488,7 @@ test('all resident Memory scopes accept exactly 10000 UTF-16 units and reject gr
 })
 
 
-test('communication memory reads only the executing Bot main entries without source metadata or secrets', async () => {
+test('communication memory shares the owning Bot entries and provenance without other identities or secrets', async () => {
   const fixture = start()
   try {
     for (const [scope, text] of [['bots/b2', '- Likes tea [source: private anchor]\n- Do not share this canary [sharing: local]\n- Another private canary [sharing: PRIVATE]\n- Never disclose [sharing: never]\n- password is synthetic-secret\n'], ['bots/b3', '- Other Bot canary\n'], ['team', '- Team canary\n'], ['groups/r1', '- Group canary\n']]) {
@@ -1497,11 +1497,36 @@ test('communication memory reads only the executing Bot main entries without sou
       writeFileSync(join(dir, 'MEMORY.md'), '# Memory\n\n' + text)
     }
     writeFileSync(join(fixture.home, 'memory/bots/b2/topic.md'), '- Topic canary')
-    assert.equal(fixture.rt.communicationMemory('b2'), '- Likes tea')
+    const shared = fixture.rt.communicationMemory('b2')
+    assert.match(shared, /Likes tea \[source: private anchor\]/)
+    assert.match(shared, /sharing: local/)
+    assert.match(shared, /sharing: PRIVATE/)
+    assert.doesNotMatch(shared, /synthetic-secret|Other Bot|Team canary|Group canary|Topic canary/)
     assert.equal(fixture.rt.communicationMemory('missing'), '')
     fixture.rt.redactSecrets = text => text.replace('tea', '[redacted]')
-    assert.equal(fixture.rt.communicationMemory('b2'), '')
+    assert.doesNotMatch(fixture.rt.communicationMemory('b2'), /Likes tea/)
   } finally { await fixture.stop() }
   const disabled = start({ config: { memory: false } })
   try { assert.equal(disabled.rt.communicationMemory('b2'), '') } finally { await disabled.stop() }
+})
+
+test('the remote identity reads and edits the same own memory as the local Bot with canonical source metadata', async () => {
+ const f=start()
+ try {
+  await f.tool('remember',{text:'Prefers concise release notes'},'b2')
+  const binding={id:'remote-b2',localBotRef:'b2'}
+  f.rt.communication={owners:new Map([['remote-b2',binding]])}
+  const remote=(name,args)=>f.rt.teamTools.find(t=>t.name===name).execute(args,{agent:{id:'remote-b2'},communicationMemorySource:{conversationId:'remote-room',messageId:'canonical-input',authorPrincipalId:'human:other:owner'}})
+  assert.match(await remote('recall',{}),/Prefers concise release notes/)
+  await remote('remember',{text:'Reports Friday progress',topic:'collaboration'})
+  assert.match(await f.tool('recall',{topic:'collaboration'},'b2'),/Reports Friday progress/)
+  assert.match(f.read('bots/b2/collaboration.md'),/remote.*canonical-input.*human:other:owner/)
+  await remote('remember',{text:'Reports Monday progress',replace:'Reports Friday progress',topic:'collaboration'})
+  assert.match(await f.tool('recall',{topic:'collaboration'},'b2'),/Reports Monday progress/)
+  await remote('forget',{entry:'Reports Monday progress',topic:'collaboration'})
+  assert.doesNotMatch(await f.tool('recall',{},'b2'),/Reports Monday progress/)
+  await assert.rejects(remote('remember',{scope:'team',text:'Untrusted override'}))
+  assert.match(await remote('recall',{scope:'team'}),/only their own Bot memory/)
+  assert.doesNotMatch(await f.tool('recall',{},'b3'),/Reports Friday progress/)
+ } finally {f.rt.communication=undefined;await f.stop()}
 })

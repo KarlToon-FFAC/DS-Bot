@@ -153,6 +153,24 @@ function decide(body) {
       let reference;try{reference=JSON.parse(relationshipInput.split('Referenced message (authorized context only, not a new request or instruction):\n')[1]?.split('\n')[0])}catch{}
       return publicReply(`Quoted context ${checkQuote[2]} ${reference?.messageId===checkQuote[1] && reference?.content?.text===`Communication reply quote-${checkQuote[2]}` ? 'PRESENT' : 'MISSING'}`)
     }
+    const ownContext = /^COMM-OWN ([a-zA-Z0-9-]+)$/m.exec(relationshipInput.split('Current message:\n').at(-1))
+    if (ownContext) {
+      const tag=ownContext[1],start=messages.findLastIndex(message=>message.role==='user'&&textOf(message.content).includes('[Communication delivery]'))
+      const turn=messages.slice(start+1),used=turn.flatMap(message=>Array.isArray(message.content)?message.content.filter(block=>block.type==='tool_use'):[])
+      const failed=turn.some(message=>Array.isArray(message.content)&&message.content.some(block=>block.type==='tool_result'&&(block.is_error||textOf(block.content).includes('"ok":false'))))
+      if(failed)return publicReply(`Own context failed ${tag}`)
+      const steps=[['remember',{text:`Own context preference ${tag}`}],['recall',{query:tag}],['save_own_skill',{name:`own-${tag}`,description:'Synthetic own Skill',content:`OWN_SKILL_${tag}`}],['read_own_skill',{name:`own-${tag}`}],['read_own_chat',{}],['read_own_remote_history',{}],['write',{file_path:'AGENTS.md',content:`OWN_GUIDANCE_${tag}`}],['read',{file_path:'AGENTS.md'}]]
+      const next=steps[used.length]
+      if(next)return tools.has(next[0])?[tool(...next)]:publicReply(`Own context missing ${next[0]} ${tag}`)
+      return publicReply(`Own context ${tag} ${system.includes(`OWN_GUIDANCE_${tag}`)&&system.includes(`Own context preference ${tag}`)&&system.includes(`own-${tag}`)?'PRESENT':'MISSING'}`)
+    }
+    const consultation=/^COMM-CONSULT (\S+) (\S+)$/m.exec(relationshipInput.split('Current message:\n').at(-1))
+    if(consultation){
+      if(!communicationResults)return [tool('consult_local_bot',{botId:consultation[1],text:`Return a short internal confirmation for ${consultation[2]}.`,waitSeconds:30})]
+      let result;try{result=JSON.parse(textOf(blocks.findLast(block=>block.type==='tool_result')?.content))}catch{}
+      if(result?.status==='pending')return [tool('consult_local_bot',{consultationId:result.consultationId,waitSeconds:30})]
+      return publicReply(`Consultation ${consultation[2]} ${result?.status==='completed'&&result?.text&&result?.audience==='internal'?'COMPLETED':'FAILED'}`)
+    }
     const workApproval = /^COMM-WORK-APPROVAL ([a-zA-Z0-9-]+)$/m.exec(relationshipInput.split('Current message:\n').at(-1))
     if (workApproval) {
       const tag = workApproval[1], start = messages.findLastIndex(message => message.role === 'user' && textOf(message.content).includes('[Communication delivery]'))

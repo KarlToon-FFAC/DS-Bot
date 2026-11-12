@@ -828,3 +828,27 @@ test('a written tool call is told apart from text about one', () => {
   assert.equal(writesToolCall(undefined), false)
   assert.equal(stripWrittenCalls(WRITTEN), 'Checking now.')
 })
+
+test('local consultation survives host restart and finishes as an internal result without a worker auto-reply', async t=>{
+ t.mock.timers.enable({apis:['setTimeout']})
+ const home=freshHome(t),first=await start(home)
+ const id='durable-consultation',remoteSource={consultationId:id,conversationId:'remote-group',messageId:'remote-input',authorPrincipalId:'human:remote:owner',reporterPrincipalId:'bot:local:worker'}
+ rt.state.localConsultations={[id]:{id,ownerBotId:'b',targetBotId:'a',bindingId:'remote-binding',remoteSource,status:'pending'}}
+ rt.openWork(id,{from:'b',to:'a',remoteSource})
+ await rt.deliver({fromId:'b',toId:'a',role:'request',text:'Review remote task internally',remoteSource,exchangeId:id})
+ run(first,'a',1,first.agentOf('a').calls[0])
+ await settle(()=>inflight(home).a?.trigger?.remoteSource!==undefined)
+ await first.stop()
+ const second=await start(home);t.mock.timers.tick(3000)
+ await settle(()=>second.agentOf('a').calls.length===1)
+ const message=second.agentOf('a').calls[0]
+ assert.equal(message.source.remoteSource.consultationId,id)
+ run(second,'a',2,message)
+ second.emit('a','assistant/message',{message:{role:'assistant',content:[{type:'text',text:'Recovered private answer.'}]}})
+ second.emit('a','turn/end',{turn:2,reason:{kind:'completed'}})
+ await settle(()=>JSON.parse(readFileSync(join(home,'state.json'),'utf8')).localConsultations[id].status==='completed')
+ await realDelay(15)
+ assert.match(rt.state.localConsultations[id].text,/Recovered private answer/)
+ assert.equal(second.agentOf('b').calls.length,0)
+ assert.equal(rt.state.turnAudiences.a[2].audience,'internal')
+})

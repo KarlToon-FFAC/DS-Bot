@@ -9,6 +9,7 @@ import { cleanText } from './diagnostics.js'
 import { absoluteLinks } from './links.js'
 import { textOf } from './text.js'
 import { reminderText } from './schedules.js'
+import {settleLocalConsultation} from './federation/local-consultations.js'
 
 // A failed turn's `LlmFailure`, kept to what can be shown and logged. Like DSH's own
 // error row, an AUTH failure loses its message: providers may echo part of the key.
@@ -29,6 +30,10 @@ export const failureLine = failure => `${failure.code}${failure.status ? ` ${fai
 // for closes, and the answer goes up to the Bot that asked. `id` is the Session the
 // answer comes from; `source` is the trigger the turn answered.
 export function answerSender(rt, id, source, text, long) {
+  if (source.remoteSource?.consultationId) {
+    void settleLocalConsultation(rt,id,source,text).catch(error=>rt.warn('ds-bot: local consultation result was not saved: %s',error))
+    return
+  }
   const back = rt.roomOf(source.senderRoomId)?.sessions?.[source.senderSessionId]
   const name = rt.botOf(rt.selfOf(id))?.name ?? 'The other Bot'
   const rootAudience = rt.state.works?.[source.exchangeId]?.audience
@@ -312,7 +317,7 @@ export function install(rt) {
   // A request whose audience is the user is answered in the recipient's own chat: that
   // turn stays visible there and its reply is not routed back to the sender.
   const answersUser = info => info.role === 'request' && info.audience === 'user'
-  const userAudience = info => info.role!=='federation-report' && (answersUser(info) || info.protocol === 'reply' && info.rootAudience === 'user' || info.work && state.works?.[info.work]?.audience === 'user')
+  const userAudience = info => !info.remoteSource && info.role!=='federation-report' && (answersUser(info) || info.protocol === 'reply' && info.rootAudience === 'user' || info.work && state.works?.[info.work]?.audience === 'user')
   // Roles whose turn owes the sender a reply: a 'stopped' notice asks the Bot to
   // acknowledge, exactly like a request.
   const expectsReply = info => info.role === 'request' || info.role === 'stopped'
@@ -846,6 +851,7 @@ export function install(rt) {
             toId: rt.selfOf(id),
             text: result.text,
             role: result.info.role,
+            ...(result.info.remoteSource ? {remoteSource:result.info.remoteSource} : {}),
             exchangeId: result.info.exchangeId,
             replyTo: result.info.replyTo,
             work: result.info.work,

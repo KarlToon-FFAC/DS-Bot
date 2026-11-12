@@ -98,11 +98,11 @@ export function install(rt) {
   // `parent`: the work the sender was doing when it sent this one. `child`: the
   // session id of the subagent a run of this work belongs to — the run, not the
   // child, is the sub-work, so a child that is continued hands up a result per run.
-  function openWork(id, { from, to, parent, fromRoom, room, name, child }) {
+  function openWork(id, { from, to, parent, fromRoom, room, name, child, remoteSource }) {
     const above = parent === undefined ? undefined : works()[parent]
     const initiating = from && rt.live?.get(rt.chatOf(from))
-    const audience = above?.audience ?? state.turnAudiences?.[rt.chatOf(from)]?.[initiating?.turn]?.audience ?? 'internal'
-    works()[id] = { audience, ...(from ? { from } : {}), ...(to ? { to } : {}), ...(room ? { room } : {}), ...(above ? { parent } : {}), ...(fromRoom ? { fromRoom } : {}), ...(name ? { name } : {}), ...(child ? { child } : {}), open: [], results: [], at: Date.now() }
+    const audience = remoteSource ? 'internal' : above?.audience ?? state.turnAudiences?.[rt.chatOf(from)]?.[initiating?.turn]?.audience ?? 'internal'
+    works()[id] = { audience, ...(remoteSource ? {remoteSource} : {}), ...(from ? { from } : {}), ...(to ? { to } : {}), ...(room ? { room } : {}), ...(above ? { parent } : {}), ...(fromRoom ? { fromRoom } : {}), ...(name ? { name } : {}), ...(child ? { child } : {}), open: [], results: [], at: Date.now() }
     if (above !== undefined) above.open.push(id)
     save()
   }
@@ -220,7 +220,7 @@ export function install(rt) {
   // Who asked for the work, as the turn that answers a request sees its trigger.
   const askedBy = workId => {
     const work = works()[workId]
-    return work === undefined ? undefined : { kind: 'bot', role: 'request', exchangeId: workId, senderSessionId: work.from, ...(work.fromRoom ? { senderRoomId: work.fromRoom } : {}) }
+    return work === undefined ? undefined : { kind: 'bot', role: 'request', exchangeId: workId, senderSessionId: work.from, ...(work.remoteSource ? {remoteSource:work.remoteSource} : {}), ...(work.fromRoom ? { senderRoomId: work.fromRoom } : {}) }
   }
   // The answer that goes up: what the Bot said last for this work, then what came back.
   function answerText(workId, reply, botName) {

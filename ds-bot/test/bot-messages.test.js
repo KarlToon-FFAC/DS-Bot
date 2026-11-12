@@ -1269,3 +1269,56 @@ test('a published worker can report to an unpublished local Chief without automa
  await assert.rejects(reportToLocalChief(comm,{chiefId:'b',text:'Self report'},exec),{code:'LOCAL_CHIEF_UNAVAILABLE'})
  await assert.rejects(reportToLocalChief(comm,{chiefId:'a',text:'Bad provenance'},{...exec,communicationCausation:{causationDeliveryId:'forged',replyToMessageId:'request'}}),{code:'COMMUNICATION_INPUT_SOURCE_UNKNOWN'})
 })
+
+test('remote consultation returns the Chief answer only to the originating Bot and conversation',async t=>{
+ const {agentOf,emit,home,stop}=await start(team());t.after(stop)
+ const {consultLocalBot,settleLocalConsultation}=await import('../src/host/federation/local-consultations.js')
+ const queue=new CommunicationQueue(':memory:',{instanceId:'consult-local'});t.after(()=>queue.close())
+ const principal=queue.localPrincipal('bot','b','Writer'),binding={id:'consult-binding',localBotRef:'b',recipientPrincipalId:principal.principalId,conversationId:'remote-group',membershipEpoch:'epoch'}
+ queue.applyMemberships({memberships:[{principalId:principal.principalId,conversationId:'remote-group',membershipEpoch:'epoch',active:true,joinSeq:1,watermark:1}]})
+ queue.receive({deliveryId:'input',messageId:'request',conversationId:'remote-group',recipientPrincipalId:principal.principalId,membershipEpoch:'epoch',routingVersion:1,ai:true,notify:false,event:{type:'message',eventId:'request',conversationId:'remote-group',conversationSeq:1,message:{messageId:'request',author:{principalId:'human:remote:owner'}}}})
+ const comm={rt,queue,owners:new Map([['remote-session',binding]]),authorize:async()=>{}}
+ const exec={agent:{id:'remote-session'},communicationBinding:binding,communicationSource:'verified',communicationCausation:{causationDeliveryId:'input',replyToMessageId:'request'}}
+ const input={botId:'a',text:'Review this remote request internally.',waitSeconds:0}
+ const pending=await consultLocalBot(comm,input,exec)
+ assert.equal(pending.status,'pending')
+ assert.equal((await consultLocalBot(comm,input,exec)).consultationId,pending.consultationId)
+ assert.equal(agentOf('a').calls.length,1,'idempotent replay does not wake Chief twice')
+ await assert.rejects(consultLocalBot(comm,{...input,text:'Different request'},exec),{code:'OPERATION_ID_CONFLICT'})
+ const message=agentOf('a').calls[0][1]
+ assert.equal(message.source.protocol,'local-consultation')
+ assert.equal(message.source.audience,'internal')
+ await assert.rejects(settleLocalConsultation(rt,'b',message.source,'Forged answer'),{code:'LOCAL_CONSULTATION_NOT_FOUND'})
+ emit('a','turn/start',{turn:1});emit('a','user/message',{source:message.source,content:message.content})
+ emit('a','assistant/message',{message:{role:'assistant',content:[{type:'text',text:'Verified private Chief result.'}]}})
+ emit('a','turn/end',{turn:1,reason:{kind:'completed'}})
+ await delay(40)
+ const answer=await consultLocalBot(comm,{consultationId:pending.consultationId,waitSeconds:0},exec)
+ assert.equal(answer.status,'completed');assert.match(answer.text,/Verified private Chief result/)
+ assert.equal(answer.automaticRemoteReply,false);assert.equal(answer.audience,'internal')
+ assert.equal(agentOf('b').calls.length,0,'no unsolicited local turn or external forwarding')
+ assert.equal(rt.state.turnAudiences.a[1].audience,'internal')
+ const other={...binding,id:'other-binding',conversationId:'other-group'};comm.owners.set('other-session',other)
+ await assert.rejects(consultLocalBot(comm,{consultationId:pending.consultationId,waitSeconds:0},{...exec,agent:{id:'other-session'},communicationBinding:other}),{code:'LOCAL_CONSULTATION_NOT_FOUND'})
+ const saved=JSON.parse(readFileSync(join(home,'state.json'),'utf8'))
+ assert.equal(saved.localConsultations[pending.consultationId].status,'completed')
+})
+
+test('remote Skills reuse the local library and local creator/shared-Skill permissions',async t=>{
+ const {stop}=await start(team());t.after(stop)
+ const {readOwnSkill,saveOwnSkill}=await import('../src/host/federation/own-context.js')
+ const binding={localBotRef:'b'},comm={rt,owners:new Map([['remote',binding]])},exec={agent:{id:'remote'}}
+ await saveOwnSkill(comm,{name:'own-review',description:'Review checklist',content:'Check the build.'},exec)
+ assert.equal(readOwnSkill(comm,{name:'own-review'},exec).content,'Check the build.')
+ assert.equal(rt.state.capabilities.items['own-review'].createdBy,'b')
+ await rt.capabilitySave({name:'own-review',kind:'skill',description:'Updated locally',content:'Check the build and tests.'},{botId:'b'})
+ assert.equal(readOwnSkill(comm,{name:'own-review'},exec).content,'Check the build and tests.')
+ await saveOwnSkill(comm,{name:'own-review',description:'Updated remotely',content:'Check regression evidence.'},exec)
+ assert.equal(rt.state.capabilities.items['own-review'].content,'Check regression evidence.')
+ await rt.changeCapabilityAttachment('attach',{name:'own-review'},'a')
+ await assert.rejects(saveOwnSkill(comm,{name:'own-review',description:'Shared',content:'Cannot silently rewrite Chief skill.'},exec),/Another Bot uses/)
+ assert.equal(rt.state.capabilities.items['own-review'].content,'Check regression evidence.')
+ await rt.capabilitySave({name:'private-chief',kind:'skill',description:'Chief only',content:'Private.'},{botId:'a'})
+ assert.throws(()=>readOwnSkill(comm,{name:'private-chief'},exec),{code:'OWN_SKILL_UNAVAILABLE'})
+ await assert.rejects(saveOwnSkill(comm,{name:'private-chief',description:'x',content:'x'},exec),{code:'OWN_SKILL_UNAVAILABLE'})
+})

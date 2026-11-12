@@ -1054,8 +1054,9 @@ export function install(rt) {
 
   const callerOf = (exec) => {
     const sessionId = exec.agent?.id
-    const bot = rt.botOf(rt.selfOf(sessionId))
-    return bot === undefined ? undefined : { bot, sessionId, roomId: roomIdOf(sessionId) }
+    const communication = rt.communication?.owners.get(sessionId)
+    const bot = rt.botOf(communication?.localBotRef ?? rt.selfOf(sessionId))
+    return bot === undefined ? undefined : { bot, sessionId, roomId: communication ? undefined : roomIdOf(sessionId), communication, communicationMemorySource:exec.communicationMemorySource }
   }
 
   // Where the caller learned it: the anchor of the latest message to it in this part,
@@ -1079,7 +1080,7 @@ export function install(rt) {
     return seq === undefined ? `part ${number} ${rt.clock(Date.now())}` : `part ${number} #${seq}`
   }
   const metaFor = async (caller, scope) => ({
-    source: await sourceOf(caller.sessionId),
+    source: caller.communication ? `remote ${JSON.stringify(caller.communicationMemorySource)}` : await sourceOf(caller.sessionId),
     ...(scope.kind !== 'bot' || scope.botId !== caller.bot.id ? { by: caller.bot.name } : {}),
     added: today(),
   })
@@ -1093,6 +1094,7 @@ export function install(rt) {
   function writeContext(args, exec) {
     const caller = callerOf(exec)
     if (caller === undefined) return { error: 'Only Bots on the team keep a memory.' }
+    if (caller.communication && (!caller.communicationMemorySource || args.scope !== undefined && args.scope !== 'own')) return {error:'Remote Sessions may change only their own Bot memory with an authenticated source.'}
     const { scope = caller.roomId === undefined ? ownScope(caller.bot.id) : groupScope(caller.roomId), error } = namedScope(args.scope, caller.bot.id, caller.roomId)
     if (error) return { error }
     const denied = writeDenied(scope, caller.bot.id)
@@ -1205,7 +1207,8 @@ export function install(rt) {
       const caller = callerOf(exec)
       if (caller === undefined) return 'Only Bots on the team keep a memory.'
       const self = caller.bot.id
-      const { scopes, error } = readScopes(args.scope, self, caller.roomId)
+      if (caller.communication && args.scope !== undefined && args.scope !== 'own') return 'Remote Sessions may read only their own Bot memory.'
+      const { scopes, error } = readScopes(caller.communication ? 'own' : args.scope, self, caller.roomId)
       if (error) return error
       let loaded
       try {
@@ -1811,13 +1814,11 @@ export function install(rt) {
     if (pending.pending || pending.failed) return ''
     const read = sectionRead(join(dirOf(ownScope(botId)), MAIN))
     if (read.failed) return ''
-    // Only the executing Bot's main entries cross this opt-out boundary. Chat
-    // summaries, metadata, topic files, team memory and other scopes stay local.
+    // The same Bot uses its own memory in every Session. Preserve provenance;
+    // other scopes and secrets are not part of this projection.
     return parseMemory(read.text).entries
-      .filter(entry => !['local', 'private', 'never'].includes(entry.meta.sharing?.toLowerCase()))
-      .map(entry => entry.text)
-      .filter(text => !secretEntry(text))
-      .map(text => `- ${text}`).join('\n').slice(0, 10000)
+      .filter(entry => !secretEntry(entry.text))
+      .map(entry => formatEntry(entry.text,entry.meta)).join('\n').slice(0, 10000)
   }
 
   Object.assign(rt, {

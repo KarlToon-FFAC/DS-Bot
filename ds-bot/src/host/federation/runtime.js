@@ -1,4 +1,6 @@
 import {communicationModel,communicationModelStates} from './model-availability.js'
+import {localIdentityTools} from './local-identity-tools.js'
+import {ownSkills,ownWorkspaceGuidance} from './own-context.js'
 import {checkCommunicationCompletion,communicationDraft} from './turn-completion.js'
 import {searchHistory} from './history-search.js'
 import { groupRoutingPayload, usesDefaultBotList, MULTI_BOT_ROUTING_CAPABILITY } from '../../shared/communication-routing.js'
@@ -269,6 +271,7 @@ export class CommunicationRuntime {
       && item.principalId === binding.recipientPrincipalId && item.membershipEpoch === binding.membershipEpoch)
     return communicationPrompt(bot, binding, member, { ...(this.relationshipContexts?.get(binding.id) ?? this.conversations.get(binding.conversationId)),
       botReplyActivation:this.transport?.welcome?.capabilities?.includes('bot-reply-activation')===true,
+      ownSkills:ownSkills(this,bot).map(({name,description})=>({name,description})),workspaceGuidance:this.workspaceGuidance?.get(binding.id)??'',
       localUserPrincipalId: this.human.principalId, remoteWorkApproval: this.settings.remoteWorkApproval ?? 'inherit', workToolNames: this.workToolNames?.get(binding.id) ?? [], localMemory: this.localMemoryFor(binding), relationshipMemory: this.relationshipMemoryFor(binding) })
   }
   async relationshipContext(principalId, input) {
@@ -379,11 +382,16 @@ export class CommunicationRuntime {
   scope(agent) {
     if (this.scoped.has(agent)) return
     this.recoveryAttempts ??= new Map()
-    const tools = this.tools.filter(tool => !OUTSIDE_CONVERSATION_TOOLS.has(tool.name) && !LOCAL_MANAGEMENT_TOOLS.has(tool.name))
+    const tools = [...this.tools.filter(tool => !OUTSIDE_CONVERSATION_TOOLS.has(tool.name) && !LOCAL_MANAGEMENT_TOOLS.has(tool.name)),...localIdentityTools(this)]
     const communicationNames = new Set(tools.map(tool => tool.name))
     for (const tool of tools) this.disposers.push(agent.ctx.tools.register(tool))
     this.disposers.push(agent.ctx.on('system-prompt/assemble', async (_assembly, context, next) => {
       await this.syncWorkContext(agent)
+      const current=this.owners?.get(agent.id),bot=current&&this.rt?.botOf(current.localBotRef)
+      if(bot&&this.ctx?.get?.('fs')){
+        this.workspaceGuidance??=new Map()
+        this.workspaceGuidance.set(current.id,await ownWorkspaceGuidance(this,bot,await botWorkDirectory(this.rt,bot)))
+      }
       let freshPrompt
       if (this.relationships) {
         const binding = this.owners.get(agent.id)
