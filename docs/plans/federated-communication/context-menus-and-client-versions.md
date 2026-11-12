@@ -33,4 +33,4 @@ stale claim. This additive nullable column preserves schema-v6 compatibility.
 
 Validation uses unit/Hub suites, Chromium desktop/mobile with real production
 components (including four themes), and isolated DSH + deterministic Mock. No real
-user data or model keys are used. Release numbers remain unchanged in this batch.
+user data or model keys are used. This batch is released as plugin and Hub V0.3.7 after owner approval.

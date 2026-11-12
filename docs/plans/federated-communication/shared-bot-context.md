@@ -21,4 +21,4 @@ not separate identities. Publication is not required for a local teammate.
   Workspace instruction loading uses the SDK's public instruction loader. Changes
   are re-read for subsequent remote requests; no DSH installation is patched.
 - These changes do not automatically forward internal histories, memory, reasoning
-  or closing prose, and do not change the release version until requested.
+  or closing prose, and are included in the owner-approved V0.3.7 release.

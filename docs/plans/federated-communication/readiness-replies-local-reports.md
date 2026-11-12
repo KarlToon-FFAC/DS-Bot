@@ -1,6 +1,6 @@
 # Model readiness, Bot reply activation and local Chief reports
 
-These changes stay on V0.3.6 until the next requested version bump.
+Released with plugin and Hub V0.3.7 after owner approval.
 
 ## Model readiness
 
