@@ -5,8 +5,9 @@ import { directoryMarkup, directoryScript, directoryCSS } from './management-dir
 
 export const managementPage = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DS-Bot Hub</title>
 <style>${managementCSS}${directoryCSS}</style>
-<main><header class="hub-header"><span class="hub-mark" aria-hidden="true">↔</span><h1>DS-Bot Hub</h1><span class="hub-version" aria-label="Hub version">V${COMMUNICATION_VERSION}</span></header><p class="intro">Approve only devices whose fingerprint you have checked with their owner. Device names are unverified.</p><section id="login"><h2>Administrator sign in</h2><form id="sign-in" method="post" action="/admin/login" autocomplete="on"><label>Username <input name="username" value="admin" autocomplete="username" readonly></label><label>Password <input id="password" name="password" type="password" autocomplete="current-password" placeholder="Administrator password" required></label><button type="submit">Sign in</button></form><p>Your browser can remember this password in its password manager. DS-Bot does not save it in browser storage. Use only a trusted HTTPS address.</p></section><p id="error" role="status"></p><div id="content" hidden><p id="live-status" role="status"></p><button id="logout">Sign out</button><button id="revoke-sessions">Sign out all sessions</button>${devicesMarkup}${directoryMarkup}<section class="hub-code"><h2>Hub code</h2><p id="hub-code-status" role="status"></p><button id="copy-code" type="button" disabled>Copy Hub code</button><details><summary>Show code and trust details</summary><p>Give this code only through a trusted channel. A v2 code includes public CA trust bound to this Hub; do not accept a code from an unverified connection. New devices still need approval.</p><code id="code"></code></details></section><section class="device-requests"><details id="device-requests-detail"><summary>Device requests <span id="request-count"></span></summary><div id="requests"></div></details></section></div></main><script src="/admin/app.js" defer></script></html>`
+<main><header class="hub-header"><span class="hub-mark" aria-hidden="true">↔</span><h1>DS-Bot Hub</h1><span class="hub-version" aria-label="Hub version">V${COMMUNICATION_VERSION}</span></header><p class="intro">Choose how new devices join and review their identity with their owners. Device names are unverified.</p><section id="login"><h2>Administrator sign in</h2><form id="sign-in" method="post" action="/admin/login" autocomplete="on"><label>Username <input name="username" value="admin" autocomplete="username" readonly></label><label>Password <input id="password" name="password" type="password" autocomplete="current-password" placeholder="Administrator password" required></label><button type="submit">Sign in</button></form><p>Your browser can remember this password in its password manager. DS-Bot does not save it in browser storage. Use only a trusted HTTPS address.</p></section><p id="error" role="status"></p><div id="content" hidden><p id="live-status" role="status"></p><button id="logout">Sign out</button><button id="revoke-sessions">Sign out all sessions</button>${devicesMarkup}${directoryMarkup}<section class="hub-code"><h2>Hub code</h2><p id="hub-code-status" role="status"></p><button id="copy-code" type="button" disabled>Copy Hub code</button><details><summary>Show code and trust details</summary><p>Give this code only through a trusted channel. A v2 code includes public CA trust bound to this Hub; do not accept a code from an unverified connection. New devices follow the admission policy below.</p><code id="code"></code></details></section><section class="device-requests"><label class="admission-control"><input id="auto-approve" type="checkbox"> Allow new devices to join without approval</label><p id="admission-status" role="status"></p><p>When enabled, devices with this Hub code and a valid device-key proof join automatically. Existing pending requests still need a decision. Contact and Bot permissions remain separate.</p><details id="device-requests-detail"><summary>Device requests <span id="request-count"></span></summary><div id="requests"></div></details></section></div></main><script src="/admin/app.js" defer></script></html>`
 export const managementScript = `
+let admissionPolicy = {autoApprove:false,version:1}, admissionSaving = false;
 let csrf, revision = '', refreshFlight, refreshAgain = false, watchTimer, watchController, watchEpoch = 0, failures = 0;
 const $ = id => document.getElementById(id);
 async function api(action, input = {}, signal) {
@@ -42,7 +43,20 @@ function renameForm(instance) {
 }
 ${directoryScript}
 ${devicesScript}
+$('auto-approve').onchange = async () => {
+  const checkbox = $('auto-approve'), autoApprove = checkbox.checked;
+  admissionSaving = true; checkbox.disabled = true; $('error').textContent = '';
+  try { admissionPolicy = (await api('enrollment-policy', {autoApprove,expectedVersion:admissionPolicy.version})).value; }
+  catch(e) { error(e); }
+  finally { admissionSaving = false; checkbox.disabled = false; checkbox.checked = admissionPolicy.autoApprove; }
+  try { await refresh(); } catch(e) { error(e); }
+};
 function render(value) {
+  if (!admissionSaving) {
+    admissionPolicy = value.enrollmentPolicy ?? {autoApprove:false,version:1};
+    $('auto-approve').checked = admissionPolicy.autoApprove;
+    $('admission-status').textContent = admissionPolicy.autoApprove ? 'New device requests are approved automatically.' : 'New device requests require administrator approval.';
+  }
   updateDirectory(value.participants ?? []);
   const code = typeof value.code === 'string' && value.code.startsWith('dsbot-hub:2:') ? value.code : '';
   $('hub-code-status').textContent = value.codeError || value.code && !code ? 'HUB_V2_MIGRATION_REQUIRED: Configure management.pairingCaFile with the public CA and a matching WSS certificate, then restart the Hub. Resetting data does not enable v2.' : code ? 'v2 pairing code — public CA included.' : 'Hub address is not configured.';

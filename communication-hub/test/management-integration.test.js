@@ -28,7 +28,7 @@ async function client(url) {
   }) }
 }
 
-test('actual HTTP approval, signed socket login, Human assignment and scoped contacts are integrated', async t => {
+test('actual HTTP manual/automatic admission, signed socket login, Human assignment and scoped contacts are integrated', async t => {
   const hub = await startHub({ databasePath: ':memory:', peers: [], port: 0, management: { enabled: true, password: 'mock-administrator-password-for-local-test' } })
   t.after(() => hub.close())
   const origin = `http://127.0.0.1:${hub.port}`
@@ -44,13 +44,15 @@ test('actual HTTP approval, signed socket login, Human assignment and scoped con
   }
   const enrolled = []
   for (const name of ['Alice', 'Bob']) {
+    if(name==='Bob')await admin('enrollment-policy',{autoApprove:true,expectedVersion:1})
     const pair = generateKeyPairSync('ed25519'), publicKey = pair.publicKey.export({ format: 'pem', type: 'spki' })
     const pending = await client(hub.url); t.after(pending.close)
     const challenge = await pending.request('enrollment.challenge', { purpose: 'join', publicKey })
     const proof = sign(null, Buffer.from(enrollmentTranscript(challenge)), pair.privateKey).toString('base64url')
     const requested = await pending.request('enrollment.prove', { challengeId: challenge.challengeId, signature: proof, displayName: name })
     const row = (await admin('state', {})).requests.find(item => item.requestId === requested.requestId)
-    const approved = await admin('decide', { requestId: row.requestId, expectedVersion: row.version, action: 'approve' })
+    assert.equal(requested.status,name==='Bob'?'approved':'pending')
+    const approved = name==='Bob' ? requested : await admin('decide', { requestId: row.requestId, expectedVersion: row.version, action: 'approve' })
     pending.close()
     const signed = await client(hub.url); t.after(signed.close)
     const auth = await signed.request('enrollment.challenge', { purpose: 'login', instanceId: approved.instanceId })

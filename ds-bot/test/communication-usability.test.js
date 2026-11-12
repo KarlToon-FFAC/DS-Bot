@@ -1857,3 +1857,103 @@ test('both composers show actual Bot avatars for defaults, typed mentions and di
   assert.equal(calls.some(call=>call.endpoint==='send'),false)
  })
 })
+
+test('first @all in a new empty group displays both the message and Bot reply without reloading',async()=>{
+ const bot={principalId:'bot:b:peer',displayName:'Peer',kind:'bot',speakingMode:'passive',published:true}
+ const events=[]
+ const group={...membership,watermark:0,cachedWatermark:0,info:{...membership.info,membershipVersion:1,members:[...membership.info.members,bot]}}
+ const event=(id,author,text)=>({type:'message',conversationId:'group',conversationSeq:events.length+1,serverAcceptedAt:'2026-11-12T00:00:00Z',message:{messageId:id,author,content:{text},mentions:[],replyToMessageId:null}})
+ await pane({getState:()=>({...state(),conversations:[{...group,watermark:events.length,cachedWatermark:events.length}]}),
+  history:body=>({conversationId:'group',membershipEpoch:'epoch',watermark:events.length,events:events.filter(e=>e.conversationSeq>(body.after??0)),hasEarlier:false,hasLater:false}),
+  handle:async body=>{
+   if(body.endpoint==='send'){
+    events.push(event(body.messageId,membership.info.members[0],body.text))
+    events.push(event('first-bot-reply',bot,'I received the first broadcast'))
+    return {messageId:body.messageId,status:'pending'}
+   }
+   return {}
+  }},async({doc,click,edit,calls,autoRefresh})=>{
+   await click('Shared group')
+   assert.equal(doc.querySelectorAll('.bt-comm-log article[data-message-id]').length,0)
+   await edit(doc.querySelector('footer textarea'),'@all hello')
+   await click('Send message')
+   assert.equal(Boolean(doc.querySelector('[data-message-id="first-bot-reply"]')),true,'first Bot reply must appear without F5')
+   assert.equal(doc.querySelectorAll('.bt-comm-log article[data-message-id]').length,2)
+   const initialReads=calls.filter(c=>c.endpoint==='history')
+   assert.equal(initialReads.length,2);assert.equal(initialReads[1].latest,true)
+   events.push(event('later-bot-reply',bot,'Later progress'))
+   await autoRefresh()
+   assert.equal(Boolean(doc.querySelector('[data-message-id="later-bot-reply"]')),true)
+   assert.equal(calls.filter(c=>c.endpoint==='history'&&c.after===2).length,1)
+   assert.equal(calls.filter(c=>c.endpoint==='send').length,1)
+  })
+})
+
+test('mid-sentence mentions show avatars and owners in both composers and retain exact sending targets',async()=>{
+ const owner={principalId:'human:b:owner',displayName:'Lisa',kind:'human'}
+ const bot={principalId:'bot:b:helper',displayName:'助手',kind:'bot',ownerPrincipalId:owner.principalId,published:true,speakingMode:'passive'}
+ const member={...membership,info:{membershipVersion:1,members:[...membership.info.members,owner,bot]}}
+ const event={type:'message',conversationSeq:1,message:{messageId:'reply-root',author:bot,content:{text:'Report'},mentions:[],replyToMessageId:null}}
+ await pane({snapshot:{...state(),conversations:[member]},history:[event],handle:async body=>body.endpoint==='thread'?{conversationId:'group',membershipEpoch:'epoch',rootMessageId:'reply-root',messageId:'reply-root',events:[event],watermark:1}:{}},async({doc,click,edit,calls,dom})=>{
+  await click('Shared group')
+  const choose = async field=>{
+   await edit(field,'请帮忙@助')
+   const option=doc.querySelector('[role=option]')
+   assert.match(option.textContent,/助手 - Lisa/)
+   assert.equal(option.querySelector('[data-avatar-id]').dataset.avatarId,bot.principalId)
+   await act(async()=>option.click())
+   assert.equal(field.value,'请帮忙@助手 ')
+   await edit(field,field.value+'检查进展')
+  }
+  await choose(doc.querySelector('footer textarea'))
+  await act(async()=>doc.querySelector('footer textarea').dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Enter',bubbles:true})))
+  assert.deepEqual([...calls.find(call=>call.endpoint==='send').mentions],[bot.principalId])
+  await click('Reply')
+  await choose(doc.querySelector('.bt-comm-thread-composer textarea'))
+  await act(async()=>doc.querySelector('.bt-comm-thread-composer textarea').dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Enter',bubbles:true})))
+  const sends=calls.filter(call=>call.endpoint==='send')
+  assert.equal(sends.length,2)
+  assert.deepEqual([...sends[1].mentions],[bot.principalId])
+  assert.equal(sends[1].replyToMessageId,'reply-root')
+ })
+})
+
+test('large recipient sets are compact with complete vertical lists in messages and both composers',async()=>{
+ const bots=Array.from({length:12},(_,i)=>({principalId:'bot:b:'+i,displayName:'Bot '+i,kind:'bot',published:true,speakingMode:'passive'}))
+ const member={...membership,info:{membershipVersion:1,members:[...membership.info.members,...bots]}}
+ const event={type:'message',conversationSeq:1,activatedBotPrincipalIds:bots.map(b=>b.principalId),message:{messageId:'broadcast',author:membership.info.members[0],content:{text:'@all status'},mentions:[],replyToMessageId:null}}
+ await pane({snapshot:{...state(),conversations:[member]},history:[event],handle:async body=>body.endpoint==='thread'?{conversationId:'group',membershipEpoch:'epoch',rootMessageId:'broadcast',messageId:'broadcast',events:[event],watermark:1}:{}},async({doc,click,edit,calls,dom})=>{
+  await click('Shared group')
+  const expand=async selector=>{
+   const area=doc.querySelector(selector)
+   assert.equal(area.querySelectorAll('.bt-comm-bot-chip').length,2)
+   const trigger=area.querySelector('.bt-comm-bot-more')
+   assert.match(trigger.textContent,/12/)
+   await act(async()=>trigger.click())
+   assert.equal(doc.querySelectorAll('.bt-comm-bot-popover li').length,12)
+   assert.equal(doc.querySelectorAll('.bt-comm-bot-popover li [data-avatar-id]').length,12)
+   await act(async()=>doc.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true})))
+   assert.equal(Boolean(doc.querySelector('.bt-comm-bot-popover')),false)
+  }
+  await expand('.bt-comm-log .bt-comm-activation')
+  await edit(doc.querySelector('footer textarea'),'@all status')
+  await expand('footer .bt-comm-recipient-preview')
+  await click('Reply')
+  await edit(doc.querySelector('.bt-comm-thread-composer textarea'),'@all next')
+  await expand('.bt-comm-thread-composer .bt-comm-recipient-preview')
+  assert.equal(Boolean(doc.querySelector('.bt-comm-thread')),true)
+  assert.equal(calls.some(call=>call.endpoint==='send'),false)
+ })
+})
+
+test('message activation uses Hub evidence rather than display mentions or pending intentions',async()=>{
+ const bot={principalId:'bot:b:one',displayName:'Bot One',kind:'bot'}
+ const member={...membership,info:{membershipVersion:1,members:[...membership.info.members,bot]}}
+ const history=[undefined,[],[bot.principalId]].map((ids,i)=>({type:'message',conversationSeq:i+1,...(ids?{activatedBotPrincipalIds:ids}:{}),message:{messageId:'e'+i,author:membership.info.members[0],content:{text:'@all'},mentions:[{principalId:bot.principalId}],replyToMessageId:null}}))
+ await pane({snapshot:{...state(),conversations:[member]},history},async({doc,click})=>{
+  await click('Shared group')
+  assert.match(doc.querySelector('[data-message-id=e0] .bt-comm-activation').textContent,/Dispatch not recorded/)
+  assert.match(doc.querySelector('[data-message-id=e1] .bt-comm-activation').textContent,/No Bots activated/)
+  assert.equal(doc.querySelectorAll('[data-message-id=e2] [data-activated-bot]').length,1)
+ })
+})

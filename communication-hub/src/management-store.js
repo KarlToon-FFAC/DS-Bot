@@ -127,6 +127,7 @@ export class HubManagement {
         requireThat(!old, 'JOIN_ALREADY_PENDING')
         requireThat(this.db.prepare("SELECT count(*) n FROM hub_join_requests WHERE status='pending'").get().n < this.maxPendingJoins, 'JOIN_LIMIT')
         this.db.prepare('INSERT INTO hub_join_requests(id,public_key,label,status,created_at,expires_at) VALUES (?,?,?,?,?,?)').run(item.requestId, item.publicKey, input.displayName.trim(), 'pending', this.now(), this.now() + day)
+        if (this.enrollmentPolicy().autoApprove) return this.approveJoin(this.db.prepare('SELECT * FROM hub_join_requests WHERE id=?').get(item.requestId), true)
         return { requestId: item.requestId, status: 'pending' }
       })
     }
@@ -150,17 +151,37 @@ export class HubManagement {
         this.db.prepare("UPDATE hub_join_requests SET status='rejected',version=version+1 WHERE id=?").run(row.id)
         this.audit('join.reject', row.id); return { requestId: row.id, status: 'rejected' }
       }
-      const id = randomUUID()
-      requireThat(this.store.activePrincipalCount() < this.store.limits.maxPrincipals, 'DIRECTORY_FULL')
-      requireThat(!this.db.prepare('SELECT 1 FROM hub_enrolled_peers WHERE public_key=?').get(row.public_key), 'ALREADY_ENROLLED')
-      this.db.prepare('INSERT INTO instances(id,label) VALUES (?,?)').run(id, row.label)
-      this.db.prepare('INSERT INTO hub_enrolled_peers(instance_id,public_key) VALUES (?,?)').run(id, row.public_key)
-      const principalId = `human:${id}:local-user`
-      this.db.prepare('INSERT INTO principals VALUES (?,?,?,?,?)').run(principalId, id, 'human', 'local-user', row.label)
-      this.ensureCode(principalId)
-      this.db.prepare("UPDATE hub_join_requests SET status='approved',instance_id=?,version=version+1 WHERE id=?").run(id, row.id)
-      this.audit('join.approve', id)
-      return { requestId: row.id, status: 'approved', instanceId: id }
+      return this.approveJoin(row)
+    })
+  }
+  // Called only inside the join/decision transaction after proof or admin consent.
+  approveJoin(row, automatic = false) {
+    const id = randomUUID()
+    requireThat(this.store.activePrincipalCount() < this.store.limits.maxPrincipals, 'DIRECTORY_FULL')
+    requireThat(!this.db.prepare('SELECT 1 FROM hub_enrolled_peers WHERE public_key=?').get(row.public_key), 'ALREADY_ENROLLED')
+    this.db.prepare('INSERT INTO instances(id,label) VALUES (?,?)').run(id, row.label)
+    this.db.prepare('INSERT INTO hub_enrolled_peers(instance_id,public_key) VALUES (?,?)').run(id, row.public_key)
+    const principalId = `human:${id}:local-user`
+    this.db.prepare('INSERT INTO principals VALUES (?,?,?,?,?)').run(principalId, id, 'human', 'local-user', row.label)
+    this.ensureCode(principalId)
+    this.db.prepare("UPDATE hub_join_requests SET status='approved',instance_id=?,version=version+1 WHERE id=?").run(id, row.id)
+    this.audit(automatic ? 'join.auto-approve' : 'join.approve', id)
+    return { requestId: row.id, status: 'approved', instanceId: id }
+  }
+  enrollmentPolicy() {
+    const value = this.db.prepare("SELECT value FROM hub_management WHERE key='enrollmentPolicy'").get()?.value
+    return value ? JSON.parse(value) : { autoApprove: false, version: 1 }
+  }
+  setEnrollmentPolicy(input) {
+    requireThat(input && !Array.isArray(input) && Object.keys(input).every(key => ['autoApprove','expectedVersion'].includes(key))
+      && typeof input.autoApprove === 'boolean' && Number.isSafeInteger(input.expectedVersion), 'INVALID_REQUEST')
+    return this.store.transaction(() => {
+      const current = this.enrollmentPolicy()
+      requireThat(input.expectedVersion === current.version, 'ENROLLMENT_POLICY_VERSION_CONFLICT')
+      const next = { autoApprove: input.autoApprove, version: current.version + 1 }
+      this.db.prepare("INSERT INTO hub_management VALUES ('enrollmentPolicy',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(JSON.stringify(next))
+      this.audit('enrollment.policy', next.autoApprove ? 'auto-approve' : 'manual-approval')
+      return next
     })
   }
   instances() { return this.db.prepare('SELECT i.id instanceId,i.label,i.trusted,i.pairing_revision pairingRevision,p.revision,coalesce(n.version,0) nameVersion FROM instances i LEFT JOIN hub_enrolled_peers p ON p.instance_id=i.id LEFT JOIN hub_instance_names n ON n.instance_id=i.id WHERE NOT EXISTS(SELECT 1 FROM hub_instance_departures d WHERE d.instance_id=i.id) ORDER BY i.id').all().map(instance => ({ ...instance, connected: this.isInstanceConnected?.(instance.instanceId) === true, ownedSharedGroups: this.db.prepare("SELECT c.id conversationId,c.title,c.version FROM conversations c JOIN principals owner ON owner.id=c.owner_id WHERE owner.instance_id=? AND c.kind='group' AND c.closed=0 AND EXISTS (SELECT 1 FROM memberships m JOIN principals p ON p.id=m.principal_id WHERE m.conversation_id=c.id AND p.instance_id<>?) ORDER BY c.id").all(instance.instanceId, instance.instanceId) })) }

@@ -136,6 +136,13 @@ test('mention insertion preserves exact IDs and excludes literal quote and code 
   assert.deepEqual(insertMention(draft, mentionQuery(draft.text, 7), members[1]), { text: 'Ask @Twin  later', mentions: ['bot:b'], manualMentions: [], caret: 10 })
   for (const text of ['email@example', '> @Tw', '`@Tw', '```js\n@Tw']) assert.equal(mentionQuery(text, text.length), null)
   assert.deepEqual(mentionQuery('```x```\n@Tw', 11), { start: 8, end: 11, query: 'Tw' })
+  for (const prefix of ['请帮忙', '说明，', 'Please ask ', '下一步：']) {
+    const text = prefix + '@Tw later', range = mentionQuery(text, prefix.length + 3)
+    assert.deepEqual(range, { start: prefix.length, end: prefix.length + 3, query: 'Tw' })
+    const selected = insertMention({text, mentions:[]}, range, members[1])
+    assert.equal(selected.text, prefix + '@Twin  later')
+    assert.deepEqual(retainedMentions(selected.text, selected.mentions, members), ['bot:b'])
+  }
 })
 
 

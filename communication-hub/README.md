@@ -90,7 +90,12 @@ they expire. Codes do not create routes, public DNS, firewall rules or NAT tunne
 
 In DS Bot choose Remote communication → Add a device, paste the code, verify the
 displayed address/Hub ID and explicitly request admission. The Hub administrator
-checks the applicant and key fingerprint before approving it on the Hub page.
+checks the applicant and key fingerprint before approving it on the Hub page by default.
+Administrators can enable **Allow new devices to join without approval** under
+Device requests. This durable setting automatically approves subsequent valid
+signed join requests, without changing existing pending requests. Turning it off
+restores manual approval. Every automatic admission is audited; revoked device
+keys remain revoked, and contact consent and Bot publication permissions still apply.
 The device proves possession of its private signing key; approval does not send
 a shared secret back. The private key stays in that device's DSH credential
 provider. Its default provider is an OS-account-protected plaintext file, so do

@@ -1,3 +1,5 @@
+import {MentionPerson} from './communication-mention-person.js'
+import {CommunicationActivation} from './communication-activation.js'
 import {RecipientPreview} from './communication-recipient-preview.js'
 import {GroupInviteDialog} from './communication-invite.js'
 import {ReceivingBotsDialog} from './communication-receivers.js'
@@ -656,11 +658,12 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
           h('div', { className: 'bt-comm-message-bubble' }, event.message.replyToMessageId ? h(ReferenceQuote, { key: `${scope}:${selected}:${member.membershipEpoch}:${event.message.replyToMessageId}`, conversationId: selected,
             membershipEpoch: member.membershipEpoch, messageId: event.message.replyToMessageId, request: conversationRequest, labels, onJump: openReference }) : null,
           h('div', { className: 'bt-comm-body' }, h(CommunicationMessage, { message: event.message, members: knownMembers, request, onInspect: inspect }))),
-          h(CommunicationMessageActions,{message:event.message,onReply:canSpeak?openThread:undefined,
+          h(CommunicationActivation,{event,members:[...currentMembers,...(member.info?.formerMembers??[])],request:conversationRequest}),
+        h(CommunicationMessageActions,{message:event.message,onReply:canSpeak?openThread:undefined,
             onThread:member.kind==='group'?openThread:undefined},
             h('time', { title: new Date(event.serverAcceptedAt).toLocaleString() }, new Date(event.serverAcceptedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))))),
         ownOutbox.filter(item => item.state !== 'failed' && !visibleIds.has(item.id) && (item.state !== 'accepted' || older === null && item.result?.conversationSeq > (page?.watermark ?? 0))).map(item => h('article', { key: item.id, 'data-message-id': item.id, 'data-self': true, 'data-failed': item.state === 'failed' },
-          messageAvatar(state.humanPrincipalId, contacts.find(person => person.principalId === state.humanPrincipalId)?.displayName), h('strong', { title: state.humanPrincipalId }, contacts.find(person => person.principalId === state.humanPrincipalId)?.displayName ?? t('You'), identityIcons({ principalId: state.humanPrincipalId, kind: 'human', homeInstanceId: state.instanceId })), h('p', { className: 'bt-comm-pending-text' }, item.text), h('p', { role: 'status' }, t(item.state === 'accepted' ? 'Hub accepted' : 'Queued on this device'))))),
+          messageAvatar(state.humanPrincipalId, contacts.find(person => person.principalId === state.humanPrincipalId)?.displayName), h('strong', { title: state.humanPrincipalId }, contacts.find(person => person.principalId === state.humanPrincipalId)?.displayName ?? t('You'), identityIcons({ principalId: state.humanPrincipalId, kind: 'human', homeInstanceId: state.instanceId })), h('p', { className: 'bt-comm-pending-text' }, item.text), h(CommunicationActivation,{event:item.result,members:currentMembers,request:conversationRequest,pending:true}), h('p', { role: 'status' }, t(item.state === 'accepted' ? 'Hub accepted' : 'Queued on this device'))))),
       currentMembers.some(person => person.retired) ? h('p', { role: 'status', className: 'bt-comm-reference' }, t('This Bot identity no longer exists. This chat is read only. A re-published Bot must start a new chat.')) : null,
       canSpeak ? h('footer', null,
         h(RecipientPreview,{member,draft:attempts[key]??draft,target:reply,request,replyMentionUnion:state.replyMentionUnionAvailable===true,directedReplies:state.directedGroupRepliesAvailable===true}),
@@ -668,7 +671,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
         h('div', { className: 'bt-comm-mentions' }, (draft.mentions ?? []).map(id => btn(`@${labels.get(id) ?? id} ×`, () => changeDraft({ mentions: draft.mentions.filter(item => item !== id), manualMentions: (draft.manualMentions ?? []).filter(item => item !== id) }), { key: id, 'data-manual-mention': (draft.manualMentions ?? []).includes(id), 'aria-label': `${t('Remove mention')}: ${labels.get(id) ?? id}` }))),
         suggestions.length ? h('div', { className: 'bt-comm-completion', role: 'listbox', id: 'bt-comm-completion', 'aria-label': t('Mention participant') }, suggestions.map((person, index) =>
           h('button', { type: 'button', key: person.principalId, id: `bt-comm-option-${index}`, role: 'option', 'aria-selected': completionIndex === index,
-            onMouseDown: event => event.preventDefault(), onClick: () => complete(person) }, person.all ? h('span', null, avatar('@all', 'All'), t('All Bots')) : personLabel(person)))) : null,
+            onMouseDown: event => event.preventDefault(), onClick: () => complete(person) }, h(MentionPerson,{person,members:currentMembers,request})))) : null,
         h('label', { className: 'bt-comm-field bt-comm-compose-field' }, h('span', { className: 'bt-sr' }, t('Communication message')), h('textarea', { ref: input, value: draft.text, rows: 2, placeholder: t('Message {name}', { name: conversationTitle(member, state.humanPrincipalId, labels) }), disabled: !canSpeak || Boolean(attempts[key]),
           onChange: event => { changeDraft({ text: event.target.value, mentions: retainedMentions(event.target.value, draft.mentions, currentMembers, draft.manualMentions) }); if (!composing) updateCompletion(event.target) },
           onClick: event => updateCompletion(event.target), onCompositionStart: () => { setComposing(true); setCompletion(null) },

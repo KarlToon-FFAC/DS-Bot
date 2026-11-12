@@ -118,8 +118,9 @@ export const communicationCSS = `
 .bt-comm-field{display:flex;flex-direction:column;gap:6px;margin:8px 0;font-size:12px;line-height:16px}
 .bt-comm-check{display:flex;gap:8px;align-items:flex-start;margin:10px 0;font-size:12px;line-height:18px;overflow-wrap:anywhere}
 .bt-comm-check input{flex:0 0 16px;width:16px;height:16px;flex-shrink:0;margin-top:1px}
-.bt-comm-recipient-preview{display:flex;align-items:center;flex-wrap:wrap;gap:4px 8px;max-height:108px;overflow:auto;margin-bottom:6px;font-size:12px;color:var(--bt-ink-2)}
+.bt-comm-recipient-preview{display:flex;align-items:center;flex-wrap:nowrap;gap:4px 8px;max-height:108px;overflow:auto;margin-bottom:6px;font-size:12px;color:var(--bt-ink-2)}
 .bt-comm-recipient-heading{flex:none}
+.bt-comm-activation>span:first-child{flex:none}
 .bt-comm-recipient-chip{display:inline-flex;align-items:center;gap:4px;max-width:100%;min-width:0;padding:2px 6px;border:.5px solid var(--bt-line);border-radius:12px;background:var(--bt-card)}
 .bt-comm-recipient-chip>span:not(.bt-comm-avatar){overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bt-comm-recipient-chip small{flex:none;color:var(--bt-ink-3)}
@@ -179,6 +180,23 @@ export const communicationCSS = `
 .bt-comm-modal>button{margin:8px 8px 0 0}
 .bt-comm-address{border-top:1px solid var(--bt-line);padding:8px 0}
 .bt-comm-address button,.bt-comm-participant-picker>button{display:block;width:100%;margin:4px 0}
+.bt-comm-mention-person{display:flex;align-items:center;gap:6px;min-width:0;text-align:left}
+.bt-comm-mention-person .bt-comm-avatar{flex:none}
+.bt-comm-mention-name,.bt-comm-mention-owner{overflow-wrap:anywhere;min-width:0}
+.bt-comm-mention-owner{color:var(--bt-ink-2)}
+.bt-comm-activation{display:flex;align-items:center;flex-wrap:nowrap;gap:4px 6px;font-size:11px;line-height:18px;color:var(--bt-ink-2);margin-top:4px;min-width:0}
+.bt-comm-log article>.bt-comm-activation{grid-column:2;grid-row:3;padding:0 10px}
+.bt-comm-bot-list{display:inline-flex;align-items:center;gap:6px;min-width:0;max-width:100%;flex:0 1 auto}
+.bt-comm-bot-chip{display:inline-flex;align-items:center;gap:4px;min-width:0;max-width:130px}
+.bt-comm-bot-chip>span:last-child{white-space:nowrap;text-overflow:ellipsis;overflow:hidden;min-width:0}
+.bt-comm-bot-chip .bt-comm-avatar{flex-shrink:0}
+.bt-comm-frame .bt-comm-bot-more{flex:none;min-height:24px;font-size:11px;line-height:18px;padding:2px 4px;background:none;border:0;color:var(--bt-ink-2);white-space:nowrap}
+.bt-comm-bot-popover{box-sizing:border-box;position:fixed;z-index:50;overflow:auto;padding:10px;border:.5px solid var(--bt-line-2);border-radius:12px;background:var(--bt-card);color:var(--bt-ink);box-shadow:0 8px 28px color-mix(in srgb,var(--bt-ink) 18%,transparent);font-size:13px}
+.bt-comm-bot-popover header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.bt-comm-bot-popover ul{list-style:none;margin:8px 0 0;padding:0}
+.bt-comm-bot-popover li{display:flex;align-items:center;gap:8px;padding:6px 0;overflow-wrap:anywhere}
+.bt-comm-bot-popover li>span:last-child{min-width:0}
+.bt-comm-bot-popover small{display:block;color:var(--bt-ink-2)}
 .bt-comm-completion{max-height:220px;overflow:auto;border:.5px solid var(--bt-line-2);border-radius:12px;background:var(--bt-card);padding:6px}
 .bt-comm-completion button{display:block;width:100%;border-color:transparent}
 .bt-comm-completion button[aria-selected=true]{background:var(--bt-active)}
@@ -284,7 +302,7 @@ export const communicationCSS = `
 .bt-comm-log article[data-self=true]>.bt-comm-avatar,.bt-comm-log article[data-self=true]>strong{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
 .bt-comm-log article[data-self=true]>.bt-comm-message-bubble,.bt-comm-log article[data-self=true]>.bt-comm-pending-text{background:var(--bt-user);color:var(--bt-user-ink);border-radius:18px;padding:7px 12px;min-width:0;max-width:100%}
 .bt-comm-log article[data-self=true]>.bt-comm-reference{color:var(--bt-ink-2)}
-.bt-comm-message-actions{grid-column:2;grid-row:3;justify-content:flex-start;gap:6px;min-height:24px;margin:0;padding-inline:6px;color:var(--bt-ink-3)}
+.bt-comm-message-actions{grid-column:2;grid-row:4;justify-content:flex-start;gap:6px;min-height:24px;margin:0;padding-inline:6px;color:var(--bt-ink-3)}
 .bt-comm-message-actions button{border:0;background:none;min-height:24px;padding:2px 5px;color:var(--bt-ink-2);opacity:0;transition:opacity .12s}
 .bt-comm-log article:is(:hover,:focus-within) .bt-comm-message-actions button{opacity:1}
 .bt-comm-main>footer{margin-top:auto;position:relative;flex-shrink:0;width:calc(100% - 48px);max-width:960px;align-self:center;padding:10px 48px 10px 14px;border:.5px solid var(--bt-line-2);border-radius:22px;background:var(--bt-main);box-shadow:0 1px 4px color-mix(in srgb,var(--bt-ink) 4%,transparent)}

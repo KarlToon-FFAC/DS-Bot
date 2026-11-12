@@ -1,7 +1,7 @@
 import {createElement as h} from 'react'
 import {humanReceivingBots} from '../../../communication-hub/src/human-routing.js'
 import {communicationMentions} from '../shared/communication-mentions.js'
-import {CommunicationAvatar} from './communication-profile.js'
+import {CompactBotList} from './communication-bot-list.js'
 import {contactLabels} from './communication-model.js'
 import {t} from './i18n.js'
 
@@ -28,6 +28,5 @@ export function RecipientPreview({member,draft,target,request,directedReplies,re
     preview.unavailable ? h('span',null,t('Waiting for current members…'))
       : preview.error ? h('span',null,t('Check mentions before sending.'))
       : !preview.bots.length ? h('span',null,t('No Bot will be activated'))
-      : preview.bots.map(person=>h('span',{key:person.principalId,className:'bt-comm-recipient-chip','data-recipient-id':person.principalId,title:`${labels.get(person.principalId)} · ${t(person.receivingReason)}`},
-        h(CommunicationAvatar,{person,request,size:20}),h('span',null,labels.get(person.principalId)),h('small',null,t(person.receivingReason)))))
+      : h(CompactBotList,{people:preview.bots.map(person=>({...person,displayName:labels.get(person.principalId)??person.displayName})),request}))
 }

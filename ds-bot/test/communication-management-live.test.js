@@ -95,3 +95,32 @@ test('Hub admin transient failures mark cached connectivity unknown and focus fu
     assert.match(dom.window.document.getElementById('live-status').textContent, /up to date/)
   } finally { dom.window.dispatchEvent(new dom.window.Event('pagehide')); await drain(); dom.window.close() }
 })
+
+test('Hub admission checkbox saves the observed version and restores authoritative state after a conflict',async()=>{
+ const dom=new JSDOM(managementPage,{url:'http://127.0.0.1:3190/admin/',pretendToBeVisual:true}),doc=dom.window.document,calls=[]
+ let policy={autoApprove:false,version:1},conflict=false
+ const fetch=async(url,options)=>{
+  const action=url.split('/').at(-1),input=JSON.parse(options.body)
+  const ok=value=>({ok:true,json:async()=>({ok:true,value})})
+  if(action==='session')return {ok:true,json:async()=>({ok:true,csrf:'synthetic'})}
+  if(action==='state')return ok({code:'',requests:[],instances:[],enrollmentPolicy:{...policy}})
+  if(action==='changes')return new Promise((resolve,reject)=>options.signal.addEventListener('abort',()=>reject(Error('aborted')),{once:true}))
+  assert.equal(action,'enrollment-policy');calls.push(input)
+  if(conflict)return {ok:false,json:async()=>({ok:false,error:{code:'ENROLLMENT_POLICY_VERSION_CONFLICT'}})}
+  policy={autoApprove:input.autoApprove,version:policy.version+1};return ok(policy)
+ }
+ runInNewContext(managementScript,{document:doc,window:dom.window,navigator:dom.window.navigator,fetch,location:dom.window.location,setTimeout,clearTimeout,AbortController,AbortSignal,Math})
+ try{
+  await drain()
+  const checkbox=doc.querySelector('#auto-approve')
+  assert.equal(checkbox.checked,false)
+  checkbox.click();await drain()
+  assert.deepEqual(calls,[{autoApprove:true,expectedVersion:1}])
+  assert.equal(checkbox.checked,true)
+  assert.match(doc.querySelector('#admission-status').textContent,/automatically/)
+  conflict=true;checkbox.click();await drain()
+  assert.equal(checkbox.checked,true)
+  assert.equal(checkbox.disabled,false)
+  assert.match(doc.querySelector('#error').textContent,/ENROLLMENT_POLICY_VERSION_CONFLICT/)
+ }finally{dom.window.dispatchEvent(new dom.window.Event('pagehide'));dom.window.close()}
+})

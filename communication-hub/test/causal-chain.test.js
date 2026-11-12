@@ -61,10 +61,15 @@ test('active tool branches and all-Bot expansion exclude the author and share a 
   const human = f.send(f.H, { mentions: [{ principalId: f.A }] }), grant = f.grant(human, f.A)
   const branch = f.send(f.A, { causationDeliveryId: grant, mentions: [f.A, f.B, f.C].map(principalId => ({ principalId })) })
   assert.deepEqual(f.ai(branch), [f.C, f.B].sort())
+  assert.deepEqual(branch.activatedBotPrincipalIds, f.ai(branch))
+  const recorded = JSON.parse(f.store.db.prepare('SELECT body FROM events WHERE id=?').get(branch.messageId).body)
+  assert.deepEqual(recorded.activatedBotPrincipalIds, branch.activatedBotPrincipalIds)
+  assert.equal(recorded.activatedBotPrincipalIds.includes(f.A), false)
   const suppressedInput = f.input(f.A, { causationDeliveryId: grant, mentions: [{ principalId: f.B }] })
   const suppressed = f.store.publish(f.a, suppressedInput)
   assert.equal(suppressed.dispatchSuppressed, 'DUPLICATE_HANDOFF'); assert.deepEqual(f.ai(suppressed), [])
   assert.equal(suppressed.causality.rootMessageId, human.messageId)
+  assert.deepEqual(suppressed.activatedBotPrincipalIds, [])
   f.store.close(); f.store = new HubStore(f.path, { limits: f.limits })
   assert.deepEqual(f.store.publish(f.a, suppressedInput), suppressed)
   const fresh = f.send(f.A, { mentions: [{ principalId: f.B }] })
@@ -91,6 +96,7 @@ test('depth limit accepts the final visible message without continuing the loop 
     parent = last
   }
   assert.equal(last.dispatchSuppressed, 'CAUSAL_LIMIT'); assert.deepEqual(f.ai(last), [])
+  assert.deepEqual(last.activatedBotPrincipalIds, [])
   assert.deepEqual(f.store.publish(f.a, lastInput), last)
   assert.equal(f.store.db.prepare('SELECT sum(ai_deliveries) n FROM causal_roots').get().n, 3)
 })

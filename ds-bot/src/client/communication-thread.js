@@ -1,3 +1,5 @@
+import {MentionPerson} from './communication-mention-person.js'
+import {CommunicationActivation} from './communication-activation.js'
 import {RecipientPreview} from './communication-recipient-preview.js'
 import { useMentionDismiss } from './communication-mentions.js'
 import { useLiveRefresh } from './communication-live.js'
@@ -68,6 +70,7 @@ export function CommunicationThread({ member, messageId, request, canSpeak, onRe
         h('div', { className: 'bt-comm-person-label' }, members.includes(person) && onInspect ? h('button',{type:'button',className:'bt-comm-avatar-button','aria-label':t('View profile of {name}',{name:labels.get(person.principalId)??person.displayName??t('Participant')}),onClick:event=>onInspect([person.principalId],event.currentTarget)},h(CommunicationAvatar,{person,request,size:24})) : h(CommunicationAvatar, { person, request, allowed: members.includes(person), size: 24 }), h('strong', { title: person.principalId }, labels.get(person.principalId) ?? t('Participant'))),
         parent ? h('p', { className: 'bt-comm-thread-parent' }, t('Reply to'), ' ', labels.get(parent.author.principalId) ?? t('Participant'), ': ', referenceExcerpt(parent.content.text)) : null,
         h('div', { className: 'bt-comm-body' }, h(CommunicationMessage, { message, members, request, onInspect })),
+        h(CommunicationActivation,{event,members,request}),
         h(CommunicationMessageActions,{message,onReply:canSpeak?onReply:undefined},h('time', null, new Date(event.serverAcceptedAt).toLocaleString()),
           replies.length ? h('button', { type: 'button', 'aria-expanded': !hidden, onClick: () => setCollapsed(old => { const next = new Set(old); if (hidden) next.delete(message.messageId); else next.add(message.messageId); return next }) }, t(hidden ? 'Show {count} replies' : 'Hide replies', { count: replies.length })) : null)),
       replies.length && !hidden ? h('ol', { className: 'bt-comm-thread-branches' }, replies.map(child => renderBranch(child, level + 1))) : null)
@@ -142,7 +145,7 @@ export function ThreadReplyComposer({ storageKey, member, target, request, onSen
   return h('div',{className:'bt-comm-thread-composer'},
     h(RecipientPreview,{member,draft:draft.attempt??draft,target:draft.replyTarget??target,request,directedReplies,replyMentionUnion}),
     h('p',{className:'bt-comm-reference'},t('Reply to'),' ',labels.get((draft.replyTarget??target)?.author?.principalId)??t('Participant'),': ',referenceExcerpt((draft.replyTarget??target)?.content?.text??'')),
-    choices.length?h('div',{className:'bt-comm-completion',role:'listbox','aria-label':t('Mention participant')},choices.map((person,at)=>h('button',{type:'button',key:person.principalId,role:'option','aria-selected':index===at,onMouseDown:event=>event.preventDefault(),onClick:()=>complete(person)},person.all?t('All Bots'):labels.get(person.principalId)??person.displayName))):null,
+    choices.length?h('div',{className:'bt-comm-completion',role:'listbox','aria-label':t('Mention participant')},choices.map((person,at)=>h('button',{type:'button',key:person.principalId,role:'option','aria-selected':index===at,onMouseDown:event=>event.preventDefault(),onClick:()=>complete(person)},h(MentionPerson,{person,members,request})))):null,
     h('textarea',{ref:input,rows:2,'aria-label':t('Reply in this thread'),value:draft.text??'',disabled:busy||Boolean(draft.attempt),
       onChange:event=>{update({text:event.target.value,mentions:retainedMentions(event.target.value,draft.mentions??[],members,draft.manualMentions??[])});if(!composing.current)query(event.target)},
       onClick:event=>query(event.target),onCompositionStart:()=>{composing.current=true;setCompletion(null)},onCompositionEnd:event=>{composing.current=false;query(event.target)},

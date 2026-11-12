@@ -9,7 +9,7 @@ export function useCommunicationHistory({scope,member,visible,request,log,autoSc
  if(current.current!==key){current.current=key;generation.current++;flight.current=null;restore.current=null}
  const page=stored?.context===key?stored:null,cache=useRef(page);cache.current=page
  const watermark=member?.cachedWatermark??member?.watermark
- const normalize=value=>({...value,context:key,scope,events:value.events??[],
+ const normalize=value=>({...value,context:key,scope,events:value.events??[],watermark:value.watermark??watermark??0,
   hasEarlier:value.hasEarlier??Boolean(value.events?.length&&value.events[0].conversationSeq>(member?.joinSeq??1)),
   hasLater:value.hasLater??Boolean(value.events?.length&&value.events.at(-1).conversationSeq<value.watermark)})
  const capture=()=>{
@@ -51,6 +51,8 @@ export function useCommunicationHistory({scope,member,visible,request,log,autoSc
  useEffect(()=>{
   if(!visible||!page||failure||!Number.isSafeInteger(watermark)||watermark<=Math.max(page.watermark??0,page.events.at(-1)?.conversationSeq??0))return
   if(flight.current)return
+  // Empty histories have no message cursor for a later-page request.
+  if(!page.events.length){void methods.current.latest();return}
   if(autoScroll.current&&!page.hasLater){
    // A long offline catch-up should still mount only the latest page.
    if(watermark-(page.events.at(-1)?.conversationSeq??0)>HISTORY_WINDOW_SIZE)void methods.current.latest()

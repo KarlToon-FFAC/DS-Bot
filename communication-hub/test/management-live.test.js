@@ -73,3 +73,17 @@ test('admin waits are bounded per session, release on disconnect and revision ge
   const other = createManagementHttp(management, { origin, password }); t.after(() => other.close())
   assert.notEqual(other.currentRevision(), revision)
 })
+
+test('admission policy requires admin authorization, CSRF and a current version and emits live changes', async t => {
+  const {portal,auth} = await fixture(t)
+  const state = await call(portal,'state',{},auth), input={autoApprove:true,expectedVersion:1}
+  assert.deepEqual(state.result.value.enrollmentPolicy,{autoApprove:false,version:1})
+  assert.equal((await call(portal,'enrollment-policy',input)).status,401)
+  assert.equal((await call(portal,'enrollment-policy',input,{...auth,'x-csrf-token':''})).status,401)
+  const updated = await call(portal,'enrollment-policy',input,auth)
+  assert.equal(updated.status,200)
+  assert.deepEqual(updated.result.value,{autoApprove:true,version:2})
+  assert.notEqual(updated.result.revision,state.result.revision)
+  assert.equal((await call(portal,'enrollment-policy',input,auth)).result.error.code,'ENROLLMENT_POLICY_VERSION_CONFLICT')
+  assert.deepEqual((await call(portal,'state',{},auth)).result.value.enrollmentPolicy,updated.result.value)
+})

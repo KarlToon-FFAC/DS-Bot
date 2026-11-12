@@ -41,6 +41,8 @@ try{
  await until(async()=>{const rows=(await topology.hub('stats')).messages;return rows.filter(m=>m.conversation_id===quoteGroup&&JSON.parse(m.body).content.text===`Quoted context ${nonce} PRESENT`).length===2},'both A and B read the exact quoted message')
  stats=await topology.hub('stats')
  assert.deepEqual(stats.deliveries.filter(d=>d.message_id===combined.messageId&&d.ai).map(d=>d.recipient_id).sort(),[a.bot,b.bot].sort())
+ const deliveredEvent=(await topology.history(a,quoteGroup)).events.find(event=>event.message?.messageId===combined.messageId)
+ assert.deepEqual(deliveredEvent.activatedBotPrincipalIds,[a.bot,b.bot].sort())
  record('reply A plus mention B activates both once and both models receive the exact authorized quoted content')
  const collectionGroup=await topology.group('Collect progress '+nonce,[])
  for(const id of [a.bot,b.bot])await topology.operation(a,'invite',{conversationId:collectionGroup,inviteePrincipalId:id})

@@ -622,3 +622,33 @@ test('legacy empty scopes are visible and can be repaired only by their owner wi
   assert.throws(() => m.usePublishedBots(b.auth, { ...input, operationId: randomUUID() }), { code: 'CONTACT_VERSION_CONFLICT' })
   assert.throws(() => m.usePublishedBots(b.auth, { ...input, principalId: botB, operationId: randomUUID() }), { code: 'HUMAN_REQUIRED' })
 })
+
+test('optional automatic admission persists, verifies device proof and never changes existing pending/revoked devices', t => {
+  const {store,m} = fixture(t)
+  const submit = manager => {
+    const key = keys(), socket = {}, challenge = manager.challenge(socket, {purpose:'join',publicKey:key.publicKey})
+    return {key, ...manager.prove(socket, proof(key, challenge, {displayName:'Auto admission probe'}))}
+  }
+  assert.deepEqual(m.enrollmentPolicy(), {autoApprove:false,version:1})
+  const pending = submit(m)
+  assert.equal(pending.status, 'pending')
+  assert.deepEqual(m.setEnrollmentPolicy({autoApprove:true,expectedVersion:1}), {autoApprove:true,version:2})
+  assert.equal(m.joins().find(row=>row.requestId===pending.requestId).status, 'pending')
+  assert.throws(()=>m.setEnrollmentPolicy({autoApprove:false,expectedVersion:1}), {code:'ENROLLMENT_POLICY_VERSION_CONFLICT'})
+  assert.throws(()=>m.setEnrollmentPolicy({autoApprove:'true',expectedVersion:2}), {code:'INVALID_REQUEST'})
+  const restarted = new HubManagement(store)
+  assert.deepEqual(restarted.enrollmentPolicy(), {autoApprove:true,version:2})
+  const socket = {}, key = keys(), forged = restarted.challenge(socket, {purpose:'join',publicKey:key.publicKey})
+  assert.throws(()=>restarted.prove(socket, proof(keys(),forged,{displayName:'Invalid proof'})),{code:'UNAUTHENTICATED'})
+  const approved = submit(restarted)
+  assert.equal(approved.status,'approved')
+  assert.equal(store.db.prepare('SELECT trusted FROM instances WHERE id=?').get(approved.instanceId).trusted,1)
+  const login = restarted.challenge(socket,{purpose:'login',instanceId:approved.instanceId})
+  assert.equal(restarted.prove(socket,proof(approved.key,login)).instanceId,approved.instanceId)
+  assert.ok(store.db.prepare("SELECT 1 FROM hub_admin_audit WHERE action='join.auto-approve' AND subject=?").get(approved.instanceId))
+  restarted.revoke(approved.instanceId)
+  assert.throws(()=>restarted.challenge(socket,{purpose:'login',instanceId:approved.instanceId}),{code:'UNAUTHENTICATED'})
+  assert.throws(()=>restarted.challenge(socket,{purpose:'join',publicKey:approved.key.publicKey}),{code:'ALREADY_ENROLLED'})
+  restarted.setEnrollmentPolicy({autoApprove:false,expectedVersion:2})
+  assert.equal(submit(restarted).status,'pending')
+})

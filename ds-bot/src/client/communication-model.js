@@ -60,7 +60,8 @@ export const communicationScope = state => state?.queueScope && state.queueScope
 export function mentionQuery(text, caret) {
   const before = text.slice(0, caret)
   if (/^\s*>/.test(before.split('\n').at(-1)) || (before.match(/```/g)?.length ?? 0) % 2 || (before.replace(/```[\s\S]*?```/g, '').match(/`/g)?.length ?? 0) % 2) return null
-  const match = /(?:^|[\s(])@([^@\n]*)$/.exec(before)
+  // Match the same address boundary as mentionSpans, including Chinese prose.
+  const match = /(?:^|[^a-z0-9_./])@([^@\n]*)$/i.exec(before)
   return match ? { start: caret - match[1].length - 1, end: caret, query: match[1] } : null
 }
 

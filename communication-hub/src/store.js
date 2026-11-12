@@ -851,11 +851,12 @@ export class HubStore {
         event.dispatchSuppressed='CAUSAL_LIMIT'
         for(const delivery of deliveries)delivery.ai=false
       }else this.db.prepare('UPDATE causal_roots SET ai_deliveries=ai_deliveries+? WHERE id=?').run(aiCount,rootId)
+      event.activatedBotPrincipalIds=deliveries.filter(delivery=>delivery.ai).map(delivery=>delivery.recipientPrincipalId).sort()
       for(let index=0;index<members.length;index++){
         requireThat(responseBytes(this.syncValue(members[index],Number.MAX_SAFE_INTEGER,[event]))<=this.limits.maxEnvelopeBytes
           &&responseBytes([deliveries[index]])<=this.limits.maxEnvelopeBytes,'PAYLOAD_TOO_LARGE')
       }
-      this.event(message.conversationId,'message',{message,serverAcceptedAt:acceptedAt,payloadHash:digest,causality,...(event.dispatchSuppressed?{dispatchSuppressed:event.dispatchSuppressed}:{})},message.messageId)
+      this.event(message.conversationId,'message',{message,serverAcceptedAt:acceptedAt,payloadHash:digest,causality,activatedBotPrincipalIds:event.activatedBotPrincipalIds,...(event.dispatchSuppressed?{dispatchSuppressed:event.dispatchSuppressed}:{})},message.messageId)
       this.db.prepare('INSERT INTO messages VALUES (?,?,?,?,?,?,?)').run(message.messageId,message.conversationId,event.conversationSeq,digest,author.principalId,JSON.stringify(message),acceptedAt)
       this.db.prepare('INSERT INTO message_causality VALUES (?,?,?,?)').run(message.messageId,rootId,parentMessageId,depth)
       if(updateParent)this.db.prepare('INSERT INTO input_updates(message_id,parent_delivery_id,recipient_id,epoch) VALUES (?,?,?,?)').run(message.messageId,updateParent.id,updateParent.recipient_id,updateParent.membership_epoch)
@@ -870,6 +871,7 @@ export class HubStore {
   accepted(row) {
     const event=JSON.parse(this.db.prepare('SELECT body FROM events WHERE id=?').get(row.id).body)
     return {messageId:row.id,conversationId:row.conversation_id,conversationSeq:row.seq,payloadHash:row.hash,serverAcceptedAt:row.accepted_at,status:'hubAccepted',
+      ...(Array.isArray(event.activatedBotPrincipalIds)?{activatedBotPrincipalIds:event.activatedBotPrincipalIds}:{}),
       ...(event.causality?{causality:event.causality}:{}),...(event.dispatchSuppressed?{dispatchSuppressed:event.dispatchSuppressed}:{})}
   }
   memberships(auth) {

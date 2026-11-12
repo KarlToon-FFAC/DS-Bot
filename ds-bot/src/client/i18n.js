@@ -5,6 +5,17 @@
 export const NAMESPACE = 'ds-bot'
 
 const ZH = {
+  '{count} Bots in total': '等 {count} 个 Bot',
+  'View all {count} Bots': '查看全部 {count} 个 Bot',
+  'All Bot recipients': '全部 Bot 接收对象',
+  'Close Bot list': '关闭 Bot 列表',
+
+  'Bot dispatch': '唤醒对象',
+  'No Bots activated': '未唤醒 Bot',
+  'Dispatch not recorded': '未记录唤醒对象',
+  'Awaiting dispatch confirmation': '等待派发确认',
+  'Bots selected by the Hub for this message. This does not mean they have started or finished processing.': 'Hub 为本条消息选定的处理对象，不代表已开始或已完成处理。',
+
   'The Bot ended without submitting a reply decision. Its text was not sent. Ask it to submit a public reply or explicitly choose no reply.': 'Bot 已结束，但仍未提交回复决定，正文没有发出。请让它提交公开回复或明确选择不回复。',
   'The Bot tried to reply, but sending failed. Check the failed send; its private closing text was not forwarded.': 'Bot 尝试回复，但发送失败。请检查失败记录；私密收尾正文没有被转发。',
   'This draft does not belong to the current reply or is no longer available. Submit new public text instead.': '此草稿不属于当前回复或已不可用，请重新提交公开正文。',
