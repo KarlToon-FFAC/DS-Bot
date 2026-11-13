@@ -3,7 +3,7 @@ import { createElement as h, Fragment, useEffect, useLayoutEffect, useMemo, useR
 import { createPortal } from 'react-dom'
 import { MarkdownText, writeClipboard } from './dsh-primitives.js'
 import { inkText } from './inks.js'
-import { linkMentions, mentionTarget, dayLabel, contentText, stripHeader, isHiddenTurn, isRelayContext, relaysBefore, relayPart, commRunOf, toolName, toolArgs, reminderPrompts, elapsedLabel, clockLabel, messageClock } from './text.js'
+import { linkMentions, mentionTarget, dayLabel, contentText, stripHeader, isHiddenTurn, isHiddenAssistant, isRelayContext, relaysBefore, relayPart, commRunOf, toolName, toolArgs, reminderPrompts, elapsedLabel, clockLabel, messageClock } from './text.js'
 import { SmileIcon, ReplyIcon, DotsIcon, CheckIcon, DownloadIcon, CopyIcon, MemoryIcon } from './icons.js'
 import { colorOf, toolState, BotMark, RoomAvatar } from './mark.js'
 import { CellEmpty } from './cell-empty.js'
@@ -253,11 +253,11 @@ export function AssistantCell({ node, groupPart, sessionId, openFile, fileMentio
   const steps = useTurnSteps(String(data.turn))
   const contexts = useTurnContext(String(data.turn))
   const mentions = useFileMentions({ node, openFile, fileMentions, useTurnData })
-  const hidden = Boolean(roster.roomsById[sessionId]) || isHiddenTurn(roster, sessionId, data.turn)
+  const hidden = Boolean(roster.roomsById[sessionId]) || isHiddenAssistant(roster, sessionId, data, node.anchorSeq)
   const texts = groupPart === 'reasoning' ? [] : data.blocks.filter(block => block.kind === 'text' && block.text.trim() !== '').map(block => block.text)
   const running = data.status === 'running'
   const members = steps.length ? steps : [data]
-  const shown = thinkingShown(roster.prefs)
+  const shown = thinkingShown(roster.prefs) && roster.turnPublications?.[sessionId]?.[data.turn]?.explicit !== true
   const reasoning = groupPart === 'response' || !shown ? '' : turnReasoning(steps, data)
   // A live step of the same Turn keeps the row ticking even when it sits on an
   // earlier step's cell.

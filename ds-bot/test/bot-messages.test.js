@@ -1420,3 +1420,103 @@ test('a consultation arriving during another local turn retains its exact identi
  await delay(25)
  assert.equal(rt.state.localConsultations[id].text,'Answer only to the consultation.')
 })
+
+test('a local Bot explicitly publishes only subsequent text, keeps internal replies, and leaves five old turns hidden', async t => {
+ const seed=team()
+ seed.turnAudiences={b:Object.fromEntries([1,2,3,4,5].map(turn=>[turn,{audience:'internal',triggerOrigin:'local-bot',protocol:'request'}]))}
+ const {agentOf,emit,tool,home,stop}=await start(seed);t.after(stop)
+ const history=structuredClone(rt.state.turnAudiences.b)
+ await tool('message_bot',{to:'Writer',message:'Prepare a progress report'},'a')
+ const incoming=agentOf('b').calls[0][1]
+ emit('b','turn/start',{turn:6});emit('b','user/message',{source:incoming.source,content:incoming.content})
+ emit('b','assistant/message',{turn:6,message:{role:'assistant',content:[{type:'text',text:'INTERNAL_BEFORE_MARKER'}]}})
+ emit('b','tool/call',{turn:6,callId:'publish-1',name:'publish_turn_to_user',arguments:'{}'})
+ const publish=rt.teamTools.find(tool=>tool.name==='publish_turn_to_user')
+ const result=JSON.parse(await publish.execute({}, {agent:{id:'b'},callId:'publish-1'}))
+ assert.equal(result.ok,true);assert.equal(result.status,'enabled');assert.equal(result.published,false)
+ const grant=rt.state.turnAudiences.b[6]
+ assert.equal(grant.explicit,true);assert.equal(grant.baseAudience,'internal')
+ assert.deepEqual(JSON.parse(readFileSync(join(home,'state.json'),'utf8')).turnAudiences.b[6],grant)
+ assert.deepEqual(JSON.parse(await publish.execute({}, {agent:{id:'b'},callId:'publish-1'})),result,'repeating the marker is idempotent')
+ const message=(turn,seq,text,content=[{type:'text',text}])=>({type:'assistant/message',seq,data:{turn,message:{role:'assistant',content}}})
+ const events=[...Object.keys(history).map(turn=>message(Number(turn),Number(turn),`OLD_${turn}`)),message(6,grant.userOutputFromSeq-1,'INTERNAL_BEFORE_MARKER'),message(6,grant.userOutputFromSeq,'User progress',[{type:'reasoning',text:'PRIVATE_REASONING'},{type:'text',text:'User progress'}])]
+ assert.deepEqual(rt.displayItems('b',events).map(item=>item.text),['User progress'])
+ assert.equal(rt.displayItems('b',events)[0].routing.explicit,true)
+ for(const [turn,row] of Object.entries(history))assert.deepEqual(rt.state.turnAudiences.b[turn],row)
+ emit('b','assistant/message',{turn:6,message:{role:'assistant',content:[{type:'text',text:'User progress'}]}})
+ emit('b','turn/end',{turn:6,reason:{kind:'completed'}})
+ await delay(30)
+ assert.ok(agentOf('a').calls.some(([,msg])=>textOf(msg.content??[]).includes('User progress')),'the normal internal result still reaches the requester')
+ emit('b','turn/start',{turn:7});emit('b','user/message',{source:{kind:SOURCE_KIND,role:'reply',senderSessionId:'a',exchangeId:'next'},content:[{type:'text',text:'Internal follow-up'}]})
+ assert.equal(rt.state.turnAudiences.b[7].audience,'internal')
+ assert.equal(rt.state.turnAudiences.b[7].explicit,undefined)
+ assert.deepEqual(rt.displayItems('b',[message(7,1000,'NEXT_TURN_INTERNAL')]),[])
+})
+
+test('turn publication rejects wrong scope and missing calls and never claims success after a failed save', async t => {
+ const {emit,stop}=await start(team({group:true}));t.after(stop)
+ const publish=rt.teamTools.find(tool=>tool.name==='publish_turn_to_user')
+ const run=(id,callId='p')=>publish.execute({}, {agent:{id},callId}).then(JSON.parse)
+ assert.equal((await run('b')).error.code,'TURN_PUBLICATION_NO_ACTIVE_CALL')
+ assert.equal((await run('gb')).error.code,'TURN_PUBLICATION_LOCAL_CHAT_ONLY')
+ rt.communication={owners:new Map([['remote-session',{localBotRef:'b'}]])}
+ assert.equal((await run('remote-session')).error.code,'TURN_PUBLICATION_REMOTE_SOURCE')
+ emit('b','turn/start',{turn:1});emit('b','user/message',{source:{kind:SOURCE_KIND,role:'reply',senderSessionId:'a',exchangeId:'internal'},content:[]})
+ emit('b','tool/call',{turn:1,callId:'p',name:'publish_turn_to_user',arguments:'{}'})
+ const prior=structuredClone(rt.state.turnAudiences.b[1]),save=rt.save
+ const readOnly=rt.readOnly
+ rt.readOnly=()=> 'read-only host'
+ assert.equal((await run('b')).error.code,'TURN_PUBLICATION_READ_ONLY')
+ assert.deepEqual(rt.state.turnAudiences.b[1],prior)
+ rt.readOnly=readOnly
+ rt.save=async options=>{if(options?.required)throw new Error('synthetic disk failure')}
+ const results=await Promise.all([run('b'),run('b')])
+ assert.ok(results.every(result=>result.ok===false&&result.error.code==='TURN_PUBLICATION_NOT_SAVED'))
+ assert.deepEqual(rt.state.turnAudiences.b[1],prior)
+ rt.save=save
+ assert.equal((await run('b')).status,'enabled')
+ // An explicit grant must not create user-audience roots for subsequent delegations.
+ rt.openWork('after-explicit',{from:'b',to:'a'})
+ assert.equal(rt.state.works['after-explicit'].audience,'internal')
+ emit('b','turn/end',{turn:1,reason:{kind:'completed'}})
+ assert.equal((await run('b')).error.code,'TURN_PUBLICATION_NO_ACTIVE_CALL')
+})
+
+test('remote input closes an explicit publication interval without hiding already published text', async t => {
+ const {emit,stop}=await start(team());t.after(stop)
+ const source={kind:SOURCE_KIND,role:'reply',senderSessionId:'a',exchangeId:'internal'}
+ emit('b','turn/start',{turn:1});emit('b','user/message',{source,content:[]})
+ emit('b','tool/call',{turn:1,callId:'p',name:'publish_turn_to_user',arguments:'{}'})
+ const publish=rt.teamTools.find(tool=>tool.name==='publish_turn_to_user')
+ assert.equal(JSON.parse(await publish.execute({}, {agent:{id:'b'},callId:'p'})).ok,true)
+ const from=rt.state.turnAudiences.b[1].userOutputFromSeq
+ emit('b','assistant/message',{turn:1,message:{role:'assistant',content:[{type:'text',text:'Public before remote input'}]}})
+ emit('b','user/message',{source:{...source,exchangeId:'remote',remoteSource:{conversationId:'remote-group'}},content:[]})
+ const grant=rt.state.turnAudiences.b[1]
+ assert.equal(grant.audience,'internal');assert.ok(grant.userOutputThroughSeq>=from)
+ const event=(seq,text)=>({type:'assistant/message',seq,data:{turn:1,message:{content:[{type:'text',text}]}}})
+ assert.deepEqual(rt.displayItems('b',[event(from,'Public'),event(grant.userOutputThroughSeq+1,'PRIVATE_REMOTE')]).map(item=>item.text),['Public'])
+ assert.equal(JSON.parse(await publish.execute({}, {agent:{id:'b'},callId:'p'})).error.code,'TURN_PUBLICATION_REMOTE_SOURCE')
+})
+
+test('a pending publication save is not visible, and remote input during that save revokes it', async t => {
+ const {emit,stop}=await start(team());t.after(stop)
+ emit('b','turn/start',{turn:1});emit('b','user/message',{source:{kind:SOURCE_KIND,role:'reply',senderSessionId:'a',exchangeId:'internal'},content:[]})
+ emit('b','tool/call',{turn:1,callId:'p',name:'publish_turn_to_user',arguments:'{}'})
+ const save=rt.save;let release
+ rt.save=options=>options?.required?new Promise(resolve=>{release=resolve}):Promise.resolve()
+ const publish=rt.teamTools.find(tool=>tool.name==='publish_turn_to_user')
+ const pending=publish.execute({}, {agent:{id:'b'},callId:'p'}).then(JSON.parse)
+ await delay(5)
+ const seq=rt.state.turnAudiences.b[1].userOutputFromSeq
+ const event={type:'assistant/message',seq,data:{turn:1,message:{content:[{type:'text',text:'NOT_YET_COMMITTED'}]}}}
+ assert.deepEqual(rt.displayItems('b',[event]),[])
+ emit('b','user/message',{source:{kind:SOURCE_KIND,role:'federation-report',exchangeId:'remote-report',senderSessionId:'a'},content:[]})
+ release()
+ const result=await pending
+ assert.equal(result.error.code,'TURN_PUBLICATION_REMOTE_SOURCE')
+ assert.equal(rt.state.turnAudiences.b[1].audience,'internal')
+ assert.equal(rt.state.turnAudiences.b[1].explicit,undefined)
+ assert.deepEqual(rt.displayItems('b',[event]),[])
+ rt.save=save
+})

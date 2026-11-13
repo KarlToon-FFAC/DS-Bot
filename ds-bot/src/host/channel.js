@@ -91,6 +91,10 @@ export function install(rt) {
   // turn there runs; the approvals waiting; per Bot, who it waits for to hand back work;
   // and per Session, when its running turn began.
   const live = () => ({
+    turnPublications: Object.fromEntries(Object.entries(state.turnAudiences ?? {}).flatMap(([id, turns]) => {
+      const explicit = Object.entries(turns).filter(([, row]) => row.explicit === true).map(([turn, row]) => [turn, {...row, publicationPending: rt.pendingUserPublications?.has(`${id}:${turn}`) === true}])
+      return explicit.length ? [[id, Object.fromEntries(explicit)]] : []
+    })),
     remoteHubEnabled: rt.remoteHubFeatureEnabled?.() ?? remoteHubEnabled(rt.config),
     remoteHubWithdrawalPending: rt.remoteHubFeatureSettings?.().withdrawalPending ?? false,
     remoteHubWithdrawalError: rt.remoteHubFeatureSettings?.().withdrawalError ?? null,

@@ -21,13 +21,13 @@ export function updateLiveRoster(roster, value) {
   const current = roster.getSnapshot()
   if (!current.ready) return
   const changed = {}
-  for (const [key, fallback] of Object.entries({ connectors: [], capabilityStatuses: {}, learning: {}, btwCards: {}, sideChats: {}, remoteHubEnabled: false, remoteUnreadCount: 0, remoteHubWithdrawalPending: false, remoteHubWithdrawalError: null, communicationEnabled: false, communicationHubId: null })) {
+  for (const [key, fallback] of Object.entries({ turnPublications: {}, connectors: [], capabilityStatuses: {}, learning: {}, btwCards: {}, sideChats: {}, remoteHubEnabled: false, remoteUnreadCount: 0, remoteHubWithdrawalPending: false, remoteHubWithdrawalError: null, communicationEnabled: false, communicationHubId: null })) {
     if (value[key] !== undefined && JSON.stringify(value[key]) !== JSON.stringify(current[key] ?? fallback)) changed[key] = value[key]
   }
   if (Object.keys(changed).length) roster.set({ ...current, ...changed })
 }
 
-export const EMPTY_ROSTER = { revision: -1, mainBotId: null, mainBotIds: [], bots: [], rooms: [], agents: [], exchangeTurns: {}, questions: {}, btwCards: {}, sideChats: {}, learning: {}, secrets: [], capabilities: [], capabilityStatuses: {}, secretRequests: {}, models: [], defaultModel: null, modelsKey: null, prefs: {}, byId: {}, roomsById: {}, agentsById: {}, agentOf: {}, ready: false }
+export const EMPTY_ROSTER = { revision: -1, mainBotId: null, mainBotIds: [], bots: [], rooms: [], agents: [], exchangeTurns: {}, turnPublications: {}, questions: {}, btwCards: {}, sideChats: {}, learning: {}, secrets: [], capabilities: [], capabilityStatuses: {}, secretRequests: {}, models: [], defaultModel: null, modelsKey: null, prefs: {}, byId: {}, roomsById: {}, agentsById: {}, agentOf: {}, ready: false }
 // Any Main Bot holds the Main Bot powers; `mainBotId`, the first one, is the sidebar tile.
 export const isMainOf = (roster, id) => id !== undefined && (roster.mainBotIds ?? []).includes(id)
 

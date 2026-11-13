@@ -45,6 +45,8 @@ In **V0.3.8**, Remote turns use the same Bot identity and local team, memory, na
 
 For the upcoming **V0.4.0** batch, local and remote Sessions use one capability toolset: `list_capabilities`, `read_capability`, `save_capability`, `attach_capability`, `detach_capability` and `delete_capability`. Local unpublished Bots need no Hub connection to maintain Skills. Old Skill tool names remain callable compatibility aliases but are no longer advertised to the model. Memory already uses the same `recall`/`remember`/`forget` implementation. Evidence-linked remote relationships and membership-scoped history keep separate tools; filesystem Skills and AGENTS.md remain under the native file/Skill tools.
 
+A local Bot-triggered turn can call `publish_turn_to_user({})` before writing a report to the local user. After the marker is saved, subsequent ordinary text in that turn appears in the user chat and canonical mirror feed. Earlier text, reasoning and later turns remain unchanged. Remote turns and remotely sourced local consultations cannot use this marker; existing internal replies still reach the requesting Bot.
+
 In **V0.3.9**, accepted contact requests disappear from the request list. Local consultation answers return durable receipts via `reply_to_local_consultation` or `message_bot`; unpublished responders need no Hub publication. Pending consultations can pause the remote turn, and late results notify the original remote Session without automatically publishing them.
 
 ![version](https://img.shields.io/badge/version-V0.3.9-blue) ![DSH](https://img.shields.io/badge/DSH-0.2.1--rc.4-4D6BFE) ![license](https://img.shields.io/badge/license-Apache_2.0-green)

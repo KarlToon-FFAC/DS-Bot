@@ -148,3 +148,22 @@ test('the thinking row shows only with its switch on, and the activity row is ne
     assert.ok(noted.every(id => id.startsWith('text:')))
   }
 })
+
+test('explicit local publication reveals only ordinary text inside its saved sequence interval', () => {
+  const grant = { audience: 'user', baseAudience: 'internal', triggerOrigin: 'local-bot', explicit: true, userOutputFromSeq: 10 }
+  const render = (seq, changes = {}) => {
+    const { props } = cellProps()
+    props.node.data = { ...props.node.data, seq, finalNode: seq === undefined ? undefined : { seq }, blocks: [{ kind: 'reasoning', text: 'PRIVATE_THINKING' }, { kind: 'text', text: 'USER_REPORT' }] }
+    props.useTurnSteps = () => [{ turn: 3, step: 0, blocks: [{ kind: 'reasoning', text: 'EARLIER_PRIVATE_THINKING' }] }, props.node.data]
+    props.useRoster = select => select({ ...roster, prefs: { thinking: true }, exchangeTurns: { b: [3] }, turnPublications: { b: { 3: { ...grant, ...changes } } } })
+    return expand(AssistantCell(props), ['Bubbles', 'Bubble'])
+  }
+  const accepted = render(10)
+  assert.equal(find(accepted, node => node.type === MarkdownText)[0].props.text, 'USER_REPORT')
+  assert.equal(find(accepted, node => node.type === ThinkingRow).length, 0)
+  for (const out of [render(9), render(undefined), render(10, { publicationPending: true }), render(11, { userOutputThroughSeq: 10 }), render(10, { triggerOrigin: 'remote-bot' }), render(10, { explicit: false })]) {
+    assert.equal(find(out, node => node.type === MarkdownText).length, 0)
+    assert.equal(find(out, node => node.type === ThinkingRow).length, 0)
+  }
+  assert.equal(find(render(10, { audience: 'internal', userOutputThroughSeq: 10 }), node => node.type === MarkdownText).length, 1)
+})

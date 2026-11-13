@@ -2173,12 +2173,12 @@ function updateLiveRoster(roster, value) {
   const current = roster.getSnapshot();
   if (!current.ready) return;
   const changed = {};
-  for (const [key2, fallback] of Object.entries({ connectors: [], capabilityStatuses: {}, learning: {}, btwCards: {}, sideChats: {}, remoteHubEnabled: false, remoteUnreadCount: 0, remoteHubWithdrawalPending: false, remoteHubWithdrawalError: null, communicationEnabled: false, communicationHubId: null })) {
+  for (const [key2, fallback] of Object.entries({ turnPublications: {}, connectors: [], capabilityStatuses: {}, learning: {}, btwCards: {}, sideChats: {}, remoteHubEnabled: false, remoteUnreadCount: 0, remoteHubWithdrawalPending: false, remoteHubWithdrawalError: null, communicationEnabled: false, communicationHubId: null })) {
     if (value[key2] !== void 0 && JSON.stringify(value[key2]) !== JSON.stringify(current[key2] ?? fallback)) changed[key2] = value[key2];
   }
   if (Object.keys(changed).length) roster.set({ ...current, ...changed });
 }
-var EMPTY_ROSTER = { revision: -1, mainBotId: null, mainBotIds: [], bots: [], rooms: [], agents: [], exchangeTurns: {}, questions: {}, btwCards: {}, sideChats: {}, learning: {}, secrets: [], capabilities: [], capabilityStatuses: {}, secretRequests: {}, models: [], defaultModel: null, modelsKey: null, prefs: {}, byId: {}, roomsById: {}, agentsById: {}, agentOf: {}, ready: false };
+var EMPTY_ROSTER = { revision: -1, mainBotId: null, mainBotIds: [], bots: [], rooms: [], agents: [], exchangeTurns: {}, turnPublications: {}, questions: {}, btwCards: {}, sideChats: {}, learning: {}, secrets: [], capabilities: [], capabilityStatuses: {}, secretRequests: {}, models: [], defaultModel: null, modelsKey: null, prefs: {}, byId: {}, roomsById: {}, agentsById: {}, agentOf: {}, ready: false };
 var isMainOf = (roster, id) => id !== void 0 && (roster.mainBotIds ?? []).includes(id);
 function indexRoster(value) {
   const byId = {};
@@ -2547,6 +2547,18 @@ var thinkingShown = (prefs) => prefs?.thinking === true;
 var widthOf = (prefs) => percent(prefs?.width, 80);
 var flatWidthOf = (prefs) => percent(prefs?.flatWidth, 100);
 
+// src/shared/turn-audience.js
+function explicitUserOutput(routing, seq) {
+  return routing?.explicit === true && routing.triggerOrigin === "local-bot" && routing.baseAudience === "internal" && Number.isSafeInteger(routing.userOutputFromSeq) && routing.userOutputFromSeq >= 0 && Number.isSafeInteger(seq) && seq >= routing.userOutputFromSeq && (routing.userOutputThroughSeq === void 0 || Number.isSafeInteger(routing.userOutputThroughSeq) && seq <= routing.userOutputThroughSeq);
+}
+function explicitUserStream(routing) {
+  return routing?.audience === "user" && routing.userOutputThroughSeq === void 0 && explicitUserOutput(routing, routing.userOutputFromSeq);
+}
+function outputRouting(routing, seq) {
+  if (!routing || routing.explicit !== true) return routing;
+  return { ...routing, audience: explicitUserOutput(routing, seq) ? "user" : "internal" };
+}
+
 // src/shared/mentions.js
 var ALL_WORDS = ["all", "everyone", "所有人", "全体"];
 var USER_NAMES = ["user", "you"];
@@ -2700,6 +2712,11 @@ function summaryBlocks(text) {
 function isHiddenTurn(roster, sessionId, turn) {
   if (sessionId === void 0 || turn === void 0) return false;
   return (roster.exchangeTurns[sessionId] ?? []).includes(turn);
+}
+function isHiddenAssistant(roster, sessionId, data, anchorSeq) {
+  const grant = roster.turnPublications?.[sessionId]?.[data.turn];
+  if (grant?.explicit === true) return grant.publicationPending === true || !explicitUserOutput(grant, data.finalNode?.seq ?? data.seq ?? anchorSeq);
+  return isHiddenTurn(roster, sessionId, data.turn);
 }
 var toolName = (root) => root.name || root.call?.name;
 function toolArgs(root) {
@@ -8879,11 +8896,11 @@ function AssistantCell({ node, groupPart, sessionId, openFile, fileMentions, use
   const steps = useTurnSteps(String(data.turn));
   const contexts = useTurnContext(String(data.turn));
   const mentions = useFileMentions({ node, openFile, fileMentions, useTurnData });
-  const hidden = Boolean(roster.roomsById[sessionId]) || isHiddenTurn(roster, sessionId, data.turn);
+  const hidden = Boolean(roster.roomsById[sessionId]) || isHiddenAssistant(roster, sessionId, data, node.anchorSeq);
   const texts2 = groupPart === "reasoning" ? [] : data.blocks.filter((block) => block.kind === "text" && block.text.trim() !== "").map((block) => block.text);
   const running = data.status === "running";
   const members = steps.length ? steps : [data];
-  const shown = thinkingShown(roster.prefs);
+  const shown = thinkingShown(roster.prefs) && roster.turnPublications?.[sessionId]?.[data.turn]?.explicit !== true;
   const reasoning = groupPart === "response" || !shown ? "" : turnReasoning(steps, data);
   const thinking = groupPart === "response" || !shown ? void 0 : thinkingStep(members);
   const ms = useThinkingMs({ sessionId, turn: data.turn, settledSteps: members.filter((step) => step.status !== "running").length, skip: hidden || reasoning === "" });

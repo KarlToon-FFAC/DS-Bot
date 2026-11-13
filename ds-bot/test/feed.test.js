@@ -272,3 +272,44 @@ test('canonical user-output feed sends only source-authorized user finals, never
  assert.equal(event.data.outputId,'m1c:10:0')
  abort.abort();assert.equal(await next(),undefined)
 })
+
+test('explicit local publication reaches chat and canonical user-output only inside its text interval', async t => {
+ const grant={audience:'internal',baseAudience:'internal',triggerOrigin:'local-bot',protocol:'request',explicit:true,userOutputFromSeq:10,userOutputThroughSeq:12}
+ const events=[{...botMessage('BEFORE_MARKER',1,7),seq:9},
+   {...botMessage('User report',2,7),seq:10},
+   {...botMessage('AFTER_REMOTE_INPUT',3,7),seq:13},
+   {...botMessage('INVALID_EXPLICIT',4,8),seq:14},
+   {...botMessage('Normal user answer',5,9),seq:15}]
+ events[1].data.message.content.unshift({type:'reasoning',text:'PRIVATE_THOUGHT'})
+ const {ctx,call,stop,routes}=start({audiences:{m1c:{7:grant,8:{audience:'user',explicit:true},9:{audience:'user',triggerOrigin:'user'}}},pages:{'m1c:end':{records:events.map(event=>({event})),hasMore:false}}})
+ t.after(stop);await call('state')
+ const page=(await call('chat',{botId:'m1'})).value
+ assert.deepEqual(page.items.filter(item=>item.kind==='bot').map(item=>item.text),['User report','Normal user answer'])
+ const abort=new AbortController();t.after(()=>abort.abort())
+ const next=reader(await routes['/api/bot/user-output'].fetch(new Request('http://localhost/api/bot/user-output?botId=m1',{signal:abort.signal})))
+ assert.equal((await next()).event,'hello')
+ const onEvent=ctx.listeners.get('session/event').at(-1)
+ for(const event of events)onEvent({id:'m1c'},event)
+ const explicit=await next();assert.equal(explicit.data.item.text,'User report');assert.equal(explicit.data.item.routing.explicit,true);assert.equal(explicit.data.item.routing.audience,'user')
+ assert.equal((await next()).data.item.text,'Normal user answer')
+ abort.abort();assert.equal(await next(),undefined)
+})
+
+test('an explicit local grant streams ordinary text despite the hidden-turn marker, never reasoning', async t => {
+ const {ctx,call,stop,routes}=start({audiences:{m1c:{7:{audience:'user',baseAudience:'internal',triggerOrigin:'local-bot',explicit:true,userOutputFromSeq:10},8:{audience:'user',explicit:true}}}})
+ t.after(stop);await call('state')
+ const abort=new AbortController();t.after(()=>abort.abort())
+ const next=reader(await routes['/api/bot/feed'].fetch(new Request('http://localhost/api/bot/feed',{signal:abort.signal})))
+ assert.equal((await next()).event,'hello')
+ const onStream=ctx.listeners.get('agent/assistant-stream')[0],agent={id:'m1c'}
+ onStream({agent,frame:{type:'start',attemptId:'invalid',turn:8}})
+ onStream({agent,frame:{type:'chunk',attemptId:'invalid',chunk:{type:'text-delta',text:'HIDDEN'}}})
+ onStream({agent,frame:{type:'start',attemptId:'public',turn:7}})
+ onStream({agent,frame:{type:'chunk',attemptId:'public',chunk:{type:'reasoning-delta',text:'PRIVATE_THOUGHT'}}})
+ onStream({agent,frame:{type:'chunk',attemptId:'public',chunk:{type:'text-delta',text:'Public text'}}})
+ onStream({agent,frame:{type:'end',attemptId:'public'}})
+ assert.equal((await next()).data.phase,'start')
+ assert.equal((await next()).data.text,'Public text')
+ assert.equal((await next()).data.phase,'end')
+ abort.abort();assert.equal(await next(),undefined)
+})

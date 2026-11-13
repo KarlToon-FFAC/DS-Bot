@@ -384,6 +384,61 @@ export function install(rt) {
     }
   }
 
+  // A receiving Bot may opt its next ordinary text into its local owner's feed.
+  // The grant never rewrites earlier outputs or the work's reply destination.
+  const publishTurnToUser = async exec => {
+    await rt.load()
+    const id = exec.agent?.id, entry = live.get(id), turn = entry?.turn
+    const fail = (code, message) => { throw Object.assign(new Error(message), {code}) }
+    const check = () => {
+      if (rt.communication?.owners?.has(id) || entry?.remoteInputSeen || entry?.info?.remoteSource
+        || entry?.info?.role === 'federation-report' || (entry?.joined ?? []).some(item => item.info?.remoteSource)
+        || state.turnAudiences?.[id]?.[turn]?.triggerOrigin === 'remote-bot') {
+        fail('TURN_PUBLICATION_REMOTE_SOURCE', 'Remote turns and remotely sourced local consultations/reports cannot publish to the local user feed with this tool. Use explicit communication replies for the remote audience; keep internal reports internal.')
+      }
+      if (!rt.chatOwners.has(id) || rt.groupOwners.has(id)) fail('TURN_PUBLICATION_LOCAL_CHAT_ONLY', 'This tool is only for your own local Bot chat, not a group or another Bot. Use the group communication tools for group output.')
+      const call = entry?.calls?.get(exec.callId)
+      if (!Number.isSafeInteger(turn) || live.get(id) !== entry || entry.turn !== turn || !entry.opened
+        || call?.name !== 'publish_turn_to_user' || call.turn !== turn || !Number.isSafeInteger(call.seq)) {
+        fail('TURN_PUBLICATION_NO_ACTIVE_CALL', 'Call publish_turn_to_user inside the current active local turn, before writing the user report. Past turns and another Session cannot be changed.')
+      }
+      if (rt.readOnly() !== undefined) fail('TURN_PUBLICATION_READ_ONLY', 'This host cannot save the publication decision. Use the writable host; no user publication was confirmed.')
+      return call
+    }
+    const call = check(), prior = state.turnAudiences?.[id]?.[turn]
+    if (prior?.audience === 'user' && prior.explicit !== true) return {ok: true, status: 'already_user', sessionId: id, turn, published: false, message: 'This turn already uses its normal user-visible route. No routing was changed.'}
+    if (prior?.triggerOrigin !== 'local-bot' || ['room','handoff'].includes(entry.info?.role)) fail('TURN_PUBLICATION_LOCAL_CHAT_ONLY', 'Only a local Bot-triggered report in your own chat can be marked. Group relay and handoff housekeeping cannot be published this way.')
+    if (entry.userPublication?.turn === turn) return entry.userPublication.promise
+    const grant = {...prior, audience: 'user', baseAudience: 'internal', explicit: true,
+      userOutputFromSeq: Math.max(call.seq, entry.lastSeq ?? call.seq) + 1, explicitCallId: exec.callId}
+    const publicationKey = `${id}:${turn}`
+    ;(rt.pendingUserPublications ??= new Set()).add(publicationKey)
+    const publication = {turn, promise: undefined}
+    entry.userPublication = publication
+    publication.promise = (async () => {
+      state.turnAudiences[id][turn] = grant
+      try {
+        await rt.save({required: true})
+        check()
+        if (state.turnAudiences[id][turn].userOutputThroughSeq !== undefined) fail('TURN_PUBLICATION_REMOTE_SOURCE', 'Remote input interrupted this publication decision. Subsequent text remains internal.')
+        return {ok: true, status: 'enabled', audience: 'user', explicit: true, sessionId: id, turn,
+          fromSeq: grant.userOutputFromSeq, published: false,
+          message: 'Publication is enabled for subsequent ordinary text in this turn only. Write the user-facing report now. Earlier text, reasoning and later turns stay unchanged; this receipt does not prove mirror delivery.'}
+      } catch (error) {
+        // Do not overwrite a newer source decision or another turn after an await.
+        const current = state.turnAudiences?.[id]?.[turn]
+        if (current?.explicitCallId === exec.callId) {
+          state.turnAudiences[id][turn] = current === grant ? prior : {...prior, audience:'internal', mixed:true, ...(current.interruptedBy === 'remote-bot' ? {triggerOrigin:'remote-bot'} : {})}
+          void rt.save().catch(() => {})
+        }
+        if (entry.userPublication === publication) entry.userPublication = undefined
+        if (error.code?.startsWith('TURN_PUBLICATION_')) throw error
+        fail('TURN_PUBLICATION_NOT_SAVED', 'The publication decision could not be saved. Nothing is confirmed; retry this tool before assuming the user can see your report.')
+      } finally { rt.pendingUserPublications.delete(publicationKey); rt.stateSaved?.() }
+    })()
+    return publication.promise
+  }
+
   // Activity is tracked per Session; a Bot's mascot shows its own chat's, else a group's.
   const activityView = () => {
     const merged = {}
@@ -547,6 +602,7 @@ export function install(rt) {
       return
     }
     const entry = liveOf(id)
+    if (Number.isSafeInteger(event.seq)) entry.lastSeq = event.seq
     if (rt.groupOwners.has(id)) rt.touchRoomTurn?.(id)
     switch (event.type) {
       case 'subagent/catalog': {
@@ -558,6 +614,7 @@ export function install(rt) {
       case 'tool/call': {
         const name = String(event.data?.name ?? '')
         startCall(id, entry, event.data?.callId, name, String(event.data?.arguments ?? ''))
+        Object.assign(entry.calls?.get(event.data?.callId) ?? {}, {seq: event.seq, turn: entry.turn})
         // A program is as quick as the tools it runs, so its sub-calls decide.
         if (name !== PROGRAM_TOOL) {
           entry.toolCount = (entry.toolCount ?? 0) + 1
@@ -568,6 +625,7 @@ export function install(rt) {
       case 'tool/ptc-dispatch-start': {
         const name = String(event.data?.name ?? '')
         startCall(id, entry, event.data?.subCallId, name, JSON.stringify(event.data?.arguments ?? {}))
+        Object.assign(entry.calls?.get(event.data?.subCallId) ?? {}, {seq: event.seq, turn: entry.turn})
         entry.toolCount = (entry.toolCount ?? 0) + 1
         if (rt.groupOwners.has(id)) rt.workRoomTurn?.(id, name)
         break
@@ -581,6 +639,8 @@ export function install(rt) {
       case 'turn/start':
         setActivity(id, 'thinking')
         entry.turn = event.data.turn
+        entry.remoteInputSeen = false
+        entry.userPublication = undefined
         entry.since = event.time ?? Date.now()
         entry.texts = []
         entry.shown = 0
@@ -631,6 +691,14 @@ export function install(rt) {
         break
       case 'user/message': {
         const source = event.data?.source
+        if (source?.remoteSource || source?.kind === 'ds-bot-communication' || source?.role === 'federation-report') {
+          entry.remoteInputSeen = true
+          const routing = state.turnAudiences?.[id]?.[entry.turn]
+          if (routing?.explicit === true && routing.userOutputThroughSeq === undefined) {
+            state.turnAudiences[id][entry.turn] = {...routing, audience: 'internal', userOutputThroughSeq: Number.isSafeInteger(event.seq) ? event.seq - 1 : routing.userOutputFromSeq - 1, interruptedBy: 'remote-bot'}
+            void rt.save().catch(() => {})
+          }
+        }
         if (source?.kind === 'subagent-settled' || source?.kind === 'agent-message') {
           if (typeof source.senderSessionId === 'string') noteSubagentEnd(source.senderSessionId)
           if (stoppedSubagentParents.has(id) || (typeof source.senderSessionId === 'string' && stoppedSubagents.has(source.senderSessionId))) {
@@ -651,13 +719,14 @@ export function install(rt) {
         // still claims it as today, a later one only joins it.
         if (entry.turn !== undefined && (source?.kind === 'user' || source?.kind === REPLY_KIND)) {
           const ledger = (state.turnAudiences ??= {})[id] ??= {}
-          ledger[entry.turn] = ledger[entry.turn]?.audience === 'internal' ? {...ledger[entry.turn],mixed:true} : {audience:'user',triggerOrigin:'user',protocol:'answer'}
+          ledger[entry.turn] = ledger[entry.turn]?.audience === 'internal' || ledger[entry.turn]?.explicit === true ? {...ledger[entry.turn],mixed:true} : {audience:'user',triggerOrigin:'user',protocol:'answer'}
           void rt.save().catch(() => {})
         }
         const opened = entry.opened === true
         if (entry.turn !== undefined && opened && source?.kind === SOURCE_KIND && !bare(source) && !userAudience(source)) {
           const ledger = (state.turnAudiences ??= {})[id] ??= {}
-          ledger[entry.turn] = {...ledger[entry.turn],audience:'internal',triggerOrigin:source.remoteSource||ledger[entry.turn]?.triggerOrigin==='remote-bot'?'remote-bot':'local-bot',mixed:true}
+          ledger[entry.turn] = ledger[entry.turn]?.explicit === true ? {...ledger[entry.turn], mixed:true}
+            : {...ledger[entry.turn],audience:'internal',triggerOrigin:source.remoteSource||ledger[entry.turn]?.triggerOrigin==='remote-bot'?'remote-bot':'local-bot',mixed:true}
           void rt.save().catch(() => {})
         }
         if (entry.turn !== undefined && !bare(source)
@@ -1047,5 +1116,5 @@ export function install(rt) {
     }, 'ds-bot: prompt rejection reasons')
   }
 
-  Object.assign(rt, { live, liveOf, roomWaiters, roomProgress, roomInbox, activityView, workView, roomWorkView, turnsView, steeredView, callDetail, doingOf, stopRoomTurn, releaseBot, markSteerCut, hasSubagents, stopSubagents })
+  Object.assign(rt, { publishTurnToUser, live, liveOf, roomWaiters, roomProgress, roomInbox, activityView, workView, roomWorkView, turnsView, steeredView, callDetail, doingOf, stopRoomTurn, releaseBot, markSteerCut, hasSubagents, stopSubagents })
 }

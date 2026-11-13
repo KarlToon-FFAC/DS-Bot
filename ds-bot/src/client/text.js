@@ -1,3 +1,4 @@
+import {explicitUserOutput} from '../shared/turn-audience.js'
 // -------------------------------------------------------------------------
 // Text helpers
 import { dateLocale, t } from './i18n.js'
@@ -125,6 +126,14 @@ export function summaryBlocks(text) {
 export function isHiddenTurn(roster, sessionId, turn) {
   if (sessionId === undefined || turn === undefined) return false
   return (roster.exchangeTurns[sessionId] ?? []).includes(turn)
+}
+
+// Only the exact ordinary assistant output may cross a turn's hidden marker.
+// Tool, reasoning and trigger cells continue to use isHiddenTurn.
+export function isHiddenAssistant(roster, sessionId, data, anchorSeq) {
+  const grant = roster.turnPublications?.[sessionId]?.[data.turn]
+  if (grant?.explicit === true) return grant.publicationPending === true || !explicitUserOutput(grant, data.finalNode?.seq ?? data.seq ?? anchorSeq)
+  return isHiddenTurn(roster, sessionId, data.turn)
 }
 
 export const toolName = root => root.name || root.call?.name

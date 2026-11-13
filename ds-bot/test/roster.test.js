@@ -1094,3 +1094,27 @@ test('old late-round and relay-limit fields of a group load away; calls it parke
   assert.equal(set.ok, true)
   assert.deepEqual(set.value.changes, [])
 })
+
+test('a saved publication becoming usable updates the browser at the same revision', async t => {
+  const { createSource, updateLiveRoster } = await import('../src/client/sources.js')
+  const { call, stop } = start(undefined, { models: ['deepseek-v4-flash'] })
+  t.after(stop)
+  await call('state', {})
+  const id = rt.state.mainBotIds[0]
+  rt.state.turnAudiences = { [id]: { 1: { audience: 'user', explicit: true, baseAudience: 'internal', triggerOrigin: 'local-bot', userOutputFromSeq: 5 } } }
+  rt.pendingUserPublications = new Set([`${id}:1`])
+  const first = (await call('state', {})).value
+  assert.equal(first.turnPublications[id][1].publicationPending, true)
+  const roster = createSource({ ...first, ready: true })
+  rt.pendingUserPublications.clear()
+  const next = (await call('state', { since: first.revision, models: first.modelsKey, live: first.liveKey })).value
+  assert.equal(next.unchanged, true)
+  assert.notEqual(next.liveKey, first.liveKey)
+  assert.equal(next.turnPublications[id][1].publicationPending, false)
+  updateLiveRoster(roster, next)
+  assert.equal(roster.getSnapshot().turnPublications[id][1].publicationPending, false)
+  delete rt.state.turnAudiences[id][1]
+  const removed = (await call('state', { since: first.revision, models: first.modelsKey, live: next.liveKey })).value
+  updateLiveRoster(roster, removed)
+  assert.deepEqual(roster.getSnapshot().turnPublications, {})
+})

@@ -126,6 +126,22 @@ function decide(body) {
   }).filter(message => message.role !== 'user' || message.content.length > 0)
   const last = messages.at(-1)
   const blocks = Array.isArray(last?.content) ? last.content : []
+  const reportStart=messages.findLastIndex(message=>message.role==='user'&&/TURN-USER-(?:PUBLISH|INTERNAL) [a-zA-Z0-9-]+/.test(textOf(message.content))&&!isResults(message))
+  if(reportStart>=0&&!system.includes('This Session belongs only to one explicit communication conversation')){
+    const report=/TURN-USER-(PUBLISH|INTERNAL) ([a-zA-Z0-9-]+)/.exec(textOf(messages[reportStart].content)),tag=report[2],turn=messages.slice(reportStart+1)
+    const used=turn.flatMap(message=>Array.isArray(message.content)?message.content.filter(block=>block.type==='tool_use'):[])
+    if(report[1]==='INTERNAL')return [text(`CONTROL_INTERNAL_${tag}`)]
+    if(!used.length)return [text(`INTERNAL_BEFORE_PUBLICATION_${tag}`),tool('publish_turn_to_user',{})]
+    const result=turn.flatMap(message=>Array.isArray(message.content)?message.content.filter(block=>block.type==='tool_result'):[]).map(block=>textOf(block.content)).join('\n')
+    return [text(result.includes('"status":"enabled"')?`PUBLIC_USER_REPORT_${tag}`:`PUBLICATION_REFUSED_${tag}`)]
+  }
+  const delegateStart=messages.findLastIndex(message=>message.role==='user'&&/^TURN-USER-DELEGATE (PUBLISH|INTERNAL) [a-zA-Z0-9-]+/.test(textOf(message.content)))
+  if(delegateStart>=0){
+    const command=/^TURN-USER-DELEGATE (PUBLISH|INTERNAL) ([a-zA-Z0-9-]+)/.exec(textOf(messages[delegateStart].content))
+    const used=messages.slice(delegateStart+1).flatMap(message=>Array.isArray(message.content)?message.content.filter(block=>block.type==='tool_use'):[])
+    if(!used.length)return [tool('message_bot',{to:'Reporter',message:`TURN-USER-${command[1]} ${command[2]}`})]
+    return [text('Delegated the report.')]
+  }
   const localSkillStart=messages.findLastIndex(message=>message.role==='user'&&/^LOCAL-SKILL [a-zA-Z0-9-]+(?:\n|$)/.test(textOf(message.content).trim()))
   if(localSkillStart>=0&&!messages.slice(localSkillStart+1).some(message=>message.role==='user'&&!isResults(message)&&!textOf(message.content).startsWith('[Bot team setup]'))&&!system.includes('This Session belongs only to one explicit communication conversation')){
     const tag=/^LOCAL-SKILL ([a-zA-Z0-9-]+)/.exec(textOf(messages[localSkillStart].content).trim())[1],turn=messages.slice(localSkillStart+1)

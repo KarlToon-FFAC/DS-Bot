@@ -1,3 +1,4 @@
+import {explicitUserOutput,outputRouting} from '../shared/turn-audience.js'
 // Parts: making room in a long conversation (a checkpoint in place, or a switch to a
 // fresh Session), the handoff note and package, and earlier pages for the chat view.
 //
@@ -1319,7 +1320,7 @@ export function install(rt) {
     const stamp = (event, item) => {
       if (typeof event.seq === 'number' && Number.isInteger(event.seq)) item.seq = event.seq
       if (turn !== undefined) item.turn = turn
-      const routing = state.turnAudiences?.[partId]?.[event.data?.turn ?? turn]
+      const routing = outputRouting(state.turnAudiences?.[partId]?.[event.data?.turn ?? turn], event.seq)
       if (routing) { item.routing = {...routing}; item.turn = event.data?.turn ?? turn }
       items.push(item)
     }
@@ -1329,7 +1330,8 @@ export function install(rt) {
         continue
       }
       if (event.type === 'assistant/message') {
-        if (hidden.has(event.data?.turn)) continue
+        const eventTurn = event.data?.turn ?? turn, routing = state.turnAudiences?.[partId]?.[eventTurn]
+        if (routing?.explicit === true ? rt.pendingUserPublications?.has(`${partId}:${eventTurn}`) || !explicitUserOutput(routing, event.seq) : hidden.has(eventTurn)) continue
         // One entry per text block: the chat shows each block in a bubble of its own.
         const content = Array.isArray(event.data?.message?.content) ? event.data.message.content : []
         for (const block of content) {
@@ -1366,7 +1368,7 @@ export function install(rt) {
           // the result event's seq, which the chat keys a post's anchor by.
           const item = { time: time ?? reply.time ?? event.time }
           if (turn !== undefined) item.turn = turn
-          const routing = state.turnAudiences?.[partId]?.[event.data?.turn ?? turn]
+          const routing = outputRouting(state.turnAudiences?.[partId]?.[event.data?.turn ?? turn], event.seq)
           if (routing) { item.routing = {...routing}; item.turn = event.data?.turn ?? turn }
           if (reply.kind === 'user') items.push({ kind: 'user', text: reply.text, ...item })
           else if (reply.kind === undefined) items.push({ kind: 'post', botId: reply.botId ?? null, name: reply.name ?? null, texts, ...item, ...(duration === undefined ? {} : { duration }) })

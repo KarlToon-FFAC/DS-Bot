@@ -1,3 +1,4 @@
+import {explicitUserStream} from '../shared/turn-audience.js'
 // The live feed: a Server-Sent Events stream of what changes, for a window that draws
 // the team itself (the desktop app) instead of polling.
 //   revision  the team was saved: ask for `state` again
@@ -66,16 +67,26 @@ export function install(rt) {
   // Attempts being streamed, by id. A turn that answers another Bot is hidden from the
   // chat (turns.js marks it before the model is called), so its text is not streamed.
   const writing = new Map()
+  const canStream = (id, turn) => {
+    const routing = state.turnAudiences?.[id]?.[turn]
+    return routing?.explicit === true ? !rt.pendingUserPublications?.has(`${id}:${turn}`) && explicitUserStream(routing)
+      : !(state.exchangeTurns[id] ?? []).includes(turn) && routing?.audience !== 'internal'
+  }
   ctx.on('agent/assistant-stream', ({ agent, frame }) => {
     if (frame.type === 'start') {
       const botId = rt.chatOwners.get(agent.id)
-      if (clients.size === 0 || botId === undefined || ((state.exchangeTurns[agent.id] ?? []).includes(frame.turn)||state.turnAudiences?.[agent.id]?.[frame.turn]?.audience==='internal')) return
-      writing.set(frame.attemptId, { botId, sessionId: agent.id })
+      if (clients.size === 0 || botId === undefined || !canStream(agent.id, frame.turn)) return
+      writing.set(frame.attemptId, { target: { botId, sessionId: agent.id }, turn: frame.turn })
       publish('stream', { botId, sessionId: agent.id, attemptId: frame.attemptId, phase: 'start' })
       return
     }
-    const target = writing.get(frame.attemptId)
+    const writingTurn = writing.get(frame.attemptId), target = writingTurn?.target
     if (target === undefined) return
+    if (!canStream(target.sessionId, writingTurn.turn)) {
+      writing.delete(frame.attemptId)
+      publish('stream', { ...target, attemptId: frame.attemptId, phase: 'end' })
+      return
+    }
     if (frame.type === 'chunk' && frame.chunk?.type === 'text-delta') publish('stream', { ...target, attemptId: frame.attemptId, text: frame.chunk.text })
     else if (frame.type === 'end') {
       writing.delete(frame.attemptId)

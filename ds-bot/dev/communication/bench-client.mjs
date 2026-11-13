@@ -34,5 +34,6 @@ export async function benchClient(name, port) {
   const api = body => request('/api/communication-probe', body)
   const identity = await api({ operation: 'identity' })
   assert.equal(identity.botId, team.mainBotId)
-  return { api, identity, request }
+  const subscribe = (path, signal) => fetch(`http://127.0.0.1:${port}${path}`, {headers: {cookie}, signal})
+  return { api, identity, request, subscribe }
 }

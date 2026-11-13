@@ -101,7 +101,10 @@ export function install(rt) {
   function openWork(id, { from, to, parent, fromRoom, room, name, child, remoteSource }) {
     const above = parent === undefined ? undefined : works()[parent]
     const initiating = from && rt.live?.get(rt.chatOf(from))
-    const audience = remoteSource ? 'internal' : above?.audience ?? state.turnAudiences?.[rt.chatOf(from)]?.[initiating?.turn]?.audience ?? 'internal'
+    const routing = state.turnAudiences?.[rt.chatOf(from)]?.[initiating?.turn]
+    // A one-turn publication grant is not inherited by delegated work.
+    const inherited = routing?.explicit === true ? routing.baseAudience : routing?.audience
+    const audience = remoteSource ? 'internal' : above?.audience ?? inherited ?? 'internal'
     works()[id] = { audience, ...(remoteSource ? {remoteSource} : {}), ...(from ? { from } : {}), ...(to ? { to } : {}), ...(room ? { room } : {}), ...(above ? { parent } : {}), ...(fromRoom ? { fromRoom } : {}), ...(name ? { name } : {}), ...(child ? { child } : {}), open: [], results: [], at: Date.now() }
     if (above !== undefined) above.open.push(id)
     save()

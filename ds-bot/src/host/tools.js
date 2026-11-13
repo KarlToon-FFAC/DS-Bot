@@ -95,6 +95,16 @@ export function install(rt) {
     },
   }))
 
+  rt.teamTools.push(defineTool({
+    name: 'publish_turn_to_user',
+    description: 'Explicitly make subsequent ordinary assistant text in this current local Bot-triggered turn visible in your own user chat and its canonical user-output feed (including configured mirrors). Call before writing the user-facing report, and check success first. Earlier text, reasoning, tool results and future turns are not published. The caller Bot still receives its normal internal work result. Only local private-chat turns qualify; remote Sessions, remotely sourced consultations/reports and group Sessions are refused. This enables visibility, not proof of mirror delivery. Do not publish internal coordination or private material without authority.',
+    parameters: {}, output,
+    async execute(_args, exec) {
+      try { return JSON.stringify(await rt.publishTurnToUser(exec)) }
+      catch (error) { return JSON.stringify({ok: false, error: {code: error.code ?? 'TURN_PUBLICATION_NOT_SAVED', message: error.code ? error.message : 'The current turn publication could not be saved. Nothing is confirmed; do not assume the user can see your report.'}, published: false}) }
+    },
+  }))
+
   rt.teamTools.push(defineTool({name:'reply_to_local_consultation',description:'Save an internal answer to an incoming local consultation and return a durable receipt. No Hub publication is required. Use the exact consultationId from the incoming header and your answer as text. Repeating the same answer is safe; a different answer after completion is rejected. This does not publish to Hub.',parameters:{consultationId:{type:'string',required:true},text:{type:'string',required:true}},output,
     async execute(args,exec){try{return JSON.stringify(await replyToLocalConsultation(rt,args,exec))}catch(error){return JSON.stringify({ok:false,error:{code:error.code??'LOCAL_CONSULTATION_RESULT_NOT_SAVED'},delivered:false})}}}))
 

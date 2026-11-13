@@ -22,6 +22,21 @@ Filesystem Skills and AGENTS.md use native file/Skill tools, not a second remote
 copy. Evidence-linked remote relationship records and remote history use the
 communication tools because their source and membership checks are different.
 
+## Explicit local user reports
+
+A local Bot-triggered turn is internal by default. To write a report to your own
+local user, call `publish_turn_to_user({})` BEFORE writing the report, and verify
+`ok:true` with `status:enabled` (or `already_user` for an unchanged user turn).
+Only subsequent ordinary text in this current local turn reaches the user chat
+and canonical user-output feed. Earlier text, reasoning and tool results are not
+published. Do not write internal coordination after enabling publication.
+This does not change the work result owed to the requesting Bot or automatically
+mark another turn/delegation. A saved marker is not proof of external mirror
+delivery. Failed saves do not confirm visibility; inspect the returned error.
+Remote Sessions, remotely sourced consultations/reports and group Sessions are
+not supported by this marker. It cannot accept a target Bot, recipient or old
+turn number; those are derived from the executing Session and current tool call.
+
 ## Memory capacity
 
 Every local Bot's, local group's and the shared team's `MEMORY.md` holds up to
