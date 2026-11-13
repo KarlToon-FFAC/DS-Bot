@@ -152,6 +152,7 @@ const ZH = {
   "Remote Hub settings changed elsewhere. Review the current setting before confirming again.": "远程 Hub 设置已在其他位置改变，请核对当前设置后重新确认。",
   "Client update required to connect": "请更新客户端后连接",
   "Update the client to use this Hub. Its required protocol or capabilities are not supported.": "请更新客户端后使用此 Hub，当前客户端不支持 Hub 要求的协议或能力。",
+  "Update needed": "需要更新",
   "Update the Hub to support this client’s required protocol and capabilities.": "请更新 Hub，以支持当前客户端要求的协议和能力。",
   "Update the client or Hub to compatible protocol and capability versions.": "请更新客户端或 Hub，使双方协议和必需能力兼容。",
   "A newer client release is available. Update the client; communication remains available with compatible protocols and capabilities.": "客户端有新版本，请更新；协议和能力兼容时仍可正常通信。",

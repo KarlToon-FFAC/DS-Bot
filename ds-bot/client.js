@@ -181,6 +181,7 @@ var ZH = {
   "Remote Hub settings changed elsewhere. Review the current setting before confirming again.": "远程 Hub 设置已在其他位置改变，请核对当前设置后重新确认。",
   "Client update required to connect": "请更新客户端后连接",
   "Update the client to use this Hub. Its required protocol or capabilities are not supported.": "请更新客户端后使用此 Hub，当前客户端不支持 Hub 要求的协议或能力。",
+  "Update needed": "需要更新",
   "Update the Hub to support this client’s required protocol and capabilities.": "请更新 Hub，以支持当前客户端要求的协议和能力。",
   "Update the client or Hub to compatible protocol and capability versions.": "请更新客户端或 Hub，使双方协议和必需能力兼容。",
   "A newer client release is available. Update the client; communication remains available with compatible protocols and capabilities.": "客户端有新版本，请更新；协议和能力兼容时仍可正常通信。",
@@ -25623,6 +25624,8 @@ var communicationCSS = `
 .bt-comm-connection-label{flex:1;font-size:11px;color:var(--bt-ink-2);font-weight:400}
 .bt-comm-connection-line{width:100%;min-width:0;display:flex;align-items:center;gap:6px}
 .bt-comm-connection-line>.bt-comm-connection-label{min-width:0;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:none}
+.bt-comm-update-indicator{display:inline-flex;align-items:center;justify-content:center;flex:0 0 18px;width:18px;height:18px;border-radius:50%;color:var(--bt-accent);background:var(--bt-hover)}
+.bt-comm-update-indicator:focus-visible{outline:2px solid var(--bt-accent);outline-offset:2px}
 .bt-comm-connection-line>[data-communication-versions]{min-width:0;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--bt-ink-2)}
 .bt-comm-connection[data-compact=true]{flex-wrap:nowrap;min-height:20px}
 .bt-comm-connection[data-compact=false]>.bt-comm-connection-line{flex-wrap:wrap}
@@ -26785,7 +26788,8 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
             "div",
             { className: "bt-comm-connection-line", title: `${t(connectionLabel)} · ${versionDetails}${compatibility.status === "different" ? ` · ${t(versionNotice)}` : ""}`, "aria-description": compactConnection && compatibility.status === "different" ? t(versionNotice) : void 0 },
             (0, import_react82.createElement)("p", { className: "bt-comm-connection-label", role: "status", "data-connected": Boolean(state?.connected && !pollError) }, (0, import_react82.createElement)("span", { className: "bt-comm-dot", "aria-hidden": true }), t(connectionLabel)),
-            team.communicationEnabled && state ? (0, import_react82.createElement)("span", { className: "bt-comm-reference", "data-communication-versions": true, "aria-label": versionDetails }, displayCommunicationVersion(compatibility.clientVersion), " / ", displayCommunicationVersion(compatibility.hubVersion) ?? t("Version not reported"), compactConnection && clientOlder ? " ↑" : "") : null
+            team.communicationEnabled && (compatibility.status === "different" || versionBlocked) ? (0, import_react82.createElement)("span", { className: "bt-comm-update-indicator", role: "img", tabIndex: 0, "aria-label": t("Update needed"), title: `${t("Update needed")} · ${versionDetails} · ${t(versionNotice)}` }, (0, import_react82.createElement)(ArrowUpIcon)) : null,
+            team.communicationEnabled && state ? (0, import_react82.createElement)("span", { className: "bt-comm-reference", "data-communication-versions": true, "aria-label": versionDetails }, displayCommunicationVersion(compatibility.clientVersion), " / ", displayCommunicationVersion(compatibility.hubVersion) ?? t("Version not reported")) : null
           ),
           team.communicationEnabled && !compactConnection && (versionBlocked || compatibility.status === "different") ? (0, import_react82.createElement)("p", { className: "bt-comm-reference", role: "status" }, t(versionNotice)) : null,
           team.communicationEnabled && versionBlocked && state?.error ? (0, import_react82.createElement)("p", { className: "bt-comm-reference", role: "status" }, communicationFailure({ code: state.error })) : null,

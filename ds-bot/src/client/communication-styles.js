@@ -274,6 +274,8 @@ export const communicationCSS = `
 .bt-comm-connection-label{flex:1;font-size:11px;color:var(--bt-ink-2);font-weight:400}
 .bt-comm-connection-line{width:100%;min-width:0;display:flex;align-items:center;gap:6px}
 .bt-comm-connection-line>.bt-comm-connection-label{min-width:0;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:none}
+.bt-comm-update-indicator{display:inline-flex;align-items:center;justify-content:center;flex:0 0 18px;width:18px;height:18px;border-radius:50%;color:var(--bt-accent);background:var(--bt-hover)}
+.bt-comm-update-indicator:focus-visible{outline:2px solid var(--bt-accent);outline-offset:2px}
 .bt-comm-connection-line>[data-communication-versions]{min-width:0;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--bt-ink-2)}
 .bt-comm-connection[data-compact=true]{flex-wrap:nowrap;min-height:20px}
 .bt-comm-connection[data-compact=false]>.bt-comm-connection-line{flex-wrap:wrap}

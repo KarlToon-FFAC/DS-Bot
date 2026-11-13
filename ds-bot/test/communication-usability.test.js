@@ -1648,9 +1648,15 @@ test('compatible version differences and subsequent matching versions update liv
   assert.equal(connection.querySelectorAll('.bt-comm-connection-line').length,1)
   assert.equal(connection.querySelector(':scope>p[role=status]'),null)
   assert.match(connection.querySelector('.bt-comm-connection-line').title,/protocols and capabilities/)
+  const update=connection.querySelector('.bt-comm-update-indicator')
+  assert.equal(update.getAttribute('aria-label'),'Update needed')
+  assert.equal(update.tabIndex,0)
+  assert.match(update.title,/V0\.2\.7.*V0\.2\.6.*Communication remains available/)
+  assert.ok(update.querySelector('svg'))
   snapshot={...snapshot,compatibility:{...snapshot.compatibility,hubVersion:'0.2.7',status:'matched'}}
   await autoRefresh()
   assert.equal(connection.querySelector('.bt-comm-connection-label').textContent,'Connected to Hub')
+  assert.equal(connection.querySelector('.bt-comm-update-indicator'),null)
  })
 })
 
@@ -1694,6 +1700,7 @@ test('older client releases show an advisory while connected, and a required upd
  let snapshot={...state(),compatibility:{clientVersion:'0.2.7',hubVersion:'0.2.8',status:'different'}}
  await pane({getState:()=>snapshot},async({doc,autoRefresh})=>{
   const connection=()=>doc.querySelector('.bt-comm-connection')
+  assert.match(connection().querySelector('.bt-comm-update-indicator').title,/newer client release/)
   assert.match(connection().querySelector('.bt-comm-connection-line').title,/newer client release is available/)
   assert.match(connection().querySelector('.bt-comm-connection-line').getAttribute('aria-description'),/communication remains available/)
   assert.equal(connection().querySelector('.bt-comm-connection-label').textContent,'Connected to Hub')
