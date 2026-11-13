@@ -23837,7 +23837,7 @@ function CommunicationResizeHandle({ side, width, onChange }) {
 // package.json
 var package_default = {
   name: "ds-bot",
-  version: "0.3.7",
+  version: "0.3.8",
   description: "DS Bot: a team of long-lived Bots for DeepSeek Harness, with Main Bots, Bot-to-Bot messages and group chats",
   keywords: [
     "dsh-plugin",
