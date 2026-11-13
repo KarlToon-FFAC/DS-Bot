@@ -36,9 +36,9 @@ V0.3.0 新增 **设置 → 通用 → 启用远程 Hub**。新安装默认关闭
 
 **V0.3.8** 中，远程回合按同一个 Bot 的身份使用本地团队、记忆、原生工具和已挂载 MCP 工具的权限。`read_own_chat({"message_id":"…"})` 可跨会话分段读取指定 ID 的本地消息。本地 Main Bot、私有 Bot、沙箱和审批检查继续生效；本地卡片和定时任务落在该 Bot 的本地对话中，对外发布仍需显式调用通信工具。
 
-待发布的 **V0.3.9** 批次中，已通过的联系人申请不再显示在申请列表。本地咨询可通过 `reply_to_local_consultation` 或 `message_bot` 提交答复并取得持久回执，答复方无需发布到 Hub。等待咨询时可暂停远程回合，迟到结果会通知原远程会话，仍不自动对外发布。
+**V0.3.9** 中，已通过的联系人申请不再显示在申请列表。本地咨询可通过 `reply_to_local_consultation` 或 `message_bot` 提交答复并取得持久回执，答复方无需发布到 Hub。等待咨询时可暂停远程回合，迟到结果会通知原远程会话，仍不自动对外发布。
 
-![版本](https://img.shields.io/badge/版本-V0.3.8-blue) ![DSH](https://img.shields.io/badge/DSH-0.2.1--rc.4-4D6BFE) ![许可](https://img.shields.io/badge/许可-Apache_2.0-green)
+![版本](https://img.shields.io/badge/版本-V0.3.9-blue) ![DSH](https://img.shields.io/badge/DSH-0.2.1--rc.4-4D6BFE) ![许可](https://img.shields.io/badge/许可-Apache_2.0-green)
 
 DS Bot 是一个基于 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（简称 dsh）的 bot 插件，插件将 dsh 改造为 bot 形式。你可以与自己创建的 bot 交流、工作。
 

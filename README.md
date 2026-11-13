@@ -43,9 +43,9 @@ Remote groups can select **multiple default receiving Bots** from the group side
 
 In **V0.3.8**, Remote turns use the same Bot identity and local team, memory, native and attached MCP tool permissions as its local chat. `read_own_chat({"message_id":"…"})` retrieves an exact local message across conversation parts. Local Main Bot, private-Bot, sandbox and approval checks still apply. Local cards and scheduled tasks target the Bot’s local chat; remote publication always requires an explicit communication send.
 
-For the upcoming **V0.3.9** batch, accepted contact requests disappear from the request list. Local consultation answers return durable receipts via `reply_to_local_consultation` or `message_bot`; unpublished responders need no Hub publication. Pending consultations can pause the remote turn, and late results notify the original remote Session without automatically publishing them.
+In **V0.3.9**, accepted contact requests disappear from the request list. Local consultation answers return durable receipts via `reply_to_local_consultation` or `message_bot`; unpublished responders need no Hub publication. Pending consultations can pause the remote turn, and late results notify the original remote Session without automatically publishing them.
 
-![version](https://img.shields.io/badge/version-V0.3.8-blue) ![DSH](https://img.shields.io/badge/DSH-0.2.1--rc.4-4D6BFE) ![license](https://img.shields.io/badge/license-Apache_2.0-green)
+![version](https://img.shields.io/badge/version-V0.3.9-blue) ![DSH](https://img.shields.io/badge/DSH-0.2.1--rc.4-4D6BFE) ![license](https://img.shields.io/badge/license-Apache_2.0-green)
 
 DS Bot is a bot plugin for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH). It turns DSH into bots. You create your own bots, then talk and work with them.
 
