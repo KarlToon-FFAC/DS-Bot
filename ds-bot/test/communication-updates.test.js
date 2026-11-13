@@ -334,3 +334,16 @@ test('reply context pins the authorized original beyond recent-history and prior
  const missing={...delivery,event:{...delivery.event,message:{...delivery.event.message,replyToMessageId:'foreign-message'}}}
  assert.match(runtime.inputText(missing,binding,false),/reference_unavailable/)
 })
+
+test('pending local consultation suspends completion reminders without marking the remote task as silence',async t=>{
+ const {q,binding,runtime,events}=fixture(t)
+ events.splice(events.findIndex(event=>event.type==='turn/end'),1)
+ runtime.owners=new Map([['session',binding]]);runtime.authorize=async()=>{}
+ runtime.rt={state:{localConsultations:{consult:{id:'consult',bindingId:binding.id,ownerBotId:binding.localBotRef,remoteSource:{messageId:'task'},status:'pending'}}}}
+ const notices=[],agent={id:'session',session:{},steer:notice=>notices.push(notice)}
+ await checkCommunicationCompletion(runtime,{agent,turn:1})
+ assert.equal(notices.length,0);assert.equal(q.replyDeclined('task'),false)
+ runtime.rt.state.localConsultations.consult.status='failed'
+ await checkCommunicationCompletion(runtime,{agent,turn:1})
+ assert.equal(notices.length,1,'a terminal failure still needs an explicit public answer or silence')
+})

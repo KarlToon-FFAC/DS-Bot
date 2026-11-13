@@ -5,6 +5,7 @@
 export const NAMESPACE = 'ds-bot'
 
 const ZH = {
+  'You are the consultation responder. Submit your answer with reply_to_local_consultation and the received consultationId, or message_bot to the requester. No Hub publication is required.': '你是这条咨询的答复方。请用收到的咨询 ID 调用 reply_to_local_consultation 提交答复，或通过 message_bot 答复请求方，无需发布到 Hub。',
   '{count} Bots in total': '等 {count} 个 Bot',
   'View all {count} Bots': '查看全部 {count} 个 Bot',
   'All Bot recipients': '全部 Bot 接收对象',
@@ -1089,6 +1090,15 @@ const ZH = {
   'Rename group': '重命名群聊',
   'Open conversation': '打开对话',
   'No accessible local teammate matches this identity. Use list_local_bots; Hub publication is not required.': '未找到可访问的本地同事。请通过 list_local_bots 查询，本地 Bot 无需发布到 Hub。',
+  'Start consultations from a remote work Session. Local responders need no Hub publication: answer with reply_to_local_consultation using the received ID, or message_bot to the requester.': '请在远程工作会话中发起咨询。本地答复方无需发布到 Hub，可用收到的咨询 ID 调用 reply_to_local_consultation，或通过 message_bot 答复请求方。',
+  'The consultation delivery was not confirmed. Check the existing consultation before sending another request.': '咨询投递未确认，请先检查已有咨询，避免重复派单。',
+  'The internal answer could not be saved. It is not a confirmed reply. Retry reply_to_local_consultation with the same ID and answer.': '内部答复未能保存，尚不能视为已答复。请使用相同咨询 ID 和正文重试 reply_to_local_consultation。',
+  'The consultation result is retained but its notification is unconfirmed. Read the existing consultation by ID.': '咨询结果已保留，但通知尚未确认，请按咨询 ID 读取已有结果。',
+  'The originating remote conversation is unavailable. Read the consultation by ID in the requesting Bot’s local chat.': '原远程会话不可用，请在请求方 Bot 的本地对话中按咨询 ID 读取结果。',
+  'The consultation has not returned a confirmed answer within ten minutes. No success is claimed; a later result remains readable.': '咨询已超过十分钟仍未收到确认答复，不能视为成功；后续到达的结果仍可读取。',
+  'The consultation ended without an answer. Submit reply_to_local_consultation explicitly.': '咨询回合未提供答复，请显式调用 reply_to_local_consultation 提交。',
+  'The internal answer exceeds 128000 characters. Store a file and submit a concise answer with its local reference.': '内部答复超过 128000 字符，请保存为文件后提交简要答复及本地文件引用。',
+  'This consultation already has a different saved answer. Nothing was overwritten or resent.': '该咨询已有不同的已保存答复，本次未覆盖或重复发送。',
   'This Bot already has eight pending local consultations. Wait for an existing consultation instead of submitting another.': '此 Bot 已有 8 个待完成的本地咨询，请继续等待已有请求。',
   'The local consultation outcome is uncertain. Inspect the existing consultation before submitting another.': '本地咨询结果暂不确定，请先查询已有请求，避免重复派单。',
   'This consultation is unavailable to this Bot and remote conversation.': '此 Bot 在当前远程会话中无法读取该咨询。',

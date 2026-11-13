@@ -1,3 +1,5 @@
+import {awaitingLocalConsultation} from './local-consultations.js'
+import {processLocalConsultations} from './consultation-recovery.js'
 import {communicationModel,communicationModelStates} from './model-availability.js'
 import {localIdentityTools} from './local-identity-tools.js'
 import {ownSkills,ownWorkspaceGuidance} from './own-context.js'
@@ -1097,9 +1099,10 @@ export class CommunicationRuntime {
       const input = sourceDelivery(this.queue, binding, output.inputSource)
       const toolMessageId=this.queue.completedToolReply(binding.id,input.deliveryId)
       const state=toolMessageId ? this.queue.outboxStatus(toolMessageId).state : null
+      const awaiting=awaitingLocalConsultation(this,binding,input)
       if (state==='failed') unresolved='REPLY_SEND_FAILED'
-      else if (!state && !this.queue.replyDeclined(input.deliveryId)) unresolved ??= 'REPLY_DECISION_REQUIRED'
-      this.queue.recordDecision(binding,input,output.sourceKey,state === 'accepted' ? 'sent' : state === 'pending' ? 'pending' : this.queue.replyDeclined(input.deliveryId) ? 'no_reply' : state === 'failed' ? 'send_failed' : 'decision_missing', {
+      else if (!state && !awaiting && !this.queue.replyDeclined(input.deliveryId)) unresolved ??= 'REPLY_DECISION_REQUIRED'
+      this.queue.recordDecision(binding,input,output.sourceKey,state === 'accepted' ? 'sent' : state === 'pending' ? 'pending' : this.queue.replyDeclined(input.deliveryId) ? 'no_reply' : state === 'failed' ? 'send_failed' : awaiting ? 'awaiting_local_consultation' : 'decision_missing', {
         sessionId:output.sessionId,seq:output.seq,outputId:output.messageId,triggerOrigin:'remote',audience:'local',
         bytes:Buffer.byteLength(output.parts.map(p=>p.text).join('\n')),sha256:createHash('sha256').update(output.parts.map(p=>p.text).join('\n')).digest('hex'), ...(toolMessageId ? {messageId:toolMessageId} : {})
       })
@@ -1170,6 +1173,7 @@ export class CommunicationRuntime {
         if (failed) this.errors.set(binding.id, failed.code ?? 'EXPORT_REJECTED')
       } catch (error) { this.errors.set(binding.id, error.code ?? 'EXPORT_UNKNOWN') }
     }
+    await processLocalConsultations(this)
     if (this.lastError === 'BACKPRESSURE' && this.queue.pendingAi().length < this.queue.maxPending) this.lastError = null
   }
   async close() {

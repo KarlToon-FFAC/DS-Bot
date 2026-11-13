@@ -1359,3 +1359,80 @@ test('remote local team tools use the same Bot privileges and keep local replies
  assert.equal(rt.state.questions.b.question,'Local review?')
  assert.equal(rt.state.questions['remote-worker'],undefined)
 })
+
+test('an unpublished local responder rejects bad consult input and message_bot commits its long consultation answer once',async t=>{
+ const {agentOf,emit,tool,home,stop}=await start(team());t.after(stop)
+ const id='report-consultation',source={consultationId:id,conversationId:'remote-group',messageId:'remote-input'}
+ rt.state.localConsultations={[id]:{id,ownerBotId:'b',targetBotId:'a',bindingId:'binding',remoteSource:source,status:'pending',createdAt:Date.now()}}
+ rt.openWork(id,{from:'b',to:'a',remoteSource:source})
+ await rt.deliver({fromId:'b',toId:'a',role:'request',remoteSource:source,exchangeId:id,text:'Give an internal answer.'})
+ const message=agentOf('a').calls[0][1]
+ assert.match(message.content[0].text,/Consultation ID: report-consultation/)
+ emit('a','turn/start',{turn:1});emit('a','user/message',{source:message.source,content:message.content})
+ const {validateConsultationInput,readLocalConsultation}=await import('../src/host/federation/local-consultations.js')
+ assert.throws(()=>validateConsultationInput({botId:'b',text:'answer',consultationId:'placeholder'}),{code:'INVALID_REQUEST'})
+ assert.equal(rt.state.localConsultations[id].status,'pending','bad responder calls cannot delete another Bot’s valid consultation')
+ const text='正式答复。'.repeat(600)
+ const result=JSON.parse(await tool('message_bot',{to:'Writer',message:text},'a'))
+ assert.equal(result.status,'completed');assert.ok(result.receiptId);assert.equal(result.text,text)
+ assert.equal(agentOf('b').calls.length,0,'no accidental local request or public forwarding')
+ assert.equal(rt.state.works[id],undefined)
+ assert.equal(JSON.parse(await tool('message_bot',{to:'Writer',message:text},'a')).receiptId,result.receiptId)
+ const changed=JSON.parse(await tool('reply_to_local_consultation',{consultationId:id,text:'different answer'},'a'))
+ assert.equal(changed.error.code,'LOCAL_CONSULTATION_RESULT_CONFLICT')
+ emit('a','assistant/message',{message:{role:'assistant',content:[{type:'text',text:'Private closing note, not another answer.'}]}})
+ emit('a','turn/end',{turn:1,reason:{kind:'completed'}})
+ await delay(30)
+ assert.equal(rt.state.localConsultations[id].text,text)
+ assert.equal(JSON.parse(readFileSync(join(home,'state.json'),'utf8')).localConsultations[id].receiptId,result.receiptId)
+ const localRead=readLocalConsultation(rt,id,'b')
+ assert.equal(localRead.text,text,'the requester can read its result locally without Hub publication')
+})
+
+test('automatic consultation settlement keeps a failed save observable and retries the same full answer',async t=>{
+ const {agentOf,emit,stop}=await start(team());t.after(stop)
+ const {settleLocalConsultation}=await import('../src/host/federation/local-consultations.js')
+ const id='save-failure',remoteSource={consultationId:id,conversationId:'remote-group',messageId:'input'}
+ rt.state.localConsultations={[id]:{id,ownerBotId:'b',targetBotId:'a',bindingId:'binding',remoteSource,status:'pending'}}
+ rt.openWork(id,{from:'b',to:'a',remoteSource})
+ await rt.deliver({fromId:'b',toId:'a',role:'request',remoteSource,exchangeId:id,text:'Answer privately.'})
+ const message=agentOf('a').calls[0][1]
+ emit('a','turn/start',{turn:1});emit('a','user/message',{source:message.source,content:message.content})
+ const save=rt.save;let fail=true
+ rt.save=async options=>{if(fail&&options?.required&&rt.state.localConsultations[id].status==='completed'){fail=false;throw Object.assign(new Error('synthetic disk failure'),{code:'EIO'})}return save(options)}
+ const text='Saved long answer '.repeat(2200)
+ rt.attachLong=async()=>assert.fail('consultation results do not depend on attachment availability')
+ emit('a','assistant/message',{message:{role:'assistant',content:[{type:'reasoning',text:'PRIVATE_REASONING'},{type:'text',text}]}})
+ emit('a','turn/end',{turn:1,reason:{kind:'completed'}})
+ await delay(35)
+ assert.equal(rt.state.localConsultations[id].status,'pending')
+ assert.equal(rt.state.localConsultations[id].resultError,'LOCAL_CONSULTATION_RESULT_NOT_SAVED')
+ assert.match(agentOf('a').calls[1][1].content[0].text,/NOT confirmed/)
+ const result=await settleLocalConsultation(rt,'a',message.source,rt.localConsultationRetries.get(id).text)
+ assert.equal(result.status,'completed');assert.equal(result.text,text.trim());assert.equal(result.truncated,false)
+ assert.doesNotMatch(result.text,/PRIVATE_REASONING/)
+})
+
+test('a consultation arriving during another local turn retains its exact identity when deferred',async t=>{
+ const {agentOf,emit,stop}=await start(team());t.after(stop)
+ const id='joined-consultation',remoteSource={consultationId:id,conversationId:'group',messageId:'input'}
+ rt.state.localConsultations={[id]:{id,ownerBotId:'b',targetBotId:'a',bindingId:'binding',remoteSource,status:'pending'}}
+ emit('a','turn/start',{turn:1});emit('a','user/message',{source:{kind:'user'},content:[{type:'text',text:'Independent local work'}]})
+ rt.openWork(id,{from:'b',to:'a',remoteSource})
+ await rt.deliver({fromId:'b',toId:'a',role:'request',remoteSource,exchangeId:id,text:'Answer this separate consultation.'})
+ const message=agentOf('a').calls[0][1]
+ emit('a','user/message',{source:message.source,content:message.content})
+ emit('a','assistant/message',{message:{role:'assistant',content:[{type:'text',text:'Answer to the local user only.'}]}})
+ emit('a','turn/end',{turn:1,reason:{kind:'completed'}})
+ await delay(20)
+ assert.equal(rt.state.localConsultations[id].status,'pending','unrelated local prose cannot settle the consultation')
+ const deferred=agentOf('a').calls[1][1]
+ assert.equal(deferred.source.deferred,true)
+ assert.deepEqual(deferred.source.remoteSource,remoteSource)
+ assert.equal(deferred.source.audience,'internal')
+ emit('a','turn/start',{turn:2});emit('a','user/message',{source:deferred.source,content:deferred.content})
+ emit('a','assistant/message',{message:{role:'assistant',content:[{type:'text',text:'Answer only to the consultation.'}]}})
+ emit('a','turn/end',{turn:2,reason:{kind:'completed'}})
+ await delay(25)
+ assert.equal(rt.state.localConsultations[id].text,'Answer only to the consultation.')
+})

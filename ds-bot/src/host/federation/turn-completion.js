@@ -1,3 +1,4 @@
+import {awaitingLocalConsultation} from './local-consultations.js'
 import {randomUUID,createHash} from 'node:crypto'
 import {createUserMessage} from '@deepseek-ai/dsh-llm'
 import {completedOutputs} from './session-journal.js'
@@ -21,7 +22,7 @@ export async function checkCommunicationCompletion(runtime,{agent,turn,signal}) 
   if (!output) return
   const delivery = sourceDelivery(runtime.queue,binding,output.inputSource)
   const messageId = runtime.queue.completedToolReply(binding.id,delivery.deliveryId)
-  if (messageId || runtime.queue.replyDeclined(delivery.deliveryId)) return
+  if (messageId || runtime.queue.replyDeclined(delivery.deliveryId) || awaitingLocalConsultation(runtime,binding,delivery)) return
   const reminder = runtime.queue.transaction(() => {
     const previous = runtime.queue.db.prepare('SELECT * FROM completion_checks WHERE delivery_id=?').get(delivery.deliveryId)
     const saved = runtime.queue.db.prepare('SELECT * FROM completion_reminders WHERE delivery_id=?').get(delivery.deliveryId)

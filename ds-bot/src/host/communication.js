@@ -1,5 +1,5 @@
 import {localChiefs,reportToLocalChief} from './federation/local-reports.js'
-import {localTeammates,consultLocalBot} from './federation/local-consultations.js'
+import {localTeammates,consultLocalBot,validateConsultationInput,readLocalConsultation} from './federation/local-consultations.js'
 import {readOwnSkill,saveOwnSkill,ownRemoteHistory} from './federation/own-context.js'
 import {readGroupAvatar,readGroupIdentity,setGroupProfile,requireGroupProfiles} from './federation/group-profiles.js'
 import { RemoteHubController } from './federation/remote-hub.js'
@@ -82,6 +82,15 @@ export function install(rt) {
   }
   const execute = work => async (args, exec) => {
     try {
+      if(exec.name==='consult_local_bot'){
+        validateConsultationInput(args)
+        if(!rt.communication?.owners?.has(exec.agent?.id)&&args.consultationId!==undefined){
+          await rt.load()
+          if(rt.state.localConsultations?.[args.consultationId]?.targetBotId===rt.selfOf(exec.agent?.id))fail('LOCAL_CONSULTATION_REPLY_REQUIRED')
+          return JSON.stringify(readLocalConsultation(rt,args.consultationId,exec.agent?.id))
+        }
+        if(!rt.communication?.owners?.has(exec.agent?.id))throw Object.assign(new Error('consult_local_bot starts or polls a consultation from a remote work Session. Local responders need no Hub publication: use reply_to_local_consultation with the received consultationId, or message_bot to the requester.'),{code:'LOCAL_CONSULTATION_REMOTE_CONTEXT_REQUIRED'})
+      }
       remoteHub.assertAvailable()
       if (publicationReloadRequired(rt, appliedSettings)) fail('PUBLICATION_RELOAD_REQUIRED')
       if (communicationReloadRequired(rt, appliedSettings)) fail('COMMUNICATION_RELOAD_REQUIRED')
@@ -109,7 +118,7 @@ export function install(rt) {
   const definitions = [
     defineTool({name:'list_local_bots',description:'List local teammates, including unpublished Bots, for internal two-way collaboration. The Hub member list is not the local team.',parameters:{},output,
       execute:execute((comm,_actor,_args,exec)=>({bots:localTeammates(comm,exec)}))}),
-    defineTool({name:'consult_local_bot',description:'Request local teammate work and receive its internal answer, without Hub publication or automatic forwarding. Supply botId and text once; retries of the same requestId return the same consultation. To keep waiting, supply only consultationId and waitSeconds. pending is not completion: wait again with that ID. After receiving the answer, decide what can be shared and call reply_to_communication or decline_communication_reply for the original remote input.',parameters:{botId:{type:'string'},text:{type:'string'},requestId:{type:'string'},consultationId:{type:'string'},waitSeconds:{type:'integer',description:'0–30 seconds per wait; default 30.'}},output,
+    defineTool({name:'consult_local_bot',description:'From a remote work Session, request local teammate work and receive its internal answer. The local responder need not be published and must use reply_to_local_consultation or message_bot to answer, not this tool. In your local chat you may read your own existing consultation by ID. No result is automatically forwarded to Hub. Supply botId and text once; retries of the same requestId return the same consultation. To keep waiting, supply only consultationId and waitSeconds. pending is not completion: wait again with that ID. After receiving the answer, decide what can be shared and call reply_to_communication or decline_communication_reply for the original remote input.',parameters:{botId:{type:'string'},text:{type:'string'},requestId:{type:'string'},consultationId:{type:'string'},waitSeconds:{type:'integer',description:'0–30 seconds per wait; default 30.'}},output,
       execute:execute((comm,_actor,args,exec)=>consultLocalBot(comm,args,exec))}),
     defineTool({name:'read_own_remote_history',description:'Read your own Bot remote history across conversations. Omit arguments to list your conversations, use query to search them, or conversationId to read one. This is internal recall, not permission to disclose another conversation. Never returns another local Bot’s private history.',parameters:{conversationId:{type:'string'},query:{type:'string'},cursor:{type:'string'},before:{type:'integer'},limit:{type:'integer'}},output,
       execute:execute((comm,_actor,args,exec)=>ownRemoteHistory(comm,args,exec))}),

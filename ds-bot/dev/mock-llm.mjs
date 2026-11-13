@@ -126,6 +126,16 @@ function decide(body) {
   }).filter(message => message.role !== 'user' || message.content.length > 0)
   const last = messages.at(-1)
   const blocks = Array.isArray(last?.content) ? last.content : []
+  const consultationStart=messages.findLastIndex(message=>message.role==='user'&&textOf(message.content).includes('[Internal consultation')&&textOf(message.content).includes('CONSULT-RESPONSE-PROBE '))
+  if(consultationStart>=0&&!system.includes('This Session belongs only to one explicit communication conversation')){
+    const header=textOf(messages[consultationStart].content),id=/Consultation ID: ([^. ]+)/.exec(header)?.[1],sender=/Internal consultation from (.*?) while handling/.exec(header)?.[1]
+    const tag=/CONSULT-RESPONSE-PROBE (\S+)/.exec(header)?.[1],turn=messages.slice(consultationStart+1)
+    const used=turn.flatMap(message=>Array.isArray(message.content)?message.content.filter(block=>block.type==='tool_use'):[])
+    if(!used.length)return Object.assign([tool('consult_local_bot',{botId:sender,text:'Incorrect reply attempt',consultationId:'placeholder'})],{delay:2500})
+    if(used.length===1)return [tool('message_bot',{to:sender,message:`CONSULT_SAVED_${tag}: `+'Internal verified result. '.repeat(120)})]
+    const result=turn.flatMap(message=>Array.isArray(message.content)?message.content.filter(block=>block.type==='tool_result'):[]).map(block=>textOf(block.content)).join('\n')
+    return [text(`LOCAL_CONSULT_CLOSING_${tag}: ${result.includes('receiptId')&&result.includes(id)?'receipt checked':'receipt missing'}`)]
+  }
   if (tools.has('send_contact_message')) {
     const communicationResults = isResults(last) && blocks.findLastIndex(block => block.type === 'tool_result')
       > blocks.findLastIndex(block => block.type === 'text' && block.text.includes('[Communication delivery]'))
@@ -173,6 +183,18 @@ function decide(body) {
       const next=steps[used.length]
       if(next)return tools.has(next[0])?[tool(...next)]:publicReply(`Own context missing ${next[0]} ${tag}`)
       return publicReply(`Own context ${tag} ${system.includes(`OWN_GUIDANCE_${tag}`)&&system.includes(`Own context preference ${tag}`)&&system.includes(`own-${tag}`)?'PRESENT':'MISSING'}`)
+    }
+    const lateConsultation=/^COMM-CONSULT-LATE (\S+) (\S+)$/m.exec(relationshipInput.split('Current message:\n').at(-1))
+    if(lateConsultation){
+      const notice=messages.findLastIndex(message=>message.role==='user'&&textOf(message.content).includes('[Local consultation result —'))
+      if(notice>=0){
+        const results=messages.slice(notice+1).flatMap(message=>Array.isArray(message.content)?message.content.filter(block=>block.type==='tool_result'):[])
+        if(!results.length){const id=/Consultation (\S+) is/.exec(textOf(messages[notice].content))?.[1];return [tool('consult_local_bot',{consultationId:id,waitSeconds:0})]}
+        let result;try{result=JSON.parse(textOf(results.at(-1).content))}catch{}
+        return publicReply(`Late consultation ${lateConsultation[2]} ${result?.status==='completed'&&result?.receiptId&&result?.text?.includes('CONSULT_SAVED_'+lateConsultation[2])?'COMPLETED':'FAILED'}`)
+      }
+      if(!communicationResults)return [tool('consult_local_bot',{botId:lateConsultation[1],text:`CONSULT-RESPONSE-PROBE ${lateConsultation[2]}`,waitSeconds:0})]
+      return [text('Waiting for the internal consultation result; no answer has been sent.')]
     }
     const consultation=/^COMM-CONSULT (\S+) (\S+)$/m.exec(relationshipInput.split('Current message:\n').at(-1))
     if(consultation){

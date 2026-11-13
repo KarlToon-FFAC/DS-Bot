@@ -131,6 +131,16 @@ export const communicationDescriptions = {
   GROUP_PROFILES_CAPABILITY_REQUIRED: 'Update the Hub to use group avatars and group collaboration identities. Other communication remains available.',
   INVALID_GROUP_IDENTITY: 'Use a group identity description of up to 4000 characters; multiple paragraphs are supported.',
   LOCAL_BOT_UNAVAILABLE: 'No accessible local teammate matches this identity. Use list_local_bots; Hub publication is not required.',
+  LOCAL_CONSULTATION_REPLY_REQUIRED: 'You are the consultation responder. Submit your answer with reply_to_local_consultation and the received consultationId, or message_bot to the requester. No Hub publication is required.',
+  LOCAL_CONSULTATION_REMOTE_CONTEXT_REQUIRED: 'Start consultations from a remote work Session. Local responders need no Hub publication: answer with reply_to_local_consultation using the received ID, or message_bot to the requester.',
+  LOCAL_CONSULTATION_DELIVERY_UNCONFIRMED: 'The consultation delivery was not confirmed. Check the existing consultation before sending another request.',
+  LOCAL_CONSULTATION_RESULT_NOT_SAVED: 'The internal answer could not be saved. It is not a confirmed reply. Retry reply_to_local_consultation with the same ID and answer.',
+  LOCAL_CONSULTATION_NOTICE_UNCONFIRMED: 'The consultation result is retained but its notification is unconfirmed. Read the existing consultation by ID.',
+  LOCAL_CONSULTATION_BINDING_UNAVAILABLE: 'The originating remote conversation is unavailable. Read the consultation by ID in the requesting Bot’s local chat.',
+  LOCAL_CONSULTATION_TIMEOUT: 'The consultation has not returned a confirmed answer within ten minutes. No success is claimed; a later result remains readable.',
+  LOCAL_CONSULTATION_EMPTY_RESULT: 'The consultation ended without an answer. Submit reply_to_local_consultation explicitly.',
+  LOCAL_CONSULTATION_RESULT_TOO_LARGE: 'The internal answer exceeds 128000 characters. Store a file and submit a concise answer with its local reference.',
+  LOCAL_CONSULTATION_RESULT_CONFLICT: 'This consultation already has a different saved answer. Nothing was overwritten or resent.',
   LOCAL_CONSULTATION_LIMIT: 'This Bot already has eight pending local consultations. Wait for an existing consultation instead of submitting another.',
   LOCAL_CONSULTATION_UNCONFIRMED: 'The local consultation outcome is uncertain. Inspect the existing consultation before submitting another.',
   LOCAL_CONSULTATION_NOT_FOUND: 'This consultation is unavailable to this Bot and remote conversation.',
@@ -237,7 +247,7 @@ export function communicationError(error, { bot, reloadRequired = false } = {}) 
   const code = knownCodes.has(error?.code) ? error.code : 'COMMUNICATION_UNAVAILABLE'
   const message = communicationDescriptions[code] ?? 'The communication operation could not be completed.'
   const detail = details[code]
-  return { code, message, why: detail?.why ?? message,
+  return { code, message, ...(code==='LOCAL_CONSULTATION_DELIVERY_UNCONFIRMED'&&typeof error.consultationId==='string'&&/^[a-f0-9]{64}$/.test(error.consultationId)?{consultationId:error.consultationId}:{}), why: detail?.why ?? message,
     nextActions: detail?.nextActions ?? [message, 'Check communication_diagnose in your own local Bot chat or dsbot-remote diagnose through the authenticated local API before retrying.'],
     docsHint: 'dsbot-remote Skill: Outcomes and recovery; An uncertain join or certificate failure',
     ...(phases.has(error?.phase) ? { phase: error.phase } : {}),

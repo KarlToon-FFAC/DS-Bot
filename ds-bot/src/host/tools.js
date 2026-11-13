@@ -1,3 +1,4 @@
+import {replyToLocalConsultation} from './federation/local-consultations.js'
 // Team tools: the roster, bot-to-bot messages, group chat settings and posts, and the
 // question and view cards. Group rounds and reading chats are in groups.js.
 import { randomUUID } from 'node:crypto'
@@ -92,6 +93,9 @@ export function install(rt) {
       ].join('\n')
     },
   }))
+
+  rt.teamTools.push(defineTool({name:'reply_to_local_consultation',description:'Save an internal answer to an incoming local consultation and return a durable receipt. No Hub publication is required. Use the exact consultationId from the incoming header and your answer as text. Repeating the same answer is safe; a different answer after completion is rejected. This does not publish to Hub.',parameters:{consultationId:{type:'string',required:true},text:{type:'string',required:true}},output,
+    async execute(args,exec){try{return JSON.stringify(await replyToLocalConsultation(rt,args,exec))}catch(error){return JSON.stringify({ok:false,error:{code:error.code??'LOCAL_CONSULTATION_RESULT_NOT_SAVED'},delivered:false})}}}))
 
   // Sessions a Bot is running in right now: its own chat plus each group Session
   // with a live turn. An idle Bot reports just its own chat.
@@ -223,6 +227,15 @@ export function install(rt) {
       // the work, and the result says where its answer goes instead of showing a
       // bare error the Bot cannot act on.
       const works = worksOf(exec)
+      const current=rt.live.get(exec.agent?.id)
+      const sources=[current?.info,...(current?.joined??[]).map(item=>item.info)].filter(source=>source?.senderSessionId===target.id&&source.remoteSource?.consultationId)
+      const consultations=[...new Map([...sources.map(source=>({from:source.senderSessionId,remoteSource:source.remoteSource})),...works.map(id=>state.works?.[id])]
+        .filter(work=>work?.from===target.id&&work.remoteSource?.consultationId).map(work=>[work.remoteSource.consultationId,work])).values()]
+      if(consultations.length===1){
+        const consultationId=consultations[0].remoteSource.consultationId
+        if(state.localConsultations?.[consultationId])return JSON.stringify(await replyToLocalConsultation(rt,{consultationId,text},exec))
+        rt.dropWork(consultationId)
+      }else if(consultations.length>1)return 'Not sent: multiple local consultations await an answer. Call reply_to_local_consultation with the exact consultationId from the request header and text.'
       if (rt.upstreamOf(works).has(target.id)) {
         return `Not sent: ${target.name} is waiting for the result of the work you are doing, and your answer reaches it by itself once everything you handed on is back. Finish the work and end your turn; to ask ${target.name} something, end your turn with the question.`
       }

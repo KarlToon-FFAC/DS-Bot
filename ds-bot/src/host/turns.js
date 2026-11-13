@@ -9,7 +9,7 @@ import { cleanText } from './diagnostics.js'
 import { absoluteLinks } from './links.js'
 import { textOf } from './text.js'
 import { reminderText } from './schedules.js'
-import {settleLocalConsultation} from './federation/local-consultations.js'
+import {automaticConsultationReply} from './federation/local-consultations.js'
 
 // A failed turn's `LlmFailure`, kept to what can be shown and logged. Like DSH's own
 // error row, an AUTH failure loses its message: providers may echo part of the key.
@@ -31,7 +31,7 @@ export const failureLine = failure => `${failure.code}${failure.status ? ` ${fai
 // answer comes from; `source` is the trigger the turn answered.
 export function answerSender(rt, id, source, text, long) {
   if (source.remoteSource?.consultationId) {
-    void settleLocalConsultation(rt,id,source,text).catch(error=>rt.warn('ds-bot: local consultation result was not saved: %s',error))
+    void automaticConsultationReply(rt,id,source,text)
     return
   }
   const back = rt.roomOf(source.senderRoomId)?.sessions?.[source.senderSessionId]
@@ -919,7 +919,7 @@ export function install(rt) {
           if (rt.waitsWork(work)) return rt.holdWork(work, reply)
           // With what came back, the answer may pass what one message carries.
           const text = rt.answerText(work, reply, name)
-          if (text.length <= MESSAGE_INLINE_MAX) return tellSender(id, asker, text)
+          if (asker?.remoteSource?.consultationId || text.length <= MESSAGE_INLINE_MAX) return tellSender(id, asker, text)
           void rt.attachLong(text, `Answer from ${name}.txt`)
             .then(long => tellSender(id, asker, text, long))
             .catch(error => rt.warn('ds-bot: answer from %s not sent: %s', name, error))
@@ -962,6 +962,7 @@ export function install(rt) {
             sessionId: id,
             text: request.text,
             role: request.info.role,
+            ...(request.info.remoteSource ? {remoteSource:request.info.remoteSource} : {}),
             exchangeId: request.info.exchangeId,
             ...(request.info.role === 'room' ? { roomId: request.info.roomId, askedBy: request.info.askedBy, note: 'you read this call during your last task; answer it now' } : {}),
             ...(request.info.senderRoomId ? { fromRoomId: request.info.senderRoomId } : {}),
