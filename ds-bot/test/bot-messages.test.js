@@ -1369,7 +1369,7 @@ test('an unpublished local responder rejects bad consult input and message_bot c
  const message=agentOf('a').calls[0][1]
  assert.match(message.content[0].text,/Consultation ID: report-consultation/)
  emit('a','turn/start',{turn:1});emit('a','user/message',{source:message.source,content:message.content})
- const {validateConsultationInput,readLocalConsultation}=await import('../src/host/federation/local-consultations.js')
+ const {validateConsultationInput,readLocalConsultation,automaticConsultationReply}=await import('../src/host/federation/local-consultations.js')
  assert.throws(()=>validateConsultationInput({botId:'b',text:'answer',consultationId:'placeholder'}),{code:'INVALID_REQUEST'})
  assert.equal(rt.state.localConsultations[id].status,'pending','bad responder calls cannot delete another Bot’s valid consultation')
  const text='正式答复。'.repeat(600)
@@ -1383,6 +1383,8 @@ test('an unpublished local responder rejects bad consult input and message_bot c
  emit('a','assistant/message',{message:{role:'assistant',content:[{type:'text',text:'Private closing note, not another answer.'}]}})
  emit('a','turn/end',{turn:1,reason:{kind:'completed'}})
  await delay(30)
+ await automaticConsultationReply(rt,'a',message.source,'')
+ assert.equal(rt.state.localConsultations[id].status,'completed','an empty final cannot downgrade a saved explicit reply')
  assert.equal(rt.state.localConsultations[id].text,text)
  assert.equal(JSON.parse(readFileSync(join(home,'state.json'),'utf8')).localConsultations[id].receiptId,result.receiptId)
  const localRead=readLocalConsultation(rt,id,'b')

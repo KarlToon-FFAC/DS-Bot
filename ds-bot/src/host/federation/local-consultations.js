@@ -85,6 +85,7 @@ export async function settleLocalConsultation(rt,sessionId,source,text,{explicit
  const operation=prior.catch(()=>{}).then(async()=>{
   const row=rt.state.localConsultations?.[id]
   if(!row||row.targetBotId!==rt.selfOf(sessionId)||row.ownerBotId!==source.senderSessionId||id!==source.exchangeId)fail('LOCAL_CONSULTATION_NOT_FOUND')
+  if(row.status==='completed'&&!explicit){rt.dropWork?.(id);return receipt(row)}
   const safe=rt.redactSecrets?.(text)??text
   if(typeof safe!=='string'||!safe.trim())fail('LOCAL_CONSULTATION_EMPTY_RESULT')
   if(safe.length>128000)fail('LOCAL_CONSULTATION_RESULT_TOO_LARGE')
