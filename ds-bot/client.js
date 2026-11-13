@@ -24636,7 +24636,7 @@ function ContactManager({ request, operation, contacts, humanPrincipalId, instan
       "details",
       { className: "bt-comm-contact-section" },
       (0, import_react74.createElement)("summary", null, t("Contact requests"), pending ? (0, import_react74.createElement)("span", { className: "bt-comm-count", "aria-label": `${pending} ${t("pending")}` }, pending) : null),
-      (data?.requests ?? []).map((item) => (0, import_react74.createElement)(
+      (data?.requests ?? []).filter((item) => item.status !== "accepted").map((item) => (0, import_react74.createElement)(
         "section",
         { key: item.requestId, className: "bt-comm-address" },
         (0, import_react74.createElement)("p", { title: item.senderPrincipalId ?? item.requestId }, item.senderPrincipalId ? (0, import_react74.createElement)(CommunicationAvatar, { person: contacts.find((person) => person.principalId === item.senderPrincipalId) ?? { principalId: item.senderPrincipalId, displayName: item.senderName, kind: "human" }, request, allowed: contacts.some((person) => person.principalId === item.senderPrincipalId) }) : null, item.senderName ?? t("Outgoing request"), " · ", statusLabel(item.status)),
