@@ -304,3 +304,24 @@ test('saved-only hide and republish remains pending even when the original Bot s
  rt.config.communication={...applied,hubId:'two',url:'wss://two.example.test/communication'}
  assert.equal(publicationReloadRequired(rt,applied),false,'a pending receipt cannot cross a Hub selection')
 })
+
+test('Hub-scoped memory and history errors explain their local alternatives without registering remote Skill copies', async () => {
+  const {rt} = fixture({enabled: true, publishedBotIds: []})
+  rt.config.remoteHubEnabled = true
+  rt.teamTools = []
+  rt.ctx.effect = () => {}
+  install(rt)
+  assert.equal(rt.teamTools.some(tool => ['read_own_skill','save_own_skill'].includes(tool.name)), false)
+  for (const [name, args, alternative] of [
+    ['read_own_remote_history', {}, 'read_own_chat'],
+    ['read_communication_relationships', {conversationId: 'group'}, 'recall/remember/forget'],
+    ['remember_communication_relationship', {conversationId: 'group', subjectKind: 'self', topic: 'expertise', text: 'Review', sourceMessageId: 'source'}, 'save_capability'],
+  ]) {
+    const tool = rt.teamTools.find(tool => tool.name === name)
+    const result = JSON.parse(await tool.execute(args, {name, agent: {id: 'own-chat'}}))
+    assert.equal(result.ok, false)
+    assert.match(result.error.scopeHint, new RegExp(alternative))
+    assert.match(result.error.nextActions[0], /do not require Hub publication/)
+    assert.notEqual(result.error.code, 'INVALID_REQUEST', 'the underlying remote error remains visible')
+  }
+})

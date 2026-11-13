@@ -29,6 +29,12 @@ test('real DSH assembly observes a newly repaired scoped schema in the same requ
     rt.teamTools.push(added)
     result = await inner.systemPrompt.assemble({ scope: agent, agent })
     assert.ok(result.tools.some(schema => schema.name === added.name))
+    assert.ok(result.tools.some(schema => schema.name === 'read_capability'))
+    assert.ok(result.tools.some(schema => schema.name === 'save_capability'))
+    for (const name of ['read_own_skill','save_own_skill']) {
+      assert.equal(result.tools.some(schema => schema.name === name), false, 'compatibility aliases are not advertised')
+      assert.ok(inner.tools.get(name, agent), 'saved old calls can still resolve')
+    }
     assert.equal(result.tools.some(schema => schema.name === 'private_probe'), false)
     assert.equal(inner.tools.get(added.name, agent).description, added.description)
     assert.equal(await inner.tools.get(added.name, agent).execute({}, { agent }), added.name)

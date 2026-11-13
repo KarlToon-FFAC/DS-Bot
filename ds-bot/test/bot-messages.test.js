@@ -1304,24 +1304,6 @@ test('remote consultation returns the Chief answer only to the originating Bot a
  assert.equal(saved.localConsultations[pending.consultationId].status,'completed')
 })
 
-test('remote Skills reuse the local library and local creator/shared-Skill permissions',async t=>{
- const {stop}=await start(team());t.after(stop)
- const {readOwnSkill,saveOwnSkill}=await import('../src/host/federation/own-context.js')
- const binding={localBotRef:'b'},comm={rt,owners:new Map([['remote',binding]])},exec={agent:{id:'remote'}}
- await saveOwnSkill(comm,{name:'own-review',description:'Review checklist',content:'Check the build.'},exec)
- assert.equal(readOwnSkill(comm,{name:'own-review'},exec).content,'Check the build.')
- assert.equal(rt.state.capabilities.items['own-review'].createdBy,'b')
- await rt.capabilitySave({name:'own-review',kind:'skill',description:'Updated locally',content:'Check the build and tests.'},{botId:'b'})
- assert.equal(readOwnSkill(comm,{name:'own-review'},exec).content,'Check the build and tests.')
- await saveOwnSkill(comm,{name:'own-review',description:'Updated remotely',content:'Check regression evidence.'},exec)
- assert.equal(rt.state.capabilities.items['own-review'].content,'Check regression evidence.')
- await rt.changeCapabilityAttachment('attach',{name:'own-review'},'a')
- await assert.rejects(saveOwnSkill(comm,{name:'own-review',description:'Shared',content:'Cannot silently rewrite Chief skill.'},exec),/Another Bot uses/)
- assert.equal(rt.state.capabilities.items['own-review'].content,'Check regression evidence.')
- await rt.capabilitySave({name:'private-chief',kind:'skill',description:'Chief only',content:'Private.'},{botId:'a'})
- assert.throws(()=>readOwnSkill(comm,{name:'private-chief'},exec),{code:'OWN_SKILL_UNAVAILABLE'})
- await assert.rejects(saveOwnSkill(comm,{name:'private-chief',description:'x',content:'x'},exec),{code:'OWN_SKILL_UNAVAILABLE'})
-})
 
 
 test('remote local team tools use the same Bot privileges and keep local replies internal',async t=>{

@@ -1,4 +1,5 @@
 import {loadBaselineInstructions} from '@deepseek-ai/dsh-agent-instructions'
+import {attachedSkills} from '../skill-tools.js'
 import {searchHistory} from './history-search.js'
 const fail=code=>{throw Object.assign(new Error(code),{code})}
 export function owningBot(runtime,exec){
@@ -8,23 +9,7 @@ export function owningBot(runtime,exec){
  return bot
 }
 export function ownSkills(runtime,bot){
- const names=new Set(runtime.rt.expandCapabilities?.(bot.capabilities??[])??bot.capabilities??[])
- return [...names].map(name=>runtime.rt.state.capabilities?.items?.[name]).filter(item=>item?.kind==='skill')
-}
-export function readOwnSkill(runtime,input,exec){
- const skills=ownSkills(runtime,owningBot(runtime,exec))
- if(input.name===undefined)return {skills:skills.map(({name,description})=>({name,description}))}
- const skill=skills.find(item=>item.name===input.name)
- if(!skill)fail('OWN_SKILL_UNAVAILABLE')
- return {name:skill.name,description:skill.description,content:skill.content,audience:'internal'}
-}
-export async function saveOwnSkill(runtime,input,exec){
- const bot=owningBot(runtime,exec),existing=runtime.rt.state.capabilities?.items?.[input.name]
- if(typeof input.content!=='string'||input.content.length>65536||typeof input.description!=='string'||input.description.length>2000)fail('INVALID_REQUEST')
- if(existing&&(existing.kind!=='skill'||!ownSkills(runtime,bot).some(item=>item.name===input.name)&&existing.createdBy!==bot.id))fail('OWN_SKILL_UNAVAILABLE')
- const item=await runtime.rt.capabilitySave({name:input.name,kind:'skill',description:input.description,content:input.content},{botId:bot.id})
- await runtime.rt.changeCapabilityAttachment('attach',{name:item.name},bot.id)
- return {name:item.name,saved:true,attached:true,effective:'next model request in local and remote Sessions'}
+ return attachedSkills(runtime.rt,bot)
 }
 export async function ownWorkspaceGuidance(runtime,bot,cwd){
  const fs=runtime.ctx.get?.('fs')

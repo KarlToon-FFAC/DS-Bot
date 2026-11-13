@@ -67,7 +67,8 @@ export const TEAM_TOOLS = [
   'create_group', 'update_group', 'delete_group', 'post_to_group', 'ask_user', 'show_view',
   'request_secret', 'list_secrets', 'group_relay', 'read_own_chat',
   'read_group_chat', 'remember', 'forget', 'recall', 'read_browser',
-  'list_capabilities', 'save_capability', 'delete_capability',
+  'list_capabilities', 'read_capability', 'save_capability', 'delete_capability',
+  'read_own_skill', 'save_own_skill',
   'attach_capability', 'detach_capability', 'communication_diagnose',
 ]
 // A member still at work this long after its first tool call lets the round go on; it
@@ -91,3 +92,6 @@ export const HISTORY_TIMEOUT_MS = 20_000
 export const ASIDE_LIMIT = 'Answer cut off at the output limit.'
 
 export const STEER_CUT = 'ds-bot/steer'
+
+// Old Skill names remain callable for saved turns, but are not advertised.
+export const LEGACY_SKILL_TOOLS = new Set(['read_own_skill', 'save_own_skill'])

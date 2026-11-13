@@ -43,6 +43,8 @@ Remote groups can select **multiple default receiving Bots** from the group side
 
 In **V0.3.8**, Remote turns use the same Bot identity and local team, memory, native and attached MCP tool permissions as its local chat. `read_own_chat({"message_id":"…"})` retrieves an exact local message across conversation parts. Local Main Bot, private-Bot, sandbox and approval checks still apply. Local cards and scheduled tasks target the Bot’s local chat; remote publication always requires an explicit communication send.
 
+For the upcoming **V0.4.0** batch, local and remote Sessions use one capability toolset: `list_capabilities`, `read_capability`, `save_capability`, `attach_capability`, `detach_capability` and `delete_capability`. Local unpublished Bots need no Hub connection to maintain Skills. Old Skill tool names remain callable compatibility aliases but are no longer advertised to the model. Memory already uses the same `recall`/`remember`/`forget` implementation. Evidence-linked remote relationships and membership-scoped history keep separate tools; filesystem Skills and AGENTS.md remain under the native file/Skill tools.
+
 In **V0.3.9**, accepted contact requests disappear from the request list. Local consultation answers return durable receipts via `reply_to_local_consultation` or `message_bot`; unpublished responders need no Hub publication. Pending consultations can pause the remote turn, and late results notify the original remote Session without automatically publishing them.
 
 ![version](https://img.shields.io/badge/version-V0.3.9-blue) ![DSH](https://img.shields.io/badge/DSH-0.2.1--rc.4-4D6BFE) ![license](https://img.shields.io/badge/license-Apache_2.0-green)
@@ -53,7 +55,7 @@ DS Bot is a bot plugin for [DeepSeek Harness](https://github.com/deepseek-ai/dee
 
 A published Bot uses the same own memory and Skills locally and remotely. Remote
 turns can update own memory with `remember`/`forget`, edit attached or self-created
-Skills with `save_own_skill` under the existing local permissions, and edit workspace
+Skills with `save_capability` (`kind: "skill", attach: true`) under the existing local permissions, and edit workspace
 `AGENTS.md` using native file tools. Use `read_own_chat`, `read_group_chat` and
 `read_own_remote_history` for deliberate internal recall. `list_local_bots` and
 `consult_local_bot` can reach unpublished local teammates and return an internal

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -524,4 +524,77 @@ test('a failed HTTP MCP mount does not show the encoded secret from its URL', as
   const status = env.rt.capabilityStatusesView().chief.exa
   assert.equal(status.state, 'error')
   assert.equal(status.error, 'Connection failed: fetch https://mcp.exa.test/mcp?apiKey=[secret:EXA_API_KEY]')
+})
+
+test('unpublished Bots share one Skill API locally and remotely, including legacy calls without Hub startup', async t => {
+  const env = await setup()
+  t.after(() => env.dispose())
+  const {rt} = env
+  const call = (name, args, id = 'worker') => rt.teamTools.find(tool => tool.name === name).execute(args, {agent: {id}})
+  assert.equal(rt.config.communication?.enabled ?? false, false)
+  const legacy = JSON.parse(await call('save_own_skill', {name: 'own-review', description: 'Review', content: 'Initial local instructions.'}))
+  assert.equal(legacy.saved, true)
+  assert.match(legacy.migration, /save_capability/)
+  assert.ok(rt.botOf('worker').capabilities.includes('own-review'))
+  assert.equal(rt.state.capabilities.items['own-review'].createdBy, 'worker')
+  const {localIdentityTools} = await import('../src/host/federation/local-identity-tools.js')
+  let revoked = false, checks = 0
+  const comm = {rt, tools: [], owners: new Map([['remote-worker', {localBotRef: 'worker'}]]), authorize: async () => {
+    checks++
+    if (revoked) throw Object.assign(new Error('Membership revoked'), {code: 'MEMBERSHIP_REVOKED'})
+  }}
+  rt.communication = comm
+  const remote = (name, args) => localIdentityTools(comm).find(tool => tool.name === name).execute(args, {agent: {id: 'remote-worker'}})
+  assert.equal(JSON.parse(await remote('read_capability', {name: 'own-review'})).content, 'Initial local instructions.')
+  assert.match(await remote('save_capability', {name: 'own-review', kind: 'skill', content: 'Updated remotely.', attach: true}), /^Saved/)
+  assert.equal(JSON.parse(await call('read_capability', {name: 'own-review'})).content, 'Updated remotely.')
+  assert.equal(JSON.parse(await call('read_own_skill', {name: 'own-review'})).content, 'Updated remotely.')
+  assert.equal(JSON.parse(await call('read_own_skill', {})).skills[0].name, 'own-review')
+  assert.equal(rt.botOf('worker').capabilities.filter(name => name === 'own-review').length, 1)
+  const stored = JSON.parse(readFileSync(join(env.home, 'state.json'), 'utf8'))
+  assert.equal(stored.capabilities.items['own-review'].content, 'Updated remotely.')
+  assert.ok(stored.bots.worker.capabilities.includes('own-review'))
+  revoked = true
+  await assert.rejects(remote('save_capability', {name: 'own-review', kind: 'skill', content: 'Forbidden.'}), {code: 'MEMBERSHIP_REVOKED'})
+  await assert.rejects(remote('save_own_skill', {name: 'own-review', description: 'Forbidden', content: 'Forbidden.'}), {code: 'MEMBERSHIP_REVOKED'})
+  assert.equal(rt.state.capabilities.items['own-review'].content, 'Updated remotely.')
+  assert.ok(checks >= 4)
+})
+
+test('unified Skill writes preserve local creator, shared use, readonly and attachment permissions', async t => {
+  const env = await setup()
+  t.after(() => env.dispose())
+  const {rt} = env
+  const call = (name, args, id = 'worker') => rt.teamTools.find(tool => tool.name === name).execute(args, {agent: {id}})
+  await call('save_capability', {name: 'shared-review', kind: 'skill', content: 'Original.', attach: true})
+  await rt.changeCapabilityAttachment('attach', {name: 'shared-review'}, 'chief')
+  assert.match(await call('save_capability', {name: 'shared-review', kind: 'skill', content: 'Forbidden.'}), /Another Bot uses/)
+  const rejected = JSON.parse(await call('save_own_skill', {name: 'shared-review', description: 'Review', content: 'Forbidden.'}))
+  assert.equal(rejected.ok, false)
+  assert.match(rejected.error.message, /Another Bot uses/)
+  assert.match(rejected.error.nextActions.join(' '), /publishing to Hub will not resolve/)
+  assert.equal(rt.state.capabilities.items['shared-review'].content, 'Original.')
+  assert.match(await call('save_capability', {name: 'shared-review', kind: 'skill', content: 'Main update.'}, 'chief'), /^Saved/)
+  assert.equal(JSON.parse(await call('read_capability', {name: 'shared-review'})).content, 'Main update.')
+  await call('save_capability', {name: 'chief-review', kind: 'skill', content: 'Shared library instructions.'}, 'chief')
+  assert.match(await call('save_capability', {name: 'chief-review', kind: 'skill', content: 'Forbidden.', attach: true}), /creator or a Main Bot/)
+  assert.equal(rt.botOf('worker').capabilities.includes('chief-review'), false, 'failed edit cannot attach')
+  await assert.rejects(call('save_capability', {name: 'invalid-attach', kind: 'skill', content: 'x', attach: 'true'}), /boolean/)
+  assert.equal(rt.state.capabilities.items['invalid-attach'], undefined)
+  rt.readOnly = () => 'Readonly test home'
+  assert.match(await call('save_capability', {name: 'readonly-skill', kind: 'skill', content: 'x', attach: true}), /Readonly/)
+  assert.equal(rt.state.capabilities.items['readonly-skill'], undefined)
+})
+
+test('shared capability reads distinguish filesystem Skills and never return MCP credentials', async t => {
+  const env = await setup()
+  t.after(() => env.dispose())
+  const call = (name, args) => env.rt.teamTools.find(tool => tool.name === name).execute(args, {agent: {id: 'worker'}})
+  await env.rt.capabilitySave({...mcp('private-config'), env: {TOKEN: 'SYNTHETIC_DO_NOT_EXPOSE'}}, {botId: 'chief'})
+  const metadata = await call('read_capability', {name: 'private-config'})
+  assert.doesNotMatch(metadata, /SYNTHETIC_DO_NOT_EXPOSE|TOKEN/)
+  assert.match(metadata, /metadata only/)
+  assert.match(await call('read_capability', {name: 'filesystem-only'}), /native Skill\/file tools/)
+  const denied = await env.rt.teamTools.find(tool => tool.name === 'read_capability').execute({name: 'private-config'}, {agent: {id: 'outside'}})
+  assert.match(denied, /Only Bots on the team/)
 })

@@ -5,9 +5,22 @@ description: Inspect local DS Bot Memory capacity and change local Bot working f
 
 # Local Bot settings and Memory
 
-Use this skill for local team settings. Remote communication has separate
-identities and isolated Sessions; this skill does not authorize remote filesystem
-access or unlock local tools there.
+Use this skill for local team settings. Remote Sessions reuse the owning Bot’s
+local tool permissions and memory, while Hub identities and membership checks
+remain separate. This skill itself grants no authority or sandbox escalation.
+
+## One Skill and memory toolset
+
+Use `recall`/`remember`/`forget` for ordinary Bot memory in either context.
+Use `list_capabilities` and `read_capability` for the shared Skill library, and
+`save_capability` with `kind: "skill", attach: true` to save and attach to yourself.
+`attach_capability`/`detach_capability` manage attachments; `delete_capability`
+removes a shared item. Local unpublished Bots need no Hub connection. The old
+`read_own_skill`/`save_own_skill` names only redirect to this same implementation.
+Creator/Main Bot and shared-use restrictions apply locally and remotely.
+Filesystem Skills and AGENTS.md use native file/Skill tools, not a second remote
+copy. Evidence-linked remote relationship records and remote history use the
+communication tools because their source and membership checks are different.
 
 ## Memory capacity
 

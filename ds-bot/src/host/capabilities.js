@@ -138,8 +138,16 @@ export function install(rt) {
     // Internal learning performs its compare-and-set after the last load and
     // immediately before synchronous mutation. Public JSON cannot supply this.
     options.assertCurrent?.(own(library(),String(body?.name??'')))
+    const target = options.attachSelf ? rt.botOf(options.botId) : undefined
+    if (options.attachSelf && !target) throw new Error('Only Bots on the team can attach capabilities.')
+    const wasEmpty = target && !target.capabilities?.length
     const item = itemInput(body ?? {}, options)
+    if (target) {
+      target.capabilities ??= []
+      if (!target.capabilities.includes(item.name)) target.capabilities.push(item.name)
+    }
     await rt.save()
+    if (wasEmpty) { await trackBotAgents(target); void scheduleReconcile() }
     return item
   }
   const capabilityDelete = async (name, { botId, ui } = {}) => {

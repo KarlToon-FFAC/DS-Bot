@@ -1,10 +1,11 @@
+import {installSkillTools,saveBotCapability} from './skill-tools.js'
 import {replyToLocalConsultation} from './federation/local-consultations.js'
 // Team tools: the roster, bot-to-bot messages, group chat settings and posts, and the
 // question and view cards. Group rounds and reading chats are in groups.js.
 import { randomUUID } from 'node:crypto'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { readAvatar } from './avatar.js'
-import { COLORS, EXTRA_COLORS, MESSAGE_INLINE_MAX, ROOM_MODES, SOURCE_KIND } from './constants.js'
+import { COLORS, EXTRA_COLORS, MESSAGE_INLINE_MAX, ROOM_MODES, SOURCE_KIND, LEGACY_SKILL_TOOLS } from './constants.js'
 import { within } from './folders.js'
 import { absoluteLinks } from './links.js'
 import { NAME_MAX } from './requests.js'
@@ -910,8 +911,8 @@ export function install(rt) {
       const assembled = await next()
       return {
         ...assembled,
-        tools: assembled.tools.filter(tool => !HIDDEN_TOOLS.includes(tool.name)),
-        sections: assembled.sections.filter(section => !HIDDEN_SECTIONS.has(section.name)),
+        tools: assembled.tools.filter(tool => !HIDDEN_TOOLS.includes(tool.name) && !LEGACY_SKILL_TOOLS.has(tool.name)),
+        sections: assembled.sections.filter(section => !HIDDEN_SECTIONS.has(section.name) && !LEGACY_SKILL_TOOLS.has(section.name.replace(/^tool:/, ''))),
       }
     })
     held.filtered = true
@@ -1083,7 +1084,7 @@ export function install(rt) {
   }))
   rt.teamTools.push(defineTool({
     name: 'save_capability',
-    description: 'Create or update a shared MCP server, skill, or pack. Changes apply from your next message.',
+    description: 'Create or update a shared MCP server, skill, or pack for the same Bot locally and remotely. No Hub publication is needed. Use kind skill for instructions and attach true to use it yourself. Only its creator or a Main Bot can edit; if another Bot uses it, only a Main Bot can edit. Changes apply from the next model request.',
     parameters: {
       name: { type: 'string', required: true, description: 'Lowercase letters, digits, and single hyphens, up to 32 characters; "github" is reserved' },
       kind: { type: 'string', required: true, enum: ['mcp', 'skill', 'pack'] },
@@ -1095,6 +1096,7 @@ export function install(rt) {
       url: { type: 'string', description: 'MCP server URL; write $DSH_SECRET_<NAME> in the path or query to insert a saved secret, URL-encoded. Prefer headers for keys' },
       headers: { type: 'object', additionalProperties: true, description: 'HTTP headers; write $DSH_SECRET_<NAME> to insert a saved secret instead of the value' },
       content: { type: 'string', description: 'Skill instructions' },
+      attach: { type: 'boolean', description: 'Also attach to your own Bot in the same save. Default false preserves existing attachments; this never detaches.' },
       items: { type: 'array', items: { type: 'string' }, description: 'MCP server and skill names in the pack' },
     },
     output,
@@ -1103,11 +1105,11 @@ export function install(rt) {
       const self = rt.selfOf(exec.agent?.id)
       if (!rt.botOf(self)) return 'Only Bots on the team can use save_capability.'
       try {
-        const item = await rt.capabilitySave(args, { botId: self })
+        const item = await saveBotCapability(rt, args, exec)
         const approval = item.kind === 'mcp' && item.transport === 'stdio' && !item.approved
           ? ' The user must allow this MCP server in DS Bot settings before it can work.'
           : ''
-        return `Saved ${item.name}. Bots with it attached use the change from their next message.${approval}`
+        return `Saved ${item.name}.${args.attach ? ' Attached to your own Bot.' : ''} Bots with it attached use the change from their next model request in local and remote Sessions.${approval}`
       } catch (error) { return error.message }
     },
   }))
@@ -1155,5 +1157,6 @@ export function install(rt) {
     }))
   }
 
+  installSkillTools(rt, output)
   Object.assign(rt, { pickRoom, hideBotUnusedTools, syncScopedTools })
 }

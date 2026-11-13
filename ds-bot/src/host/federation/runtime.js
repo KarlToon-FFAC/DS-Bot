@@ -1,3 +1,4 @@
+import {LEGACY_SKILL_TOOLS} from '../constants.js'
 import {awaitingLocalConsultation} from './local-consultations.js'
 import {processLocalConsultations} from './consultation-recovery.js'
 import {communicationModel,communicationModelStates} from './model-availability.js'
@@ -417,7 +418,7 @@ export class CommunicationRuntime {
         freshPrompt = this.promptFor(binding)
       }
       const assembled = await next()
-      const allowed = name => name === 'run_code' || communicationNames.has(name) || this.workToolScopes?.get(agent)?.get(name)?.active === true
+      const allowed = name => !LEGACY_SKILL_TOOLS.has(name) && (name === 'run_code' || communicationNames.has(name) || this.workToolScopes?.get(agent)?.get(name)?.active === true)
       return { ...assembled, tools: assembled.tools.filter(tool => allowed(tool.name)),
         sections: assembled.sections.filter(section => ['deployment:persona-prefix', 'ds-bot-communication', 'tools:sdk', 'tools:ptc-only'].includes(section.name)
           || section.name.startsWith('tool:') && allowed(section.name.slice(5)))

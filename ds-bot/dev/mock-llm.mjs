@@ -126,6 +126,17 @@ function decide(body) {
   }).filter(message => message.role !== 'user' || message.content.length > 0)
   const last = messages.at(-1)
   const blocks = Array.isArray(last?.content) ? last.content : []
+  const localSkillStart=messages.findLastIndex(message=>message.role==='user'&&/^LOCAL-SKILL [a-zA-Z0-9-]+(?:\n|$)/.test(textOf(message.content).trim()))
+  if(localSkillStart>=0&&!messages.slice(localSkillStart+1).some(message=>message.role==='user'&&!isResults(message)&&!textOf(message.content).startsWith('[Bot team setup]'))&&!system.includes('This Session belongs only to one explicit communication conversation')){
+    const tag=/^LOCAL-SKILL ([a-zA-Z0-9-]+)/.exec(textOf(messages[localSkillStart].content).trim())[1],turn=messages.slice(localSkillStart+1)
+    const used=turn.flatMap(message=>Array.isArray(message.content)?message.content.filter(block=>block.type==='tool_use'):[])
+    if(tools.has('save_own_skill')||tools.has('read_own_skill'))return [text('LOCAL_SKILL_DUPLICATE_TOOLS')]
+    const steps=[['save_capability',{name:`local-${tag}`,kind:'skill',attach:true,content:`LOCAL_SKILL_${tag}`}],['read_capability',{name:`local-${tag}`}],['remember',{text:`Local unpublished Skill verified ${tag}`}]]
+    const failed=turn.some(message=>Array.isArray(message.content)&&message.content.some(block=>block.type==='tool_result'&&(block.is_error||textOf(block.content).includes('"ok":false'))))
+    if(failed)return [text('LOCAL_SKILL_FAILED')]
+    if(steps[used.length])return [tool(...steps[used.length])]
+    return [text(`LOCAL_SKILL_VERIFIED_${tag}`)]
+  }
   const consultationStart=messages.findLastIndex(message=>message.role==='user'&&textOf(message.content).includes('[Internal consultation')&&textOf(message.content).includes('CONSULT-RESPONSE-PROBE '))
   if(consultationStart>=0&&!system.includes('This Session belongs only to one explicit communication conversation')){
     const header=textOf(messages[consultationStart].content),id=/Consultation ID: ([^. ]+)/.exec(header)?.[1],sender=/Internal consultation from (.*?) while handling/.exec(header)?.[1]
@@ -179,7 +190,8 @@ function decide(body) {
       const turn=messages.slice(start+1),used=turn.flatMap(message=>Array.isArray(message.content)?message.content.filter(block=>block.type==='tool_use'):[])
       const failed=turn.some(message=>Array.isArray(message.content)&&message.content.some(block=>block.type==='tool_result'&&(block.is_error||textOf(block.content).includes('"ok":false'))))
       if(failed)return publicReply(`Own context failed ${tag}`)
-      const steps=[['remember',{text:`Own context preference ${tag}`}],['recall',{query:tag}],['save_own_skill',{name:`own-${tag}`,description:'Synthetic own Skill',content:`OWN_SKILL_${tag}`}],['read_own_skill',{name:`own-${tag}`}],['read_own_chat',{}],['read_own_remote_history',{}],['write',{file_path:'AGENTS.md',content:`OWN_GUIDANCE_${tag}`}],['read',{file_path:'AGENTS.md'}]]
+      if(tools.has('save_own_skill')||tools.has('read_own_skill'))return publicReply(`Own context duplicate Skill tools ${tag}`)
+      const steps=[['remember',{text:`Own context preference ${tag}`}],['recall',{query:tag}],['save_capability',{name:`own-${tag}`,kind:'skill',attach:true,description:'Synthetic own Skill',content:`OWN_SKILL_${tag}`}],['read_capability',{name:`own-${tag}`}],['read_own_chat',{}],['read_own_remote_history',{}],['write',{file_path:'AGENTS.md',content:`OWN_GUIDANCE_${tag}`}],['read',{file_path:'AGENTS.md'}]]
       const next=steps[used.length]
       if(next)return tools.has(next[0])?[tool(...next)]:publicReply(`Own context missing ${next[0]} ${tag}`)
       return publicReply(`Own context ${tag} ${system.includes(`OWN_GUIDANCE_${tag}`)&&system.includes(`Own context preference ${tag}`)&&system.includes(`own-${tag}`)?'PRESENT':'MISSING'}`)

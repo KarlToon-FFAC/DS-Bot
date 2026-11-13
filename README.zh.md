@@ -36,6 +36,8 @@ V0.3.0 新增 **设置 → 通用 → 启用远程 Hub**。新安装默认关闭
 
 **V0.3.8** 中，远程回合按同一个 Bot 的身份使用本地团队、记忆、原生工具和已挂载 MCP 工具的权限。`read_own_chat({"message_id":"…"})` 可跨会话分段读取指定 ID 的本地消息。本地 Main Bot、私有 Bot、沙箱和审批检查继续生效；本地卡片和定时任务落在该 Bot 的本地对话中，对外发布仍需显式调用通信工具。
 
+待发布的 **V0.4.0** 批次中，本地与远程统一使用 `list_capabilities`、`read_capability`、`save_capability`、`attach_capability`、`detach_capability`、`delete_capability`。未发布的本地 Bot 无需连接 Hub 即可维护技能；旧技能工具名仅保留兼容转接，不再展示给模型。记忆已共用 `recall`/`remember`/`forget`。带来源证据的远程关系记录与按成员身份授权的历史保留独立工具；文件型 Skill 与 AGENTS.md 继续使用原生文件/Skill 工具。
+
 **V0.3.9** 中，已通过的联系人申请不再显示在申请列表。本地咨询可通过 `reply_to_local_consultation` 或 `message_bot` 提交答复并取得持久回执，答复方无需发布到 Hub。等待咨询时可暂停远程回合，迟到结果会通知原远程会话，仍不自动对外发布。
 
 ![版本](https://img.shields.io/badge/版本-V0.3.9-blue) ![DSH](https://img.shields.io/badge/DSH-0.2.1--rc.4-4D6BFE) ![许可](https://img.shields.io/badge/许可-Apache_2.0-green)
@@ -45,7 +47,7 @@ DS Bot 是一个基于 [DeepSeek Harness](https://github.com/deepseek-ai/deepsee
 ![和 Chief 说一句话，它就把 bot 和群聊建好](docs/images/team.zh.png)
 
 同一个 Bot 在本地和远程共享自身记忆与 Skill。远程回合可通过
-`remember`/`forget` 修改自身记忆，通过 `save_own_skill` 按原有本地权限
+`remember`/`forget` 修改自身记忆，通过 `save_capability`（`kind: "skill", attach: true`）按原有本地权限
 编辑已挂载或自己创建的 Skill，通过原生文件工具修改工作目录的 `AGENTS.md`。
 `read_own_chat`、`read_group_chat`、`read_own_remote_history` 用于主动检索
 自己的本地对话、已加入的本地群和远程历史。`list_local_bots`、
