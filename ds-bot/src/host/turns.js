@@ -116,6 +116,8 @@ const RETRY_PROMISE_TEXT = 'Your last reply said you would start working, but yo
 const PROMISED_WORK = /(?:^(?:收到|好的|明白|好|行|没问题|了解)[，,、。.!！：\s]*(?:我(?:现在|这就|先|马上|立刻|去|来)?(?:开始|着手|去|来|准备)?(?:排查|检查|调查|查看|看看|搜索|搜一下|分析|处理|执行|运行|跑一下|修改|修复|实现|编写|整理|验证|测试|读一下|翻一下)|(?:现在|马上|立刻)?(?:开始|着手)(?:执行|处理|排查|检查|调查|干活|开工)|开工(?:[。！!，,\s]|$))|^(?:开工(?:[。！!，,\s]|$)|我(?:现在|这就|先|马上|立刻)(?:开始|着手|去)(?:排查|检查|调查|查看|搜索|分析|处理|执行|运行|修改|修复|实现|编写|整理|验证|测试))|\b(?:(?:i\s+will|i'll|let\s+me|going\s+to)\s+(?:start|begin|check|look\s+into|investigate|search|run|inspect|read|fix|implement|work\s+on)\b|(?:starting|beginning)\s+(?:the\s+)?(?:investigation|check|search|work|execution|analysis)\b|^on\s+it[,.\s!]+(?:i'll|i\s+will|let\s+me|starting|checking)\b))/i
 export const promisesWork = text => typeof text === 'string' && text.trim().length <= 240 && PROMISED_WORK.test(text.trim())
 
+const RECOVERED_TURN = -1
+
 export function install(rt) {
   const { ctx, state } = rt
 
@@ -218,7 +220,7 @@ export function install(rt) {
     const map = subagentsByParent.get(sessionId)
     const childIds = [...(map?.keys() ?? [])]
     for (const agent of ctx.get?.('agents')?.list?.() ?? []) {
-      if (agent?.session?.header?.parentSession === sessionId && typeof agent.id === 'string' && !childIds.includes(agent.id)) {
+      if (agent?.session?.header?.origin === 'subagent' && agent.session.header.parentSession === sessionId && typeof agent.id === 'string' && !childIds.includes(agent.id)) {
         childIds.push(agent.id)
       }
     }
@@ -227,7 +229,7 @@ export function install(rt) {
     stoppedSubagentParents.add(sessionId)
     for (const childId of childIds) {
       rememberStopped(stoppedSubagents, childId)
-      await Promise.resolve(ctx.subagents?.interrupt?.(childId, { kind: 'user', parentSessionId: sessionId })).catch(() => {})
+      try { await ctx.get?.('subagents')?.interrupt?.(childId, { kind: 'user', parentSessionId: sessionId }) } catch {}
       const childAgent = ctx.get?.('agents')?.get?.(childId)
       if (childAgent !== undefined) {
         try { childAgent.cancel?.({ kind: 'user' }) } catch {}
@@ -240,6 +242,31 @@ export function install(rt) {
       }
     }
     return true
+  }
+
+  async function adoptLiveWork() {
+    const agents = ctx.get?.('agents')
+    if (agents?.list === undefined) return
+    await rt.load()
+    const known = id => rt.isBotSession(id) || rt.roomOf(id) !== undefined
+    for (const agent of agents.list()) {
+      if (agent?.status !== 'running') continue
+      const sessionId = agent?.session?.id ?? agent?.id
+      const header = agent?.session?.header
+      const parentId = header?.parentSession
+      if (typeof parentId === 'string' && header?.origin === 'subagent' && known(parentId)) {
+        noteSubagentStart(parentId, sessionId, undefined, Date.now())
+        continue
+      }
+      if (typeof sessionId !== 'string' || !known(sessionId)) continue
+      const entry = liveOf(sessionId)
+      if (entry.turn !== undefined) continue
+      entry.turn = RECOVERED_TURN
+      // Its input was consumed before the reload; a later request joins this turn.
+      entry.opened = true
+      entry.since ??= Date.now()
+      setActivity(sessionId, 'thinking')
+    }
   }
 
   // A stopped round stops the member work it started: the turn that answers it, or the
@@ -1116,5 +1143,5 @@ export function install(rt) {
     }, 'ds-bot: prompt rejection reasons')
   }
 
-  Object.assign(rt, { publishTurnToUser, live, liveOf, roomWaiters, roomProgress, roomInbox, activityView, workView, roomWorkView, turnsView, steeredView, callDetail, doingOf, stopRoomTurn, releaseBot, markSteerCut, hasSubagents, stopSubagents })
+  Object.assign(rt, { adoptLiveWork, publishTurnToUser, live, liveOf, roomWaiters, roomProgress, roomInbox, activityView, workView, roomWorkView, turnsView, steeredView, callDetail, doingOf, stopRoomTurn, releaseBot, markSteerCut, hasSubagents, stopSubagents })
 }

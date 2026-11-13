@@ -36,13 +36,15 @@ V0.3.0 新增 **设置 → 通用 → 启用远程 Hub**。新安装默认关闭
 
 **V0.3.8** 中，远程回合按同一个 Bot 的身份使用本地团队、记忆、原生工具和已挂载 MCP 工具的权限。`read_own_chat({"message_id":"…"})` 可跨会话分段读取指定 ID 的本地消息。本地 Main Bot、私有 Bot、沙箱和审批检查继续生效；本地卡片和定时任务落在该 Bot 的本地对话中，对外发布仍需显式调用通信工具。
 
-待发布的 **V0.4.0** 批次中，本地与远程统一使用 `list_capabilities`、`read_capability`、`save_capability`、`attach_capability`、`detach_capability`、`delete_capability`。未发布的本地 Bot 无需连接 Hub 即可维护技能；旧技能工具名仅保留兼容转接，不再展示给模型。记忆已共用 `recall`/`remember`/`forget`。带来源证据的远程关系记录与按成员身份授权的历史保留独立工具；文件型 Skill 与 AGENTS.md 继续使用原生文件/Skill 工具。
+**V0.4.0** 中，本地与远程统一使用 `list_capabilities`、`read_capability`、`save_capability`、`attach_capability`、`detach_capability`、`delete_capability`。未发布的本地 Bot 无需连接 Hub 即可维护技能；旧技能工具名仅保留兼容转接，不再展示给模型。记忆已共用 `recall`/`remember`/`forget`。带来源证据的远程关系记录与按成员身份授权的历史保留独立工具；文件型 Skill 与 AGENTS.md 继续使用原生文件/Skill 工具。
 
 本地 Bot 请求触发的回合可先调用 `publish_turn_to_user({})`，成功保存标记后再写给用户的汇报；该回合随后产生的普通正文进入用户聊天和规范镜像 feed。此前正文、思考和后续回合不变。远程回合及带远程来源的本地咨询不允许使用；原请求方仍照常收到内部答复。
 
+V0.4.0 同步了上游的 Bot 私聊消息账本、工作答复保留和运行中回合重载恢复，保留联邦路由与本地咨询回执；DSH 仍使用 0.2.1-rc.4。本次不包含上游尚未解决的 IM 多会话串台，也不提供外部网关送达确认。参见[迁移说明、风险和来源提交](docs/plans/federated-communication/v040-upstream-message-reliability.md)。
+
 **V0.3.9** 中，已通过的联系人申请不再显示在申请列表。本地咨询可通过 `reply_to_local_consultation` 或 `message_bot` 提交答复并取得持久回执，答复方无需发布到 Hub。等待咨询时可暂停远程回合，迟到结果会通知原远程会话，仍不自动对外发布。
 
-![版本](https://img.shields.io/badge/版本-V0.3.9-blue) ![DSH](https://img.shields.io/badge/DSH-0.2.1--rc.4-4D6BFE) ![许可](https://img.shields.io/badge/许可-Apache_2.0-green)
+![版本](https://img.shields.io/badge/版本-V0.4.0-blue) ![DSH](https://img.shields.io/badge/DSH-0.2.1--rc.4-4D6BFE) ![许可](https://img.shields.io/badge/许可-Apache_2.0-green)
 
 DS Bot 是一个基于 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（简称 dsh）的 bot 插件，插件将 dsh 改造为 bot 形式。你可以与自己创建的 bot 交流、工作。
 

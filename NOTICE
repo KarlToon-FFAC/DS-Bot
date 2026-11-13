@@ -7,6 +7,14 @@ This product is licensed under the Apache License, Version 2.0 (see LICENSE).
 Third-party code in this repository
 ==============================================================================
 
+DS Bot upstream (https://github.com/Fei2411/DS-Bot)
+Apache License 2.0, Copyright 2026 Fei2411 and the DS Bot contributors
+
+  - V0.4.0 selectively adapts the Bot-pair ledger, upward-answer retention,
+    live-turn adoption and regression tests from main a66cc737 and dev 554da65c.
+    The source commits and federation-specific adaptations are recorded in
+    docs/plans/federated-communication/v040-upstream-message-reliability.md.
+
 DeepSeek Harness (https://github.com/deepseek-ai/deepseek-harness)
 MIT License, Copyright (c) 2026 DeepSeek
 

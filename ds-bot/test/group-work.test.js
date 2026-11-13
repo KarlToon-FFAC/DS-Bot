@@ -1355,9 +1355,10 @@ test('consecutive 0-tool ack ping-pong relays pause after 6 turns and resume whe
 test('a group member with a running DSH subagent stays working and stop-room-work interrupts the subagent (#701)', async (t) => {
   const host = await start(t)
   const interrupted = []
-  host.ctx.subagents = {
+  const get = host.ctx.get
+  host.ctx.get = name => name === 'subagents' ? {
     interrupt: async (childId, opts) => { interrupted.push({ childId, opts }) },
-  }
+  } : get(name)
   const first = host.round('c1', host.say('@Writer 派子代理跑长任务'))
   await settle(() => host.agentOf('gb').calls.length === 1)
   host.begin('gb')

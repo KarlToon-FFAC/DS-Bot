@@ -266,6 +266,8 @@ test('other Bots cannot read, write or search what a private Bot keeps', async (
   await refused('read', { file_path: join(home, 'memory', 'bots', P, 'MEMORY.md') })
   await refused('read', { file_path: join(home, 'memory', 'journal.jsonl') })
   await refused('read', { file_path: join(home, 'state.json') })
+  await refused('read', { file_path: join(home, 'ledger', 'a-hashed-pair.jsonl') })
+  await refused('bash', { command: `cat ${posix(join(home, 'ledger', 'a-hashed-pair.jsonl'))}` })
   await refused('read', { file_path: join(home, 'chat-index.sqlite') })
   await refused('read', { file_path: join(home, 'usage.sqlite') })
   await refused('read', { file_path: join(home, 'secrets.json') })
