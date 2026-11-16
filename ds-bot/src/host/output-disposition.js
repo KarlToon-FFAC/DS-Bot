@@ -15,7 +15,7 @@ export function install(rt) {
     queues.set(id, task.catch(error => rt.warn('ds-bot: output state could not be saved: %s', error?.code ?? 'STORAGE_ERROR')))
     return task
   }
-  const save = () => rt.save({required:true})
+  const save = () => rt.save({required:true,outputDrain:true})
   const ownRows = (id, turn) => Object.values(rows()).filter(row => row.sessionId === id && (turn === undefined || row.turn === turn))
   const read = row => {
     const record = rt.ledger.records(bookOf(row.sessionId)).find(record => record.id === row.id)

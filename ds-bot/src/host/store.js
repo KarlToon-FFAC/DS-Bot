@@ -31,7 +31,7 @@ export function install(rt) {
   let lockBroken = false
   let stuck
   let warnedReadOnly = false
-  let stopped = false
+  let stopped = false, closing = false
   // mtime and size of the state.json this host last read or wrote.
   let seen = ''
   // Bumped each time the in-memory state is replaced from the file, so a queued
@@ -341,8 +341,8 @@ export function install(rt) {
     return warnReadOnly()
   }
 
-  const save = ({ required = false } = {}) => {
-    if (stopped) return required ? Promise.reject(new Error('The Bot team cannot be saved after this host stopped.')) : writing
+  const save = ({ required = false, outputDrain = false } = {}) => {
+    if (stopped || closing && !outputDrain) return required ? Promise.reject(new Error('The Bot team cannot be saved after this host stopped.')) : writing
     indexSessions()
     // A reading host keeps the file's revision, so its window does not skip the next change.
     if (!writable()) return required ? Promise.reject(new Error(`This host cannot save the Bot team: ${readOnly()}`)) : writing
@@ -398,7 +398,8 @@ export function install(rt) {
   }
 
   ctx.effect(() => async () => {
-    // Output evidence must finish its required saves before the store closes.
+    // Close normal admission first; only already queued output evidence may drain.
+    closing = true
     if(rt.flushOutputs)await rt.flushOutputs()
     stopped = true
     return writing.finally(() => lock.release())
