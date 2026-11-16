@@ -5,7 +5,7 @@ export function userOutputDecision(item) {
   if(!routing)return {allow:false,reason:'routing-absent'}
   if(routing.audience!=='user')return {allow:false,reason:routing.audience==='internal'?'internal':'routing-invalid'}
   if(routing.explicit===true){
-    const allowed=routing.triggerOrigin==='local-bot' && (routing.recovered===true && typeof routing.originalOutputId==='string' || explicitUserOutput(routing,item.seq))
+    const allowed=['local-bot','schedule'].includes(routing.triggerOrigin) && (routing.recovered===true && typeof routing.originalOutputId==='string' || explicitUserOutput(routing,item.seq))
     return {allow:allowed,reason:allowed?'explicit':'explicit-outside-range'}
   }
   return {allow:routing.triggerOrigin==='user',reason:routing.triggerOrigin==='user'?'user':'inherited'}

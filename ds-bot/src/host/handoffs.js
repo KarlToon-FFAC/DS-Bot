@@ -101,7 +101,7 @@ export function install(rt) {
   function openWork(id, { from, to, parent, fromRoom, room, name, child, remoteSource }) {
     const above = parent === undefined ? undefined : works()[parent]
     const audience = remoteSource ? 'internal' : above?.audience ?? 'internal'
-    works()[id] = { audience, ...(remoteSource ? {remoteSource} : {}), ...(from ? { from } : {}), ...(to ? { to } : {}), ...(room ? { room } : {}), ...(above ? { parent } : {}), ...(fromRoom ? { fromRoom } : {}), ...(name ? { name } : {}), ...(child ? { child } : {}), open: [], results: [], at: Date.now() }
+    works()[id] = { replyChain:above?.replyChain??(above?parent:rt.live?.get(rt.chatOf(from))?.info?.localReplyChain??id), audience, ...(remoteSource ? {remoteSource} : {}), ...(from ? { from } : {}), ...(to ? { to } : {}), ...(room ? { room } : {}), ...(above ? { parent } : {}), ...(fromRoom ? { fromRoom } : {}), ...(name ? { name } : {}), ...(child ? { child } : {}), open: [], results: [], at: Date.now() }
     if (above !== undefined) above.open.push(id)
     save()
   }

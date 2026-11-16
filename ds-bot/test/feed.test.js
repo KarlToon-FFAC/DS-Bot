@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { apply } from '../index.js'
+import {createRuntime} from '../index.js'
 import { fakeContext } from './fake-ctx.js'
 
 const TEAM = {
@@ -39,7 +39,7 @@ function start({ pages = {}, services = {}, audiences } = {}) {
     routes[options.path] = options
     return register(options)
   }
-  apply(ctx, { home })
+  const rt=createRuntime(ctx, { home })
   const call = async (endpoint, payload) => {
     const response = await routes['/api/bot'].fetch(new Request('http://localhost/api/bot', { method: 'POST', body: JSON.stringify({ endpoint, payload }) }))
     return response.json()
@@ -48,7 +48,7 @@ function start({ pages = {}, services = {}, audiences } = {}) {
     await ctx.dispose()
     rmSync(home, { recursive: true, force: true, maxRetries: 5 })
   }
-  return { ctx, call, stop, routes }
+  return { ctx, call, stop, routes,rt }
 }
 
 // Reads Server-Sent Events off a response, one `{ event, data }` per call.
@@ -74,7 +74,7 @@ function reader(response) {
 }
 
 test('the live feed tells a window about saves, new chat entries and the reply being written', async (t) => {
-  const { ctx, call, stop, routes } = start()
+  const { ctx, call, stop, routes } = start({audiences:{m1c:{8:{audience:'user',triggerOrigin:'user',protocol:'answer'}}}})
   t.after(stop)
   await call('state')
   const abort = new AbortController()
@@ -311,5 +311,29 @@ test('an explicit local grant streams ordinary text despite the hidden-turn mark
  assert.equal((await next()).data.phase,'start')
  assert.equal((await next()).data.text,'Public text')
  assert.equal((await next()).data.phase,'end')
+ abort.abort();assert.equal(await next(),undefined)
+})
+
+
+test('a changed internal audience cannot escape while output storage is awaited; unknown output and streaming fail closed', {timeout:10000},async t=>{
+ const {ctx,call,stop,routes,rt}=start({audiences:{m1c:{1:{audience:'user',triggerOrigin:'user',protocol:'answer'},3:{audience:'user',triggerOrigin:'local-bot',protocol:'reply'}}}})
+ t.after(stop);await call('state')
+ const abort=new AbortController();t.after(()=>abort.abort())
+ const next=reader(await routes['/api/bot/feed'].fetch(new Request('http://localhost/api/bot/feed',{signal:abort.signal})))
+ assert.equal((await next()).event,'hello')
+ let release
+ const gate=new Promise(resolve=>{release=resolve})
+ rt.prepareOutputPublication=()=>gate
+ const onEvent=ctx.listeners.get('session/event').at(-1),onStream=ctx.listeners.get('agent/assistant-stream')[0]
+ onEvent({id:'m1c'},{...botMessage('PRIVATE_RACE',1,1),seq:10})
+ rt.state.turnAudiences.m1c[1]={audience:'internal',triggerOrigin:'local-bot',protocol:'reply'}
+ onEvent({id:'m1c'},{...botMessage('UNKNOWN_PRIVATE',2,2),seq:11})
+ onStream({agent:{id:'m1c'},frame:{type:'start',attemptId:'unknown',turn:2}})
+ onStream({agent:{id:'m1c'},frame:{type:'chunk',attemptId:'unknown',chunk:{type:'text-delta',text:'UNKNOWN_STREAM'}}})
+ onStream({agent:{id:'m1c'},frame:{type:'start',attemptId:'inherited',turn:3}})
+ onStream({agent:{id:'m1c'},frame:{type:'chunk',attemptId:'inherited',chunk:{type:'text-delta',text:'INHERITED_PRIVATE'}}})
+ release();await new Promise(resolve=>setImmediate(resolve))
+ onEvent({id:'m1c'},userMessage('sentinel',3))
+ assert.equal((await next()).data.item.text,'sentinel')
  abort.abort();assert.equal(await next(),undefined)
 })

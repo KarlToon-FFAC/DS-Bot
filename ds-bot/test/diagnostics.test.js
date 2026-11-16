@@ -234,11 +234,12 @@ function turnsHost() {
 
 const failed = { kind: 'error', error: { code: 'SERVER', message: 'upstream busy', status: 503 } }
 
-test('a failed reply to message_bot tells the sender instead of leaving it waiting', () => {
+test('a failed reply to message_bot tells the sender instead of leaving it waiting', async () => {
   const { emit, delivered, noted } = turnsHost()
   emit('b', 'turn/start', { turn: 1 })
   emit('b', 'user/message', { content: [{ type: 'text', text: 'hi' }], source: { kind: SOURCE_KIND, role: 'request', senderSessionId: 'a', exchangeId: 'x1' } })
   emit('b', 'turn/end', { turn: 1, reason: failed })
+  await new Promise(resolve=>setImmediate(resolve))
   assert.equal(delivered.length, 1)
   assert.equal(delivered[0].toId, 'a')
   assert.equal(delivered[0].role, 'reply')

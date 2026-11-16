@@ -125,7 +125,7 @@ test('the thinking row shows only with its switch on, and the activity row is ne
     props.node.data = { turn: 3, step: 1, seq: 10, status: 'running', finalNode: { seq: 10 }, blocks }
     props.useTurnSteps = () => steps
     props.actions = { noteLive: (sessionId, id) => noted.push(id) }
-    const useRoster = select => select({ ...roster, prefs })
+    const useRoster = select => select({ ...roster, prefs, turnPublications:{[props.sessionId]:{3:{audience:'user',triggerOrigin:'user'}}} })
     const out = expand(AssistantCell({ ...props, useRoster }), [])
     for (const run of effects) run()
     return { out, noted }

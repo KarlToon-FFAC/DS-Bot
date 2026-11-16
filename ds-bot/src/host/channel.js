@@ -78,7 +78,8 @@ export function install(rt) {
     modelsKey: modelsKey(),
     prefs: state.prefs,
     recoveredOutputIds: Object.values(state.turnOutputs??{}).filter(row=>row.submissions?.user?.status==='submitted-user').map(({id,botId,sessionId,turn})=>({id,botId,sessionId,turn})),
-    unpublishedOutputs: Object.fromEntries(Object.values(state.bots).map(bot=>[bot.id,rt.outputNotices?.(bot.id)??[]])),
+    unpublishedOutputCounts:Object.fromEntries(Object.values(state.bots).map(bot=>[bot.id,rt.outputNotices?.(bot.id)?.length??0])),
+    protectedOutputTurns:state.protectedOutputTurns??{},
     // Whether a Desktop window should serve Bot browser reads (see browser.js).
     browser: rt.browserEnabled,
     // False when config.memory turns memory off: no Memory row or panel.
@@ -94,7 +95,7 @@ export function install(rt) {
   // and per Session, when its running turn began.
   const live = () => ({
     turnPublications: Object.fromEntries(Object.entries(state.turnAudiences ?? {}).flatMap(([id, turns]) => {
-      const explicit = Object.entries(turns).filter(([, row]) => row.explicit === true || row.userOutputThroughSeq!==undefined).map(([turn, row]) => [turn, {...row, publicationPending: rt.pendingUserPublications?.has(`${id}:${turn}`) === true}])
+      const explicit = Object.entries(turns).filter(([, row]) => row!==null).map(([turn, row]) => [turn, {...row, publicationPending: rt.pendingUserPublications?.has(`${id}:${turn}`) === true}])
       return explicit.length ? [[id, Object.fromEntries(explicit)]] : []
     })),
     remoteHubEnabled: rt.remoteHubFeatureEnabled?.() ?? remoteHubEnabled(rt.config),
@@ -246,15 +247,11 @@ export function install(rt) {
         case 'earlier':
           await rt.load()
           return ok(await rt.earlierPage(String(body.sessionId ?? ''), body.cursor ?? undefined))
-        case 'submit-turn-output': {
-          const bot=rt.botOf(body.botId)
-          if(!bot)return fail('Unknown Bot','bot/not-found')
-          return ok(await rt.submitTurnOutput({agent:{id:rt.chatOf(bot.id)}},{outputId:body.outputId,target:'user'}))
-        }
+        case 'submit-turn-output':return fail('Only an authorized Bot can submit private output.','OUTPUT_BOT_SUBMISSION_REQUIRED')
         case 'read-turn-output': {
           const bot=rt.botOf(body.botId)
           if(!bot)return fail('Unknown Bot','bot/not-found')
-          return ok(await rt.readTurnOutput({agent:{id:rt.chatOf(bot.id)}},body.outputId))
+          try{return ok(await rt.readPublishedOutput(bot.id,body.outputId))}catch(error){if(error.code==='OUTPUT_PRIVATE_DRAFT')return fail('Private pending text is available only to its authorized Bot.',error.code);throw error}
         }
         case 'chat':
           await rt.load()

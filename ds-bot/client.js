@@ -2564,14 +2564,15 @@ var flatWidthOf = (prefs) => percent(prefs?.flatWidth, 100);
 
 // src/shared/turn-audience.js
 function explicitUserOutput(routing, seq) {
-  if (routing?.explicit === true && routing.triggerOrigin === "local-bot" && routing.baseAudience === "internal" && Number.isSafeInteger(seq) && seq >= 0 && (Number.isSafeInteger(routing.userOutputBeforeSeq) && seq <= routing.userOutputBeforeSeq || (routing.priorUserOutputRanges ?? []).some(([from, to]) => Number.isSafeInteger(from) && Number.isSafeInteger(to) && seq >= from && seq <= to))) return true;
-  return routing?.explicit === true && routing.triggerOrigin === "local-bot" && routing.baseAudience === "internal" && Number.isSafeInteger(routing.userOutputFromSeq) && routing.userOutputFromSeq >= 0 && Number.isSafeInteger(seq) && seq >= routing.userOutputFromSeq && (routing.userOutputThroughSeq === void 0 || Number.isSafeInteger(routing.userOutputThroughSeq) && seq <= routing.userOutputThroughSeq);
+  if (routing?.explicit === true && ["local-bot", "schedule"].includes(routing.triggerOrigin) && routing.baseAudience === "internal" && Number.isSafeInteger(seq) && seq >= 0 && (Number.isSafeInteger(routing.userOutputBeforeSeq) && seq <= routing.userOutputBeforeSeq || (routing.priorUserOutputRanges ?? []).some(([from, to]) => Number.isSafeInteger(from) && Number.isSafeInteger(to) && seq >= from && seq <= to))) return true;
+  return routing?.explicit === true && ["local-bot", "schedule"].includes(routing.triggerOrigin) && routing.baseAudience === "internal" && Number.isSafeInteger(routing.userOutputFromSeq) && routing.userOutputFromSeq >= 0 && Number.isSafeInteger(seq) && seq >= routing.userOutputFromSeq && (routing.userOutputThroughSeq === void 0 || Number.isSafeInteger(routing.userOutputThroughSeq) && seq <= routing.userOutputThroughSeq);
 }
 function explicitUserStream(routing) {
   return routing?.audience === "user" && routing.userOutputThroughSeq === void 0 && explicitUserOutput(routing, routing.userOutputFromSeq);
 }
 function outputRouting(routing, seq) {
   if (!routing) return routing;
+  if (routing.userDirectedRequest === true && routing.audience === "user" && routing.protocol === "request" && routing.triggerOrigin === "local-bot") return { ...routing, explicit: true, baseAudience: "internal" };
   if (routing.explicit !== true) return routing.userOutputThroughSeq !== void 0 && (!Number.isSafeInteger(seq) || seq > routing.userOutputThroughSeq) ? { ...routing, audience: "internal" } : routing;
   if (Number.isSafeInteger(routing.userOutputBeforeSeq) && Number.isSafeInteger(seq) && seq <= routing.userOutputBeforeSeq) return { ...routing, audience: "user", triggerOrigin: "user", explicit: false };
   return { ...routing, audience: explicitUserOutput(routing, seq) ? "user" : "internal" };
@@ -2729,10 +2730,14 @@ function summaryBlocks(text) {
 }
 function isHiddenTurn(roster, sessionId, turn) {
   if (sessionId === void 0 || turn === void 0) return false;
-  return (roster.exchangeTurns[sessionId] ?? []).includes(turn);
+  const routing = roster.turnPublications?.[sessionId]?.[turn];
+  return routing?.audience === "internal" || routing?.baseAudience === "internal" || (roster.exchangeTurns[sessionId] ?? []).includes(turn);
 }
 function isHiddenAssistant(roster, sessionId, data, anchorSeq) {
   const grant = roster.turnPublications?.[sessionId]?.[data.turn];
+  if (grant?.audience === "internal" && grant.explicit !== true) return true;
+  if (!grant && data.status === "running") return true;
+  if (!grant && roster.protectedOutputTurns?.[sessionId] !== void 0 && data.turn >= roster.protectedOutputTurns[sessionId]) return true;
   if (grant?.explicit === true) return grant.publicationPending === true || !explicitUserOutput(grant, data.finalNode?.seq ?? data.seq ?? anchorSeq);
   if (grant?.userOutputThroughSeq !== void 0) {
     const seq = data.finalNode?.seq ?? data.seq ?? anchorSeq;
@@ -12516,6 +12521,8 @@ ${shown}`, { axis: "y", ...QUICK_EDGES });
 
 // src/shared/communication-diagnostics.js
 var communicationDescriptions = {
+  OUTPUT_PRIVATE_DRAFT: "Private pending text is available only to its authorized Bot.",
+  OUTPUT_BOT_SUBMISSION_REQUIRED: "Only the owning Bot or its explicitly authorized Chief can submit private output.",
   REPLY_DECISION_REQUIRED: "The Bot ended without submitting a reply decision. Its text was not sent. Ask it to submit a public reply or explicitly choose no reply.",
   REPLY_SEND_FAILED: "The Bot tried to reply, but sending failed. Check the failed send; its private closing text was not forwarded.",
   COMMUNICATION_DRAFT_UNAVAILABLE: "This draft does not belong to the current reply or is no longer available. Submit new public text instead.",
@@ -22064,42 +22071,6 @@ function createSwitchWindow(settle) {
 
 // src/client/output-notices.js
 var import_react56 = require("react");
-function OutputNotices({ sessionId, useRoster, actions }) {
-  const roster = useRoster((value) => value), [open, setOpen] = (0, import_react56.useState)(false), [preview, setPreview] = (0, import_react56.useState)(null), [busy, setBusy] = (0, import_react56.useState)(false), [error, setError] = (0, import_react56.useState)("");
-  const bot = roster.bots?.find((bot2) => bot2.sessionId === sessionId || bot2.id === sessionId || bot2.parts?.includes(sessionId));
-  const rows2 = bot ? roster.unpublishedOutputs?.[bot.id] ?? [] : [];
-  if (!rows2.length) return null;
-  const run2 = async (task) => {
-    if (busy) return;
-    setBusy(true);
-    setError("");
-    try {
-      await task();
-    } catch (error2) {
-      setError(error2.message ?? t("Output was not confirmed"));
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (0, import_react56.createElement)(
-    "section",
-    { className: "bt-output-notices", "aria-label": t("Unpublished output") },
-    (0, import_react56.createElement)("button", { type: "button", "aria-expanded": open, onClick: () => setOpen(!open) }, t("Unpublished output"), " · ", rows2.length),
-    open ? (0, import_react56.createElement)("div", { className: "bt-output-list" }, rows2.map((row) => (0, import_react56.createElement)(
-      "article",
-      { key: row.id },
-      (0, import_react56.createElement)("p", null, t(row.status === "unsubmitted-text" ? "Not automatically published" : "Delivery not confirmed"), " · ", t("Turn"), " ", row.turn),
-      (0, import_react56.createElement)("p", null, row.head),
-      (0, import_react56.createElement)("button", { type: "button", disabled: busy, onClick: () => run2(async () => {
-        const result = await actions.readTurnOutput(bot.id, row.id);
-        setPreview({ id: row.id, text: result.text });
-      }) }, t("Read saved text")),
-      (0, import_react56.createElement)("button", { type: "button", disabled: busy || row.status !== "unsubmitted-text", onClick: () => run2(() => actions.submitTurnOutput(bot.id, row.id)) }, t("Publish saved text to my chat")),
-      preview?.id === row.id ? (0, import_react56.createElement)("pre", { className: "bt-output-preview" }, preview.text) : null
-    ))) : null,
-    error ? (0, import_react56.createElement)("p", { role: "alert" }, error) : null
-  );
-}
 var OUTPUT_NOTICE_CSS = `
 .bt-output-notices{color:var(--bt-ink);background:var(--bt-card);border:1px solid var(--bt-line);border-radius:12px;padding:8px 12px;margin:4px 0;max-width:100%;min-width:0}
 .bt-output-notices button{color:var(--bt-accent,var(--bt-ink));background:transparent;border:1px solid var(--bt-line);border-radius:8px;padding:6px 10px;cursor:pointer;margin:2px}
@@ -28251,7 +28222,6 @@ function apply(ctx) {
       priority: BOT_PRIORITY,
       select: (owner) => owner.pendingInteraction?.kind === "question" ? owner.pendingInteraction : null
     }, QuestionCard),
-    () => shadow("conversation.input.dock", { id: "bot-unpublished", order: -130, inject: face }, OutputNotices),
     () => shadow("conversation.input.dock", { id: "bot-members", order: -120, inject: face }, MemberDock),
     () => shadow("conversation.input.dock", { id: "bot-model", order: -110, inject: face }, ModelChoiceDock),
     () => shadow("conversation.input.dock", { id: "bot-question", order: -100, inject: face }, QuestionDock),

@@ -23,6 +23,7 @@ export function install(rt) {
   /** @type {Set<ReadableStreamDefaultController<Uint8Array>>} */
   const clients = new Set()
   const userClients = new Map()
+  let closed=false
   const send = (controller, chunk) => {
     if ((controller.desiredSize ?? 0) < -MAX_QUEUED) {
       leave(controller)
@@ -36,9 +37,10 @@ export function install(rt) {
   }
 
   rt.publishRecoveredOutput=(botId,sessionId,item,outputId)=>{
+    if(closed||!userOutputDecision(item).allow)return
     publish('message',{botId,sessionId,item})
     const chunk=encoder.encode(`event: user-output\ndata: ${JSON.stringify({botId,sessionId,outputId,item})}\n\n`)
-    for(const [controller,target] of userClients)if(target===botId)send(controller,chunk)
+    for(const [controller,target] of userClients)if(target===botId){rt.recordRecoveredVisibility?.(item.routing.originalOutputId,'recovered-user-output');send(controller,chunk)}
   }
 
   rt.stateSaved = () => {
@@ -58,17 +60,27 @@ export function install(rt) {
   })
 
   ctx.on('session/event', (session, event) => {
-    if (clients.size === 0 && userClients.size === 0) return
-    const botId = rt.chatOwners.get(session.id)
-    if (botId === undefined) return
-    for (const [index, item] of rt.displayItems(session.id, [event]).entries()) {
-      publish('message', { botId, sessionId: session.id, item })
-      if (item.kind === 'bot' && userOutputDecision(item).allow && Number.isSafeInteger(event.seq)) {
-        const chunk = encoder.encode(`event: user-output\ndata: ${JSON.stringify({botId,sessionId:session.id,outputId:`${session.id}:${event.seq}:${index}`,item})}\n\n`)
-        for (const [controller, target] of userClients) if (target === botId) send(controller, chunk)
+    if(closed || clients.size===0&&userClients.size===0&&event.type!=='assistant/message')return
+    const botId=rt.chatOwners.get(session.id)
+    if(botId===undefined)return
+    const emit=()=>{
+      if(closed)return
+      // Resolve again after storage awaits. A mutable turn label is never a send receipt.
+      for(const [index,item] of rt.displayItems(session.id,[event]).entries()){
+        const allowed=item.kind==='bot'&&userOutputDecision(item).allow
+        if(item.kind==='bot'&&!allowed)continue
+        if(allowed)rt.recordOutputVisibility?.(session.id,event,'local-chat',botId)
+        publish('message',{botId,sessionId:session.id,item})
+        if(allowed&&Number.isSafeInteger(event.seq)){
+          const chunk=encoder.encode(`event: user-output\ndata: ${JSON.stringify({botId,sessionId:session.id,outputId:`${session.id}:${event.seq}:${index}`,item})}\n\n`)
+          for(const [controller,target] of userClients)if(target===botId){rt.recordOutputVisibility?.(session.id,event,'user-output',botId);send(controller,chunk)}
+        }
       }
+      if(event.type==='tool/call')live()
     }
-    if (event.type === 'tool/call') live()
+    if(event.type==='assistant/message'&&rt.prepareOutputPublication){
+      void rt.prepareOutputPublication(session.id,event).then(emit).catch(error=>rt.warn('ds-bot: output publication not prepared: %s',error?.code??'STORAGE_ERROR'))
+    }else emit()
   })
 
   // Attempts being streamed, by id. A turn that answers another Bot is hidden from the
@@ -78,7 +90,7 @@ export function install(rt) {
     const routing = state.turnAudiences?.[id]?.[turn]
     if(routing?.explicit!==true && routing?.userOutputThroughSeq!==undefined)return false
     return routing?.explicit === true ? !rt.pendingUserPublications?.has(`${id}:${turn}`) && explicitUserStream(routing)
-      : !(state.exchangeTurns[id] ?? []).includes(turn) && routing?.audience !== 'internal'
+      : !(state.exchangeTurns[id] ?? []).includes(turn) && routing?.audience === 'user' && (routing.triggerOrigin==='user'||routing.userDirectedRequest===true&&routing.triggerOrigin==='local-bot'&&routing.protocol==='request')
   }
   ctx.on('agent/assistant-stream', ({ agent, frame }) => {
     if (frame.type === 'start') {
@@ -148,6 +160,7 @@ export function install(rt) {
     }, KEEPALIVE_MS)
     keepalive.unref?.()
     return () => {
+      closed=true
       clearInterval(keepalive)
       clearTimeout(liveTimer)
       for (const controller of [...clients,...userClients.keys()]) leave(controller)

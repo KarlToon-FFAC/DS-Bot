@@ -1,5 +1,7 @@
 # V0.4.1 first change: explicit output disposition
 
+> Superseded by [v3](v041-output-routing-v3.md) for output storage, pending ownership, user draft UI and recovery endpoints. The original private-draft composer cards and human submission endpoint are removed. This document retains the initial implementation history.
+
 Bot reply triggers do not inherit user publication from work or a parent turn.
 First-level work is internal; explicit request audience remains supported. Existing
 work is not reclassified. Ordinary requests entering a running user-visible local

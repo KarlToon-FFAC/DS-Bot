@@ -1,4 +1,6 @@
 export const communicationDescriptions = {
+  OUTPUT_PRIVATE_DRAFT:'Private pending text is available only to its authorized Bot.',
+  OUTPUT_BOT_SUBMISSION_REQUIRED:'Only the owning Bot or its explicitly authorized Chief can submit private output.',
   REPLY_DECISION_REQUIRED: 'The Bot ended without submitting a reply decision. Its text was not sent. Ask it to submit a public reply or explicitly choose no reply.',
   REPLY_SEND_FAILED: 'The Bot tried to reply, but sending failed. Check the failed send; its private closing text was not forwarded.',
   COMMUNICATION_DRAFT_UNAVAILABLE: 'This draft does not belong to the current reply or is no longer available. Submit new public text instead.',

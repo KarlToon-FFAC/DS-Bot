@@ -36,7 +36,7 @@ V0.3.0 新增 **设置 → 通用 → 启用远程 Hub**。新安装默认关闭
 
 **V0.3.8** 中，远程回合按同一个 Bot 的身份使用本地团队、记忆、原生工具和已挂载 MCP 工具的权限。`read_own_chat({"message_id":"…"})` 可跨会话分段读取指定 ID 的本地消息。本地 Main Bot、私有 Bot、沙箱和审批检查继续生效；本地卡片和定时任务落在该 Bot 的本地对话中，对外发布仍需显式调用通信工具。
 
-**V0.4.1** 首项改动修复正文路由：Bot 回报触发的回合默认内部可见；用户回合中的普通 Bot 请求排队处理；未发布的收尾正文会在输入框上方提示。可通过 `read_turn_output` / `submit_turn_output` 按原文和稳定回执提交，或通过 `decline_turn_output` 明确保留为私密内容。开启发布权限不等于已经送达。参见[路由与网关对接约定](docs/plans/federated-communication/v041-output-routing.md)。
+**V0.4.1** 首项改动修复正文路由：Bot 回报触发的回合默认内部可见；用户回合中的普通 Bot 请求排队处理；未发布的收尾正文仅由所属 Bot 私下处置。可通过 `read_turn_output` / `submit_turn_output` 按原文和稳定回执提交，或通过 `decline_turn_output` 明确保留为私密内容。可见性事实、投递回执和待决状态分账记录；Chief 接管需要明确委派，用户面不再展示内部正文预览或发布按钮。未知来源和定时任务不会默认对用户发布。开启发布权限不等于已经送达。参见[v3 路由与网关对接约定](docs/plans/federated-communication/v041-output-routing-v3.md)。
 
 V0.4.1 另修复了执行 Session 缺失时，尚未使用的远程绑定导致收件永久 pending 的问题；恢复保留原消息和 Bot 身份，已有执行记录或结果不明的消息不会自动重放。活动页和 `communication_diagnose.bindingFailures` 会单独显示失败阶段及宿主原因，参见[复现与恢复边界](docs/plans/federated-communication/v041-binding-recovery.md)。
 

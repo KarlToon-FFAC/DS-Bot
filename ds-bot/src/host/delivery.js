@@ -80,11 +80,11 @@ export function install(rt) {
   // length when it went as a file (attachLong). `work`: the work (handoffs.js) a
   // result that came back goes on with. `merged`: a request that takes in an earlier
   // one its recipient had not read, under that one's exchange.
-  async function deliver({ fromId, toId, sessionId, text, role, replyTo, roomId, audience, rootAudience, remoteSource, note, exchangeId = randomUUID(), steer = false, deferred = false, resumed = false, retried = false, resent = false, merged = false, askedBy, fromRoomId, files = [], length, work, recordExchange = true }) {
+  async function deliver({ fromId, toId, sessionId, text, role, replyTo, roomId, audience, rootAudience, remoteSource, note, exchangeId = randomUUID(), steer = false, deferred = false, resumed = false, retried = false, resent = false, merged = false, askedBy, fromRoomId, files = [], length, work, recordExchange = true, localReplyChain, senderName }) {
     const from = rt.botOf(fromId)
     const to = rt.botOf(toId)
     if (to === undefined) throw new Error(`Unknown Bot ${toId}`)
-    const fromName = from?.name ?? 'You'
+    const fromName = senderName ?? from?.name ?? 'You'
     const room = rt.roomOf(roomId)
     const asker = work === undefined ? undefined : rt.botOf(state.works?.[work]?.from)?.name
     // Session events reject `undefined` members, so optional fields are omitted instead.
@@ -94,6 +94,7 @@ export function install(rt) {
       ...(remoteSource ? {remoteSource,protocol:remoteSource.consultationId?'local-consultation':'local-report'} : {}),
       ...(role === 'reply' ? {protocol:'reply'} : {}),
       ...(rootAudience ? {rootAudience} : {}),
+      ...(localReplyChain??state.works[exchangeId]?.replyChain?{localReplyChain:localReplyChain??state.works[exchangeId]?.replyChain}:{}),
       form: 'relay',
       role,
       exchangeId,

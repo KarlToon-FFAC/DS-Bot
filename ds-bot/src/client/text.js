@@ -125,13 +125,17 @@ export function summaryBlocks(text) {
 
 export function isHiddenTurn(roster, sessionId, turn) {
   if (sessionId === undefined || turn === undefined) return false
-  return (roster.exchangeTurns[sessionId] ?? []).includes(turn)
+  const routing=roster.turnPublications?.[sessionId]?.[turn]
+  return routing?.audience==='internal'||routing?.baseAudience==='internal'||(roster.exchangeTurns[sessionId] ?? []).includes(turn)
 }
 
 // Only the exact ordinary assistant output may cross a turn's hidden marker.
 // Tool, reasoning and trigger cells continue to use isHiddenTurn.
 export function isHiddenAssistant(roster, sessionId, data, anchorSeq) {
   const grant = roster.turnPublications?.[sessionId]?.[data.turn]
+  if(grant?.audience==='internal'&&grant.explicit!==true)return true
+  if(!grant&&data.status==='running')return true
+  if(!grant&&roster.protectedOutputTurns?.[sessionId]!==undefined&&data.turn>=roster.protectedOutputTurns[sessionId])return true
   if (grant?.explicit === true) return grant.publicationPending === true || !explicitUserOutput(grant, data.finalNode?.seq ?? data.seq ?? anchorSeq)
   if(grant?.userOutputThroughSeq!==undefined){const seq=data.finalNode?.seq??data.seq??anchorSeq;return !Number.isSafeInteger(seq)||seq>grant.userOutputThroughSeq}
   return isHiddenTurn(roster, sessionId, data.turn)

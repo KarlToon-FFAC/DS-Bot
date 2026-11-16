@@ -2,6 +2,7 @@
 // triggered, the waiters and inboxes of group rounds, and routing a finished turn's reply.
 //
 // Turn tracking: which turns were triggered by another Bot, and what they said.
+import {reserveAutomaticReply} from './local-reply-budget.js'
 import { randomUUID } from 'node:crypto'
 import { carrierKeyOf } from '@deepseek-ai/dsh-scope'
 import { HANDOFF_ACK, MESSAGE_INLINE_MAX, REFERENCE_KIND, REPLY_KIND, SOURCE_KIND, STEER_CUT } from './constants.js'
@@ -29,19 +30,25 @@ export const failureLine = failure => `${failure.code}${failure.status ? ` ${fai
 // The reply a sender waits for, sent the way a finished turn sends it: the work it was
 // for closes, and the answer goes up to the Bot that asked. `id` is the Session the
 // answer comes from; `source` is the trigger the turn answered.
-export function answerSender(rt, id, source, text, long, routingTurn) {
+export function answerSender(rt, id, source, text, long, routingTurn, outputIds) {
   if (source.remoteSource?.consultationId) {
     const delivery = automaticConsultationReply(rt,id,source,text)
-    rt.noteOutputRoute?.(id, routingTurn, text, 'delivered-auto', delivery.then(result=>{if(result?.status!=='completed')throw Object.assign(new Error('Consultation not confirmed'),{code:'LOCAL_CONSULTATION_RESULT_NOT_SAVED'})}), {consultationId:source.remoteSource.consultationId})
+    rt.noteOutputRoute?.(id, routingTurn, text, 'delivered-auto', delivery.then(result=>{if(result?.status!=='completed')throw Object.assign(new Error('Consultation not confirmed'),{code:'LOCAL_CONSULTATION_RESULT_NOT_SAVED'})}), {consultationId:source.remoteSource.consultationId,outputIds})
     return
   }
   const back = rt.roomOf(source.senderRoomId)?.sessions?.[source.senderSessionId]
-  const name = rt.botOf(rt.selfOf(id))?.name ?? 'The other Bot'
+  const fromId=rt.selfOf(id)
+  const name = rt.botOf(fromId)?.name ?? 'The other Bot'
+  const reservation=rt.reserveLocalReply?.(id,source,text)??reserveAutomaticReply(rt,id,source,text)
+  if(reservation.blocked){rt.deferTurnOutputs?.(id,routingTurn,outputIds,reservation.blocked);return}
+  if(reservation.replay){rt.noteOutputRoute?.(id,routingTurn,text,'delivered-auto',Promise.resolve(),{botId:source.senderSessionId,receiptId:reservation.receiptId,outputIds});return}
   const rootAudience = rt.state.works?.[source.exchangeId]?.audience
-  const work = rt.closeWork?.(source.exchangeId, name, text)
+  let work
   const exchangeId = randomUUID()
-  const delivery = rt.deliver({
-    fromId: rt.selfOf(id),
+  const delivery = Promise.resolve(reservation.ready).then(()=>{
+    work=rt.closeWork?.(source.exchangeId,name,text)
+    return rt.deliver({localReplyChain:reservation.root,
+    fromId, senderName:name,
     toId: source.senderSessionId,
     ...(back ? { sessionId: back } : {}),
     text: long?.text ?? text,
@@ -52,8 +59,8 @@ export function answerSender(rt, id, source, text, long, routingTurn) {
     replyTo: source.exchangeId,
     exchangeId,
     ...(work ? { work } : {}),
-  })
-  rt.noteOutputRoute?.(id, routingTurn, text, 'delivered-auto', delivery, {botId:source.senderSessionId})
+  })}).then(async result=>{await reservation.confirm?.();return result})
+  rt.noteOutputRoute?.(id, routingTurn, text, 'delivered-auto', delivery, {botId:source.senderSessionId,exchangeId,outputIds})
   void delivery.catch((error) => {
     rt.warn('ds-bot: reply delivery failed: %s', error)
     if(error?.deliveryUncertain===true)return
@@ -65,7 +72,7 @@ export function answerSender(rt, id, source, text, long, routingTurn) {
     rt.answerMissed?.(source.exchangeId)
     const said = `${name} could not send its reply to you (${failureLine(turnFailure(error))}); what it had answered:\n`
     void rt.deliver({
-      fromId: rt.selfOf(id),
+      fromId, senderName:name,
       toId: source.senderSessionId,
       ...(back ? { sessionId: back } : {}),
       text: `${said}${long?.text ?? text}`,
@@ -348,11 +355,12 @@ export function install(rt) {
 
   // A request whose audience is the user is answered in the recipient's own chat: that
   // turn stays visible there and its reply is not routed back to the sender.
-  const answersUser = info => info.role === 'request' && info.audience === 'user'
-  const userAudience = info => !info.remoteSource && info.role!=='federation-report' && (answersUser(info) || info.role !== 'reply' && info.work && state.works?.[info.work]?.audience === 'user')
+  const isReply = info => info?.role==='reply' || info?.protocol==='reply'
+  const answersUser = info => !isReply(info) && info.role === 'request' && info.audience === 'user'
+  const userAudience = info => !info.remoteSource && info.role!=='federation-report' && answersUser(info)
   // Roles whose turn owes the sender a reply: a 'stopped' notice asks the Bot to
   // acknowledge, exactly like a request.
-  const expectsReply = info => info.role === 'request' || info.role === 'stopped'
+  const expectsReply = info => !isReply(info) && (info.role === 'request' || info.role === 'stopped')
   // A group Session speaks only in its group, so what its turns write goes there, also
   // for turns that a finished background job or a fresh part starts; a Bot's private
   // message to it is answered privately.
@@ -403,14 +411,14 @@ export function install(rt) {
     entry.info = info
     const audience = userAudience(info) ? 'user' : 'internal'
     const ledger = (state.turnAudiences ??= {})[sessionId] ??= {}
-    ledger[entry.turn] = {audience,triggerOrigin:info.remoteSource?'remote-bot':'local-bot',protocol:info.role==='federation-report'?'local-report':info.role === 'reply' ? 'reply' : 'request'}
+    ledger[entry.turn] = {audience,triggerOrigin:info.remoteSource?'remote-bot':'local-bot',protocol:info.role==='federation-report'?'local-report':isReply(info) ? 'reply' : 'request',...(audience==='user'?{userDirectedRequest:true,userOutputFromSeq:Math.max(0,(entry.lastSeq??0)+1),authorizationId:info.exchangeId}:{})}
     void rt.save().catch(() => {})
     // A turn that was stopped for a part switch brings its joined requests along.
     if (Array.isArray(info.joined) && info.joined.length > 0) {
       entry.joined = info.joined.filter(item => item?.info !== undefined && item.info !== null)
     }
     if (rt.groupOwners.has(sessionId)) return
-    if (info.role==='federation-report' || (expectsReply(info) && !answersUser(info)) || (info.role === 'reply' && audience !== 'user') || info.role === 'room' || (info.role === 'handoff' && info.resume !== true)) {
+    if (info.role==='federation-report' || (expectsReply(info) && !answersUser(info)) || (isReply(info) && audience !== 'user') || info.role === 'room' || (info.role === 'handoff' && info.resume !== true)) {
       markExchangeTurn(sessionId, entry.turn)
     }
   }
@@ -438,10 +446,10 @@ export function install(rt) {
     }
     const call = check(), prior = state.turnAudiences?.[id]?.[turn]
     if (prior?.audience === 'user' && prior.explicit !== true && prior.userOutputThroughSeq === undefined) return {ok: true, status: 'already_user', sessionId: id, turn, published: false, message: 'This turn already uses its normal user-visible route. No routing was changed.'}
-    if (!(prior?.triggerOrigin === 'local-bot' || prior?.triggerOrigin === 'user' && prior.userOutputThroughSeq !== undefined && prior.interruptedBy==='local-bot') || ['room','handoff'].includes(entry.info?.role)) fail('TURN_PUBLICATION_LOCAL_CHAT_ONLY', 'Only a local Bot-triggered report in your own chat can be marked. Group relay and handoff housekeeping cannot be published this way.')
+    if (!(['local-bot','schedule'].includes(prior?.triggerOrigin) || prior?.triggerOrigin === 'user' && prior.userOutputThroughSeq !== undefined && prior.interruptedBy==='local-bot') || ['room','handoff'].includes(entry.info?.role)) fail('TURN_PUBLICATION_LOCAL_CHAT_ONLY', 'Only a local Bot-triggered report in your own chat can be marked. Group relay and handoff housekeeping cannot be published this way.')
     if(entry.userPublication?.turn===turn && prior?.userOutputThroughSeq===undefined)return entry.userPublication.promise
     if(prior?.explicitCallId===exec.callId && prior.userOutputThroughSeq!==undefined)fail('TURN_PUBLICATION_INTERRUPTED','This grant was closed by new input. Make a new explicit publication call for new user-facing text.')
-    const grant = {...prior, audience: 'user', triggerOrigin:'local-bot', baseAudience: 'internal', explicit: true,
+    const grant = {...prior, audience: 'user', triggerOrigin:prior?.triggerOrigin==='schedule'?'schedule':'local-bot', baseAudience: 'internal', explicit: true,
       userOutputFromSeq: Math.max(call.seq, entry.lastSeq ?? call.seq) + 1, explicitCallId: exec.callId}
     if(prior?.explicit!==true && prior?.userOutputThroughSeq!==undefined)grant.userOutputBeforeSeq=prior.userOutputThroughSeq
     else if(prior?.explicit===true && prior?.userOutputThroughSeq!==undefined)grant.priorUserOutputRanges=[...(prior.priorUserOutputRanges??[]),[prior.userOutputFromSeq,prior.userOutputThroughSeq]]
@@ -674,6 +682,12 @@ export function install(rt) {
       case 'turn/start':
         setActivity(id, 'thinking')
         entry.turn = event.data.turn
+        if(rt.chatOwners.has(id)&&!rt.communication?.owners?.has(id)){
+          const ledger=(state.turnAudiences??={})[id]??={}
+          ledger[entry.turn]??={audience:'internal',triggerOrigin:'unknown',protocol:'unclassified'}
+          ;(state.protectedOutputTurns??={})[id]??=entry.turn
+        }
+        entry.outputIds=[]
         entry.remoteInputSeen = false
         entry.userPublication = undefined
         entry.since = event.time ?? Date.now()
@@ -705,6 +719,7 @@ export function install(rt) {
           const carry = entry.carry
           entry.carry = undefined
           entry.texts = carry.texts
+          entry.outputIds=carry.outputIds??[]
           entry.shown = carry.shown
           entry.publicPosted = carry.publicPosted === true
           entry.answers = carry.answers
@@ -754,10 +769,15 @@ export function install(rt) {
         // still claims it as today, a later one only joins it.
         if (entry.turn !== undefined && (source?.kind === 'user' || source?.kind === REPLY_KIND)) {
           const ledger = (state.turnAudiences ??= {})[id] ??= {}
-          ledger[entry.turn] = ledger[entry.turn]?.audience === 'internal' || ledger[entry.turn]?.explicit === true || ledger[entry.turn]?.userOutputThroughSeq!==undefined ? {...ledger[entry.turn],mixed:true} : {audience:'user',triggerOrigin:'user',protocol:'answer'}
+          ledger[entry.turn] = ledger[entry.turn]?.audience === 'internal' && ledger[entry.turn]?.triggerOrigin!=='unknown' || ledger[entry.turn]?.explicit === true || ledger[entry.turn]?.userOutputThroughSeq!==undefined ? {...ledger[entry.turn],mixed:true} : {audience:'user',triggerOrigin:'user',protocol:'answer'}
           void rt.save().catch(() => {})
         }
         const opened = entry.opened === true
+        if(entry.turn!==undefined && !opened && source?.kind==='schedule' && !rt.roomOf(id)){
+          const ledger=(state.turnAudiences??={})[id]??={}
+          ledger[entry.turn]={audience:'internal',triggerOrigin:'schedule',protocol:'schedule'}
+          markExchangeTurn(id,entry.turn)
+        }
         if (entry.turn !== undefined && opened && source?.kind === SOURCE_KIND && !bare(source) && !userAudience(source)) {
           rt.closeUserOutputInterval?.(id, entry.turn, event.seq, source.remoteSource ? 'remote-bot' : 'local-bot')
           if(rt.closeUserOutputInterval)markExchangeTurn(id,entry.turn)
@@ -920,9 +940,11 @@ export function install(rt) {
         const steerCut = cut !== undefined && event.data?.reason?.kind === 'aborted'
           && event.data.reason.reason?.kind === 'hook' && event.data.reason.reason.reason === STEER_CUT
         if (steerCut) {
-          entry.carry = { info: entry.info, joined: entry.joined ?? [], later: entry.later ?? [], texts: entry.texts.slice(0, cut.texts), shown: entry.shown, publicPosted: entry.publicPosted, answers: entry.answers, toolCount: entry.toolCount ?? 0 }
+          entry.carry = { outputIds:entry.outputIds??[], info: entry.info, joined: entry.joined ?? [], later: entry.later ?? [], texts: entry.texts.slice(0, cut.texts), shown: entry.shown, publicPosted: entry.publicPosted, answers: entry.answers, toolCount: entry.toolCount ?? 0 }
         }
         const completedTurn = entry.turn
+        const completedOutputIds=entry.outputIds??[]
+        entry.outputIds=[]
         const info = entry.info
         const joined = entry.joined ?? []
         // Exclude intermediate execution text from the public final.
@@ -1007,11 +1029,11 @@ export function install(rt) {
           if (!expectsReply(source) || answersUser(source)) return
           if (failure !== undefined) {
             // The sender was told a reply comes later; without this it would wait forever.
-            answerSender(rt, id, source, `${name} could not answer your message: its model call failed (${failureLine(failure)}). Tell the user if it matters; do not retry right away.`,undefined,completedTurn)
+            answerSender(rt, id, source, `${name} could not answer your message: its model call failed (${failureLine(failure)}). Tell the user if it matters; do not retry right away.`,undefined,completedTurn,completedOutputIds)
           } else if (reply !== '' || reason?.kind === 'aborted') {
             // A turn stopped before it could answer still owes the sender a line,
             // or it would wait forever for a reply that never comes.
-            answerSender(rt, id, source, reply !== '' ? reply : `${name} was stopped before it could answer your message.`,undefined,completedTurn)
+            answerSender(rt, id, source, reply !== '' ? reply : `${name} was stopped before it could answer your message.`,undefined,completedTurn,completedOutputIds)
           }
         }
         // Work a Bot asked for, also when what came back for it opens the turn: while
@@ -1024,16 +1046,16 @@ export function install(rt) {
           if (failure !== undefined || reason?.kind === 'aborted') return answer(asker, reply)
           if (rt.waitsWork(work)) {
             rt.holdWork(work, reply)
-            rt.noteOutputRoute?.(id, completedTurn, reply, 'waiting-subtask', rt.save({required:true}), {work})
+            rt.noteOutputRoute?.(id, completedTurn, reply, 'waiting-subtask', rt.save({required:true}), {work,outputIds:completedOutputIds})
             return
           }
           // With what came back, the answer may pass what one message carries.
           const text = rt.answerText(work, reply, name)
-          if (asker?.remoteSource?.consultationId || text.length <= MESSAGE_INLINE_MAX) return answerSender(rt,id,asker,text,undefined,completedTurn)
+          if (asker?.remoteSource?.consultationId || text.length <= MESSAGE_INLINE_MAX) return answerSender(rt,id,asker,text,undefined,completedTurn,completedOutputIds)
           const attachment = rt.attachLong(text, `Answer from ${name}.txt`)
-          rt.noteOutputRoute?.(id, completedTurn, reply, 'delivery-unknown', attachment, {work}, false)
+          rt.noteOutputRoute?.(id, completedTurn, reply, 'delivery-unknown', attachment, {work,outputIds:completedOutputIds}, false)
           void attachment
-            .then(long => answerSender(rt,id,asker,text,long,completedTurn))
+            .then(long => answerSender(rt,id,asker,text,long,completedTurn,completedOutputIds))
             .catch(error => rt.warn('ds-bot: answer from %s not sent: %s', name, error))
         }
         // A retried turn answers the same waiter or sender, so this one passes nothing on.

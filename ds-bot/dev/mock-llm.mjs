@@ -126,6 +126,14 @@ function decide(body) {
   }).filter(message => message.role !== 'user' || message.content.length > 0)
   const last = messages.at(-1)
   const blocks = Array.isArray(last?.content) ? last.content : []
+  const resolveStart=messages.findLastIndex(message=>message.role==='user'&&/^TURN-OUTPUT-RESOLVE \S+/.test(textOf(message.content)))
+  if(resolveStart>=0){
+    const outputId=/^TURN-OUTPUT-RESOLVE (\S+)/.exec(textOf(messages[resolveStart].content))[1]
+    const used=messages.slice(resolveStart+1).flatMap(message=>Array.isArray(message.content)?message.content.filter(block=>block.type==='tool_use'):[])
+    if(!used.length)return [tool('submit_turn_output',{outputId,target:'user'})]
+    const results=messages.slice(resolveStart+1).flatMap(message=>Array.isArray(message.content)?message.content.filter(block=>block.type==='tool_result'):[]).map(block=>textOf(block.content)).join('\n')
+    return [text(results.includes('"replay":true')?'SAVED_OUTPUT_REPLAY_CONFIRMED':'SAVED_OUTPUT_FIRST_SUBMISSION')]
+  }
   const reportStart=messages.findLastIndex(message=>message.role==='user'&&/TURN-USER-(?:PUBLISH|INTERNAL) [a-zA-Z0-9-]+/.test(textOf(message.content))&&!isResults(message))
   if(reportStart>=0&&!system.includes('This Session belongs only to one explicit communication conversation')){
     const report=/TURN-USER-(PUBLISH|INTERNAL) ([a-zA-Z0-9-]+)/.exec(textOf(messages[reportStart].content)),tag=report[2],turn=messages.slice(reportStart+1)

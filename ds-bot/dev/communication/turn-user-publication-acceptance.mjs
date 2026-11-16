@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import {randomUUID} from 'node:crypto'
+import {randomUUID,createHash} from 'node:crypto'
 import {readFileSync} from 'node:fs'
 import {join} from 'node:path'
 import {spawn} from 'node:child_process'
@@ -76,25 +76,34 @@ try{
   return Object.values(saved.turnOutputs??{}).some(row=>row.botId===chiefId&&row.status==='unsubmitted-text')
  },'a result-triggered Chief summary stays private with a visible unpublished disposition',60000)
  const current=await client.request('/api/bot',{endpoint:'state',payload:{}})
- const draft=current.unpublishedOutputs[chiefId].find(row=>row.status==='unsubmitted-text')
+ assert.equal(current.unpublishedOutputs,undefined)
+ const saved=JSON.parse(readFileSync(join(repo,`.dsh-test-${name}`,'bot/state.json'),'utf8'))
+ const draft=Object.values(saved.turnOutputs).find(row=>row.botId===chiefId&&row.pending?.owner==='self')
  assert.ok(draft)
- const body=await client.request('/api/bot',{endpoint:'read-turn-output',payload:{botId:chiefId,outputId:draft.id}})
+ const book='outputs-'+createHash('sha256').update(draft.sessionId).digest('hex').slice(0,32)
+ const body=readFileSync(join(repo,`.dsh-test-${name}`,'bot/ledger',book+'.jsonl'),'utf8').trim().split('\n').map(line=>JSON.parse(line)).find(row=>row.id===draft.id)
+ await assert.rejects(client.request('/api/bot',{endpoint:'read-turn-output',payload:{botId:chiefId,outputId:draft.id}}),{code:'OUTPUT_PRIVATE_DRAFT'})
+ await assert.rejects(client.request('/api/bot',{endpoint:'submit-turn-output',payload:{botId:chiefId,outputId:draft.id}}),{code:'OUTPUT_BOT_SUBMISSION_REQUIRED'})
  if(page){
   await page.locator(`[data-bot-id="${chiefId}"]`).first().click()
-  await page.locator('.bt-output-notices').first().waitFor({timeout:15000})
-  await page.getByRole('button',{name:/Unpublished output|未发布正文/}).click()
-  await page.getByRole('button',{name:/Read saved text|查看已保存正文/}).first().click()
-  await page.locator('.bt-output-preview').filter({hasText:body.text}).first().waitFor({timeout:15000})
+  assert.equal(await page.locator('.bt-output-list').count(),0)
+  assert.equal(await page.getByRole('button',{name:/Read saved text|查看已保存正文/}).count(),0)
  }
- const receipt=await client.request('/api/bot',{endpoint:'submit-turn-output',payload:{botId:chiefId,outputId:draft.id}})
- assert.equal(receipt.status,'submitted-user')
- const replay=await client.request('/api/bot',{endpoint:'submit-turn-output',payload:{botId:chiefId,outputId:draft.id}})
- assert.equal(replay.replay,true);assert.equal(replay.receiptId,receipt.receiptId)
+ const command=()=>client.request('/api/bot',{endpoint:'send',payload:{sessionId:chiefId,text:`TURN-OUTPUT-RESOLVE ${draft.id}`}})
+ await command()
+ await until(()=>{
+  const state=JSON.parse(readFileSync(join(repo,`.dsh-test-${name}`,'bot/state.json'),'utf8'))
+  return state.turnOutputs[draft.id].submissions?.user?.status==='submitted-user'
+ },'owning Bot explicitly submits saved output',60000)
  const chiefChat=await client.request('/api/bot',{endpoint:'chat',payload:{botId:chiefId}})
  assert.equal(chiefChat.items.filter(item=>item.routing?.originalOutputId===draft.id).length,1)
  assert.equal(chiefChat.items.find(item=>item.routing?.originalOutputId===draft.id).text,body.text)
+ await command()
+ await until(()=>readFileSync(join(repo,`.dsh-test-${name}`,'mock.jsonl'),'utf8').trim().split('\n').map(line=>JSON.parse(line)).some(row=>row.session===chiefId&&row.out?.some(block=>block.text==='SAVED_OUTPUT_REPLAY_CONFIRMED')),'model receives the saved idempotent replay receipt',60000)
+ const repeated=await client.request('/api/bot',{endpoint:'chat',payload:{botId:chiefId}})
+ assert.equal(repeated.items.filter(item=>item.routing?.originalOutputId===draft.id).length,1)
  if(page){await page.getByRole('region',{name:/Published saved output|已发布的原文/}).waitFor({timeout:15000});assert.deepEqual(browserErrors,[])}
- console.log('PASS native private Chief summary has an immediate notice; exact saved text recovers with one idempotent receipt')
+ console.log('PASS native private Chief output is absent from user draft UI; model submission recovers exact text once')
  console.log('PASS native local Bot-triggered explicit report reaches chat and user-output with durable metadata')
  console.log('PASS preceding internal text, unmarked control and later turns do not inherit publication')
 }finally{abort.abort();await consume;await browser?.close();await bench('stop')}

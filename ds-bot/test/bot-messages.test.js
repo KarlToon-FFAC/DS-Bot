@@ -102,8 +102,9 @@ async function start(seed) {
   const emit = (id, type, data, extra) => {
     if (type === 'user/message') agentOf(id).session.deriveMessages().push({ role: 'user', content: data.content, source: data.source })
     if (type === 'assistant/message') agentOf(id).session.deriveMessages().push({ ...data.message, role: 'assistant' })
+    const eventSeq=++seq
     for (const listener of ctx.listeners.get('session/event') ?? []) {
-      if (listener.length >= 2) listener({ id }, { type, seq: ++seq, data, ...extra })
+      if (listener.length >= 2) listener({ id }, { type, seq:eventSeq, data, ...extra })
     }
   }
   // Runs every registered waterfall listener; `next` settles the chain.
@@ -377,13 +378,14 @@ const replySource = (role, extra = {}) => ({ kind: SOURCE_KIND, role, senderSess
 const textBlock = (content) => [{ type: 'text', text: content }]
 const assistantText = text => ({ message: { content: textBlock(text) } })
 
-test('a stopped notice routes the acknowledgement back like a request', () => {
+test('a stopped notice routes the acknowledgement back like a request', async () => {
   const { rt, emit, delivered } = turnsHost()
   emit('b', 'turn/start', { turn: 1 })
   emit('b', 'user/message', { content: textBlock('[Stopped by Chief]\nwhy'), source: replySource('stopped', { exchangeId: 's1' }) })
   assert.deepEqual(rt.state.exchangeTurns.b, [1])
   emit('b', 'assistant/message', assistantText('understood'))
   emit('b', 'turn/end', { turn: 1, reason: { kind: 'completed' } })
+  await delay(0) // Automatic reply admission is persisted before delivery.
   assert.equal(delivered.length, 1)
   assert.equal(delivered[0].toId, 'a')
   assert.equal(delivered[0].role, 'reply')
@@ -394,7 +396,7 @@ test('a stopped notice routes the acknowledgement back like a request', () => {
 // What the turn hands back for a joined request: the request itself, to answer next.
 const deferredOf = job => [job.fromId, job.toId, job.sessionId, job.role, job.exchangeId, job.deferred, job.text]
 
-test('a request that joins a user-started turn is handed back, not answered with the turn\'s text', () => {
+test('a request that joins a user-started turn is handed back, not answered with the turn\'s text', async () => {
   const { rt, emit, delivered } = turnsHost()
   emit('b', 'turn/start', { turn: 1 })
   emit('b', 'user/message', { content: textBlock('write the letter'), source: { kind: 'user' } })
@@ -402,6 +404,7 @@ test('a request that joins a user-started turn is handed back, not answered with
   emit('b', 'user/message', { content: textBlock('[Message from Chief]\nmake it shorter'), source: replySource('request', { exchangeId: 'e1' }) })
   emit('b', 'assistant/message', assistantText('second half'))
   emit('b', 'turn/end', { turn: 1, reason: { kind: 'completed' } })
+  await delay(0) // Automatic reply admission is persisted before delivery.
   assert.deepEqual(delivered.map(deferredOf), [['a', 'b', 'b', 'request', 'e1', true, 'make it shorter']])
   assert.deepEqual(rt.state.exchangeTurns, {})
 
@@ -410,11 +413,12 @@ test('a request that joins a user-started turn is handed back, not answered with
   emit('b', 'user/message', { content: textBlock('[Message from Chief · you read it during your last task; answer it now]\nmake it shorter'), source: replySource('request', { exchangeId: 'e1', deferred: true }) })
   emit('b', 'assistant/message', assistantText('done, it is shorter'))
   emit('b', 'turn/end', { turn: 2, reason: { kind: 'completed' } })
+  await delay(0) // Automatic reply admission is persisted before delivery.
   assert.deepEqual(delivered.slice(1).map(job => [job.toId, job.role, job.replyTo, job.text]), [['a', 'reply', 'e1', 'done, it is shorter']])
   assert.deepEqual(rt.state.exchangeTurns, { b: [2] })
 })
 
-test('a request that joins a Bot-triggered turn is handed back; the trigger gets the whole turn', () => {
+test('a request that joins a Bot-triggered turn is handed back; the trigger gets the whole turn', async () => {
   const { rt, emit, delivered } = turnsHost()
   emit('b', 'turn/start', { turn: 1 })
   emit('b', 'user/message', { content: textBlock('[Message from Chief]\ntask'), source: replySource('request', { exchangeId: 'e0' }) })
@@ -422,11 +426,12 @@ test('a request that joins a Bot-triggered turn is handed back; the trigger gets
   emit('b', 'user/message', { content: textBlock('[Message from Chief]\nmore'), source: replySource('request', { exchangeId: 'e1' }) })
   emit('b', 'assistant/message', assistantText('second half'))
   emit('b', 'turn/end', { turn: 1, reason: { kind: 'completed' } })
+  await delay(0) // Automatic reply admission is persisted before delivery.
   assert.deepEqual(rt.state.exchangeTurns.b, [1])
-  assert.deepEqual(delivered.map(job => [job.role, job.replyTo ?? job.exchangeId, job.text]), [['reply', 'e0', 'first half\n\nsecond half'], ['request', 'e1', 'more']])
+  assert.deepEqual(delivered.map(job => [job.role, job.replyTo ?? job.exchangeId, job.text]).sort(), [['reply', 'e0', 'first half\n\nsecond half'], ['request', 'e1', 'more']])
 })
 
-test('a joined request in a stopped turn tells its sender, and is not handed back', () => {
+test('a joined request in a stopped turn tells its sender, and is not handed back', async () => {
   const { emit, delivered } = turnsHost()
   emit('b', 'turn/start', { turn: 1 })
   emit('b', 'user/message', { content: textBlock('write the letter'), source: { kind: 'user' } })
@@ -434,19 +439,21 @@ test('a joined request in a stopped turn tells its sender, and is not handed bac
   emit('b', 'user/message', { content: textBlock('[Message from Chief]\nmore'), source: replySource('request', { exchangeId: 'e1' }) })
   emit('b', 'assistant/message', assistantText('second half'))
   emit('b', 'turn/end', { turn: 1, reason: { kind: 'aborted', reason: { kind: 'hook', reason: 'ds-bot/stopped' } } })
+  await delay(0) // Automatic reply admission is persisted before delivery.
   assert.equal(delivered.length, 1)
   assert.equal(delivered[0].toId, 'a')
   assert.equal(delivered[0].replyTo, 'e1')
   assert.match(delivered[0].text, /was stopped before it could answer/)
 })
 
-test('a joined request gets the failure notice when the model call fails', () => {
+test('a joined request gets the failure notice when the model call fails', async () => {
   const { emit, delivered } = turnsHost()
   emit('b', 'turn/start', { turn: 1 })
   emit('b', 'user/message', { content: textBlock('write the letter'), source: { kind: 'user' } })
   emit('b', 'assistant/message', assistantText('first half'))
   emit('b', 'user/message', { content: textBlock('[Message from Chief]\nmore'), source: replySource('request', { exchangeId: 'e1' }) })
   emit('b', 'turn/end', { turn: 1, reason: { kind: 'error', error: { code: 'SERVER', message: 'upstream busy', status: 503 } } })
+  await delay(0) // Automatic reply admission is persisted before delivery.
   assert.equal(delivered.length, 1)
   assert.equal(delivered[0].replyTo, 'e1')
   assert.match(delivered[0].text, /^Writer could not answer your message: its model call failed \(SERVER 503: upstream busy\)/)
@@ -467,7 +474,7 @@ test('a joined request never claims the next turn', () => {
   assert.deepEqual(rt.state.exchangeTurns, {})
 })
 
-test('a schedule-started turn stays visible when a request joins', () => {
+test('a schedule-started turn stays private when a request joins', () => {
   const { rt, emit, delivered } = turnsHost()
   emit('b', 'turn/start', { turn: 1 })
   emit('b', 'user/message', { content: textBlock('routine'), source: { kind: 'schedule' } })
@@ -476,16 +483,18 @@ test('a schedule-started turn stays visible when a request joins', () => {
   emit('b', 'assistant/message', assistantText('after'))
   emit('b', 'turn/end', { turn: 1, reason: { kind: 'completed' } })
   assert.deepEqual(delivered.map(job => [job.role, job.exchangeId, job.text]), [['request', 'e1', 'more']])
-  assert.deepEqual(rt.state.exchangeTurns, {})
+  assert.deepEqual(rt.state.exchangeTurns, {b:[1]})
+  assert.equal(rt.state.turnAudiences.b[1].triggerOrigin,'schedule')
 })
 
-test('a duplicate exchangeId joins no second reply', () => {
+test('a duplicate exchangeId joins no second reply', async () => {
   const { emit, delivered } = turnsHost()
   emit('b', 'turn/start', { turn: 1 })
   emit('b', 'user/message', { content: textBlock('[Message from Chief]\ntask'), source: replySource('request', { exchangeId: 'e0' }) })
   emit('b', 'user/message', { content: textBlock('[Message from Chief]\ntask'), source: replySource('request', { exchangeId: 'e0' }) })
   emit('b', 'assistant/message', assistantText('answer'))
   emit('b', 'turn/end', { turn: 1, reason: { kind: 'completed' } })
+  await delay(0) // Automatic reply admission is persisted before delivery.
   assert.equal(delivered.length, 1)
   assert.equal(delivered[0].replyTo, 'e0')
 })
@@ -1536,7 +1545,7 @@ test('automatic consultation settlement keeps a failed save observable and retri
  rt.attachLong=async()=>assert.fail('consultation results do not depend on attachment availability')
  emit('a','assistant/message',{message:{role:'assistant',content:[{type:'reasoning',text:'PRIVATE_REASONING'},{type:'text',text}]}})
  emit('a','turn/end',{turn:1,reason:{kind:'completed'}})
- await delay(35)
+ for(let n=0;n<200&&agentOf('a').calls.length<2;n++)await delay(5)
  assert.equal(rt.state.localConsultations[id].status,'pending')
  assert.equal(rt.state.localConsultations[id].resultError,'LOCAL_CONSULTATION_RESULT_NOT_SAVED')
  assert.match(agentOf('a').calls[1][1].content[0].text,/NOT confirmed/)
@@ -1593,7 +1602,7 @@ test('a local Bot explicitly publishes only subsequent text, keeps internal repl
  for(const [turn,row] of Object.entries(history))assert.deepEqual(rt.state.turnAudiences.b[turn],row)
  emit('b','assistant/message',{turn:6,message:{role:'assistant',content:[{type:'text',text:'User progress'}]}})
  emit('b','turn/end',{turn:6,reason:{kind:'completed'}})
- await delay(30)
+ for(let n=0;n<200&&!agentOf('a').calls.some(([,msg])=>textOf(msg.content??[]).includes('User progress'));n++)await delay(5)
  assert.ok(agentOf('a').calls.some(([,msg])=>textOf(msg.content??[]).includes('User progress')),'the normal internal result still reaches the requester')
  emit('b','turn/start',{turn:7});emit('b','user/message',{source:{kind:SOURCE_KIND,role:'reply',senderSessionId:'a',exchangeId:'next'},content:[{type:'text',text:'Internal follow-up'}]})
  assert.equal(rt.state.turnAudiences.b[7].audience,'internal')
@@ -1934,4 +1943,128 @@ test('immediate plugin disposal drains the closing output before releasing the s
   await host.ctx.dispose()
   const saved=JSON.parse(readFileSync(join(host.home,'state.json'),'utf8'))
   assert.equal(Object.values(saved.turnOutputs).find(row=>row.sessionId==='b').status,'unsubmitted-text')
+})
+
+test('reply protocol aliases and inherited user work cannot grant publication or automatic reflection',async t=>{
+ const host=await start(team());t.after(host.stop)
+ host.rt.state.works.legacy={audience:'user'}
+ host.emit('b','turn/start',{turn:1})
+ host.emit('b','user/message',{source:{kind:SOURCE_KIND,role:'request',protocol:'reply',audience:'user',rootAudience:'user',work:'legacy',exchangeId:'alias',senderSessionId:'a'},content:[]})
+ host.emit('b','assistant/message',{turn:1,message:{content:textBlock('Private reply alias')}})
+ host.emit('b','turn/end',{turn:1,reason:{kind:'completed'}})
+ await host.rt.flushOutputs();await delay(10)
+ const row=Object.values(host.rt.state.turnOutputs).at(-1)
+ assert.equal(host.rt.state.turnAudiences.b[1].audience,'internal')
+ assert.equal(row.pending.owner,'self');assert.deepEqual(row.visibility,[])
+ assert.equal(host.agentOf('a').calls.length,0)
+ const roster=await host.call('state')
+ assert.equal(roster.value.unpublishedOutputs,undefined)
+ assert.doesNotMatch(JSON.stringify(roster),/Private reply alias|Private final|Unpublished local output/)
+ await assert.rejects(host.rt.readPublishedOutput('b',row.id),{code:'OUTPUT_PRIVATE_DRAFT'})
+})
+
+test('Chief requires an exact-output delegation and cannot inherit access to private pending prose',async t=>{
+ const host=await start(team());t.after(host.stop)
+ const row=await privateClosing(host,'Private owned draft')
+ const chief={agent:{id:'a'}},owner={agent:{id:'b'}}
+ await assert.rejects(host.rt.readTurnOutput(chief,row.id),{code:'OUTPUT_NOT_OWNED'})
+ const grant=await host.rt.delegateTurnOutput(owner,{outputId:row.id,chiefId:'a'})
+ assert.equal(grant.authorizedBy,'b');assert.equal(grant.owner,'chief')
+ host.rt.state.bots.b.private=true
+ assert.equal(host.rt.outputNotices('a').length,0)
+ await assert.rejects(host.rt.readTurnOutput(chief,row.id,grant.authorizationId),{code:'OUTPUT_NOT_OWNED'})
+ host.rt.state.bots.b.private=false
+ await assert.rejects(host.rt.readTurnOutput(chief,row.id,'wrong'),{code:'OUTPUT_NOT_OWNED'})
+ assert.equal((await host.rt.readTurnOutput(chief,row.id,grant.authorizationId)).text,'Private owned draft')
+ const receipt=await host.rt.submitTurnOutput(chief,{outputId:row.id,target:'user',authorizationId:grant.authorizationId})
+ assert.equal(receipt.status,'submitted-user');assert.equal(row.visibility.length,1)
+ assert.equal(row.visibility[0].actor,'a');assert.equal(row.botId,'b')
+ assert.equal((await host.rt.submitTurnOutput(chief,{outputId:row.id,target:'user',authorizationId:grant.authorizationId})).replay,true)
+ delete host.rt.state.bots.b
+ await assert.rejects(host.rt.readTurnOutput(chief,row.id,grant.authorizationId),{code:'OUTPUT_NOT_OWNED'})
+})
+
+test('schedule turns have an internal ledger, while explicit scheduled reports retain a publication route',async t=>{
+ const host=await start(team());t.after(host.stop)
+ host.emit('b','turn/start',{turn:1})
+ host.emit('b','user/message',{source:{kind:'schedule'},content:[]})
+ assert.equal(host.rt.state.turnAudiences.b[1].triggerOrigin,'schedule')
+ assert.equal(host.rt.state.turnAudiences.b[1].audience,'internal')
+ host.emit('b','tool/call',{turn:1,callId:'schedule-publish',name:'publish_turn_to_user',arguments:'{}'})
+ const grant=await host.rt.publishTurnToUser({agent:{id:'b'},callId:'schedule-publish'})
+ assert.equal(grant.status,'enabled')
+ host.emit('b','assistant/message',{turn:1,message:{content:textBlock('Scheduled report')}})
+ host.emit('b','turn/end',{turn:1,reason:{kind:'completed'}})
+ await host.rt.flushOutputs()
+ const row=Object.values(host.rt.state.turnOutputs).at(-1)
+ assert.equal(row.triggerOrigin,'schedule')
+ for(let n=0;n<100&&!row.visibility.some(fact=>fact.confirmed);n++)await delay(5)
+ assert.ok(row.visibility.some(fact=>fact.confirmed&&fact.channel==='local-chat'))
+ assert.equal(row.pending,null)
+})
+
+
+test('a valid request returns its saved output with a receipt and keeps visibility independent',async t=>{
+ const host=await start(team());t.after(host.stop)
+ await host.tool('message_bot',{to:'Writer',message:'Specific request'},'a')
+ const source=host.agentOf('b').calls.at(-1)[1].source
+ host.emit('b','turn/start',{turn:1});host.emit('b','user/message',{source,content:[]})
+ host.emit('b','assistant/message',{turn:1,message:{content:textBlock('Actual task result')}})
+ host.emit('b','turn/end',{turn:1,reason:{kind:'completed'}})
+ const row=Object.values(host.rt.state.turnOutputs).at(-1)
+ for(let n=0;n<200&&!row.deliveries.some(route=>route.confirmed);n++)await delay(5)
+ assert.ok(row.deliveries.some(route=>route.confirmed&&route.exchangeId))
+ assert.equal(row.pending,null);assert.equal(row.visibility.length,0)
+ await assert.rejects(host.rt.declineTurnOutput({agent:{id:'b'}},row.id),{code:'OUTPUT_ALREADY_SUBMITTED'})
+ assert.match(textOf(host.agentOf('a').calls.at(-1)[1].content),/Actual task result/)
+ const result=await host.rt.submitTurnOutput({agent:{id:'b'}},{outputId:row.id,target:'user'})
+ assert.equal(result.status,'submitted-user')
+ assert.ok(row.visibility.some(fact=>fact.confirmed));assert.ok(row.deliveries.some(route=>route.confirmed))
+})
+
+
+test('private output delegation needs native approval and preserves its owner on denial or failed saving',async t=>{
+ const host=await start(team());t.after(host.stop)
+ const row=await privateClosing(host,'Owner-only secret');host.rt.state.bots.b.private=true
+ const exec={agent:host.agentOf('b'),callId:'delegate-private'}
+ await assert.rejects(host.rt.delegateTurnOutput(exec,{outputId:row.id,chiefId:'a'}),/approval/)
+ assert.equal(row.pending.owner,'self');assert.equal(row.delegation,undefined)
+ let approvals=0;const get=host.ctx.get
+ host.ctx.get=name=>name==='approval'?{request:async()=>{approvals++;return 'allowed-once'}}:get(name)
+ const save=host.rt.save;host.rt.save=async()=>{throw new Error('disk failed')}
+ await assert.rejects(host.rt.delegateTurnOutput(exec,{outputId:row.id,chiefId:'a'}),/disk failed/)
+ assert.equal(row.pending.owner,'self');assert.equal(row.delegation,undefined)
+ host.rt.save=save
+ const grant=await host.rt.delegateTurnOutput(exec,{outputId:row.id,chiefId:'a'})
+ assert.equal(approvals,2);assert.equal(grant.privateApproved,true)
+ assert.equal((await host.rt.readTurnOutput({agent:host.agentOf('a')},row.id,grant.authorizationId)).text,'Owner-only secret')
+})
+
+
+test('an uncertain post-send output receipt remains privately actionable without resending',async t=>{
+ const host=await start(team());t.after(host.stop)
+ const row=await privateClosing(host,'Receipt uncertainty test')
+ let sends=0
+ host.rt.teamTools.find(tool=>tool.name==='message_bot').execute=async()=>{sends++;return 'Delivered to Chief.'}
+ const save=host.rt.save
+ host.rt.save=async options=>{if(row.deliveries.some(route=>route.confirmed))throw new Error('receipt disk error');return save(options)}
+ await assert.rejects(host.rt.submitTurnOutput({agent:{id:'b'}},{outputId:row.id,target:'bot',botId:'a'}),/receipt disk error/)
+ host.rt.save=save
+ assert.equal(row.pending.owner,'self');assert.equal(row.pending.reason,'delivery-unknown')
+ await assert.rejects(host.rt.submitTurnOutput({agent:{id:'b'}},{outputId:row.id,target:'bot',botId:'a'}),{code:'OUTPUT_DELIVERY_UNKNOWN'})
+ assert.equal(sends,1)
+ host.emit('b','turn/start',{turn:2});host.emit('b','user/message',{source:{kind:'user'},content:[]})
+ assert.match(host.rt.outputNoticePrompt('b'),/submit_turn_output/)
+})
+
+
+test('pending notices offer at most five owned IDs and never embed private prose or wake a Bot',async t=>{
+ const host=await start(team());t.after(host.stop)
+ for(let turn=1;turn<=6;turn++)await privateClosing(host,`UNTRUSTED_PRIVATE_BODY_${turn}`,turn)
+ host.emit('b','turn/start',{turn:7});host.emit('b','user/message',{source:{kind:'user'},content:[]})
+ const prompt=host.rt.outputNoticePrompt('b')
+ assert.equal((prompt.match(/"outputId":/g)??[]).length,5)
+ assert.doesNotMatch(prompt,/UNTRUSTED_PRIVATE_BODY_/)
+ assert.equal(host.agentOf('b').calls.length,0)
+ assert.equal(host.rt.outputNoticePrompt('a'),'')
 })

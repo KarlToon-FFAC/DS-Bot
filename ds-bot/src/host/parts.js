@@ -1331,6 +1331,7 @@ export function install(rt) {
       }
       if (event.type === 'assistant/message') {
         const eventTurn = event.data?.turn ?? turn, routing = state.turnAudiences?.[partId]?.[eventTurn]
+        if(!routing&&state.protectedOutputTurns?.[partId]!==undefined&&eventTurn>=state.protectedOutputTurns[partId])continue
         if (routing?.explicit === true ? rt.pendingUserPublications?.has(`${partId}:${eventTurn}`) || !explicitUserOutput(routing, event.seq) : (hidden.has(eventTurn) && routing?.userOutputThroughSeq===undefined || outputRouting(routing,event.seq)?.audience==='internal')) continue
         // One entry per text block: the chat shows each block in a bubble of its own.
         const content = Array.isArray(event.data?.message?.content) ? event.data.message.content : []
