@@ -42,6 +42,9 @@ module.exports = __toCommonJS(index_exports);
 // src/client/i18n.js
 var NAMESPACE = "ds-bot";
 var ZH = {
+  "The remote execution Session could not be opened. Check bindingFailures for the stage and hostCode; do not reset conversation data.": "远程执行会话无法打开。请查看 bindingFailures 中的阶段和宿主错误码，不要重置聊天数据。",
+  "A previously used remote Session is missing. Its admission outcome cannot be proven; it was not recreated or replayed.": "已使用过的远程执行会话缺失，无法确认历史任务的执行状态，因此没有自动重建或重放。",
+  "The binding has execution evidence or changed during recovery. Automatic recreation was refused to avoid duplicate work.": "会话绑定存在执行记录或在恢复过程中发生变化，为避免重复执行，未自动重建。",
   "Unpublished output reminders": "未发布正文提醒",
   "Once per conversation": "每个会话一次",
   "Turn": "回合",
@@ -12620,6 +12623,9 @@ var communicationDescriptions = {
   REQUEST_TIMEOUT: "The Hub response timed out. Check current status before retrying the same operation; it may already be committed.",
   STORAGE_UNAVAILABLE: "The Hub temporarily cannot store this operation. Its original request ID is retained.",
   BACKPRESSURE: "The Hub is busy. Its original request ID is retained.",
+  COMMUNICATION_SESSION_UNAVAILABLE: "The remote execution Session could not be opened. Check bindingFailures for the stage and hostCode; do not reset conversation data.",
+  COMMUNICATION_SESSION_HISTORY_UNAVAILABLE: "A previously used remote Session is missing. Its admission outcome cannot be proven; it was not recreated or replayed.",
+  COMMUNICATION_BINDING_REPAIR_UNSAFE: "The binding has execution evidence or changed during recovery. Automatic recreation was refused to avoid duplicate work.",
   COMMUNICATION_UNAVAILABLE: "Remote communication is not ready. Wait for connection status to update without repeating the operation.",
   COMMUNICATION_NOT_CONFIGURED: "This profile has no active Hub configuration. Check the approved device profile.",
   CREDENTIAL_UNAVAILABLE: "The instance credential provider is unavailable. Restart with the intended private credential source; do not send its value.",
@@ -12776,6 +12782,9 @@ var knownCodes = /* @__PURE__ */ new Set([
   "COMMUNICATION_PRESET_CONFLICT",
   "COMMUNICATION_PRESET_UNAVAILABLE",
   "COMMUNICATION_READ_ONLY",
+  "COMMUNICATION_SESSION_UNAVAILABLE",
+  "COMMUNICATION_SESSION_HISTORY_UNAVAILABLE",
+  "COMMUNICATION_BINDING_REPAIR_UNSAFE",
   "COMMUNICATION_SESSION_MIGRATION_REQUIRED",
   "COMMUNICATION_STOPPED",
   "COMMUNICATION_STORAGE_UNAVAILABLE",
@@ -25049,7 +25058,7 @@ function CommunicationActivity({ state, member, events, outbox, operations, oper
     )),
     events.filter((event) => event.type === "bot.input.read").map((event) => (0, import_react79.createElement)("p", { key: event.eventId, role: "status" }, `${labels.get(event.principalId) ?? t("Participant")}: ${t("Update read into task")}`)),
     stops.map((item) => (0, import_react79.createElement)("p", { key: item.messageId, role: "status", "data-causal-stop": item.messageId }, t("Bot collaboration stopped at the safety limit. Send a new Human message to continue."))),
-    failures.map((item) => (0, import_react79.createElement)("p", { key: item.bindingId, role: "status" }, t("Bot delivery needs reconciliation"), ": ", ["REPLY_DECISION_REQUIRED", "REPLY_SEND_FAILED"].includes(item.code) ? friendly({ code: item.code }) : item.code)),
+    failures.map((item) => (0, import_react79.createElement)("p", { key: item.bindingId, role: "status" }, t("Bot delivery needs reconciliation"), ": ", ["REPLY_DECISION_REQUIRED", "REPLY_SEND_FAILED"].includes(item.code) ? friendly({ code: item.code }) : [item.code, item.stage, item.hostCode, item.errorClass, item.location].filter(Boolean).join(" · "))),
     exports.map((item) => (0, import_react79.createElement)("p", { key: item.messageId, role: "status" }, t("Send failed"), ": ", item.code)),
     !error && !state?.error && !pollError && !pendingAttempt && !operationPending && !operations.length && !outbox.some((item) => item.state !== "accepted") && !stops.length && !failures.length && !exports.length ? notice("No activity needs attention.") : null
   );

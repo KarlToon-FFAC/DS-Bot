@@ -5,6 +5,10 @@
 export const NAMESPACE = 'ds-bot'
 
 const ZH = {
+  'The remote execution Session could not be opened. Check bindingFailures for the stage and hostCode; do not reset conversation data.':'远程执行会话无法打开。请查看 bindingFailures 中的阶段和宿主错误码，不要重置聊天数据。',
+  'A previously used remote Session is missing. Its admission outcome cannot be proven; it was not recreated or replayed.':'已使用过的远程执行会话缺失，无法确认历史任务的执行状态，因此没有自动重建或重放。',
+  'The binding has execution evidence or changed during recovery. Automatic recreation was refused to avoid duplicate work.':'会话绑定存在执行记录或在恢复过程中发生变化，为避免重复执行，未自动重建。',
+
   'Unpublished output reminders':'未发布正文提醒',
   'Once per conversation':'每个会话一次',
   'Turn':'回合',

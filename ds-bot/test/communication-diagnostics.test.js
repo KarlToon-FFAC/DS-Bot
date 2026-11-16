@@ -325,3 +325,11 @@ test('Hub-scoped memory and history errors explain their local alternatives with
     assert.notEqual(result.error.code, 'INVALID_REQUEST', 'the underlying remote error remains visible')
   }
 })
+
+test('ready transport does not hide Bot-specific binding failure diagnostics or expose raw exceptions',async()=>{
+ const {rt,state}=fixture({enabled:true,publishedBotIds:['local-bot']})
+ state.runtime={transport:{connected:true,diagnostics:()=>({state:'ready'})},everReconciled:true,bots:new Map([['local-bot',{}]]),errors:new Map([['bad','COMMUNICATION_SESSION_UNAVAILABLE']]),bindingDiagnostics:new Map([['bad',{stage:'export-resolve',hostCode:'session/not-found',errorClass:'RemoteError',sessionId:'session-missing'}]]),queue:{bindings:()=>[{id:'bad',localBotRef:'local-bot',conversationId:'group',recipientPrincipalId:'bot:a:worker'}]}}
+ const diagnostic=await diagnoseCommunication(rt,state,{sessionId:'own-chat'})
+ assert.equal(diagnostic.connected,true);assert.equal(diagnostic.error,null)
+ assert.deepEqual(diagnostic.bindingFailures,[{bindingId:'bad',conversationId:'group',principalId:'bot:a:worker',code:'COMMUNICATION_SESSION_UNAVAILABLE',stage:'export-resolve',hostCode:'session/not-found',errorClass:'RemoteError',sessionId:'session-missing'}])
+})

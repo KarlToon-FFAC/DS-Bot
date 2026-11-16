@@ -136,6 +136,30 @@ export class CommunicationQueue {
       return this.bindings().find(binding => binding.conversationId === conversationId && binding.recipientPrincipalId === principalId && binding.membershipEpoch === epoch)
     })
   }
+  unusedBinding(bindingId) {
+    const binding=this.db.prepare('SELECT * FROM bindings WHERE id=?').get(bindingId)
+    if(!binding || binding.context_seq!==0)return false
+    if(this.db.prepare("SELECT 1 FROM inbox WHERE conversation_id=? AND principal_id=? AND epoch=? AND ai=1 AND (ai_state!='pending' OR mapping IS NOT NULL OR applied!=0) LIMIT 1").get(binding.conversation_id,binding.principal_id,binding.epoch))return false
+    for(const table of ['exports','outbound_decisions','completion_checks','export_cursors','reply_targets','tool_reply_completions']){
+      if(this.db.prepare(`SELECT 1 FROM ${table} WHERE binding_id=? LIMIT 1`).get(bindingId))return false
+    }
+    return true
+  }
+  repairUnusedBinding(bindingId,expectedSessions,missing) {
+    return this.transaction(()=>{
+      const row=this.db.prepare('SELECT sessions FROM bindings WHERE id=?').get(bindingId)
+      requireValue(row && row.sessions===JSON.stringify(expectedSessions) && this.unusedBinding(bindingId),'COMMUNICATION_BINDING_REPAIR_UNSAFE')
+      requireValue(missing.length>0 && missing.every(id=>expectedSessions.includes(id)),'COMMUNICATION_BINDING_REPAIR_UNSAFE')
+      const sessions=expectedSessions.filter(id=>!missing.includes(id))
+      this.db.prepare('UPDATE bindings SET sessions=? WHERE id=?').run(JSON.stringify(sessions),bindingId)
+      const key=`binding-repair:${bindingId}`
+      const previous=this.db.prepare('SELECT value FROM metadata WHERE key=?').get(key)
+      const history=previous?JSON.parse(previous.value):[]
+      history.push({at:new Date().toISOString(),missingSessionIds:missing,proof:'unused-binding-session-not-found'})
+      this.db.prepare('INSERT INTO metadata VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(key,JSON.stringify(history))
+      return sessions
+    })
+  }
   bindings() {
     return this.db.prepare('SELECT * FROM bindings').all().map(row => ({ id: row.id, conversationId: row.conversation_id,
       recipientPrincipalId: row.principal_id, membershipEpoch: row.epoch, localBotRef: row.bot_ref,

@@ -38,6 +38,8 @@ V0.3.0 新增 **设置 → 通用 → 启用远程 Hub**。新安装默认关闭
 
 **V0.4.1** 首项改动修复正文路由：Bot 回报触发的回合默认内部可见；用户回合中的普通 Bot 请求排队处理；未发布的收尾正文会在输入框上方提示。可通过 `read_turn_output` / `submit_turn_output` 按原文和稳定回执提交，或通过 `decline_turn_output` 明确保留为私密内容。开启发布权限不等于已经送达。参见[路由与网关对接约定](docs/plans/federated-communication/v041-output-routing.md)。
 
+V0.4.1 另修复了执行 Session 缺失时，尚未使用的远程绑定导致收件永久 pending 的问题；恢复保留原消息和 Bot 身份，已有执行记录或结果不明的消息不会自动重放。活动页和 `communication_diagnose.bindingFailures` 会单独显示失败阶段及宿主原因，参见[复现与恢复边界](docs/plans/federated-communication/v041-binding-recovery.md)。
+
 **V0.4.0** 中，本地与远程统一使用 `list_capabilities`、`read_capability`、`save_capability`、`attach_capability`、`detach_capability`、`delete_capability`。未发布的本地 Bot 无需连接 Hub 即可维护技能；旧技能工具名仅保留兼容转接，不再展示给模型。记忆已共用 `recall`/`remember`/`forget`。带来源证据的远程关系记录与按成员身份授权的历史保留独立工具；文件型 Skill 与 AGENTS.md 继续使用原生文件/Skill 工具。
 
 本地 Bot 请求触发的回合可先调用 `publish_turn_to_user({})`，成功保存标记后再写给用户的汇报；该回合随后产生的普通正文进入用户聊天和规范镜像 feed。此前正文、思考和后续回合不变。远程回合及带远程来源的本地咨询不允许使用；原请求方仍照常收到内部答复。

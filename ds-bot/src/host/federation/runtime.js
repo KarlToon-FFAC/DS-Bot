@@ -1,3 +1,4 @@
+import {bindingFailure,resolveBindingAgent,recoverUnusedBinding,safeBindingFailure} from './binding-recovery.js'
 import {LEGACY_SKILL_TOOLS} from '../constants.js'
 import {awaitingLocalConsultation} from './local-consultations.js'
 import {processLocalConsultations} from './consultation-recovery.js'
@@ -805,7 +806,7 @@ export class CommunicationRuntime {
       invites: this.queue.invites(), outbox: this.queue.outboxFor(this.human.principalId).map(item => ({ ...item, deliveries: this.deliveryStates.get(item.id) ?? [] })),
       errors: [...this.errors].flatMap(([bindingId,code]) => {
         const binding = this.queue.bindings().find(item => item.id === bindingId)
-        return binding && memberships.some(member => member.conversationId === binding.conversationId) ? [{ bindingId, conversationId: binding.conversationId, principalId: binding.recipientPrincipalId, code }] : []
+        return binding && memberships.some(member => member.conversationId === binding.conversationId) ? [{ bindingId, conversationId: binding.conversationId, principalId: binding.recipientPrincipalId, code, ...(this.bindingDiagnostics?.get(bindingId)??{}) }] : []
       }),
       exportFailures: this.queue.exportFailures().filter(item => memberships.some(member => member.conversationId === item.conversationId)) }
   }
@@ -851,11 +852,16 @@ export class CommunicationRuntime {
     if(error)fail(error)
     const cwd = await botWorkDirectory(this.rt, bot)
     if (binding.sessionIds.length && !fresh) {
-      const resolved = await this.ctx.sessionController.resolveAgent(binding.sessionIds.at(-1))
-      if ('error' in resolved) fail('SESSION_UNAVAILABLE')
-      if (!hasCommunicationPreset(this.ctx.get('agentPresets'), resolved.agent) || resolved.agent.session.header?.cwd !== cwd) {
-        const { events } = await this.ctx.sessionController.inspect(resolved.agent.id, AbortSignal.timeout(15000))
-        if (!legacySessionSettled(this.queue, binding, resolved.agent, events)) fail('COMMUNICATION_SESSION_MIGRATION_REQUIRED')
+      let existing
+      try{existing=await resolveBindingAgent(this,binding.sessionIds.at(-1),'ensure-session')}catch(error){
+        if(error.hostCode!=='session/not-found')throw error
+        await recoverUnusedBinding(this,binding)
+        if(binding.sessionIds.length)existing=await resolveBindingAgent(this,binding.sessionIds.at(-1),'ensure-session')
+        else fresh=true
+      }
+      if(existing && (!hasCommunicationPreset(this.ctx.get('agentPresets'), existing) || existing.session.header?.cwd !== cwd)) {
+        const { events } = await this.ctx.sessionController.inspect(existing.id, AbortSignal.timeout(15000))
+        if (!legacySessionSettled(this.queue, binding, existing, events)) fail('COMMUNICATION_SESSION_MIGRATION_REQUIRED')
         fresh = true
       }
     }
@@ -866,13 +872,12 @@ export class CommunicationRuntime {
     }
     for (const id of binding.sessionIds) this.owners.set(id, binding)
     const sessionId = binding.sessionIds.at(-1)
-    const resolved = await this.ctx.sessionController.resolveAgent(sessionId)
-    if ('error' in resolved) fail('SESSION_UNAVAILABLE')
+    const resolved = {agent:await resolveBindingAgent(this,sessionId,'prepare-session')}
     if (!hasCommunicationPreset(this.ctx.get('agentPresets'), resolved.agent)) fail('COMMUNICATION_PRESET_UNAVAILABLE')
     this.scope(resolved.agent)
-    await this.syncWorkContext(resolved.agent)
+    try{await this.syncWorkContext(resolved.agent)}catch(error){if(error.code)throw error;throw bindingFailure(error,'work-context',sessionId)}
     const effort = await this.rt.desiredEffort(bot, ref)
-    await this.ctx.sessionController.selectModel({ sessionId, ...splitRef(ref), ...(effort === undefined ? {} : { reasoningEffort: effort }) })
+    try{await this.ctx.sessionController.selectModel({ sessionId, ...splitRef(ref), ...(effort === undefined ? {} : { reasoningEffort: effort }) })}catch(error){if(error.code)throw error;throw bindingFailure(error,'model-selection',sessionId)}
     return resolved.agent
   }
   async needsSegment(agent, bot) {
@@ -1074,8 +1079,7 @@ export class CommunicationRuntime {
     try { this.queue.member(binding.conversationId, binding.recipientPrincipalId, binding.membershipEpoch) } catch { return }
     const safeIds = new Set()
     for (const id of binding.sessionIds) {
-      const resolved = await this.ctx.sessionController.resolveAgent(id)
-      if ('error' in resolved) fail('EXPORT_UNKNOWN')
+      const resolved = {agent:await resolveBindingAgent(this,id,'export-resolve')}
       if (!hasCommunicationPreset(this.ctx.get('agentPresets'), resolved.agent)) {
         const { events } = await this.ctx.sessionController.inspect(id, AbortSignal.timeout(15000))
         if (!legacySessionSettled(this.queue, binding, resolved.agent, events)) fail('COMMUNICATION_SESSION_MIGRATION_REQUIRED')
@@ -1145,13 +1149,28 @@ export class CommunicationRuntime {
       await this.ctx.sessions.flush(agent.session)
     }
   }
+  recordBindingFailure(binding,error,stage){
+    this.errors.set(binding.id,error.code??'INJECTION_UNKNOWN')
+    ;(this.bindingDiagnostics??=new Map()).set(binding.id,safeBindingFailure(error,stage))
+  }
   async process() {
     if (this.closed) return
     if (this.rt.readOnly() !== undefined) fail('COMMUNICATION_READ_ONLY')
     await this.cancelRevoked()
     for (const binding of this.queue.bindings()) {
       if (this.queue?.isRetiredBot?.(binding.recipientPrincipalId)) continue
-      try { await this.processUpdates(binding); await this.export(binding); await this.recoverInterrupted(binding) } catch (error) { this.errors.set(binding.id, error.code ?? 'RECOVERY_UNKNOWN') }
+      try {
+        await this.processUpdates(binding)
+        try{await this.export(binding)}catch(error){
+          if(error.hostCode!=='session/not-found')throw error
+          await recoverUnusedBinding(this,binding)
+          await this.export(binding)
+        }
+        await this.recoverInterrupted(binding)
+      } catch (error) {
+        if(typeof this.recordBindingFailure==='function')this.recordBindingFailure(binding,error,'recovery')
+        else this.errors.set(binding.id,error.code??'RECOVERY_UNKNOWN')
+      }
     }
     const seen = new Set(), injectionFailed = new Set()
     for (const delivery of this.queue.pendingAi()) {
@@ -1161,7 +1180,7 @@ export class CommunicationRuntime {
       seen.add(key)
       try { await this.consume(delivery) } catch (error) {
         const binding = this.queue.bindings().find(item => item.conversationId === delivery.conversationId && item.recipientPrincipalId === delivery.recipientPrincipalId && item.membershipEpoch === delivery.membershipEpoch)
-          if (binding) { this.errors.set(binding.id, error.code ?? 'INJECTION_UNKNOWN'); injectionFailed.add(binding.id) }
+          if (binding) { (typeof this.recordBindingFailure==='function'?this.recordBindingFailure(binding,error,'injection'):this.errors.set(binding.id,error.code??'INJECTION_UNKNOWN')); injectionFailed.add(binding.id) }
         else this.lastError = error.code ?? 'INJECTION_UNKNOWN'
       }
     }
@@ -1169,10 +1188,10 @@ export class CommunicationRuntime {
       if (this.queue?.isRetiredBot?.(binding.recipientPrincipalId)) continue
       try {
         await this.export(binding)
-          if (!injectionFailed.has(binding.id) && !['INPUT_CANCELED','COMMUNICATION_SESSION_MIGRATION_REQUIRED','COMMUNICATION_INPUT_SOURCE_UNKNOWN','REPLY_DECISION_REQUIRED','REPLY_SEND_FAILED'].includes(this.errors.get(binding.id))) this.errors.delete(binding.id)
+          if (!injectionFailed.has(binding.id) && !['INPUT_CANCELED','COMMUNICATION_SESSION_MIGRATION_REQUIRED','COMMUNICATION_INPUT_SOURCE_UNKNOWN','REPLY_DECISION_REQUIRED','REPLY_SEND_FAILED'].includes(this.errors.get(binding.id))) {this.errors.delete(binding.id);this.bindingDiagnostics?.delete(binding.id)}
         const failed = this.queue.exportFailures().find(item => item.bindingId === binding.id)
         if (failed) this.errors.set(binding.id, failed.code ?? 'EXPORT_REJECTED')
-      } catch (error) { this.errors.set(binding.id, error.code ?? 'EXPORT_UNKNOWN') }
+      } catch (error) {if(typeof this.recordBindingFailure==='function')this.recordBindingFailure(binding,error,'export');else this.errors.set(binding.id,error.code??'EXPORT_UNKNOWN')}
     }
     await processLocalConsultations(this)
     if (this.lastError === 'BACKPRESSURE' && this.queue.pendingAi().length < this.queue.maxPending) this.lastError = null

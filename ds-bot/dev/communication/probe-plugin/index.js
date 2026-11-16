@@ -146,6 +146,17 @@ export function apply(ctx) {
       else throw new Error('Unknown checkpoint')
       return { armed: true }
     }
+    if(body.operation==='production-missing-session'){
+      const db=new DatabaseSync(join(root,'bot/communication.sqlite'))
+      try{
+        const member=db.prepare('SELECT epoch FROM memberships WHERE conversation_id=? AND principal_id=? AND active=1').get(body.conversationId,body.principalId)
+        if(!member)throw new Error('Owned fixture needs current Bot membership')
+        if(db.prepare('SELECT 1 FROM bindings WHERE conversation_id=? AND principal_id=?').get(body.conversationId,body.principalId))throw new Error('Owned fixture requires a new conversation binding')
+        const bindingId=randomUUID(),sessionId=`session-${randomUUID()}`
+        db.prepare('INSERT INTO bindings(id,conversation_id,principal_id,epoch,bot_ref,sessions) VALUES (?,?,?,?,?,?)').run(bindingId,body.conversationId,body.principalId,member.epoch,body.localBotId,JSON.stringify([sessionId]))
+        return {bindingId,sessionId}
+      }finally{db.close()}
+    }
     if (body.operation === 'production-state') {
       const db = new DatabaseSync(join(root, 'bot/communication.sqlite'), { readOnly: true })
       try {

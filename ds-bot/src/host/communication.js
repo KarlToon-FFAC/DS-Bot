@@ -1,3 +1,4 @@
+import {safeBindingFailure} from './federation/binding-recovery.js'
 import {localChiefs,reportToLocalChief} from './federation/local-reports.js'
 import {localTeammates,consultLocalBot,validateConsultationInput,readLocalConsultation} from './federation/local-consultations.js'
 import {ownRemoteHistory} from './federation/own-context.js'
@@ -115,6 +116,7 @@ export function install(rt) {
     }
     catch (error) {
       const diagnostic = communicationError(error, { bot: rt.botOf?.(rt.chatOwners?.get(exec.agent?.id)), reloadRequired: communicationReloadRequired(rt, appliedSettings) })
+      if(diagnostic.code==='COMMUNICATION_UNAVAILABLE')diagnostic.hostFailure={...safeBindingFailure(error,'tool-operation'),...(typeof exec.name==='string'&&/^[a-z_]{1,80}$/.test(exec.name)?{operation:exec.name}:{})}
       const hint = ['read_communication_relationships','remember_communication_relationship'].includes(exec.name)
         ? 'This tool requires an authorized remote conversation and exact source evidence. For ordinary Bot memory use recall/remember/forget; for Skills use list_capabilities/read_capability/save_capability. Local memory and Skills do not require Hub publication.'
         : exec.name === 'read_own_remote_history' ? 'This tool reads Hub-scoped history with participant and membership checks. For your local conversation use read_own_chat. Local history, memory and Skills do not require Hub publication.' : undefined
