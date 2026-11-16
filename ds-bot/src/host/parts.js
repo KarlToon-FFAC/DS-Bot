@@ -1331,7 +1331,7 @@ export function install(rt) {
       }
       if (event.type === 'assistant/message') {
         const eventTurn = event.data?.turn ?? turn, routing = state.turnAudiences?.[partId]?.[eventTurn]
-        if (routing?.explicit === true ? rt.pendingUserPublications?.has(`${partId}:${eventTurn}`) || !explicitUserOutput(routing, event.seq) : hidden.has(eventTurn)) continue
+        if (routing?.explicit === true ? rt.pendingUserPublications?.has(`${partId}:${eventTurn}`) || !explicitUserOutput(routing, event.seq) : (hidden.has(eventTurn) && routing?.userOutputThroughSeq===undefined || outputRouting(routing,event.seq)?.audience==='internal')) continue
         // One entry per text block: the chat shows each block in a bubble of its own.
         const content = Array.isArray(event.data?.message?.content) ? event.data.message.content : []
         for (const block of content) {
@@ -1472,7 +1472,9 @@ export function install(rt) {
     if (parts.length === 0) throw Object.assign(new Error('Unknown Bot'), { code: 'bot/not-found' })
     const index = Number.isInteger(cursor?.part) ? cursor.part : parts.length - 1
     if (index < 0 || index >= parts.length) return { sessionId: parts.at(-1).sessionId, items: [], cursor: null }
-    return { sessionId: parts.at(-1).sessionId, ...(await partPage(parts, index, cursor)) }
+    const page=await partPage(parts,index,cursor)
+    if(cursor===undefined) page.items=[...page.items,...(rt.recoveredOutputs?.(botId)??[])].sort((a,b)=>(a.time??0)-(b.time??0))
+    return {sessionId:parts.at(-1).sessionId,...page}
   }
 
   Object.assign(rt, { clock, partsOf, historyEntry, partLines, noteText, earlierPage, chatPage, displayItems, followFolder, heldBack, switchJobs: () => switches.values() })

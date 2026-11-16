@@ -1,3 +1,4 @@
+import {userOutputDecision} from '../shared/user-output-policy.js'
 import {explicitUserStream} from '../shared/turn-audience.js'
 // The live feed: a Server-Sent Events stream of what changes, for a window that draws
 // the team itself (the desktop app) instead of polling.
@@ -34,6 +35,12 @@ export function install(rt) {
     for (const controller of clients) send(controller, chunk)
   }
 
+  rt.publishRecoveredOutput=(botId,sessionId,item,outputId)=>{
+    publish('message',{botId,sessionId,item})
+    const chunk=encoder.encode(`event: user-output\ndata: ${JSON.stringify({botId,sessionId,outputId,item})}\n\n`)
+    for(const [controller,target] of userClients)if(target===botId)send(controller,chunk)
+  }
+
   rt.stateSaved = () => {
     if (clients.size > 0) publish('revision', { revision: state.revision })
   }
@@ -56,7 +63,7 @@ export function install(rt) {
     if (botId === undefined) return
     for (const [index, item] of rt.displayItems(session.id, [event]).entries()) {
       publish('message', { botId, sessionId: session.id, item })
-      if (item.kind === 'bot' && item.routing?.audience === 'user' && Number.isSafeInteger(event.seq)) {
+      if (item.kind === 'bot' && userOutputDecision(item).allow && Number.isSafeInteger(event.seq)) {
         const chunk = encoder.encode(`event: user-output\ndata: ${JSON.stringify({botId,sessionId:session.id,outputId:`${session.id}:${event.seq}:${index}`,item})}\n\n`)
         for (const [controller, target] of userClients) if (target === botId) send(controller, chunk)
       }
@@ -69,6 +76,7 @@ export function install(rt) {
   const writing = new Map()
   const canStream = (id, turn) => {
     const routing = state.turnAudiences?.[id]?.[turn]
+    if(routing?.explicit!==true && routing?.userOutputThroughSeq!==undefined)return false
     return routing?.explicit === true ? !rt.pendingUserPublications?.has(`${id}:${turn}`) && explicitUserStream(routing)
       : !(state.exchangeTurns[id] ?? []).includes(turn) && routing?.audience !== 'internal'
   }

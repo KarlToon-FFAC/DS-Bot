@@ -29,9 +29,10 @@ export const failureLine = failure => `${failure.code}${failure.status ? ` ${fai
 // The reply a sender waits for, sent the way a finished turn sends it: the work it was
 // for closes, and the answer goes up to the Bot that asked. `id` is the Session the
 // answer comes from; `source` is the trigger the turn answered.
-export function answerSender(rt, id, source, text, long) {
+export function answerSender(rt, id, source, text, long, routingTurn) {
   if (source.remoteSource?.consultationId) {
-    void automaticConsultationReply(rt,id,source,text)
+    const delivery = automaticConsultationReply(rt,id,source,text)
+    rt.noteOutputRoute?.(id, routingTurn, text, 'delivered-auto', delivery.then(result=>{if(result?.status!=='completed')throw Object.assign(new Error('Consultation not confirmed'),{code:'LOCAL_CONSULTATION_RESULT_NOT_SAVED'})}), {consultationId:source.remoteSource.consultationId})
     return
   }
   const back = rt.roomOf(source.senderRoomId)?.sessions?.[source.senderSessionId]
@@ -39,7 +40,7 @@ export function answerSender(rt, id, source, text, long) {
   const rootAudience = rt.state.works?.[source.exchangeId]?.audience
   const work = rt.closeWork?.(source.exchangeId, name, text)
   const exchangeId = randomUUID()
-  void rt.deliver({
+  const delivery = rt.deliver({
     fromId: rt.selfOf(id),
     toId: source.senderSessionId,
     ...(back ? { sessionId: back } : {}),
@@ -51,8 +52,11 @@ export function answerSender(rt, id, source, text, long) {
     replyTo: source.exchangeId,
     exchangeId,
     ...(work ? { work } : {}),
-  }).catch((error) => {
+  })
+  rt.noteOutputRoute?.(id, routingTurn, text, 'delivered-auto', delivery, {botId:source.senderSessionId})
+  void delivery.catch((error) => {
     rt.warn('ds-bot: reply delivery failed: %s', error)
+    if(error?.deliveryUncertain===true)return
     // The reply never reached the asker: its note goes — the notice below carries
     // what it answered — the result kept with the work is marked, and the failure
     // reaches the asker the way the reply would have, so the work goes on and its
@@ -345,7 +349,7 @@ export function install(rt) {
   // A request whose audience is the user is answered in the recipient's own chat: that
   // turn stays visible there and its reply is not routed back to the sender.
   const answersUser = info => info.role === 'request' && info.audience === 'user'
-  const userAudience = info => !info.remoteSource && info.role!=='federation-report' && (answersUser(info) || info.protocol === 'reply' && info.rootAudience === 'user' || info.work && state.works?.[info.work]?.audience === 'user')
+  const userAudience = info => !info.remoteSource && info.role!=='federation-report' && (answersUser(info) || info.role !== 'reply' && info.work && state.works?.[info.work]?.audience === 'user')
   // Roles whose turn owes the sender a reply: a 'stopped' notice asks the Bot to
   // acknowledge, exactly like a request.
   const expectsReply = info => info.role === 'request' || info.role === 'stopped'
@@ -433,11 +437,15 @@ export function install(rt) {
       return call
     }
     const call = check(), prior = state.turnAudiences?.[id]?.[turn]
-    if (prior?.audience === 'user' && prior.explicit !== true) return {ok: true, status: 'already_user', sessionId: id, turn, published: false, message: 'This turn already uses its normal user-visible route. No routing was changed.'}
-    if (prior?.triggerOrigin !== 'local-bot' || ['room','handoff'].includes(entry.info?.role)) fail('TURN_PUBLICATION_LOCAL_CHAT_ONLY', 'Only a local Bot-triggered report in your own chat can be marked. Group relay and handoff housekeeping cannot be published this way.')
-    if (entry.userPublication?.turn === turn) return entry.userPublication.promise
-    const grant = {...prior, audience: 'user', baseAudience: 'internal', explicit: true,
+    if (prior?.audience === 'user' && prior.explicit !== true && prior.userOutputThroughSeq === undefined) return {ok: true, status: 'already_user', sessionId: id, turn, published: false, message: 'This turn already uses its normal user-visible route. No routing was changed.'}
+    if (!(prior?.triggerOrigin === 'local-bot' || prior?.triggerOrigin === 'user' && prior.userOutputThroughSeq !== undefined && prior.interruptedBy==='local-bot') || ['room','handoff'].includes(entry.info?.role)) fail('TURN_PUBLICATION_LOCAL_CHAT_ONLY', 'Only a local Bot-triggered report in your own chat can be marked. Group relay and handoff housekeeping cannot be published this way.')
+    if(entry.userPublication?.turn===turn && prior?.userOutputThroughSeq===undefined)return entry.userPublication.promise
+    if(prior?.explicitCallId===exec.callId && prior.userOutputThroughSeq!==undefined)fail('TURN_PUBLICATION_INTERRUPTED','This grant was closed by new input. Make a new explicit publication call for new user-facing text.')
+    const grant = {...prior, audience: 'user', triggerOrigin:'local-bot', baseAudience: 'internal', explicit: true,
       userOutputFromSeq: Math.max(call.seq, entry.lastSeq ?? call.seq) + 1, explicitCallId: exec.callId}
+    if(prior?.explicit!==true && prior?.userOutputThroughSeq!==undefined)grant.userOutputBeforeSeq=prior.userOutputThroughSeq
+    else if(prior?.explicit===true && prior?.userOutputThroughSeq!==undefined)grant.priorUserOutputRanges=[...(prior.priorUserOutputRanges??[]),[prior.userOutputFromSeq,prior.userOutputThroughSeq]]
+    delete grant.userOutputThroughSeq
     const publicationKey = `${id}:${turn}`
     ;(rt.pendingUserPublications ??= new Set()).add(publicationKey)
     const publication = {turn, promise: undefined}
@@ -746,14 +754,15 @@ export function install(rt) {
         // still claims it as today, a later one only joins it.
         if (entry.turn !== undefined && (source?.kind === 'user' || source?.kind === REPLY_KIND)) {
           const ledger = (state.turnAudiences ??= {})[id] ??= {}
-          ledger[entry.turn] = ledger[entry.turn]?.audience === 'internal' || ledger[entry.turn]?.explicit === true ? {...ledger[entry.turn],mixed:true} : {audience:'user',triggerOrigin:'user',protocol:'answer'}
+          ledger[entry.turn] = ledger[entry.turn]?.audience === 'internal' || ledger[entry.turn]?.explicit === true || ledger[entry.turn]?.userOutputThroughSeq!==undefined ? {...ledger[entry.turn],mixed:true} : {audience:'user',triggerOrigin:'user',protocol:'answer'}
           void rt.save().catch(() => {})
         }
         const opened = entry.opened === true
         if (entry.turn !== undefined && opened && source?.kind === SOURCE_KIND && !bare(source) && !userAudience(source)) {
+          rt.closeUserOutputInterval?.(id, entry.turn, event.seq, source.remoteSource ? 'remote-bot' : 'local-bot')
+          if(rt.closeUserOutputInterval)markExchangeTurn(id,entry.turn)
           const ledger = (state.turnAudiences ??= {})[id] ??= {}
-          ledger[entry.turn] = ledger[entry.turn]?.explicit === true ? {...ledger[entry.turn], mixed:true}
-            : {...ledger[entry.turn],audience:'internal',triggerOrigin:source.remoteSource||ledger[entry.turn]?.triggerOrigin==='remote-bot'?'remote-bot':'local-bot',mixed:true}
+          ledger[entry.turn] = {...ledger[entry.turn], mixed:true}
           void rt.save().catch(() => {})
         }
         if (entry.turn !== undefined && !bare(source)
@@ -913,6 +922,7 @@ export function install(rt) {
         if (steerCut) {
           entry.carry = { info: entry.info, joined: entry.joined ?? [], later: entry.later ?? [], texts: entry.texts.slice(0, cut.texts), shown: entry.shown, publicPosted: entry.publicPosted, answers: entry.answers, toolCount: entry.toolCount ?? 0 }
         }
+        const completedTurn = entry.turn
         const info = entry.info
         const joined = entry.joined ?? []
         // Exclude intermediate execution text from the public final.
@@ -997,11 +1007,11 @@ export function install(rt) {
           if (!expectsReply(source) || answersUser(source)) return
           if (failure !== undefined) {
             // The sender was told a reply comes later; without this it would wait forever.
-            tellSender(id, source, `${name} could not answer your message: its model call failed (${failureLine(failure)}). Tell the user if it matters; do not retry right away.`)
+            answerSender(rt, id, source, `${name} could not answer your message: its model call failed (${failureLine(failure)}). Tell the user if it matters; do not retry right away.`,undefined,completedTurn)
           } else if (reply !== '' || reason?.kind === 'aborted') {
             // A turn stopped before it could answer still owes the sender a line,
             // or it would wait forever for a reply that never comes.
-            tellSender(id, source, reply !== '' ? reply : `${name} was stopped before it could answer your message.`)
+            answerSender(rt, id, source, reply !== '' ? reply : `${name} was stopped before it could answer your message.`,undefined,completedTurn)
           }
         }
         // Work a Bot asked for, also when what came back for it opens the turn: while
@@ -1012,12 +1022,18 @@ export function install(rt) {
           if (!rt.ownsWork?.(rt.selfOf(id), work)) return answer(source, reply)
           const asker = rt.workAsker(work)
           if (failure !== undefined || reason?.kind === 'aborted') return answer(asker, reply)
-          if (rt.waitsWork(work)) return rt.holdWork(work, reply)
+          if (rt.waitsWork(work)) {
+            rt.holdWork(work, reply)
+            rt.noteOutputRoute?.(id, completedTurn, reply, 'waiting-subtask', rt.save({required:true}), {work})
+            return
+          }
           // With what came back, the answer may pass what one message carries.
           const text = rt.answerText(work, reply, name)
-          if (asker?.remoteSource?.consultationId || text.length <= MESSAGE_INLINE_MAX) return tellSender(id, asker, text)
-          void rt.attachLong(text, `Answer from ${name}.txt`)
-            .then(long => tellSender(id, asker, text, long))
+          if (asker?.remoteSource?.consultationId || text.length <= MESSAGE_INLINE_MAX) return answerSender(rt,id,asker,text,undefined,completedTurn)
+          const attachment = rt.attachLong(text, `Answer from ${name}.txt`)
+          rt.noteOutputRoute?.(id, completedTurn, reply, 'delivery-unknown', attachment, {work}, false)
+          void attachment
+            .then(long => answerSender(rt,id,asker,text,long,completedTurn))
             .catch(error => rt.warn('ds-bot: answer from %s not sent: %s', name, error))
         }
         // A retried turn answers the same waiter or sender, so this one passes nothing on.

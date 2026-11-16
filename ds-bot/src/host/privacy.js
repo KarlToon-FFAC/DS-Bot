@@ -365,5 +365,5 @@ export function install(rt) {
   // What the settings list shows. Session ids stay on the host.
   const archivesView = () => (state.privateArchives ?? []).map(({ id, name, workDir }) => ({ id, name, ...(workDir === undefined ? {} : { workDir }) }))
 
-  Object.assign(rt, { isPrivate, privateClash, checkPrivacyChange: checkChange, checkNoPrivate, releaseArchive, archivesView })
+  Object.assign(rt, { checkOutputPrivacy: (exec,botId,text)=>guardTeam({...exec,name:'message_bot',arguments:{to:rt.botOf(botId)?.name,message:text}},rt.selfOf(exec.agent?.id)), isPrivate, privateClash, checkPrivacyChange: checkChange, checkNoPrivate, releaseArchive, archivesView })
 }

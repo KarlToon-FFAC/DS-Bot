@@ -70,6 +70,31 @@ try{
   if(process.env.DSBOT_SCREENSHOT_PATH)await page.screenshot({path:process.env.DSBOT_SCREENSHOT_PATH})
   console.log('PASS native browser shows only explicit user reports live without reload; zero page errors')
  }
+ const chiefId=client.identity.botId
+ await until(()=>{
+  const saved=JSON.parse(readFileSync(join(repo,`.dsh-test-${name}`,'bot/state.json'),'utf8'))
+  return Object.values(saved.turnOutputs??{}).some(row=>row.botId===chiefId&&row.status==='unsubmitted-text')
+ },'a result-triggered Chief summary stays private with a visible unpublished disposition',60000)
+ const current=await client.request('/api/bot',{endpoint:'state',payload:{}})
+ const draft=current.unpublishedOutputs[chiefId].find(row=>row.status==='unsubmitted-text')
+ assert.ok(draft)
+ const body=await client.request('/api/bot',{endpoint:'read-turn-output',payload:{botId:chiefId,outputId:draft.id}})
+ if(page){
+  await page.locator(`[data-bot-id="${chiefId}"]`).first().click()
+  await page.locator('.bt-output-notices').first().waitFor({timeout:15000})
+  await page.getByRole('button',{name:/Unpublished output|未发布正文/}).click()
+  await page.getByRole('button',{name:/Read saved text|查看已保存正文/}).first().click()
+  await page.locator('.bt-output-preview').filter({hasText:body.text}).first().waitFor({timeout:15000})
+ }
+ const receipt=await client.request('/api/bot',{endpoint:'submit-turn-output',payload:{botId:chiefId,outputId:draft.id}})
+ assert.equal(receipt.status,'submitted-user')
+ const replay=await client.request('/api/bot',{endpoint:'submit-turn-output',payload:{botId:chiefId,outputId:draft.id}})
+ assert.equal(replay.replay,true);assert.equal(replay.receiptId,receipt.receiptId)
+ const chiefChat=await client.request('/api/bot',{endpoint:'chat',payload:{botId:chiefId}})
+ assert.equal(chiefChat.items.filter(item=>item.routing?.originalOutputId===draft.id).length,1)
+ assert.equal(chiefChat.items.find(item=>item.routing?.originalOutputId===draft.id).text,body.text)
+ if(page){await page.getByRole('region',{name:/Published saved output|已发布的原文/}).waitFor({timeout:15000});assert.deepEqual(browserErrors,[])}
+ console.log('PASS native private Chief summary has an immediate notice; exact saved text recovers with one idempotent receipt')
  console.log('PASS native local Bot-triggered explicit report reaches chat and user-output with durable metadata')
  console.log('PASS preceding internal text, unmarked control and later turns do not inherit publication')
 }finally{abort.abort();await consume;await browser?.close();await bench('stop')}

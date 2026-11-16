@@ -77,6 +77,8 @@ export function install(rt) {
     permissions: rt.permissionCatalog?.() ?? null,
     modelsKey: modelsKey(),
     prefs: state.prefs,
+    recoveredOutputIds: Object.values(state.turnOutputs??{}).filter(row=>row.submissions?.user?.status==='submitted-user').map(({id,botId,sessionId,turn})=>({id,botId,sessionId,turn})),
+    unpublishedOutputs: Object.fromEntries(Object.values(state.bots).map(bot=>[bot.id,rt.outputNotices?.(bot.id)??[]])),
     // Whether a Desktop window should serve Bot browser reads (see browser.js).
     browser: rt.browserEnabled,
     // False when config.memory turns memory off: no Memory row or panel.
@@ -92,7 +94,7 @@ export function install(rt) {
   // and per Session, when its running turn began.
   const live = () => ({
     turnPublications: Object.fromEntries(Object.entries(state.turnAudiences ?? {}).flatMap(([id, turns]) => {
-      const explicit = Object.entries(turns).filter(([, row]) => row.explicit === true).map(([turn, row]) => [turn, {...row, publicationPending: rt.pendingUserPublications?.has(`${id}:${turn}`) === true}])
+      const explicit = Object.entries(turns).filter(([, row]) => row.explicit === true || row.userOutputThroughSeq!==undefined).map(([turn, row]) => [turn, {...row, publicationPending: rt.pendingUserPublications?.has(`${id}:${turn}`) === true}])
       return explicit.length ? [[id, Object.fromEntries(explicit)]] : []
     })),
     remoteHubEnabled: rt.remoteHubFeatureEnabled?.() ?? remoteHubEnabled(rt.config),
@@ -125,7 +127,7 @@ export function install(rt) {
   }
   // What a host that only reads the team may still answer.
   // Updates change the dsh profile, not the team, so a reading host may run them too.
-  const READS = new Set(['state', 'models', 'efforts', 'providers', 'provider-models', 'earlier', 'chat', 'run-stats', 'room-progress', 'exchange', 'exchange-text', 'file-text', 'usage', 'schedules', 'memory-view', 'browser-wait', 'browser-result', 'diagnostics', 'diagnostics-log', 'diagnostics-clear', 'update-check', 'update-install', 'dsh-update-install', 'repo-stars', 'approval-answer', 'thinking', 'avatar-library'])
+  const READS = new Set(['read-turn-output', 'state', 'models', 'efforts', 'providers', 'provider-models', 'earlier', 'chat', 'run-stats', 'room-progress', 'exchange', 'exchange-text', 'file-text', 'usage', 'schedules', 'memory-view', 'browser-wait', 'browser-result', 'diagnostics', 'diagnostics-log', 'diagnostics-clear', 'update-check', 'update-install', 'dsh-update-install', 'repo-stars', 'approval-answer', 'thinking', 'avatar-library'])
 
   function setPrefs(body) {
     if (body.theme !== undefined) {
@@ -162,6 +164,10 @@ export function install(rt) {
       // may grow more states later.
       if (body.thinking === true) state.prefs.thinking = true
       else if (body.thinking === false || body.thinking === null) delete state.prefs.thinking
+    }
+    if(body.undeliveredNotice!==undefined){
+      if(!['on','once','off'].includes(body.undeliveredNotice))throw invalid('Unpublished output notices must be on, once or off')
+      state.prefs.undeliveredNotice=body.undeliveredNotice
     }
     return rt.save()
   }
@@ -240,6 +246,16 @@ export function install(rt) {
         case 'earlier':
           await rt.load()
           return ok(await rt.earlierPage(String(body.sessionId ?? ''), body.cursor ?? undefined))
+        case 'submit-turn-output': {
+          const bot=rt.botOf(body.botId)
+          if(!bot)return fail('Unknown Bot','bot/not-found')
+          return ok(await rt.submitTurnOutput({agent:{id:rt.chatOf(bot.id)}},{outputId:body.outputId,target:'user'}))
+        }
+        case 'read-turn-output': {
+          const bot=rt.botOf(body.botId)
+          if(!bot)return fail('Unknown Bot','bot/not-found')
+          return ok(await rt.readTurnOutput({agent:{id:rt.chatOf(bot.id)}},body.outputId))
+        }
         case 'chat':
           await rt.load()
           return ok(await rt.chatPage(String(body.botId ?? ''), body.cursor ?? undefined))

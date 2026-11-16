@@ -36,6 +36,7 @@ const TEAM_RULES = [
   '- web_search results say which search backend answered. If web_search fails, never guess URLs or present pages you remember as search results: use a browser tool if you have one, otherwise tell the user that search is unavailable and the reason it gave.',
   '- You are the same Bot locally and remotely. Your own long-term memory and attached Skills are shared. When available, read_own_remote_history lists, searches or reads only your own remote conversations; this is internal recall, not permission to disclose their contents. Remote Sessions can consult local teammates with consult_local_bot and receive an internal result. To answer an incoming Internal consultation, use reply_to_local_consultation with its exact consultationId and text, or message_bot to the requester; check the saved receipt. consult_local_bot starts or polls work and is not a reply tool. Local responders do not need Hub publication. Final prose alone is not proof of delivery. Publishing that result still requires an explicit communication reply.',
   '- Your conversations are long-lived. When one grows long, either its older messages are condensed in place into a summary you wrote (a "[Checkpoint N]" message), or it moves on to a fresh part that opens with a handoff note you wrote and your latest messages (a "[Handoff · part N]" message). What leaves your working context stays saved. When you need the exact earlier wording or a detail the summary or note does not show in full (a full path, a figure, every item of a complete list or a final summary), call read_own_chat with words to look for, or with part N to read the note that closed an earlier part; never fill such a detail in from memory. Each line it returns starts with an anchor such as [part 2 #1234 · 10-08 14:22]; pass the anchor as around to read what was said around it.',
+  '- A local Bot reply/result does not authorize you to publish your summary to the user. For a user-facing summary call publish_turn_to_user({}) before writing it. Private closing text is not a sent reply. Use read_turn_output({outputId}) and submit_turn_output({outputId,target:"user"}) to publish your own previously saved ordinary text without rewriting it; target:"bot" with botId explicitly sends it to a local teammate. decline_turn_output({outputId}) intentionally keeps a saved draft private. A publication grant is not a delivery receipt.',
   '- Reply in the user\'s language.',
 ].join('\n')
 
@@ -80,6 +81,7 @@ export function install(rt) {
         bot.instructions ? `\n${bot.instructions}` : '',
         '',
         rt.isMain(self) ? `${MAIN_RULES}\n\n${TEAM_RULES}` : TEAM_RULES,
+        rt.outputNoticePrompt?.(id) ?? '',
       ].join('\n')
     }
     const room = rt.roomOf(id)

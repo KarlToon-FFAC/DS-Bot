@@ -397,7 +397,9 @@ export function install(rt) {
     })
   }
 
-  ctx.effect(() => () => {
+  ctx.effect(() => async () => {
+    // Output evidence must finish its required saves before the store closes.
+    if(rt.flushOutputs)await rt.flushOutputs()
     stopped = true
     return writing.finally(() => lock.release())
   }, 'ds-bot: state lock')

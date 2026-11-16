@@ -105,6 +105,13 @@ export function install(rt) {
     },
   }))
 
+  for(const [name,description,parameters,run] of [
+    ['list_turn_outputs','List your own unpublished local output identities and their submission status. This does not publish text.',{},async(_args,exec)=>rt.outputNotices(rt.selfOf(exec.agent?.id))],
+    ['read_turn_output','Read your own saved ordinary output by outputId. Reasoning is never included.',{outputId:{type:'string',required:true}},(args,exec)=>rt.readTurnOutput(exec,args.outputId)],
+    ['submit_turn_output','Submit exactly one saved local output to an explicit user or local Bot target, without rewriting it. Retry with the same outputId and target for the existing receipt. Remote/group output is forbidden. Saved/queued is not proof of external delivery.',{outputId:{type:'string',required:true},target:{type:'string',enum:['user','bot'],required:true},botId:{type:'string'}},(args,exec)=>rt.submitTurnOutput(exec,args)],
+    ['decline_turn_output','Explicitly leave one of your saved local outputs private. This does not send a message.',{outputId:{type:'string',required:true}},(args,exec)=>rt.declineTurnOutput(exec,args.outputId)],
+  ])rt.teamTools.push(defineTool({name,description,parameters,output,async execute(args,exec){try{return JSON.stringify({ok:true,value:await run(args,exec)})}catch(error){return JSON.stringify({ok:false,error:{code:error.code??'OUTPUT_NOT_SAVED',message:error.code?error.message:'Output was not confirmed. Check storage before retrying.'}})}}}))
+
   rt.teamTools.push(defineTool({name:'reply_to_local_consultation',description:'Save an internal answer to an incoming local consultation and return a durable receipt. No Hub publication is required. Use the exact consultationId from the incoming header and your answer as text. Repeating the same answer is safe; a different answer after completion is rejected. This does not publish to Hub.',parameters:{consultationId:{type:'string',required:true},text:{type:'string',required:true}},output,
     async execute(args,exec){try{return JSON.stringify(await replyToLocalConsultation(rt,args,exec))}catch(error){return JSON.stringify({ok:false,error:{code:error.code??'LOCAL_CONSULTATION_RESULT_NOT_SAVED'},delivered:false})}}}))
 
@@ -319,7 +326,8 @@ export function install(rt) {
         const joins = before !== undefined && agent.inbox?.remove?.(earlier.message.id) === true
         if (before !== undefined && !joins) long = await rt.attachLong(text, `Message from ${sender.name}.txt`) ?? long
         const working = rt.live.get(chat)?.turn !== undefined
-        const steer = (args.when !== 'queue' && !toUser) || (joins && earlier.steered)
+        const userTurn=rt.state.turnAudiences?.[chat]?.[rt.live.get(chat)?.turn]?.audience==='user'
+        const steer = !userTurn && ((args.when !== 'queue' && !toUser) || (joins && earlier.steered))
         const exchangeId = joins ? earlier.message.source.exchangeId : randomUUID()
         if (joins) rt.forgetDelivery?.(exchangeId)
         else if (!toUser) rt.openWork(exchangeId, { from: sender.id, to: target.id, parent: work, remoteSource })
@@ -332,6 +340,7 @@ export function install(rt) {
           if (!joins && rt.botOf(target.id) === undefined) rt.dropWork(exchangeId)
           throw error
         }
+        rt.noteOutputRoute?.(exec.agent.id,rt.live.get(exec.agent.id)?.turn,text,'submitted-bot',Promise.resolve(),{botId:target.id,exchangeId})
         const sent = toUser
           ? `Delivered to ${target.name}. It will answer the user in its own chat; nothing comes back to you, so point the user to ${target.name}'s chat instead of relaying.`
           : working && steer

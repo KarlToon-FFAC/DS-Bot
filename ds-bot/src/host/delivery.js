@@ -129,13 +129,18 @@ export function install(rt) {
       ],
       source,
     })
-    if (steer) agent.steer(message)
+    const active = rt.live?.get(targetSessionId)
+    const routing = rt.state.turnAudiences?.[targetSessionId]?.[active?.turn]
+    const queueForUser = role === 'request' && active?.turn !== undefined && routing?.audience === 'user'
+    if (steer && !queueForUser) agent.steer(message)
     else agent.followup(message)
     await ctx.sessions.flush(agent.session)
     if (book !== undefined) {
       rt.ledger.append(book, { event: 'delivered', id: exchangeId, sessionId: targetSessionId, time: Date.now() })
-      // The message went out either way; a mark that is lost only hides it from the dialog.
-      await rt.ledger.written(book).catch(() => {})
+      // The Session accepted it; a missing receipt must never trigger a second send.
+      try {await rt.ledger.written(book)} catch(error) {
+        throw Object.assign(new Error('The Session accepted this message, but its delivery receipt could not be saved. Do not resend under a new identity.'),{code:'LOCAL_DELIVERY_RECEIPT_UNKNOWN',deliveryUncertain:true,cause:error})
+      }
     } else if (recordExchange && EXCHANGE_ROLES.has(role) && !deferred && !resumed && !retried) {
       // A message no Bot of the team sent keeps the record it had before the ledger.
       // Recorded once the message is in the Session: an earlier record would show

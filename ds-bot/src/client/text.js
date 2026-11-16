@@ -133,6 +133,7 @@ export function isHiddenTurn(roster, sessionId, turn) {
 export function isHiddenAssistant(roster, sessionId, data, anchorSeq) {
   const grant = roster.turnPublications?.[sessionId]?.[data.turn]
   if (grant?.explicit === true) return grant.publicationPending === true || !explicitUserOutput(grant, data.finalNode?.seq ?? data.seq ?? anchorSeq)
+  if(grant?.userOutputThroughSeq!==undefined){const seq=data.finalNode?.seq??data.seq??anchorSeq;return !Number.isSafeInteger(seq)||seq>grant.userOutputThroughSeq}
   return isHiddenTurn(roster, sessionId, data.turn)
 }
 

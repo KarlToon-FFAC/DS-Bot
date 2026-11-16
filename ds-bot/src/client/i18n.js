@@ -5,6 +5,18 @@
 export const NAMESPACE = 'ds-bot'
 
 const ZH = {
+  'Unpublished output reminders':'未发布正文提醒',
+  'Once per conversation':'每个会话一次',
+  'Turn':'回合',
+  'Published saved output':'已发布的原文',
+
+  'Unpublished output':'未发布正文',
+  'Not automatically published':'未自动发布',
+  'Delivery not confirmed':'投递未确认',
+  'Read saved text':'查看已保存正文',
+  'Publish saved text to my chat':'将原文发布到我的对话',
+  'Output was not confirmed':'正文提交尚未确认',
+
   'You are the consultation responder. Submit your answer with reply_to_local_consultation and the received consultationId, or message_bot to the requester. No Hub publication is required.': '你是这条咨询的答复方。请用收到的咨询 ID 调用 reply_to_local_consultation 提交答复，或通过 message_bot 答复请求方，无需发布到 Hub。',
   '{count} Bots in total': '等 {count} 个 Bot',
   'View all {count} Bots': '查看全部 {count} 个 Bot',

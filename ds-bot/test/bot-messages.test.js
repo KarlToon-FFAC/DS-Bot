@@ -1753,3 +1753,185 @@ test('an unavailable ledger directory prevents delivery on every platform and re
   assert.equal(agentOf('b').calls.length, 1)
   assert.deepEqual((await exchanges()).map(row => row.text), ['Retry me'])
 })
+
+async function privateClosing(host,text='Saved private answer',turn=1) {
+  host.emit('b','turn/start',{turn})
+  host.emit('b','user/message',{source:{kind:SOURCE_KIND,role:'reply',protocol:'reply',rootAudience:'user',exchangeId:`result-${turn}`,senderSessionId:'a'},content:[]})
+  host.emit('b','assistant/message',{turn,message:{content:[{type:'reasoning',text:'SECRET_REASONING'},{type:'text',text}]}})
+  host.emit('b','turn/end',{turn,reason:{kind:'completed'}})
+  await host.rt.flushOutputs()
+  return Object.values(host.rt.state.turnOutputs).find(row=>row.sessionId==='b'&&row.turn===turn)
+}
+
+test('reply roots cannot publish internal coordination and first-level work is internal',async t=>{
+  const host=await start(team());t.after(host.stop)
+  const row=await privateClosing(host)
+  assert.equal(host.rt.state.turnAudiences.b[1].audience,'internal')
+  assert.ok(host.rt.state.exchangeTurns.b.includes(1))
+  assert.equal(row.status,'unsubmitted-text')
+  host.rt.openWork('first-level',{from:'a',to:'b'})
+  assert.equal(host.rt.state.works['first-level'].audience,'internal')
+})
+
+test('unsubmitted output creates no activation, is durable and publishes once without rewriting',async t=>{
+  const host=await start(team());t.after(host.stop)
+  const row=await privateClosing(host)
+  assert.equal(host.agentOf('b').calls.length,0)
+  assert.equal(JSON.parse(readFileSync(join(host.home,'state.json'),'utf8')).turnOutputs[row.id].status,'unsubmitted-text')
+  const body=await host.rt.readTurnOutput({agent:{id:'b'}},row.id)
+  assert.equal(body.text,'Saved private answer');assert.doesNotMatch(JSON.stringify(body),/SECRET_REASONING/)
+  let published=0;host.rt.publishRecoveredOutput=()=>published++
+  const result=await host.rt.submitTurnOutput({agent:{id:'b'}},{outputId:row.id,target:'user'})
+  assert.equal(result.status,'submitted-user');assert.equal(result.externalDeliveryConfirmed,false)
+  const again=await host.rt.submitTurnOutput({agent:{id:'b'}},{outputId:row.id,target:'user'})
+  assert.equal(again.replay,true);assert.equal(again.receiptId,result.receiptId);assert.equal(published,1)
+  assert.equal(host.rt.recoveredOutputs('b')[0].text,'Saved private answer')
+  assert.equal(host.rt.state.turnAudiences.b[1].audience,'internal')
+  await assert.rejects(host.rt.submitTurnOutput({agent:{id:'a'}},{outputId:row.id,target:'user'}),{code:'OUTPUT_NOT_OWNED'})
+})
+
+test('sending unrelated text to a Bot cannot settle a later closing draft',async t=>{
+  const host=await start(team());t.after(host.stop)
+  host.emit('b','turn/start',{turn:1})
+  host.emit('b','user/message',{source:{kind:SOURCE_KIND,role:'reply',senderSessionId:'a',exchangeId:'input'},content:[]})
+  await host.tool('message_bot',{to:'Chief',message:'A different message'},'b')
+  host.emit('b','assistant/message',{turn:1,message:{content:[{type:'text',text:'Private final summary'}]}})
+  host.emit('b','turn/end',{turn:1,reason:{kind:'completed'}})
+  await host.rt.flushOutputs()
+  assert.equal(host.rt.outputNotices('b').at(-1).status,'unsubmitted-text')
+})
+
+test('publication grant alone is not submission and reasoning-only is not an explicit refusal',async t=>{
+  const host=await start(team());t.after(host.stop)
+  host.emit('b','turn/start',{turn:1})
+  host.emit('b','user/message',{source:{kind:SOURCE_KIND,role:'reply',senderSessionId:'a'},content:[]})
+  host.emit('b','tool/call',{turn:1,callId:'grant',name:'publish_turn_to_user',arguments:'{}'})
+  assert.equal((await host.rt.publishTurnToUser({agent:{id:'b'},callId:'grant'})).published,false)
+  host.emit('b','assistant/message',{turn:1,message:{content:[{type:'reasoning',text:'SECRET_REASONING'}]}})
+  host.emit('b','turn/end',{turn:1,reason:{kind:'completed'}})
+  await host.rt.flushOutputs()
+  assert.equal(Object.values(host.rt.state.turnOutputs??{}).length,0)
+})
+
+test('a local user turn queues ordinary Bot requests before model consumption',async t=>{
+  const host=await start(team());t.after(host.stop)
+  host.emit('b','turn/start',{turn:1})
+  host.emit('b','user/message',{source:{kind:'user'},content:[]})
+  assert.match(await host.tool('message_bot',{to:'Writer',message:'Internal request'},'a'),/^Queued for Writer/)
+  assert.deepEqual(host.agentOf('b').calls.map(([kind])=>kind),['followup'])
+  assert.equal(host.rt.state.turnAudiences.b[1].audience,'user')
+})
+
+test('mid-turn internal insertion closes the output interval but preserves previously public text',async t=>{
+  const host=await start(team());t.after(host.stop)
+  host.emit('b','turn/start',{turn:1});host.emit('b','user/message',{source:{kind:'user'},content:[]})
+  host.emit('b','assistant/message',{turn:1,message:{content:[{type:'text',text:'Already public'}]}})
+  const before=Object.values(host.rt.state.turnOutputs).at(-1)
+  host.emit('b','user/message',{source:{kind:SOURCE_KIND,role:'request',senderSessionId:'a',exchangeId:'urgent'},content:[]})
+  const through=host.rt.state.turnAudiences.b[1].userOutputThroughSeq
+  const event=(seq,text)=>({type:'assistant/message',seq,data:{turn:1,message:{content:[{type:'text',text}]}}})
+  assert.deepEqual(host.rt.displayItems('b',[event(before.seq,'Already public'),event(through+2,'New internal text')]).map(row=>row.text),['Already public'])
+  host.emit('b','tool/call',{turn:1,callId:'publish-again',name:'publish_turn_to_user',arguments:'{}'})
+  assert.equal((await host.rt.publishTurnToUser({agent:{id:'b'},callId:'publish-again'})).status,'enabled')
+})
+
+test('notice construction does not consume a reminder after a failed model request',async t=>{
+  const host=await start(team());t.after(host.stop)
+  const row=await privateClosing(host)
+  host.emit('b','turn/start',{turn:2});host.emit('b','user/message',{source:{kind:'user'},content:[]})
+  assert.match(host.rt.outputNoticePrompt('b'),/submit_turn_output/)
+  assert.equal(row.noticeConsumed,undefined)
+  host.emit('b','turn/end',{turn:2,reason:{kind:'failed'}})
+  host.emit('b','turn/start',{turn:3});host.emit('b','user/message',{source:{kind:'user'},content:[]})
+  assert.match(host.rt.outputNoticePrompt('b'),/read_turn_output/)
+  host.emit('b','assistant/message',{turn:3,message:{content:[{type:'text',text:'I inspected the notice'}]}})
+  await host.rt.flushOutputs();assert.equal(row.noticeConsumed,true)
+  host.rt.state.prefs.undeliveredNotice='off';assert.equal(host.rt.outputNoticePrompt('b'),'')
+})
+
+test('pending automatic delivery remains unknown until its matching output has a receipt',async t=>{
+  const host=await start(team());t.after(host.stop)
+  const row=await privateClosing(host);let resolve
+  const route=new Promise(done=>resolve=done)
+  host.rt.noteOutputRoute('b',1,'Saved private answer','delivered-auto',route,{botId:'a'})
+  assert.equal(row.status,'delivery-unknown');resolve();await delay(15)
+  assert.equal(row.status,'delivered-auto')
+})
+
+test('saved-output recovery refuses remote origin and failed storage never claims submission',async t=>{
+  const host=await start(team());t.after(host.stop)
+  const row=await privateClosing(host);row.remote=true
+  await assert.rejects(host.rt.submitTurnOutput({agent:{id:'b'}},{outputId:row.id,target:'user'}),{code:'OUTPUT_LOCAL_ONLY'})
+  row.remote=false
+  const save=host.rt.save;host.rt.save=async()=>{throw new Error('synthetic write failure')}
+  await assert.rejects(host.rt.submitTurnOutput({agent:{id:'b'}},{outputId:row.id,target:'user'}))
+  assert.equal(row.submissions.user,undefined);assert.equal(host.rt.recoveredOutputs('b').length,0)
+  host.rt.save=save
+})
+
+test('saved output can be sent to an explicit Bot with a stable receipt and privacy checks',async t=>{
+  const host=await start(team());t.after(host.stop)
+  const row=await privateClosing(host)
+  const receipt=await host.rt.submitTurnOutput({agent:{id:'b'}},{outputId:row.id,target:'bot',botId:'a'})
+  assert.equal(receipt.status,'submitted-bot')
+  assert.equal(host.agentOf('a').calls.length,1)
+  assert.match(textOf(host.agentOf('a').calls[0][1].content),/Saved private answer/)
+  const again=await host.rt.submitTurnOutput({agent:{id:'b'}},{outputId:row.id,target:'bot',botId:'a'})
+  assert.equal(again.replay,true);assert.equal(host.agentOf('a').calls.length,1)
+  const second=await privateClosing(host,'Private target probe',2)
+  host.rt.state.bots.a.private=true
+  await assert.rejects(host.rt.submitTurnOutput({agent:{id:'b'}},{outputId:second.id,target:'bot',botId:'a'}),/private Bot/)
+  assert.equal(host.agentOf('a').calls.length,1)
+})
+
+test('an ambiguous saved-output submission survives restart without resending',async t=>{
+  const host=await start(team());t.after(host.stop)
+  const row=await privateClosing(host)
+  host.rt.teamTools.find(tool=>tool.name==='message_bot').execute=async()=>{throw new Error('synthetic lost acknowledgment')}
+  const result=await host.rt.submitTurnOutput({agent:{id:'b'}},{outputId:row.id,target:'bot',botId:'a'})
+  assert.equal(result.status,'delivery-unknown')
+  await host.rt.flushOutputs();await host.ctx.dispose()
+  const saved=JSON.parse(readFileSync(join(host.home,'state.json'),'utf8'))
+  const restarted=await start(saved);t.after(restarted.stop)
+  // The identity/outcome is in state; refusing a second send does not need to read its body.
+  const {install}=await import('../src/host/ledger.js')
+  const oldLedger={home:host.home,warn:()=>{},readOnly:()=> 'reader'};install(oldLedger)
+  restarted.rt.ledger.records=oldLedger.ledger.records
+  await assert.rejects(restarted.rt.submitTurnOutput({agent:{id:'b'}},{outputId:row.id,target:'bot',botId:'a'}),{code:'OUTPUT_DELIVERY_UNKNOWN'})
+  assert.equal(restarted.agentOf('a').calls.length,0)
+})
+
+test('a missing post-delivery ledger receipt reports uncertainty without an automatic duplicate reply',async t=>{
+  const host=await start(team());t.after(host.stop)
+  const {answerSender}=await import('../src/host/turns.js')
+  const written=host.rt.ledger.written
+  host.rt.ledger.written=async book=>{if(host.rt.ledger.records(book).at(-1)?.event==='delivered')throw new Error('synthetic marker write failure');return written(book)}
+  answerSender(host.rt,'b',{exchangeId:'request',senderSessionId:'a'},'The answer')
+  await delay(25)
+  assert.equal(host.agentOf('a').calls.length,1)
+})
+
+
+test('repeated internal insertions never reopen the private gap before an explicit grant',async t=>{
+  const host=await start(team());t.after(host.stop)
+  host.emit('b','turn/start',{turn:1});host.emit('b','user/message',{source:{kind:'user'},content:[]})
+  host.emit('b','user/message',{source:{kind:SOURCE_KIND,role:'reply',senderSessionId:'a',exchangeId:'first'},content:[]})
+  const through=host.rt.state.turnAudiences.b[1].userOutputThroughSeq
+  host.emit('b','assistant/message',{turn:1,message:{content:[{type:'text',text:'PRIVATE_GAP'}]}})
+  host.emit('b','user/message',{source:{kind:SOURCE_KIND,role:'reply',senderSessionId:'a',exchangeId:'second'},content:[]})
+  assert.equal(host.rt.state.turnAudiences.b[1].userOutputThroughSeq,through)
+  const event={type:'assistant/message',seq:through+2,data:{turn:1,message:{content:[{type:'text',text:'PRIVATE_GAP'}]}}}
+  assert.deepEqual(host.rt.displayItems('b',[event]),[])
+})
+
+
+test('immediate plugin disposal drains the closing output before releasing the state lock',async t=>{
+  const host=await start(team());t.after(host.stop)
+  host.emit('b','turn/start',{turn:1})
+  host.emit('b','user/message',{source:{kind:SOURCE_KIND,role:'reply',senderSessionId:'a'},content:[]})
+  host.emit('b','assistant/message',{turn:1,message:{content:[{type:'text',text:'Persist during shutdown'}]}})
+  host.emit('b','turn/end',{turn:1,reason:{kind:'completed'}})
+  await host.ctx.dispose()
+  const saved=JSON.parse(readFileSync(join(host.home,'state.json'),'utf8'))
+  assert.equal(Object.values(saved.turnOutputs).find(row=>row.sessionId==='b').status,'unsubmitted-text')
+})
