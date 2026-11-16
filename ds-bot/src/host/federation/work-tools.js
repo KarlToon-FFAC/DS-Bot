@@ -1,5 +1,6 @@
 import { BLOCKING_QUESTION_TOOL, DELEGATION_TOOLS, GOAL_TOOLS } from '../tools.js'
 import { setApprovalPolicy } from '@deepseek-ai/dsh-user-approval'
+import {bindingFailure,safeBindingFailure} from './binding-recovery.js'
 const LOCAL_SCHEDULE_TOOLS = new Set(['schedule_create', 'schedule_list', 'schedule_update', 'schedule_delete'])
 const MUTATING_WORK = new Set(['write', 'edit', 'str_replace_editor', 'bash', 'pwsh'])
 const fail = code => { throw Object.assign(new Error(code), { code }) }
@@ -27,10 +28,14 @@ export async function syncWorkTools(runtime, agent, bot) {
   if (!entries) {
     entries = new Map()
     runtime.workToolScopes.set(agent, entries)
-    runtime.disposers.push(() => { for (const entry of entries.values()) { entry.active = false; entry.dispose() }; entries.clear() })
+    runtime.disposers.push(() => { for (const entry of entries.values()) { entry.active = false; entry.dispose() }; entries.clear();runtime.workToolRegistrationFailures?.delete(agent.id) })
   }
+  runtime.workToolRegistrationFailures??=new Map()
+  const failures=[]
+  runtime.workToolRegistrationFailures.set(agent.id,failures)
   const registry = runtime.ctx.tools
-  const excluded = new Set([BLOCKING_QUESTION_TOOL, ...DELEGATION_TOOLS, ...GOAL_TOOLS,
+  // PTC adds a reserved transport to schemas(); DSH owns it in each viewing scope.
+  const excluded = new Set(['run_code', BLOCKING_QUESTION_TOOL, ...DELEGATION_TOOLS, ...GOAL_TOOLS,
     ...(runtime.rt.teamTools ?? []).map(tool => tool.name), ...(runtime.tools ?? []).map(tool => tool.name)])
   const names = new Set((registry.schemas ? registry.schemas(local).map(tool => tool.name) : [...WORK_TOOL_NAMES]).filter(name => !excluded.has(name)))
   for (const [name, prior] of entries) if (!names.has(name)) { prior.active = false; prior.dispose(); entries.delete(name) }
@@ -79,7 +84,15 @@ export async function syncWorkTools(runtime, agent, bot) {
       }
       finally { runtime.workCalls.delete(key); runtime.workControllers.delete(key); finish() }
     } }
-    entry.dispose = agent.ctx.tools.register(registered)
+    try{entry.dispose = agent.ctx.tools.register(registered)}catch(error){
+      entry.active=false
+      const failure=bindingFailure(error,'work-tools-register',agent.id)
+      failure.toolName=name
+      failure.registrationFailure=name==='run_code'?'reserved-transport':typeof error?.message==='string'&&error.message.includes('already registered')?'scope-conflict':'registration-failed'
+      if(failure.registrationFailure!=='scope-conflict')throw failure
+      failures.push({code:'WORK_TOOL_SCOPE_CONFLICT',...safeBindingFailure(failure,'work-tools-register')})
+      continue
+    }
     entries.set(name, entry)
   }
   return [...entries.keys()]
@@ -102,4 +115,13 @@ export function syncWorkPermission(runtime, agent, bot) {
   const wanted = bot.permission ?? service.catalog().defaultPreset
   if (service.current(agent.session) !== wanted) service.set(agent.session, wanted)
   if (runtime.settings?.remoteWorkApproval === 'ask') setApprovalPolicy(agent.session, 'ask')
+}
+
+
+export function workToolWarnings(runtime,localBotId) {
+  return [...(runtime.workToolRegistrationFailures??[])].flatMap(([sessionId,failures])=>{
+    const binding=runtime.owners?.get(sessionId)
+    if(!binding||localBotId&&binding.localBotRef!==localBotId)return []
+    return failures.map(failure=>({...failure,sessionId,bindingId:binding.id,conversationId:binding.conversationId,principalId:binding.recipientPrincipalId}))
+  })
 }

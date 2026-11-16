@@ -103,3 +103,11 @@ test('a surviving Session that starts work during inspection prevents repair',as
  await assert.rejects(recoverUnusedBinding(runtime,binding),{code:'COMMUNICATION_SESSION_UNAVAILABLE'})
  assert.deepEqual(queue.bindings()[0].sessionIds,['missing','alive'])
 })
+
+test('work registration diagnostics retain only a validated tool name and bounded failure category',()=>{
+ const diagnostic=safeBindingFailure({bindingStage:'work-tools-register',toolName:'read_probe',registrationFailure:'scope-conflict',message:'PRIVATE_EXCEPTION_BODY'},'injection')
+ assert.equal(diagnostic.toolName,'read_probe');assert.equal(diagnostic.registrationFailure,'scope-conflict')
+ assert.equal(diagnostic.stage,'work-tools-register');assert.doesNotMatch(JSON.stringify(diagnostic),/PRIVATE_EXCEPTION_BODY/)
+ const unsafe=safeBindingFailure({toolName:'PRIVATE\nCALL',registrationFailure:'PRIVATE_EXCEPTION_BODY'},'injection')
+ assert.equal(unsafe.toolName,undefined);assert.equal(unsafe.registrationFailure,undefined)
+})

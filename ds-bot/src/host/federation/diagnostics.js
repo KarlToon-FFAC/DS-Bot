@@ -1,3 +1,4 @@
+import {workToolWarnings} from './work-tools.js'
 import { pendingPublication, publicationKeys, publicationReloadRequired } from './publication-state.js'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { parseCredentialKey } from '@deepseek-ai/dsh-credentials'
@@ -98,6 +99,7 @@ export async function diagnoseCommunication(rt, state, { sessionId, agent } = {}
       hostLeaseAvailable: applied.credentialKey ? null : state.legacy?.status().available === true,
       why: 'Legacy bootstrap credentials are consumed into a host-only process lease and removed from child environments. Absence after consumption is expected; a newly configured shell variable requires restarting the actual host process.' } },
     lists: { contacts: listStatus(comm?.contacts?.length ?? 0), conversations: listStatus(conversationCount(comm?.queue)), invites: listStatus(count(comm?.queue, 'invites')) },
+    workToolWarnings:comm?workToolWarnings(comm,bot?.id):[],
     bindingFailures: comm?.queue?.bindings ? comm.queue.bindings().filter(binding=>(!bot||binding.localBotRef===bot.id)&&comm.errors?.has(binding.id)).map(binding=>({bindingId:binding.id,conversationId:binding.conversationId,principalId:binding.recipientPrincipalId,code:comm.errors.get(binding.id),...(comm.bindingDiagnostics?.get(binding.id)??{})})) : [],
     error, nextActions: error?.nextActions ?? (!applied.enabled ? communicationError({ code: 'COMMUNICATION_NOT_CONFIGURED' }).nextActions
       : bot && !publishedIds.includes(bot.id) ? communicationError({ code: 'BOT_NOT_PUBLISHED' }).nextActions

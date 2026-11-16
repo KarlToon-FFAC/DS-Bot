@@ -14,6 +14,7 @@ export function apply(ctx) {
   const root = process.env.DSH_HOME
   if (!root || !process.env.DSBOT_COMMUNICATION_PROBE) throw new Error('Probe requires an isolated bench')
   const stateFile = join(root, 'communication-probe.json')
+  let workConflict
   let contextFixture
   const contextDisposers = []
   const holds = new Map()
@@ -145,6 +146,26 @@ export function apply(ctx) {
       else if (['before-receive', 'after-receive', 'before-injection', 'after-injection', 'before-export', 'after-export'].includes(body.point)) runtimeHold = { point: body.point, conversationId: body.conversationId }
       else throw new Error('Unknown checkpoint')
       return { armed: true }
+    }
+    if(body.operation==='production-work-tool-conflict'){
+      if(body.clear){workConflict?.release();return {cleared:true,executions:workConflict?.executions??0}}
+      if(workConflict)return {bindingId:workConflict.bindingId,sessionId:workConflict.sessionId,executions:workConflict.executions}
+      const team=JSON.parse(await readFile(join(root,'bot/state.json'),'utf8')),bot=team.bots[value.botId]
+      if(body.localBotId!==bot.id||!bot.workDir)throw new Error('Owned conflict fixture needs an explicit Bot directory')
+      const local=await agentOf(bot.sessionId??bot.id),registry=ctx.get('tools'),definition=registry.get('read',local)
+      if(!definition)throw new Error('Owned conflict fixture needs the native read capability')
+      const {sessionId}=await ctx.sessionController.create({cwd:bot.workDir,agentPreset:'ds-bot-communication'})
+      const remote=await agentOf(sessionId),bindingId=randomUUID()
+      workConflict={bindingId,sessionId,executions:0}
+      workConflict.release=remote.ctx.tools.register({...definition,description:'Owned synthetic foreign read conflict',execute:async()=>{workConflict.executions++;throw new Error('Foreign tool must never execute')}})
+      contextDisposers.push(workConflict.release)
+      const db=new DatabaseSync(join(root,'bot/communication.sqlite'))
+      try{
+        const member=db.prepare('SELECT epoch FROM memberships WHERE conversation_id=? AND principal_id=? AND active=1').get(body.conversationId,body.principalId)
+        if(!member||db.prepare('SELECT 1 FROM bindings WHERE conversation_id=? AND principal_id=?').get(body.conversationId,body.principalId))throw new Error('Owned conflict fixture needs a new current binding')
+        db.prepare('INSERT INTO bindings(id,conversation_id,principal_id,epoch,bot_ref,sessions) VALUES (?,?,?,?,?,?)').run(bindingId,body.conversationId,body.principalId,member.epoch,bot.id,JSON.stringify([sessionId]))
+      }finally{db.close()}
+      return {bindingId,sessionId,localMode:registry.modeFor(local),remoteMode:registry.modeFor(remote)}
     }
     if(body.operation==='production-missing-session'){
       const db=new DatabaseSync(join(root,'bot/communication.sqlite'))

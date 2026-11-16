@@ -40,6 +40,8 @@ V0.3.0 新增 **设置 → 通用 → 启用远程 Hub**。新安装默认关闭
 
 V0.4.1 另修复了执行 Session 缺失时，尚未使用的远程绑定导致收件永久 pending 的问题；恢复保留原消息和 Bot 身份，已有执行记录或结果不明的消息不会自动重放。活动页和 `communication_diagnose.bindingFailures` 会单独显示失败阶段及宿主原因，参见[复现与恢复边界](docs/plans/federated-communication/v041-binding-recovery.md)。
 
+工作工具准备失败现在会在本地活动与诊断中显示具体工具名和注册失败类型。普通模式下，单个可选工作工具同名冲突不再阻断收件：该工具保持隐藏和禁用，明确显示警告，并在原注册方释放后重试恢复；同步能力时另排除 PTC 保留入口。参见[诊断与修复边界](docs/plans/federated-communication/v041-work-tool-registration.md)。
+
 **V0.4.0** 中，本地与远程统一使用 `list_capabilities`、`read_capability`、`save_capability`、`attach_capability`、`detach_capability`、`delete_capability`。未发布的本地 Bot 无需连接 Hub 即可维护技能；旧技能工具名仅保留兼容转接，不再展示给模型。记忆已共用 `recall`/`remember`/`forget`。带来源证据的远程关系记录与按成员身份授权的历史保留独立工具；文件型 Skill 与 AGENTS.md 继续使用原生文件/Skill 工具。
 
 本地 Bot 请求触发的回合可先调用 `publish_turn_to_user({})`，成功保存标记后再写给用户的汇报；该回合随后产生的普通正文进入用户聊天和规范镜像 feed。此前正文、思考和后续回合不变。远程回合及带远程来源的本地咨询不允许使用；原请求方仍照常收到内部答复。

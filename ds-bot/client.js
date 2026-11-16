@@ -42,6 +42,7 @@ module.exports = __toCommonJS(index_exports);
 // src/client/i18n.js
 var NAMESPACE = "ds-bot";
 var ZH = {
+  "Some work tools are unavailable": "部分工作工具不可用",
   "The remote execution Session could not be opened. Check bindingFailures for the stage and hostCode; do not reset conversation data.": "远程执行会话无法打开。请查看 bindingFailures 中的阶段和宿主错误码，不要重置聊天数据。",
   "A previously used remote Session is missing. Its admission outcome cannot be proven; it was not recreated or replayed.": "已使用过的远程执行会话缺失，无法确认历史任务的执行状态，因此没有自动重建或重放。",
   "The binding has execution evidence or changed during recovery. Automatic recreation was refused to avoid duplicate work.": "会话绑定存在执行记录或在恢复过程中发生变化，为避免重复执行，未自动重建。",
@@ -25003,6 +25004,7 @@ function CommunicationWorkApprovals({ state, request, refresh }) {
 var import_react79 = require("react");
 function CommunicationActivity({ state, member, events, outbox, operations, operationPending, pendingAttempt, error, pollError, friendly, labels, onRetry, onCopy, copyDisabled, busy }) {
   const failures = (state?.errors ?? []).filter((item) => !member || item.conversationId === member.conversationId);
+  const workWarnings = (state?.workToolWarnings ?? []).filter((item) => !member || item.conversationId === member.conversationId);
   const exports = (state?.exportFailures ?? []).filter((item) => !member || item.conversationId === member.conversationId);
   const stops = collaborationStops(events, outbox);
   const notice = (value) => (0, import_react79.createElement)("p", { role: "status" }, t(value));
@@ -25029,9 +25031,10 @@ function CommunicationActivity({ state, member, events, outbox, operations, oper
     )),
     events.filter((event) => event.type === "bot.input.read").map((event) => (0, import_react79.createElement)("p", { key: event.eventId, role: "status" }, `${labels.get(event.principalId) ?? t("Participant")}: ${t("Update read into task")}`)),
     stops.map((item) => (0, import_react79.createElement)("p", { key: item.messageId, role: "status", "data-causal-stop": item.messageId }, t("Bot collaboration stopped at the safety limit. Send a new Human message to continue."))),
-    failures.map((item) => (0, import_react79.createElement)("p", { key: item.bindingId, role: "status" }, t("Bot delivery needs reconciliation"), ": ", ["REPLY_DECISION_REQUIRED", "REPLY_SEND_FAILED"].includes(item.code) ? friendly({ code: item.code }) : [item.code, item.stage, item.hostCode, item.errorClass, item.location].filter(Boolean).join(" · "))),
+    failures.map((item) => (0, import_react79.createElement)("p", { key: item.bindingId, role: "status" }, t("Bot delivery needs reconciliation"), ": ", ["REPLY_DECISION_REQUIRED", "REPLY_SEND_FAILED"].includes(item.code) ? friendly({ code: item.code }) : [item.code, item.stage, item.toolName, item.registrationFailure, item.hostCode, item.errorClass, item.location].filter(Boolean).join(" · "))),
+    workWarnings.map((item) => (0, import_react79.createElement)("p", { key: `${item.sessionId}:${item.toolName}`, role: "status" }, t("Some work tools are unavailable"), ": ", [item.toolName, item.registrationFailure, item.code].filter(Boolean).join(" · "))),
     exports.map((item) => (0, import_react79.createElement)("p", { key: item.messageId, role: "status" }, t("Send failed"), ": ", item.code)),
-    !error && !state?.error && !pollError && !pendingAttempt && !operationPending && !operations.length && !outbox.some((item) => item.state !== "accepted") && !stops.length && !failures.length && !exports.length ? notice("No activity needs attention.") : null
+    !error && !state?.error && !pollError && !pendingAttempt && !operationPending && !operations.length && !outbox.some((item) => item.state !== "accepted") && !stops.length && !failures.length && !exports.length && !workWarnings.length ? notice("No activity needs attention.") : null
   );
 }
 

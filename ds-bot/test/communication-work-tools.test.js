@@ -192,3 +192,11 @@ test('inherited schedule tools target the owning local Bot so future tasks never
  assert.equal(f.calls[0].args.prompt,'Synthetic scheduled task')
  assert.match(f.registered.get('schedule_list').description,/own local chat/)
 })
+
+
+test('work tool registration failures are not swallowed as optional transport mismatches',async()=>{
+ const f=fixture();f.define('read')
+ const failure=new Error('synthetic capability registration failure')
+ f.agent.ctx.tools.register=()=>{throw failure}
+ await assert.rejects(syncWorkTools(f.runtime,f.agent,f.bot),error=>error.code==='COMMUNICATION_SESSION_UNAVAILABLE'&&error.cause===failure&&error.toolName==='read'&&error.registrationFailure==='registration-failed')
+})

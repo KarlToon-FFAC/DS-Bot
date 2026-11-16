@@ -1145,7 +1145,8 @@ test('routine failures, queues and reconciliation have no bottom console and act
       { id: 'pending-here', type: 'message.publish', state: 'pending', conversationId: 'group', text: 'Pending text' },
       { id: 'old-foreign', type: 'invite', state: 'failed', conversationId: 'other', error: 'FORBIDDEN' },
       { id: 'bot-owned', type: 'invite', state: 'failed', conversationId: 'group', principalId: 'bot:a:private', error: 'SECRET_BOT_FAILURE' }],
-    errors: [{ bindingId: 'here', conversationId: 'group', code: 'CURRENT_RECONCILE' }, { bindingId: 'elsewhere', conversationId: 'other', code: 'OTHER_RECONCILE' }],
+    errors: [{ bindingId: 'here', conversationId: 'group', code: 'CURRENT_RECONCILE',stage:'work-tools-register',toolName:'read_probe',registrationFailure:'scope-conflict' }, { bindingId: 'elsewhere', conversationId: 'other', code: 'OTHER_RECONCILE' }],
+    workToolWarnings:[{bindingId:'here',sessionId:'remote',conversationId:'group',toolName:'read_probe',registrationFailure:'scope-conflict',code:'WORK_TOOL_SCOPE_CONFLICT'},{bindingId:'other',sessionId:'elsewhere',conversationId:'other',toolName:'SECRET_OTHER_SCOPE'}],
     exportFailures: [{ messageId: 'export', conversationId: 'group', code: 'CURRENT_EXPORT' }] }
   await pane({ snapshot, handle: async body => { if (body.endpoint === 'send') throw Object.assign(new Error('uncertain'), { code: 'REQUEST_TIMEOUT' }); return {} } }, async ({ doc, click, edit, calls }) => {
     await click('Shared group')
@@ -1156,6 +1157,9 @@ test('routine failures, queues and reconciliation have no bottom console and act
     const activity = doc.querySelector('.bt-comm-activity')
     assert.match(activity.textContent, /Preserved failed text|Pending text/)
     assert.match(activity.textContent, /CURRENT_RECONCILE/); assert.match(activity.textContent, /CURRENT_EXPORT/)
+    assert.match(activity.textContent,/work-tools-register.*read_probe.*scope-conflict/)
+    assert.match(activity.textContent,/Some work tools are unavailable.*read_probe.*scope-conflict/)
+    assert.doesNotMatch(activity.textContent,/SECRET_OTHER_SCOPE/)
     assert.doesNotMatch(activity.textContent, /OTHER_RECONCILE|SECRET_BOT_FAILURE|Operation failed/)
     assert.equal(calls.some(body => !['state', 'history', 'read', 'participant-profile', 'contact-requests'].includes(body.endpoint)), false)
     await click('Cancel')

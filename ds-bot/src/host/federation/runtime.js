@@ -24,7 +24,7 @@ import { startedSources } from './work-events.js'
 import { conversationSummary, safeManagementUrl } from './conversation-summary.js'
 import { splitRef } from '../text.js'
 import { communicationPrompt } from './prompt.js'
-import { botWorkDirectory, syncWorkTools, syncWorkPermission, cancelRevokedWork } from './work-tools.js'
+import { botWorkDirectory, syncWorkTools, syncWorkPermission, cancelRevokedWork,workToolWarnings } from './work-tools.js'
 import { RelationshipMemory, relationshipMemoryContext } from './relationship-memory.js'
 import { OUTSIDE_CONVERSATION_TOOLS } from './tool-scope.js'
 import { LOCAL_MANAGEMENT_TOOLS, localManagementAuthority } from './local-management.js'
@@ -276,7 +276,7 @@ export class CommunicationRuntime {
     return communicationPrompt(bot, binding, member, { ...(this.relationshipContexts?.get(binding.id) ?? this.conversations.get(binding.conversationId)),
       botReplyActivation:this.transport?.welcome?.capabilities?.includes('bot-reply-activation')===true,
       ownSkills:ownSkills(this,bot).map(({name,description})=>({name,description})),workspaceGuidance:this.workspaceGuidance?.get(binding.id)??'',
-      localUserPrincipalId: this.human.principalId, remoteWorkApproval: this.settings.remoteWorkApproval ?? 'inherit', workToolNames: this.workToolNames?.get(binding.id) ?? [], localMemory: this.localMemoryFor(binding), relationshipMemory: this.relationshipMemoryFor(binding) })
+      localUserPrincipalId: this.human.principalId, remoteWorkApproval: this.settings.remoteWorkApproval ?? 'inherit', workToolNames: this.workToolNames?.get(binding.id) ?? [], workToolWarnings:workToolWarnings(this).filter(item=>item.bindingId===binding.id), localMemory: this.localMemoryFor(binding), relationshipMemory: this.relationshipMemoryFor(binding) })
   }
   async relationshipContext(principalId, input) {
     if (!this.transport.connected) fail('COMMUNICATION_AUTHORIZATION_UNKNOWN')
@@ -795,7 +795,7 @@ export class CommunicationRuntime {
       managementRevision: this.managementRevision ?? 0, transport: this.transport.diagnostics?.() ?? null,
       compatibility: this.transport.compatibility, managementUrl, managementAvailable: managementUrl !== null,
       lastConnectedAt: this.lastConnectedAt ?? null, error: this.transportError ?? this.lastError ?? null, avatarError: this.avatarError ?? null, contacts: this.contacts.map(person=>this.modelAvailability?.has(person.principalId)?{...person,availabilityError:this.modelAvailability.get(person.principalId)}:person),
-      limits: this.queue.limits, workApprovals: CommunicationRuntime.prototype.workApprovals.call(this),
+      limits: this.queue.limits, workToolWarnings:workToolWarnings(this).filter(item=>memberships.some(member=>member.conversationId===item.conversationId)), workApprovals: CommunicationRuntime.prototype.workApprovals.call(this),
       localBots: [...this.bots.values()].map(bot => ({ principalId: bot.principalId, displayName: this.rt.botOf(bot.localRef)?.name ?? bot.displayName })),
       conversations: memberships.map(member => ({ ...member, cachedWatermark:this.queue.cursor(member.conversationId,member.principalId,member.membershipEpoch),info: this.conversations.get(member.conversationId) ?? null,
         lastMessage: conversationSummary(this.queue.lastMessage(member.conversationId, member.principalId, member.membershipEpoch),

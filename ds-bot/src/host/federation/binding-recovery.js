@@ -8,7 +8,7 @@ export function bindingFailure(error,stage,sessionId) {
   })
 }
 export function safeBindingFailure(error,stage) {
-  return {stage:error?.bindingStage??stage,...(typeof error?.sessionId==='string'?{sessionId:error.sessionId}:{}),
+  return {stage:error?.bindingStage??stage,...(typeof error?.toolName==='string'&&/^[A-Za-z0-9_.:-]{1,128}$/.test(error.toolName)?{toolName:error.toolName}:{}),...( ['reserved-transport','scope-conflict','registration-failed'].includes(error?.registrationFailure)?{registrationFailure:error.registrationFailure}:{}),...(typeof error?.sessionId==='string'?{sessionId:error.sessionId}:{}),
     ...(safeCode(error?.hostCode??error?.code)?{hostCode:safeCode(error.hostCode??error.code)}:{}),
     ...(error?.bindingLocation||locationOf(error)?{location:error?.bindingLocation??locationOf(error)}:{}),
     errorClass:['TypeError','RangeError','SyntaxError','Error','RemoteError','AbortError'].includes(error?.errorClass??error?.name)?error.errorClass??error.name:'Error'}
