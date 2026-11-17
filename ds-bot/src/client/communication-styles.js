@@ -304,9 +304,14 @@ export const communicationCSS = `
 .bt-comm-log article>strong{grid-column:2;grid-row:1;display:flex;align-items:center;gap:3px;padding:0 10px;color:var(--bt-ink-2);font-size:12px;line-height:18px}
 .bt-comm-log article>.bt-comm-message-bubble{grid-column:2;grid-row:2;min-width:0;padding:7px 12px;border-radius:18px;background:var(--bt-bubble);overflow-wrap:anywhere}
 .bt-comm-body p{margin:0}
-.bt-comm-log article[data-self=true]{display:flex;flex-direction:column;align-items:flex-end;margin-left:auto;max-width:85%;background:none;color:var(--bt-ink)}
-.bt-comm-log article[data-self=true]>.bt-comm-avatar,.bt-comm-log article[data-self=true]>strong{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+.bt-comm-log article[data-self=true]{grid-template-columns:minmax(0,1fr) 28px;margin-left:auto;max-width:85%;background:none;color:var(--bt-ink)}
+.bt-comm-log article[data-self=true]>strong{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
 .bt-comm-log article[data-self=true]>.bt-comm-message-bubble,.bt-comm-log article[data-self=true]>.bt-comm-pending-text{background:var(--bt-user);color:var(--bt-user-ink);border-radius:18px;padding:7px 12px;min-width:0;max-width:100%}
+.bt-comm-log article[data-self=true]>:is(.bt-comm-avatar,.bt-comm-avatar-button){grid-column:2;grid-row:2}
+.bt-comm-log article[data-self=true]>:is(.bt-comm-message-bubble,.bt-comm-pending-text){grid-column:1;grid-row:2;margin:0}
+.bt-comm-log article[data-self=true]>.bt-comm-activation{grid-column:1;justify-content:flex-end}
+.bt-comm-log article[data-self=true]>.bt-comm-message-actions{grid-column:1;justify-content:flex-end}
+.bt-comm-log article[data-self=true]>[role=status]{grid-column:1;grid-row:4;justify-self:end;margin:0;font-size:11px;color:var(--bt-ink-2)}
 .bt-comm-log article[data-self=true]>.bt-comm-reference{color:var(--bt-ink-2)}
 .bt-comm-message-actions{grid-column:2;grid-row:4;justify-content:flex-start;gap:6px;min-height:24px;margin:0;padding-inline:6px;color:var(--bt-ink-3)}
 .bt-comm-message-actions button{border:0;background:none;min-height:24px;padding:2px 5px;color:var(--bt-ink-2);opacity:0;transition:opacity .12s}

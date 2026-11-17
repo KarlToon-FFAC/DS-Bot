@@ -2,6 +2,13 @@ import { createElement as h, useEffect, useRef, useState } from 'react'
 import { fnv1a, lookOf, shapeId, shapeOf, MASK_ID, nextMarkSerial, characterMarkup } from './characters.js'
 import { t } from './i18n.js'
 
+// Local chats have no published Human identity; keep an explicit human fallback.
+export function UserAvatar({size=28}) {
+  return h('span',{className:'bt-user-avatar',role:'img','aria-label':t('You'),title:t('You'),style:{width:size,height:size,flexBasis:size}},
+    h('svg',{viewBox:'0 0 24 24',width:Math.round(size*.7),height:Math.round(size*.7),fill:'none',stroke:'currentColor',strokeWidth:1.6,'aria-hidden':true},
+      h('circle',{cx:12,cy:8,r:3.5}),h('path',{d:'M4.5 21v-2a7.5 7.5 0 0 1 15 0v2'})))
+}
+
 export { colorOf, lookOf } from './characters.js'
 
 // -------------------------------------------------------------------------

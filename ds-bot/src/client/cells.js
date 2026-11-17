@@ -5,7 +5,7 @@ import { MarkdownText, writeClipboard } from './dsh-primitives.js'
 import { inkText } from './inks.js'
 import { linkMentions, mentionTarget, dayLabel, contentText, stripHeader, isHiddenTurn, isHiddenAssistant, isRelayContext, relaysBefore, relayPart, commRunOf, toolName, toolArgs, reminderPrompts, elapsedLabel, clockLabel, messageClock } from './text.js'
 import { SmileIcon, ReplyIcon, DotsIcon, CheckIcon, DownloadIcon, CopyIcon, MemoryIcon } from './icons.js'
-import { colorOf, toolState, BotMark, RoomAvatar } from './mark.js'
+import { colorOf, toolState, BotMark, RoomAvatar,UserAvatar } from './mark.js'
 import { CellEmpty } from './cell-empty.js'
 import { SettledQuestion, PendingQuestion } from './questions.js'
 import { AnsweredReply, WidgetCell } from './widget-cell.js'
@@ -430,7 +430,7 @@ function EarlierUser({ row, actions }) {
   return h('div', { className: 'bt-urow', onContextMenu:event=>context.open(event,[row.text&&{label:t('Copy'),run:()=>navigator.clipboard.writeText(row.text)}]) }, context.menu, h('div', { className: 'bt-ububble', 'data-folded': folded || undefined },
     control ? h('div', { className: 'bt-fold-body' }, area) : area,
     control,
-    row.images ? h('span', { className: 'bt-uimages' }, row.images === 1 ? t('1 image') : t('{count} images', { count: row.images })) : null))
+    row.images ? h('span', { className: 'bt-uimages' }, row.images === 1 ? t('1 image') : t('{count} images', { count: row.images })) : null),h(UserAvatar))
 }
 
 // The earlier parts of a Bot's own chat, above its current part as one conversation.
@@ -948,7 +948,7 @@ function GroupReplies({ sessionId, callId, done, content, roster, actions, useUi
       if (reply.kind === 'user') {
         return h('div', { key: `user-${index}`, className: 'bt-urow' }, h('div', { className: 'bt-ububble' },
           h(MarkdownText, { text: reply.text, labels: mdLabels(), variant: 'compact' }),
-          Number.isFinite(time) ? h('div', { className: 'bt-utime', title: clockLabel(time) }, messageClock(time)) : null))
+          Number.isFinite(time) ? h('div', { className: 'bt-utime', title: clockLabel(time) }, messageClock(time)) : null),h(UserAvatar))
       }
       if (reply.kind !== undefined) {
         return h(RelayEvent, { key: `${reply.botId ?? reply.kind}-${index}`, reply, bot, sessionId, actions })

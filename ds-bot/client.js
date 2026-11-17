@@ -3109,6 +3109,7 @@ body{--bt-ink:#141414;--bt-danger:#e02135;--bt-ink-2:rgba(20,20,20,.6);--bt-ink-
 body[data-ds-dark-theme]{--bt-ink:#f2f2f2;--bt-ink-2:rgba(242,242,242,.6);--bt-ink-3:rgba(242,242,242,.36);--bt-bubble:#262626;--bt-sidebar:#1b1b1b;--bt-main:#141414;--bt-line:rgba(255,255,255,.08);--bt-line-2:rgba(255,255,255,.15);--bt-line-weak:rgba(255,255,255,.1);--bt-hover:rgba(160,160,160,.12);--bt-active:rgba(160,160,160,.2);--bt-card:#1f1f1f;--bt-user:#f2f2f2;--bt-user-ink:#141414;--bt-tag-bg:rgba(255,255,255,.09);--bt-tag-ink:rgba(242,242,242,.62)}
 ${Object.entries(INKS).map(([name, [light]]) => `body{--bt-ink-${name}:${light}}`).join("")}
 ${Object.entries(INKS).map(([name, [, dark]]) => `body[data-ds-dark-theme]{--bt-ink-${name}:${dark}}`).join("")}
+.bt-user-avatar{display:inline-flex;align-items:center;justify-content:center;flex:none;align-self:flex-start;border-radius:50%;background:var(--bt-active);color:var(--bt-ink-2);box-sizing:border-box}
 .bt-mark{display:inline-block;flex:none;position:relative;line-height:0}
 .bt-mark svg{width:100%;height:100%;overflow:visible}
 .bt-mark-img{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;box-shadow:inset 0 0 0 1px var(--bt-line)}
@@ -4259,7 +4260,7 @@ div:has(> nav [class*="_marks"]){display:none!important}
 .bt-earlier-top{display:flex;justify-content:center;align-items:center;height:34px;flex:none}
 .bt-earlier-top:empty{display:none}
 .bt-earlier-top .bt-soft{height:28px;font-size:12px;padding:0 12px}
-.bt-urow{display:flex;justify-content:flex-end}
+.bt-urow{display:flex;justify-content:flex-end;align-items:flex-start;gap:8px}
 .bt-ububble{max-width:calc(var(--bt-msg-w) * 100%);background:var(--bt-user);color:var(--bt-user-ink);border-radius:18px;padding:7px 12px;font-size:14px;line-height:24px;box-sizing:border-box;overflow-wrap:anywhere;text-wrap:pretty;text-autospace:normal}
 .bt-ububble [class*="_markdown"],.bt-ububble a{color:inherit!important}
 .bt-ububble p{margin:0;line-height:24px}
@@ -4375,6 +4376,18 @@ function installCompiledStyles(text, tag) {
 
 // src/client/mark.js
 var import_react2 = require("react");
+function UserAvatar({ size = 28 }) {
+  return (0, import_react2.createElement)(
+    "span",
+    { className: "bt-user-avatar", role: "img", "aria-label": t("You"), title: t("You"), style: { width: size, height: size, flexBasis: size } },
+    (0, import_react2.createElement)(
+      "svg",
+      { viewBox: "0 0 24 24", width: Math.round(size * 0.7), height: Math.round(size * 0.7), fill: "none", stroke: "currentColor", strokeWidth: 1.6, "aria-hidden": true },
+      (0, import_react2.createElement)("circle", { cx: 12, cy: 8, r: 3.5 }),
+      (0, import_react2.createElement)("path", { d: "M4.5 21v-2a7.5 7.5 0 0 1 15 0v2" })
+    )
+  );
+}
 var STATES = ["idle", "thinking", "searching", "working", "sending", "orbit", "waiting", "alert", "done"];
 var botState = (running, activity, alert) => running ? STATES.includes(activity) && activity !== "waiting" ? activity : "working" : alert ? "alert" : activity === "waiting" ? "waiting" : "idle";
 var toolState = (name) => /^(message_bot|stop_bot|create_bot|update_bot|create_group|update_group|delete_group|post_to_group)$/.test(name) ? "sending" : /search|fetch|browse|read|grep|glob|list|recall/i.test(name) ? "searching" : "working";
@@ -5080,7 +5093,7 @@ function AnsweredCell({ node }) {
   const data = node.data ?? {};
   const questions = Array.isArray(data.questions) ? data.questions : [];
   if (questions.length === 0) {
-    return data.text ? (0, import_react8.createElement)("div", { className: "bt-urow" }, (0, import_react8.createElement)("div", { className: "bt-ububble" }, data.text)) : (0, import_react8.createElement)(CellEmpty);
+    return data.text ? (0, import_react8.createElement)("div", { className: "bt-urow" }, (0, import_react8.createElement)("div", { className: "bt-ububble" }, data.text), (0, import_react8.createElement)(UserAvatar)) : (0, import_react8.createElement)(CellEmpty);
   }
   const answers = Array.isArray(data.answers) ? data.answers : [];
   return (0, import_react8.createElement)("div", { className: "bt-q-inline" }, questions.map((question) => (0, import_react8.createElement)(SettledQuestion, {
@@ -9112,7 +9125,7 @@ function EarlierUser({ row, actions }) {
     control ? (0, import_react19.createElement)("div", { className: "bt-fold-body" }, area) : area,
     control,
     row.images ? (0, import_react19.createElement)("span", { className: "bt-uimages" }, row.images === 1 ? t("1 image") : t("{count} images", { count: row.images })) : null
-  ));
+  ), (0, import_react19.createElement)(UserAvatar));
 }
 function EarlierParts({ sessionId, roster, actions }) {
   const [view, setView] = (0, import_react19.useState)({ pages: [], cursor: void 0, loading: true, failed: false, startedAt: null });
@@ -9621,7 +9634,7 @@ function GroupReplies({ sessionId, callId, done, content, roster, actions, useUi
           { className: "bt-ububble" },
           (0, import_react19.createElement)(import_dsh_client_ui_primitives.MarkdownText, { text: reply.text, labels: mdLabels3(), variant: "compact" }),
           Number.isFinite(time) ? (0, import_react19.createElement)("div", { className: "bt-utime", title: clockLabel(time) }, messageClock(time)) : null
-        ));
+        ), (0, import_react19.createElement)(UserAvatar));
       }
       if (reply.kind !== void 0) {
         return (0, import_react19.createElement)(RelayEvent, { key: `${reply.botId ?? reply.kind}-${index}`, reply, bot, sessionId, actions });
@@ -11904,7 +11917,7 @@ function SideEntry({ chatId, entry, actions }) {
   return (0, import_react24.createElement)(
     "div",
     { className: "bt-side-pair", "data-status": entry.status },
-    (0, import_react24.createElement)("div", { className: "bt-side-qrow" }, (0, import_react24.createElement)("div", { className: "bt-side-q" }, question)),
+    (0, import_react24.createElement)("div", { className: "bt-side-qrow" }, (0, import_react24.createElement)("div", { className: "bt-side-q" }, question), (0, import_react24.createElement)(UserAvatar)),
     entry.status === "answering" ? (0, import_react24.createElement)(
       "div",
       { className: "bt-side-a" },
@@ -12034,7 +12047,7 @@ var SIDE_CSS = `
 .bt-side-note{flex:none;margin:0;padding:10px 16px 8px;font-size:12px;line-height:17px;color:var(--bt-ink-3);border-bottom:.5px solid var(--bt-line)}
 .bt-side-scroll{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:14px;padding:14px 16px}
 .bt-side-pair{display:flex;flex-direction:column;gap:8px}
-.bt-side-qrow{display:flex;justify-content:flex-end}
+.bt-side-qrow{display:flex;justify-content:flex-end;align-items:flex-start;gap:8px}
 .bt-side-q{max-width:85%;padding:7px 12px;border-radius:18px;background:var(--bt-user);color:var(--bt-user-ink);font-size:13px;line-height:19px;box-sizing:border-box;overflow-wrap:anywhere;white-space:pre-wrap}
 .bt-side-a{display:flex;flex-direction:column;gap:8px;align-items:flex-start;font-size:13px;line-height:19px;color:var(--bt-ink)}
 .bt-side-status{margin:0;font-size:12px;color:var(--bt-ink-3)}
@@ -22198,6 +22211,7 @@ function UserMessageCell({ node, sessionId, useRoster, actions, renderMessageIma
     "div",
     { ref: row, className: "bt-umsg", "data-steering": steering || void 0, onContextMenu: (event) => context.open(event, [text && { label: t("Copy"), run: () => navigator.clipboard.writeText(text) }]) },
     context.menu,
+    (0, import_react57.createElement)(UserAvatar),
     (0, import_react57.createElement)(
       "div",
       { className: "bt-ustack" },
@@ -22216,6 +22230,7 @@ function UserMessageCell({ node, sessionId, useRoster, actions, renderMessageIma
   );
 }
 var USER_MESSAGE_CSS = `
+.bt-umsg>.bt-user-avatar{align-self:flex-start;margin-top:4px}
 .bt-umsg{display:flex;flex-direction:row-reverse;align-items:center;justify-content:flex-start;gap:4px}
 .bt-ustack{min-width:0;max-width:calc(var(--bt-msg-w) * 100%);display:flex;flex-direction:column;align-items:flex-end;gap:8px}
 .bt-ubody{max-width:100%;box-sizing:border-box;background:var(--bt-user);color:var(--bt-user-ink);border-radius:18px;padding:7px 12px;font-size:var(--dsh-content-font-size,14px);line-height:calc(var(--dsh-content-font-size,14px) + 10px);white-space:pre-wrap;word-break:break-word;text-wrap:pretty;text-autospace:normal}
@@ -25759,9 +25774,14 @@ var communicationCSS = `
 .bt-comm-log article>strong{grid-column:2;grid-row:1;display:flex;align-items:center;gap:3px;padding:0 10px;color:var(--bt-ink-2);font-size:12px;line-height:18px}
 .bt-comm-log article>.bt-comm-message-bubble{grid-column:2;grid-row:2;min-width:0;padding:7px 12px;border-radius:18px;background:var(--bt-bubble);overflow-wrap:anywhere}
 .bt-comm-body p{margin:0}
-.bt-comm-log article[data-self=true]{display:flex;flex-direction:column;align-items:flex-end;margin-left:auto;max-width:85%;background:none;color:var(--bt-ink)}
-.bt-comm-log article[data-self=true]>.bt-comm-avatar,.bt-comm-log article[data-self=true]>strong{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+.bt-comm-log article[data-self=true]{grid-template-columns:minmax(0,1fr) 28px;margin-left:auto;max-width:85%;background:none;color:var(--bt-ink)}
+.bt-comm-log article[data-self=true]>strong{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
 .bt-comm-log article[data-self=true]>.bt-comm-message-bubble,.bt-comm-log article[data-self=true]>.bt-comm-pending-text{background:var(--bt-user);color:var(--bt-user-ink);border-radius:18px;padding:7px 12px;min-width:0;max-width:100%}
+.bt-comm-log article[data-self=true]>:is(.bt-comm-avatar,.bt-comm-avatar-button){grid-column:2;grid-row:2}
+.bt-comm-log article[data-self=true]>:is(.bt-comm-message-bubble,.bt-comm-pending-text){grid-column:1;grid-row:2;margin:0}
+.bt-comm-log article[data-self=true]>.bt-comm-activation{grid-column:1;justify-content:flex-end}
+.bt-comm-log article[data-self=true]>.bt-comm-message-actions{grid-column:1;justify-content:flex-end}
+.bt-comm-log article[data-self=true]>[role=status]{grid-column:1;grid-row:4;justify-self:end;margin:0;font-size:11px;color:var(--bt-ink-2)}
 .bt-comm-log article[data-self=true]>.bt-comm-reference{color:var(--bt-ink-2)}
 .bt-comm-message-actions{grid-column:2;grid-row:4;justify-content:flex-start;gap:6px;min-height:24px;margin:0;padding-inline:6px;color:var(--bt-ink-3)}
 .bt-comm-message-actions button{border:0;background:none;min-height:24px;padding:2px 5px;color:var(--bt-ink-2);opacity:0;transition:opacity .12s}
@@ -26784,7 +26804,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
   const versionDetails = `${t("Client")}: ${displayCommunicationVersion(compatibility.clientVersion) ?? t("Version not reported")} · Hub: ${displayCommunicationVersion(compatibility.hubVersion) ?? t("Version not reported")}`;
   const roleLabel = (role) => role === "owner" ? "Group owner" : role === "admin" ? "Group admin" : "Group member";
   const avatar = (id, name) => {
-    const contact = contacts.find((person) => person.principalId === id);
+    const contact = contacts.find((person) => person.principalId === id) ?? knownMembers.find((person) => person.principalId === id);
     return (0, import_react83.createElement)(CommunicationAvatar, { person: contact ?? { principalId: id, displayName: name ?? id, kind: id?.startsWith("bot:") ? "bot" : id?.startsWith("human:") ? "human" : "group" }, request, allowed: Boolean(contact) });
   };
   const messageAvatar = (id, name) => member?.kind === "group" && [...currentMembers, ...member.info?.formerMembers ?? []].some((person) => person.principalId === id) ? (0, import_react83.createElement)("button", { type: "button", className: "bt-comm-avatar-button", "data-context-action": true, "aria-label": t("View profile of {name}", { name: labels.get(id) ?? name ?? t("Participant") }), onClick: (event) => inspect([id], event.currentTarget) }, avatar(id, name)) : avatar(id, name);

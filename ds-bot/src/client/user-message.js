@@ -2,7 +2,7 @@ import { useActionMenu } from './action-menu.js'
 import { createElement as h, Fragment, useEffect, useRef, useState } from 'react'
 import * as ui from '@deepseek-ai/dsh-client-ui-primitives'
 import { mentionSpans } from '../shared/mentions.js'
-import { BotMark } from './mark.js'
+import { BotMark,UserAvatar } from './mark.js'
 import { CheckIcon, CopyIcon } from './icons.js'
 import { dateLocale, t } from './i18n.js'
 import { noHover } from './motion.js'
@@ -109,7 +109,7 @@ export function UserMessageCell({ node, sessionId, useRoster, actions, renderMes
     if (!noHover() || event.target instanceof Element && event.target.closest('a,button,input,textarea,select,pre,code,[role=button],[role=link]')) return
     setToolsOpen(value => !value)
   }
-  return h('div', { ref: row, className: 'bt-umsg', 'data-steering': steering || undefined, onContextMenu: event => context.open(event, [text && {label:t('Copy'),run:()=>navigator.clipboard.writeText(text)}]) }, context.menu,
+  return h('div', { ref: row, className: 'bt-umsg', 'data-steering': steering || undefined, onContextMenu: event => context.open(event, [text && {label:t('Copy'),run:()=>navigator.clipboard.writeText(text)}]) }, context.menu,h(UserAvatar),
     h('div', { className: 'bt-ustack' },
       attachments.length > 0 ? h(Attachments, { attachments, renderMessageImages }) : null,
       text !== '' || rest.length > 0 ? h('div', { className: 'bt-ubody', title: clock(data.time), 'data-folded': folded || undefined, onClick: tapTools },
@@ -122,6 +122,7 @@ export function UserMessageCell({ node, sessionId, useRoster, actions, renderMes
 }
 
 export const USER_MESSAGE_CSS = `
+.bt-umsg>.bt-user-avatar{align-self:flex-start;margin-top:4px}
 .bt-umsg{display:flex;flex-direction:row-reverse;align-items:center;justify-content:flex-start;gap:4px}
 .bt-ustack{min-width:0;max-width:calc(var(--bt-msg-w) * 100%);display:flex;flex-direction:column;align-items:flex-end;gap:8px}
 .bt-ubody{max-width:100%;box-sizing:border-box;background:var(--bt-user);color:var(--bt-user-ink);border-radius:18px;padding:7px 12px;font-size:var(--dsh-content-font-size,14px);line-height:calc(var(--dsh-content-font-size,14px) + 10px);white-space:pre-wrap;word-break:break-word;text-wrap:pretty;text-autospace:normal}

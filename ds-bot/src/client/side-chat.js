@@ -2,6 +2,7 @@
 // starts one. A chat is a list of question/answer entries; a follow-up carries
 // the chat's earlier finished pairs to the model.
 import { createElement as h, useEffect, useRef, useState } from 'react'
+import {UserAvatar} from './mark.js'
 import { call } from './api.js'
 import { MarkdownText } from './dsh-primitives.js'
 import { hostText, t } from './i18n.js'
@@ -20,7 +21,7 @@ function SideEntry({ chatId, entry, actions }) {
     Promise.resolve(actions.cancelSide(chatId, entry.id)).catch(() => {}).finally(() => setCancelling(false))
   }
   return h('div', { className: 'bt-side-pair', 'data-status': entry.status },
-    h('div', { className: 'bt-side-qrow' }, h('div', { className: 'bt-side-q' }, question)),
+    h('div', { className: 'bt-side-qrow' }, h('div', { className: 'bt-side-q' }, question),h(UserAvatar)),
     entry.status === 'answering'
       ? h('div', { className: 'bt-side-a' },
           h('span', { className: 'bt-shimmer' }, t('Answering…')),
@@ -128,7 +129,7 @@ export const SIDE_CSS = `
 .bt-side-note{flex:none;margin:0;padding:10px 16px 8px;font-size:12px;line-height:17px;color:var(--bt-ink-3);border-bottom:.5px solid var(--bt-line)}
 .bt-side-scroll{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:14px;padding:14px 16px}
 .bt-side-pair{display:flex;flex-direction:column;gap:8px}
-.bt-side-qrow{display:flex;justify-content:flex-end}
+.bt-side-qrow{display:flex;justify-content:flex-end;align-items:flex-start;gap:8px}
 .bt-side-q{max-width:85%;padding:7px 12px;border-radius:18px;background:var(--bt-user);color:var(--bt-user-ink);font-size:13px;line-height:19px;box-sizing:border-box;overflow-wrap:anywhere;white-space:pre-wrap}
 .bt-side-a{display:flex;flex-direction:column;gap:8px;align-items:flex-start;font-size:13px;line-height:19px;color:var(--bt-ink)}
 .bt-side-status{margin:0;font-size:12px;color:var(--bt-ink-3)}

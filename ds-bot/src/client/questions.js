@@ -1,5 +1,6 @@
 import { createElement as h, useEffect, useId, useRef, useState, useSyncExternalStore } from 'react'
 import { CloseIcon, CheckIcon } from './icons.js'
+import {UserAvatar} from './mark.js'
 import { CellEmpty } from './cell-empty.js'
 import { t } from './i18n.js'
 import { useDockHold } from './card-hold.js'
@@ -220,7 +221,7 @@ export function AnsweredCell({ node }) {
   const data = node.data ?? {}
   const questions = Array.isArray(data.questions) ? data.questions : []
   if (questions.length === 0) {
-    return data.text ? h('div', { className: 'bt-urow' }, h('div', { className: 'bt-ububble' }, data.text)) : h(CellEmpty)
+    return data.text ? h('div', { className: 'bt-urow' }, h('div', { className: 'bt-ububble' }, data.text),h(UserAvatar)) : h(CellEmpty)
   }
   const answers = Array.isArray(data.answers) ? data.answers : []
   return h('div', { className: 'bt-q-inline' }, questions.map(question => h(SettledQuestion, {

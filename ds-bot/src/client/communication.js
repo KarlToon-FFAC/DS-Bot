@@ -553,7 +553,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
   const versionDetails = `${t('Client')}: ${displayCommunicationVersion(compatibility.clientVersion) ?? t('Version not reported')} · Hub: ${displayCommunicationVersion(compatibility.hubVersion) ?? t('Version not reported')}`
   const roleLabel = role => role === 'owner' ? 'Group owner' : role === 'admin' ? 'Group admin' : 'Group member'
   const avatar = (id, name) => {
-    const contact = contacts.find(person => person.principalId === id)
+    const contact = contacts.find(person => person.principalId === id) ?? knownMembers.find(person=>person.principalId===id)
     return h(CommunicationAvatar, { person: contact ?? { principalId: id, displayName: name ?? id, kind: id?.startsWith('bot:') ? 'bot' : id?.startsWith('human:') ? 'human' : 'group' }, request, allowed: Boolean(contact) })
   }
   const messageAvatar = (id,name) => member?.kind === 'group' && [...currentMembers,...(member.info?.formerMembers ?? [])].some(person=>person.principalId===id)
