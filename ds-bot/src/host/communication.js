@@ -330,6 +330,9 @@ export function install(rt) {
         switch (body.endpoint) {
           case 'state': value = { ...comm.snapshot(), ...communicationReloadState(rt, appliedSettings) }; break
           case 'routing-audit': value = comm.queue.routingAudit(body.limit); break
+          case 'set-conversation-hidden': value=comm.manageConversation(body,'hidden'); break
+          case 'set-conversation-pinned': value=comm.manageConversation(body,'pinned'); break
+          case 'delete-conversation': value=comm.manageConversation(body,'delete'); break
           case 'set-conversation-archived': value = comm.setConversationArchived(body); break
           case 'answer-work-approval': value = await comm.answerWorkApproval(body); break
           case 'relationship-memory':
@@ -337,16 +340,16 @@ export function install(rt) {
           case 'forget-relationship-memory': value = await comm.manageRelationships(body.endpoint, body); break
           case 'update-handoff': value = comm.sendUpdate(comm.human,body,body.messageId); break
           case 'participant-profile': value = await participantProfile(comm, body); break
-          case 'bot-dm-history': { const context = botDmContext(comm, body); value = comm.history(context.principalId, body); break }
+          case 'bot-dm-history': { const context = botDmContext(comm, body); value = comm.history(context.principalId, body,true); break }
           case 'bot-dm-read': { const context = botDmContext(comm, body); comm.queue.markBotDmRead(body.conversationId,context.principalId,context.member.membershipEpoch,body.seq); value = {status:'ownerViewed',conversationId:body.conversationId,seq:body.seq}; break }
-          case 'bot-dm-reference': { const context = botDmContext(comm, body); value = comm.queue.reference(body.conversationId, context.principalId, context.member.membershipEpoch, body.messageId); break }
+          case 'bot-dm-reference': { const context = botDmContext(comm, body); value = comm.visibleReference(context.principalId,body); break }
           case 'search-history': value = comm.searchHistory(body); break
           case 'history': value = comm.history(comm.human.principalId, body); break
           case 'thread': value = comm.thread(comm.human.principalId, body); break
           case 'members': value = await comm.members(comm.human.principalId, body); break
           case 'reference': {
-            const member = comm.member(comm.human.principalId, body.conversationId)
-            value = comm.queue.reference(body.conversationId, comm.human.principalId, member.membershipEpoch, body.messageId)
+            const member = comm.member(comm.human.principalId, body.conversationId,body.membershipEpoch)
+            value = comm.visibleReference(comm.human.principalId,{...body,membershipEpoch:member.membershipEpoch})
             break
           }
           case 'read': value = comm.markRead(body); break
@@ -368,7 +371,7 @@ export function install(rt) {
           case 'save-settings': value = await comm.operation(comm.human.principalId,'group.settings',{conversationId:body.conversationId,membershipEpoch:body.membershipEpoch,expectedVersion:body.expectedVersion,
             ...(body.title === undefined ? {} : { title: body.title }), ...(body.routing === undefined ? {} : { routing: body.routing }),
             ...(body.policies === undefined ? {} : { policies: body.policies })},body.operationId); break
-          case 'dm': value = await comm.operation(comm.human.principalId, 'dm.open', { otherPrincipalId: body.otherPrincipalId }, body.operationId); break
+          case 'dm': value = await comm.operation(comm.human.principalId, 'dm.open', { otherPrincipalId: body.otherPrincipalId }, body.operationId); if(value.conversationId)comm.queue.setConversationHidden(value.conversationId,false); break
           case 'create-group': value = await comm.operation(comm.human.principalId, 'group.create', { title: body.title }, body.operationId); break
           case 'invite': value = await comm.operation(comm.human.principalId, 'group.invite', { membershipEpoch: body.membershipEpoch, expectedVersion: body.expectedVersion, conversationId: body.conversationId, inviteePrincipalId: body.inviteePrincipalId }, body.operationId); break
           case 'accept': {

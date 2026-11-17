@@ -5,7 +5,7 @@ import {t} from './i18n.js'
 export function CommunicationHistorySearch({request,conversations,initialConversationId='',onSelect}){
  const [query,setQuery]=useState(''),[selection,setSelection]=useState(initialConversationId),[page,setPage]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState('')
  const order=useRef(0),live=useRef(true),[trail,setTrail]=useState([])
- const scope=JSON.stringify(conversations.map(item=>[item.conversationId,item.membershipEpoch]).sort()),key=JSON.stringify([query.trim(),selection,scope]),current=useRef(key);current.current=key
+ const scope=JSON.stringify(conversations.map(item=>[item.conversationId,item.membershipEpoch,item.historyAfter??0]).sort()),key=JSON.stringify([query.trim(),selection,scope]),current=useRef(key);current.current=key
  useEffect(()=>{live.current=true;return()=>{live.current=false;order.current++}},[])
  const search=async(cursor=null)=>{
   const token=++order.current,context=key
@@ -33,7 +33,7 @@ export function CommunicationHistorySearch({request,conversations,initialConvers
   h('label',{className:'bt-comm-field'},t('Search chat history'),h('input',{value:query,maxLength:200,'aria-label':t('Search chat history'),onChange:event=>setQuery(event.target.value)})),
   h('label',{className:'bt-comm-field'},t('Search scope'),h('select',{value:selection,'aria-label':t('Search scope'),onChange:event=>setSelection(event.target.value)},
    h('option',{value:''},t('All conversations')),conversations.map(item=>h('option',{key:item.conversationId,value:item.conversationId},item.searchTitle)))),
-  h('p',{className:'bt-comm-reference'},t('Searches messages already synchronized to this device, including archived private chats.')),
+  h('p',{className:'bt-comm-reference'},t('Searches messages already synchronized to this device, including hidden conversations.')),
   busy?h('p',{role:'status'},t('Searching chat history…')):null,
   error?h('div',{role:'alert',className:'bt-comm-error'},t(error),h('button',{type:'button',disabled:busy,onClick:()=>{setTrail([]);void search()}},t('Search again'))):null,
   h('div',{className:'bt-comm-history-results','aria-label':t('Chat history results')},(result?.results??[]).map(item=>h('button',{type:'button',key:JSON.stringify([item.conversationId,item.membershipEpoch,item.messageId]),className:'bt-comm-history-result',disabled:busy,onClick:()=>onSelect(item)},

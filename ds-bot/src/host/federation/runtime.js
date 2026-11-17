@@ -746,13 +746,15 @@ export class CommunicationRuntime {
     this.queue.stageReplyTargets(binding.id, cause.causationDeliveryId, targets, exec.communicationSource)
     return { status: 'staged', activationTargets: targets, sendsMessage: false }
   }
-  history(principalId, input) {
+  history(principalId, input, ownerView=false) {
     const member = this.member(principalId, input.conversationId, input.membershipEpoch)
-    const events = this.queue.view(input.conversationId, principalId, member.membershipEpoch, { after: input.after ?? 0,
+    if(input.after!==undefined&&(!Number.isSafeInteger(input.after)||input.after<0))fail('INVALID_CURSOR')
+    const floor=principalId===this.human.principalId||ownerView?this.queue.deletedThrough(input.conversationId)??0:0
+    const events = this.queue.view(input.conversationId, principalId, member.membershipEpoch, { after: Math.max(input.after ?? 0,floor),
       before: input.before, limit: input.limit ?? 50, latest: input.latest ?? true })
     return { conversationId: input.conversationId, membershipEpoch: member.membershipEpoch, joinSeq: member.joinSeq,
       watermark: this.queue.cursor(input.conversationId, principalId, member.membershipEpoch), events,
-      ...this.queue.historyEdges(input.conversationId,principalId,member.membershipEpoch,events) }
+      ...this.queue.historyEdges(input.conversationId,principalId,member.membershipEpoch,events,floor) }
   }
   searchHistory(input) {
     if (!this.everReconciled && !CommunicationRuntime.prototype.hasAuthorizedProjection.call(this)) fail('AUTHORIZATION_PENDING')
@@ -764,11 +766,11 @@ export class CommunicationRuntime {
       if (input.membershipEpoch !== undefined && contexts[0].membershipEpoch !== input.membershipEpoch) fail('MEMBERSHIP_REVOKED')
     }
     for (const context of contexts) this.member(context.principalId,context.conversationId,context.membershipEpoch)
-    return searchHistory(this.queue,contexts,input)
+    return searchHistory(this.queue,contexts.map(member=>({...member,joinSeq:Math.max(member.joinSeq,(this.queue.deletedThrough(member.conversationId)??0)+1)})),input)
   }
   thread(principalId, input) {
     const member = this.member(principalId, input.conversationId, input.membershipEpoch)
-    return this.queue.thread(input.conversationId, principalId, member.membershipEpoch, input.messageId, input)
+    return this.queue.thread(input.conversationId, principalId, member.membershipEpoch, input.messageId, {...input,floor:principalId===this.human?.principalId?this.queue.deletedThrough(input.conversationId)??0:0})
   }
   async members(principalId, input) {
     const member = this.member(principalId, input.conversationId, input.membershipEpoch)
@@ -782,9 +784,9 @@ export class CommunicationRuntime {
   unreadCount() {
     if (this.closed || !this.everReconciled) return 0
     const archived = new Set(this.queue.archivedConversations())
-    return this.queue.memberships().filter(member => member.principalId === this.human.principalId && !archived.has(member.conversationId))
-      .reduce((total,member) => total + this.queue.unread(member.conversationId,member.principalId,member.membershipEpoch),0)
-      + botDmRecords(this).filter(member => !archived.has(member.conversationId)).reduce((total,member) => total + member.unread,0)
+    const human=this.queue.memberships().filter(member=>member.principalId===this.human.principalId&&!archived.has(member.conversationId))
+    return human.reduce((total,member)=>total+this.queue.unread(member.conversationId,member.principalId,member.membershipEpoch,this.queue.deletedThrough(member.conversationId)??0),0)
+      +botDmRecords(this).filter(member=>!archived.has(member.conversationId)).reduce((total,member)=>total+this.queue.botDmUnread(member.conversationId,member.principalId,member.membershipEpoch,this.queue.deletedThrough(member.conversationId)??0),0)
   }
   snapshot() {
     const memberships = this.everReconciled ? this.queue.memberships().filter(member => member.principalId === this.human.principalId) : []
@@ -805,9 +807,9 @@ export class CommunicationRuntime {
       conversations: memberships.map(member => ({ ...member, cachedWatermark:this.queue.cursor(member.conversationId,member.principalId,member.membershipEpoch),info: this.conversations.get(member.conversationId) ?? null,
         lastMessage: conversationSummary(this.queue.lastMessage(member.conversationId, member.principalId, member.membershipEpoch),
           [...this.contacts, ...(this.conversations.get(member.conversationId)?.members ?? [])]),
-        unread: this.queue.unread(member.conversationId, member.principalId, member.membershipEpoch) })),
-      botConversations: botDmRecords(this),
-      archivedConversationIds: this.queue.archivedConversations(), conversationPreferencesScope: conversationPreferencesScope(this),
+        unread: this.queue.unread(member.conversationId, member.principalId, member.membershipEpoch) })).map(member=>CommunicationRuntime.prototype.conversationRecord.call(this,member)).filter(Boolean),
+      botConversations: botDmRecords(this).map(member=>CommunicationRuntime.prototype.conversationRecord.call(this,member)).filter(Boolean),
+      archivedConversationIds: this.queue.archivedConversations(), ...this.queue.conversationPreferences(), conversationPreferencesScope: conversationPreferencesScope(this),
       invites: this.queue.invites(), outbox: this.queue.outboxFor(this.human.principalId).map(item => ({ ...item, deliveries: this.deliveryStates.get(item.id) ?? [] })),
       errors: [...this.errors].flatMap(([bindingId,code]) => {
         const binding = this.queue.bindings().find(item => item.id === bindingId)
@@ -841,6 +843,34 @@ export class CommunicationRuntime {
     }
     this.rt.answerApproval(entry.id, input.choice)
     return { answered: true }
+  }
+  visibleReference(principalId,input) {
+    const member=this.member(principalId,input.conversationId,input.membershipEpoch)
+    const event=this.queue.reference(input.conversationId,principalId,member.membershipEpoch,input.messageId)
+    if(event.conversationSeq<=(this.queue.deletedThrough(input.conversationId)??0))fail('REFERENCE_NOT_AVAILABLE')
+    return event
+  }
+  manageConversation(input,action) {
+    if(this.rt.readOnly?.()!==undefined)fail('COMMUNICATION_READ_ONLY')
+    if(input.expectedScope!==conversationPreferencesScope(this))fail('HUB_SELECTION_CHANGED')
+    if(typeof input.membershipEpoch!=='string')fail('MEMBERSHIP_EPOCH_REQUIRED')
+    const member=input.localBotId===undefined?this.member(this.human.principalId,input.conversationId,input.membershipEpoch):botDmContext(this,input).member
+    if(action==='hidden')return this.queue.setConversationHidden(input.conversationId,input.hidden)
+    if(action==='pinned')return this.queue.setConversationPinned(input.conversationId,input.pinned)
+    if(action!=='delete')fail('INVALID_REQUEST')
+    if(input.confirmed!==true)fail('CONVERSATION_DELETE_CONFIRMATION_REQUIRED')
+    const cursor=this.queue.cursor(member.conversationId,member.principalId,member.membershipEpoch)
+    if(!Number.isSafeInteger(input.through)||input.through<0||input.through>cursor)fail('INVALID_CURSOR')
+    return this.queue.deleteConversationHistory(input.conversationId,input.through)
+  }
+  conversationRecord(member) {
+    const floor=this.queue.deletedThrough(member.conversationId)
+    const event=this.queue.lastMessage(member.conversationId,member.principalId,member.membershipEpoch)
+    if(floor!==null&&(!event||event.conversationSeq<=floor)&&!this.queue.conversationReopened(member.conversationId))return null
+    if(floor===null)return {...member,historyAfter:0}
+    return {...member,historyAfter:floor,
+      lastMessage:event&&event.conversationSeq>floor?conversationSummary(event,[...this.contacts,...(member.info?.members??[])]):null,
+      unread:member.archive?this.queue.botDmUnread(member.conversationId,member.principalId,member.membershipEpoch,floor):this.queue.unread(member.conversationId,member.principalId,member.membershipEpoch,floor)}
   }
   conversationPreferencesScope() { return conversationPreferencesScope(this) }
   setConversationArchived(input) {

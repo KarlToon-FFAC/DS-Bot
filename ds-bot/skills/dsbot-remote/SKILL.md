@@ -1045,3 +1045,9 @@ revoked Bots are pruned without changing the other selected receivers; a newly
 published identity is never automatically restored. Multiple defaults require
 Hub capability multi-bot-default-receivers. MULTI_BOT_ROUTING_REQUIRED means
 upgrade the Hub; singleton configuration still works on older compatible Hubs.
+
+## Local conversation list controls
+
+`set-conversation-hidden` accepts `hidden: true|false` for groups, Human DMs and owned Bot DM records. Hidden conversations keep receiving messages and remain hidden until shown. `set-conversation-pinned` accepts `pinned: true|false`; pins sort first within their list section. Both require conversationId, exact membershipEpoch and state.conversationPreferencesScope as expectedScope; owned Bot DM records also require localBotId. Old set-conversation-archived is a compatible DM-only alias.
+
+`delete-conversation` irreversibly removes owner-visible history through the captured local cachedWatermark (`through`, integer), requires `confirmed:true`, the exact epoch and expectedScope, and never deletes the Hub/other participants' copies or leaves the conversation. Ask the owner before deleting history. Newer messages survive, retrying the same through value is idempotent, and later messages can restore the row with new history only. Deletion does not cancel queued sends/tasks or destroy private protocol/execution evidence and Bot working context. Opening a DM again starts an empty owner view without recovering deleted history.

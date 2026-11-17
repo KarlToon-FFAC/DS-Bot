@@ -1501,25 +1501,25 @@ test('private chats and Bot DM records archive into one separate collection, sta
  const botRecord={...dm,conversationId:'bot-private',archive:true,viewerBotId:'worker',viewerPrincipalId:'bot:a:worker',info:{members:[{principalId:'bot:a:worker',displayName:'Worker',kind:'bot'},{principalId:'bot:b:expert',displayName:'Expert',kind:'bot'}]}}
  let snapshot={...state(),conversationPreferencesScope:'local-scope',archivedConversationIds:[],conversations:[membership,dm],botConversations:[botRecord]}
  await pane({getState:()=>snapshot,handle:async body=>{
-  if(body.endpoint==='set-conversation-archived'){
+  if(body.endpoint==='set-conversation-hidden'){
    assert.equal(body.expectedScope,'local-scope');assert.equal(body.membershipEpoch,'epoch')
-   const ids=new Set(snapshot.archivedConversationIds);if(body.archived)ids.add(body.conversationId);else ids.delete(body.conversationId)
+   const ids=new Set(snapshot.archivedConversationIds);if(body.hidden)ids.add(body.conversationId);else ids.delete(body.conversationId)
    snapshot={...snapshot,archivedConversationIds:[...ids]};return {archivedConversationIds:[...ids]}
   }
   if(body.endpoint==='bot-dm-history')return {conversationId:'bot-private',events:[]}
   return {}
  }},async({doc,click,calls,autoRefresh,remount})=>{
-  await click('Buddy');await click('Archive private chat')
+  await click('Buddy');await click('Hide conversation')
   assert.equal(doc.querySelector('nav[aria-label="Communication conversations"] [data-conversation-id="human-private"]'),null)
-  await click('Worker ↔ Expert');await click('Archive private chat')
+  await click('Worker ↔ Expert');await click('Hide conversation')
   assert.equal(doc.querySelector('nav[aria-label="Bot private chats"]'),null)
-  await autoRefresh();await remount();await click('Archived private chats')
-  const dialog=doc.querySelector('[aria-label="Archived private chats"][role=dialog]')
+  await autoRefresh();await remount();await click('Hidden conversations')
+  const dialog=doc.querySelector('[aria-label="Hidden conversations"][role=dialog]')
   assert.equal(dialog.querySelectorAll('.bt-comm-archive-row').length,2)
-  await click('Restore private chat Buddy');await click('Cancel')
+  await click('Show conversation Buddy');await click('Cancel')
   assert.ok(doc.querySelector('nav [data-conversation-id="human-private"]'))
   assert.ok(doc.querySelector('nav [data-conversation-id="group"]'),'groups remain visible')
-  assert.equal(calls.filter(body=>body.endpoint==='set-conversation-archived'&&body.localBotId==='worker').length,1)
+  assert.equal(calls.filter(body=>body.endpoint==='set-conversation-hidden'&&body.localBotId==='worker').length,1)
   assert.ok(!calls.some(body=>['send','remove','accept','dissolve'].includes(body.endpoint)))
  })
 })
@@ -2155,5 +2155,78 @@ test('remote message context menu uses the visible reply action, stays inside th
   const event=new dom.window.MouseEvent('contextmenu',{bubbles:true,cancelable:true})
   await act(async()=>native.dispatchEvent(event))
   assert.equal(event.defaultPrevented,false)
+ })
+})
+
+test('groups hide and restore, pinned conversations move first, and context menus match header actions',async()=>{
+ const second={...membership,conversationId:'second',title:'Second group'}
+ let snapshot={...state(),conversationPreferencesScope:'scope',hiddenConversationIds:[],pinnedConversationIds:[],conversations:[membership,second]}
+ await pane({getState:()=>snapshot,handle:async body=>{
+  if(body.endpoint==='set-conversation-pinned')snapshot={...snapshot,pinnedConversationIds:body.pinned?[body.conversationId]:[]}
+  if(body.endpoint==='set-conversation-hidden')snapshot={...snapshot,hiddenConversationIds:body.hidden?[body.conversationId]:[]}
+  return {hiddenConversationIds:snapshot.hiddenConversationIds,pinnedConversationIds:snapshot.pinnedConversationIds}
+ }},async({doc,click,autoRefresh,remount,dom})=>{
+  await click('Second group');await click('Pin conversation')
+  const rows=()=>[...doc.querySelectorAll('nav[aria-label="Communication conversations"] [data-conversation-id]')].map(node=>node.dataset.conversationId)
+  assert.deepEqual(rows(),['second','group'])
+  await autoRefresh();await remount();assert.deepEqual(rows(),['second','group'])
+  await click('Second group');await click('Hide conversation')
+  assert.deepEqual(rows(),['group'])
+  await click('Hidden conversations');await click('Show conversation Second group');await click('Cancel')
+  assert.deepEqual(rows(),['second','group'])
+  await act(async()=>doc.querySelector('[data-conversation-id="second"]').dispatchEvent(new dom.window.MouseEvent('contextmenu',{bubbles:true,cancelable:true})))
+  const menu=doc.querySelector('[role=menu]')
+  for(const label of ['Unpin conversation','Hide conversation','Delete conversation'])assert.ok(menu.textContent.includes(label))
+ })
+})
+
+test('conversation deletion requires a separate confirmation, retains failures and only removes the row after success',async()=>{
+ let snapshot={...state(),conversationPreferencesScope:'scope',conversations:[membership]},fail=true
+ await pane({getState:()=>snapshot,handle:async body=>{
+  if(body.endpoint==='delete-conversation'){
+   assert.equal(body.through,1);assert.equal(body.membershipEpoch,'epoch');assert.equal(body.confirmed,true);assert.equal(body.expectedScope,'scope')
+   if(fail)throw Object.assign(new Error('write failed'),{code:'COMMUNICATION_UNAVAILABLE'})
+   snapshot={...snapshot,conversations:[]};return {status:'deleted'}
+  }
+  return {}
+ }},async({doc,click,calls})=>{
+  await click('Shared group');await click('Delete conversation')
+  let dialog=doc.querySelector('[role=alertdialog]')
+  assert.ok(dialog.textContent.includes('It cannot be restored.'))
+  assert.ok(dialog.textContent.includes('Shared group'))
+  assert.equal(calls.filter(body=>body.endpoint==='delete-conversation').length,0)
+  await click('Cancel')
+  assert.ok(doc.querySelector('nav [data-conversation-id="group"]'))
+  await click('Delete conversation');await click('Delete chat history')
+  dialog=doc.querySelector('[role=alertdialog]')
+  assert.ok(dialog.querySelector('[role=alert]'),'failure stays next to the confirmation')
+  assert.ok(doc.querySelector('nav [data-conversation-id="group"]'))
+  fail=false;await click('Delete chat history')
+  assert.equal(doc.querySelector('nav [data-conversation-id="group"]'),null)
+  assert.ok(!calls.some(body=>['leave','dissolve','remove','send'].includes(body.endpoint)))
+ })
+})
+
+test('another window deleting history clears cached quotes and reply-chain state even when new messages keep the row present',async()=>{
+ const old={type:'message',conversationSeq:1,serverAcceptedAt:'2026-11-17T00:00:00Z',message:{messageId:'old',author:membership.info.members[0],content:{text:'old private text'},mentions:[],replyToMessageId:null}}
+ const newer={...old,conversationSeq:2,message:{...old.message,messageId:'new',content:{text:'new public text'},replyToMessageId:'old'}}
+ let floor=0
+ const snapshot=()=>({...state(),conversations:[{...membership,cachedWatermark:2,watermark:2,historyAfter:floor}]})
+ await pane({getState:snapshot,history:()=>({conversationId:'group',membershipEpoch:'epoch',watermark:2,events:floor?[newer]:[old,newer]}),handle:async body=>{
+  if(body.endpoint==='reference'){
+   if(floor)throw Object.assign(new Error('REFERENCE_NOT_AVAILABLE'),{code:'REFERENCE_NOT_AVAILABLE'})
+   return old
+  }
+  if(body.endpoint==='thread')return {conversationId:'group',membershipEpoch:'epoch',messageId:'new',rootMessageId:'old',watermark:2,events:[old,newer],hasMore:false}
+  return {}
+ }},async({doc,click,autoRefresh})=>{
+  await click('Shared group')
+  assert.ok(doc.querySelector('.bt-comm-quote-text').textContent.includes('old private text'))
+  await act(async()=>doc.querySelector('[data-message-id="new"] button[aria-label="Reply"]').click())
+  assert.ok(doc.querySelector('[role=dialog][aria-label="Message replies"]'))
+  floor=1;await autoRefresh()
+  assert.equal(doc.querySelector('[role=dialog][aria-label="Message replies"]'),null)
+  assert.ok(!doc.querySelector('.bt-comm-log').textContent.includes('old private text'))
+  assert.ok(doc.querySelector('.bt-comm-quote').textContent.includes('Earlier message unavailable'))
  })
 })

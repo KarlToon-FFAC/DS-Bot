@@ -3,7 +3,7 @@ import {useEffect,useLayoutEffect,useRef,useState} from 'react'
 export const HISTORY_PAGE_SIZE=50,HISTORY_WINDOW_SIZE=200
 const combine=(left,right)=>[...new Map([...left,...right].map(event=>[event.conversationSeq,event])).values()].sort((a,b)=>a.conversationSeq-b.conversationSeq)
 export function useCommunicationHistory({scope,member,visible,request,log,autoScroll,onError,onLoaded}){
- const key=JSON.stringify([scope,member?.conversationId,member?.membershipEpoch]),current=useRef(key),generation=useRef(0),flight=useRef(null),restore=useRef(null),retry=useRef(null)
+ const key=JSON.stringify([scope,member?.conversationId,member?.membershipEpoch,member?.historyAfter??0]),current=useRef(key),generation=useRef(0),flight=useRef(null),restore=useRef(null),retry=useRef(null)
  const [stored,setStored]=useState(null),[loading,setLoading]=useState(false),[failure,setFailure]=useState(false)
  const latest=useRef({member,onError,onLoaded});latest.current={member,onError,onLoaded}
  if(current.current!==key){current.current=key;generation.current++;flight.current=null;restore.current=null}

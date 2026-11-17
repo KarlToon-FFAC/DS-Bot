@@ -42,6 +42,7 @@ export class CommunicationQueue {
       CREATE TABLE IF NOT EXISTS bot_publication_generations (local_ref TEXT PRIMARY KEY,generation TEXT);
       CREATE TABLE IF NOT EXISTS retired_local_bots (principal_id TEXT PRIMARY KEY,local_ref TEXT NOT NULL,local_id TEXT NOT NULL,name TEXT NOT NULL,retired_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS archived_conversations (conversation_id TEXT PRIMARY KEY);
+      CREATE TABLE IF NOT EXISTS conversation_preferences (conversation_id TEXT PRIMARY KEY,pinned INTEGER NOT NULL DEFAULT 0,deleted_through INTEGER);
       `)
     if (version < 2) {
       this.db.exec('BEGIN IMMEDIATE')
@@ -72,6 +73,33 @@ export class CommunicationQueue {
   remoteHubWithdrawalComplete(id) { return this.db.prepare('SELECT value FROM metadata WHERE key=?').get('remote-hub-withdrawal')?.value === id }
   completeRemoteHubWithdrawal(id) {
     this.db.prepare('INSERT INTO metadata VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run('remote-hub-withdrawal', id)
+  }
+  conversationPreferences() {
+    return { hiddenConversationIds:this.archivedConversations(), pinnedConversationIds:this.db.prepare('SELECT conversation_id FROM conversation_preferences WHERE pinned=1 ORDER BY conversation_id').all().map(row=>row.conversation_id) }
+  }
+  deletedThrough(conversationId) { return this.db.prepare('SELECT deleted_through FROM conversation_preferences WHERE conversation_id=?').get(conversationId)?.deleted_through ?? null }
+  conversationReopened(conversationId) { return this.db.prepare('SELECT value FROM metadata WHERE key=?').get(JSON.stringify(['conversation-reopened',conversationId]))?.value===String(this.deletedThrough(conversationId)) }
+  setConversationHidden(conversationId,hidden) {
+    this.setConversationArchived(conversationId,hidden)
+    if(!hidden&&this.deletedThrough(conversationId)!==null)this.db.prepare('INSERT INTO metadata VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(JSON.stringify(['conversation-reopened',conversationId]),String(this.deletedThrough(conversationId)))
+    return this.conversationPreferences()
+  }
+  setConversationPinned(conversationId,pinned) {
+    requireValue(typeof pinned==='boolean','INVALID_REQUEST')
+    this.db.prepare('INSERT INTO conversation_preferences(conversation_id,pinned) VALUES (?,?) ON CONFLICT(conversation_id) DO UPDATE SET pinned=excluded.pinned').run(conversationId,Number(pinned))
+    return this.conversationPreferences()
+  }
+  deleteConversationHistory(conversationId,through) {
+    requireValue(Number.isSafeInteger(through)&&through>=0,'INVALID_CURSOR')
+    return this.transaction(()=>{
+      const previous=this.deletedThrough(conversationId)
+      if(previous===null||through>previous){
+        this.db.prepare('INSERT INTO conversation_preferences(conversation_id,deleted_through) VALUES (?,?) ON CONFLICT(conversation_id) DO UPDATE SET deleted_through=excluded.deleted_through,pinned=0').run(conversationId,through)
+        this.db.prepare('DELETE FROM archived_conversations WHERE conversation_id=?').run(conversationId)
+        this.db.prepare('DELETE FROM metadata WHERE key=?').run(JSON.stringify(['conversation-reopened',conversationId]))
+      }
+      return {status:'deleted',through:this.deletedThrough(conversationId),...this.conversationPreferences()}
+    })
   }
   archivedConversations() {
     return this.db.prepare('SELECT conversation_id FROM archived_conversations ORDER BY conversation_id').all().map(row => row.conversation_id)
@@ -325,9 +353,9 @@ export class CommunicationQueue {
     const events = this.db.prepare(`SELECT body FROM events WHERE conversation_id=? AND principal_id=? AND epoch=? AND seq>? AND seq<=? ORDER BY seq ${latest ? 'DESC' : 'ASC'} LIMIT ?`).all(conversationId, principalId, epoch, after, upper, limit).map(row => JSON.parse(row.body))
     return latest ? events.reverse() : events
   }
-  historyEdges(conversationId,principalId,epoch,events) {
+  historyEdges(conversationId,principalId,epoch,events,floor=0) {
     const member=this.member(conversationId,principalId,epoch),cursor=this.cursor(conversationId,principalId,epoch)
-    const exists=(operator,seq)=>Boolean(this.db.prepare(`SELECT 1 FROM events WHERE conversation_id=? AND principal_id=? AND epoch=? AND seq>=? AND seq<=? AND seq${operator}? LIMIT 1`).get(conversationId,principalId,epoch,member.join_seq,cursor,seq))
+    const exists=(operator,seq)=>Boolean(this.db.prepare(`SELECT 1 FROM events WHERE conversation_id=? AND principal_id=? AND epoch=? AND seq>=? AND seq<=? AND seq${operator}? LIMIT 1`).get(conversationId,principalId,epoch,Math.max(member.join_seq,floor+1),cursor,seq))
     const first=events[0]?.conversationSeq,last=events.at(-1)?.conversationSeq
     return {hasEarlier:first!==undefined&&exists('<',first),hasLater:last!==undefined&&exists('>',last),nextBefore:first===undefined?null:first-1,nextAfter:last??null}
   }
@@ -345,7 +373,7 @@ export class CommunicationQueue {
     requireValue(row, 'REFERENCE_NOT_AVAILABLE')
     return JSON.parse(row.body)
   }
-  thread(conversationId, principalId, epoch, messageId, { after = 0, limit = 50, watermark } = {}) {
+  thread(conversationId, principalId, epoch, messageId, { after = 0, limit = 50, watermark, floor = 0 } = {}) {
     const member = this.member(conversationId, principalId, epoch)
     requireValue(typeof messageId === 'string' && messageId.length > 0, 'INVALID_REQUEST')
     requireValue(Number.isSafeInteger(after) && after >= 0 && Number.isSafeInteger(limit) && limit > 0 && limit <= 100, 'INVALID_CURSOR')
@@ -355,7 +383,7 @@ export class CommunicationQueue {
     // Reply ancestry is a view of authorized canonical messages, not Bot causal
     // ancestry. Scope every recursive edge before following it; UNION ends cycles.
     const visible = `SELECT body,seq,json_extract(body,'$.message.messageId') id,json_extract(body,'$.message.replyToMessageId') parent FROM events WHERE conversation_id=? AND principal_id=? AND epoch=? AND seq>=? AND seq<=? AND json_extract(body,'$.type')='message'`
-    const scope = [conversationId, principalId, epoch, member.join_seq, upper]
+    const scope = [conversationId, principalId, epoch, Math.max(member.join_seq,floor+1), upper]
     const root = this.db.prepare(`WITH RECURSIVE visible AS (${visible}), ancestors AS (SELECT * FROM visible WHERE id=? UNION SELECT v.* FROM visible v JOIN ancestors a ON v.id=a.parent) SELECT * FROM ancestors ORDER BY seq LIMIT 1`).get(...scope, messageId)
     requireValue(root, 'REFERENCE_NOT_AVAILABLE')
     const rows = this.db.prepare(`WITH RECURSIVE visible AS (${visible}), descendants AS (SELECT * FROM visible WHERE id=? UNION SELECT v.* FROM visible v JOIN descendants d ON v.parent=d.id) SELECT body,seq FROM descendants WHERE seq>? ORDER BY seq LIMIT ?`).all(...scope, root.id, after, limit + 1)
@@ -379,20 +407,20 @@ export class CommunicationQueue {
     })
   }
   botDmReadKey(conversationId, principalId, epoch) { return `bot-dm-read:${JSON.stringify([conversationId,principalId,epoch])}` }
-  botDmUnread(conversationId, principalId, epoch) {
+  botDmUnread(conversationId, principalId, epoch,floor=0) {
     const member = this.member(conversationId, principalId, epoch)
     const read = Number(this.db.prepare('SELECT value FROM metadata WHERE key=?').get(this.botDmReadKey(conversationId,principalId,epoch))?.value ?? member.join_seq - 1)
-    return this.db.prepare("SELECT count(*) count FROM events WHERE conversation_id=? AND principal_id=? AND epoch=? AND seq>? AND seq>=? AND seq<=? AND json_extract(body,'$.type')='message'").get(conversationId,principalId,epoch,read,member.join_seq,this.cursor(conversationId,principalId,epoch)).count
+    return this.db.prepare("SELECT count(*) count FROM events WHERE conversation_id=? AND principal_id=? AND epoch=? AND seq>? AND seq>=? AND seq<=? AND json_extract(body,'$.type')='message'").get(conversationId,principalId,epoch,Math.max(read,floor),member.join_seq,this.cursor(conversationId,principalId,epoch)).count
   }
   markBotDmRead(conversationId, principalId, epoch, seq) {
     const member = this.member(conversationId,principalId,epoch)
     requireValue(Number.isSafeInteger(seq) && seq >= member.join_seq - 1 && seq <= this.cursor(conversationId,principalId,epoch), 'HISTORY_GAP')
     this.db.prepare('INSERT INTO metadata VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=CAST(max(CAST(metadata.value AS INTEGER),CAST(excluded.value AS INTEGER)) AS TEXT)').run(this.botDmReadKey(conversationId,principalId,epoch),String(seq))
   }
-  unread(conversationId, principalId, epoch) {
+  unread(conversationId, principalId, epoch,floor=0) {
     this.member(conversationId, principalId, epoch)
     const read = this.db.prepare('SELECT read_seq FROM view_watermarks WHERE conversation_id=? AND principal_id=? AND epoch=?').get(conversationId, principalId, epoch)?.read_seq ?? 0
-    return this.db.prepare("SELECT count(*) count FROM events WHERE conversation_id=? AND principal_id=? AND epoch=? AND seq>? AND seq<=? AND json_extract(body,'$.type')='message' AND json_extract(body,'$.message.author.principalId')!=?").get(conversationId, principalId, epoch, read, this.cursor(conversationId, principalId, epoch), principalId).count
+    return this.db.prepare("SELECT count(*) count FROM events WHERE conversation_id=? AND principal_id=? AND epoch=? AND seq>? AND seq<=? AND json_extract(body,'$.type')='message' AND json_extract(body,'$.message.author.principalId')!=?").get(conversationId, principalId, epoch, Math.max(read,floor), this.cursor(conversationId, principalId, epoch), principalId).count
   }
   pendingAi() {
     if (!this.authorized) return []

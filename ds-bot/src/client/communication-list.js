@@ -1,5 +1,6 @@
 import { useActionMenu } from './action-menu.js'
 import { createElement as h, useCallback } from 'react'
+import {PinIcon} from './icons.js'
 import { t } from './i18n.js'
 import { CommunicationAvatar } from './communication-profile.js'
 import { contactLabels, conversationTitle } from './communication-model.js'
@@ -28,7 +29,7 @@ export function ConversationAvatar({ conversation, humanId, request, size = 36 }
   }))
 }
 
-export function ConversationRow({ conversation, humanId, labels, selected, request, onChoose, disabled, onArchive, onDetails }) {
+export function ConversationRow({ conversation, humanId, labels, selected, request, onChoose, disabled, onArchive, onDetails,onPin,onDelete,pinned=false }) {
   const context = useActionMenu()
   const name = conversationTitle(conversation, humanId, labels)
   const preview = conversation.lastMessage?.summary ?? ''
@@ -39,9 +40,9 @@ export function ConversationRow({ conversation, humanId, labels, selected, reque
   const summary = preview && conversation.kind === 'group' && sender ? `${sender}: ${preview}` : preview
   const accessibleName = [name, summary, conversation.unread > 0 ? `${conversation.unread} ${t('Unread')}` : ''].filter(Boolean).join(', ')
   return h('button', { type: 'button', className: 'bt-comm-conversation-row', disabled, 'aria-label': accessibleName, 'aria-pressed': selected, 'aria-current': selected ? 'page' : undefined,
-    onContextMenu:event=>context.open(event,[{label:t('Open conversation'),run:()=>onChoose(conversation.conversationId)}, {label:t('Copy conversation ID'),run:()=>navigator.clipboard.writeText(conversation.conversationId)},onDetails&&{label:t('Group settings'),run:()=>onDetails(conversation)},onArchive&&{label:t(conversation.archived?'Restore private chat':'Archive private chat'),run:()=>onArchive(conversation)}]),
+    onContextMenu:event=>context.open(event,[{label:t('Open conversation'),run:()=>onChoose(conversation.conversationId)}, {label:t('Copy conversation ID'),run:()=>navigator.clipboard.writeText(conversation.conversationId)},onDetails&&{label:t('Group settings'),run:()=>onDetails(conversation)},onArchive&&{label:t(conversation.archived?'Show conversation':'Hide conversation'),run:()=>onArchive(conversation)},onPin&&{label:t(pinned?'Unpin conversation':'Pin conversation'),run:()=>onPin(conversation)},onDelete&&{label:t('Delete conversation'),run:()=>onDelete(conversation)}]),
     title: `${name}\n${conversation.conversationId}`, 'data-conversation-id': conversation.conversationId, onClick: () => onChoose(conversation.conversationId) },
     context.menu, h(ConversationAvatar, { conversation, humanId, request }),
-    h('span', { className: 'bt-row-body bt-comm-conversation-body' }, h('span', { className: 'bt-row-name bt-comm-conversation-name' }, name), h('span', { className: 'bt-row-preview bt-comm-conversation-preview', title: summary }, summary)),
+    h('span', { className: 'bt-row-body bt-comm-conversation-body' }, h('span', { className: 'bt-row-name bt-comm-conversation-name' }, name,pinned?h('span',{className:'bt-pin',title:t('Pinned')},h(PinIcon)):null), h('span', { className: 'bt-row-preview bt-comm-conversation-preview', title: summary }, summary)),
     conversation.unread > 0 ? h('span', { className: 'bt-comm-unread', 'aria-hidden': true }, conversation.unread > 99 ? '99+' : conversation.unread) : null)
 }

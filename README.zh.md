@@ -50,6 +50,8 @@ V0.4.0 同步了上游的 Bot 私聊消息账本、工作答复保留和运行�
 
 **V0.3.9** 中，已通过的联系人申请不再显示在申请列表。本地咨询可通过 `reply_to_local_consultation` 或 `message_bot` 提交答复并取得持久回执，答复方无需发布到 Hub。等待咨询时可暂停远程回合，迟到结果会通知原远程会话，仍不自动对外发布。
 
+远程会话支持隐藏后重新显示、置顶，以及经独立窗口确认后删除本机可见聊天记录。隐藏不停止收信；删除不影响 Hub 和其他成员的记录，新消息仍可让会话重新出现。详见[会话管理说明](docs/plans/federated-communication/conversation-management.md)。
+
 下一批 V0.4.2 面向 npm 默认通道的 DSH **0.2.2-rc.1**，同时保留 **0.2.1-rc.4** 兼容。DSH 0.2.2 要求 **Node 24.9 或更新版本**。升级前备份配置和数据；兼容两套 SDK 不代表新版宿主写入的数据能够直接降级。详见[接口兼容方案](docs/plans/federated-communication/v042-dsh-compatibility.md)。包版本尚未推进到 V0.4.2。
 
 ![版本](https://img.shields.io/badge/版本-V0.4.1-blue) ![DSH](https://img.shields.io/badge/DSH-0.2.2--rc.1-4D6BFE) ![许可](https://img.shields.io/badge/许可-Apache_2.0-green)
