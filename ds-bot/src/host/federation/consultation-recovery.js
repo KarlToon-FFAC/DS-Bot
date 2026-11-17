@@ -1,3 +1,4 @@
+import {inspectSession} from '../session-inspection.js'
 import {createHash} from 'node:crypto'
 import {createUserMessage} from '@deepseek-ai/dsh-llm'
 import {settleLocalConsultation,consultationSettling} from './local-consultations.js'
@@ -7,7 +8,7 @@ import {sourceDelivery} from './session-scope.js'
 export async function recoverConsultationAnswer(rt,row){
  if(rt.waitsWork?.(row.id))return
  for(const part of [...(rt.partsOf?.(row.targetBotId)??[])].reverse()){
-  const {events}=await rt.ctx.sessionController.inspect(part.sessionId,AbortSignal.timeout(15000))
+  const {events}=await inspectSession(rt.ctx,part.sessionId,AbortSignal.timeout(15000))
   let turn,source,answer,invalid=false
   for(const event of events){
    if(event.type==='turn/start'){turn=event.data.turn;source=undefined;answer=undefined;invalid=false}
@@ -61,7 +62,7 @@ export async function notifyConsultationResult(runtime,row){
   const agent=resolved.agent
   if(agent.status!=='idle')return // An active polling call can still consume the result.
   await runtime.ctx.sessions.flush(agent.session)
-  const {events}=await runtime.ctx.sessionController.inspect(sessionId,AbortSignal.timeout(15000))
+  const {events}=await inspectSession(runtime.ctx,sessionId,AbortSignal.timeout(15000))
   seen ||= receivedResult(events,row)||events.some(event=>event.type==='user/message'&&event.data.source?.consultationResultKey===key)
    ||[...agent.inbox.nextTurn,...agent.inbox.nextStep].some(message=>message.source?.consultationResultKey===key)
   if(sessionId===binding.sessionIds.at(-1))current=agent

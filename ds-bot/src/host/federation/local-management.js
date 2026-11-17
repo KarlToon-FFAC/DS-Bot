@@ -1,3 +1,4 @@
+import {inspectSession} from '../session-inspection.js'
 import { sourceDelivery } from './session-scope.js'
 import { createHash } from 'node:crypto'
 import { defineTool } from '@deepseek-ai/dsh-tools'
@@ -30,7 +31,7 @@ export async function localManagementAuthority(rt, exec) {
   if (!botId || !rt.botOf(botId) || rt.groupOwners?.has(sessionId) || rt.communication?.owners?.has(sessionId)) fail('LOCAL_USER_SESSION_REQUIRED')
   if (!exec.callId) fail('TOOL_SOURCE_UNKNOWN')
   await rt.ctx.sessions.flush(exec.agent.session)
-  const { events } = await rt.ctx.sessionController.inspect(sessionId, AbortSignal.timeout(15000))
+  const { events } = await inspectSession(rt.ctx,sessionId, AbortSignal.timeout(15000))
   const call = events.findLast(event => event.type === 'assistant/message' && event.data.message.content.some(block => block.type === 'tool-call'
     && block.id === (exec.rootCallId ?? exec.callId) && (exec.rootCallId && exec.rootCallId !== exec.callId || block.name === exec.name)))
   if (!call?.data.message.id) fail('TOOL_SOURCE_UNKNOWN')

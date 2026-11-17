@@ -1,3 +1,4 @@
+import {inspectSession} from '../session-inspection.js'
 // Public Session inspection is the recovery source; never infer receipt from text.
 import { isCommunicationContext } from './session-scope.js'
 export const SOURCE_KIND = 'ds-bot-communication'
@@ -9,7 +10,7 @@ export async function inspectBinding(controller, binding, signal) {
   const sessions = []
   for (const sessionId of binding.sessionIds) {
     signal?.throwIfAborted()
-    const inspection = await controller.inspect(sessionId, signal)
+    const inspection = await inspectSession(controller.sessionController?controller:{sessionController:controller},sessionId,signal)
     if (!Array.isArray(inspection?.events)) throw new Error('Session inspection unavailable')
     sessions.push({ sessionId, events: inspection.events })
   }
@@ -28,7 +29,7 @@ export async function recoverBinding(services, binding, source, signal) {
   }
   if (agents.some(agent => agent.status !== 'idle')) return { input: { status: 'injection_unknown', reason: 'input_in_flight' } }
   for (const agent of agents) await services.sessions.flush(agent.session)
-  const sessions = await inspectBinding(services.sessionController, binding, signal)
+  const sessions = await inspectBinding(services, binding, signal)
   // An await above could have let new input start; the caller must also serialize
   // its own consumer. Do not issue a replay grant if any owner became active.
   if (agents.some(agent => agent.status !== 'idle')) return { input: { status: 'injection_unknown', reason: 'input_in_flight' } }
@@ -70,7 +71,7 @@ export async function resumePendingInput(services, binding, source, makeMessage,
   signal?.throwIfAborted()
   agent.steer(notice)
   await services.sessions.flush(agent.session)
-  const sessions = await inspectBinding(services.sessionController, binding, signal)
+  const sessions = await inspectBinding(services, binding, signal)
   return { input: reconcileInput(sessions, source), resumed: true,
     notice: { id: notice.id, kind: notice.source.kind, form: notice.source.form } }
 }
@@ -89,7 +90,7 @@ export async function resumeInterruptedInput(services, binding, source, makeMess
   if ('error' in result || result.agent.status !== 'idle') return { resumed: false }
   if (retryProof) {
     await services.sessions.flush(result.agent.session)
-    if (!retryablePromptAttempt(retryProof, await inspectBinding(services.sessionController, binding, signal)) || result.agent.status !== 'idle') return { resumed: false }
+    if (!retryablePromptAttempt(retryProof, await inspectBinding(services, binding, signal)) || result.agent.status !== 'idle') return { resumed: false }
   }
   const notice = makeMessage({ source: { kind: RECOVERY_SOURCE_KIND, form: 'notice', summary: 'Resuming interrupted communication response after a host restart',
     conversationId: binding.conversationId, forDeliveryId: source.deliveryId, forMessageId: source.messageId },

@@ -8,9 +8,10 @@ test('cross-platform bench validates isolated names, actions and distinct unrese
   for(const change of [{name:'../personal'},{name:''},{action:'reset'},{webPort:3080},{mockPort:3131},{webPort:65536},{webPort:1.5}])assert.throws(()=>validateBenchOptions({...options,...change}),/INVALID_BENCH_/)
 })
 test('Linux child environment excludes ambient real credentials, preserving only local guard and fixtures',()=>{
-  const input={PATH:'/bin',HOME:'/synthetic',OPENAI_API_KEY:'synthetic-external-key',DSBOT_COMMUNICATION_OPENAI_INPUT:'synthetic-private-input',OTHER_SECRET:'synthetic-other',NODE_OPTIONS:'--import /unrelated',DSBOT_COMMUNICATION_CREDENTIAL:'synthetic-pairing',DSBOT_OPENAI_LOCAL:'x'.repeat(32),DSBOT_OPENAI_GUARD_URL:'http://127.0.0.1:3456/v1',MOCK_LOG_TOOLS:'1'}
+  const input={DSH_HARNESS:'/synthetic/sdk-install',PATH:'/bin',HOME:'/synthetic',OPENAI_API_KEY:'synthetic-external-key',DSBOT_COMMUNICATION_OPENAI_INPUT:'synthetic-private-input',OTHER_SECRET:'synthetic-other',NODE_OPTIONS:'--import /unrelated',DSBOT_COMMUNICATION_CREDENTIAL:'synthetic-pairing',DSBOT_OPENAI_LOCAL:'x'.repeat(32),DSBOT_OPENAI_GUARD_URL:'http://127.0.0.1:3456/v1',MOCK_LOG_TOOLS:'1'}
   const host=benchEnvironment(input,'/synthetic/test',options)
   for(const key of ['OPENAI_API_KEY','DSBOT_COMMUNICATION_OPENAI_INPUT','OTHER_SECRET','NODE_OPTIONS'])assert.equal(Object.hasOwn(host,key),false)
+  assert.equal(host.DSH_HARNESS,'/synthetic/sdk-install')
   assert.equal(host.DEEPSEEK_API_KEY,'mock-key');assert.equal(host.DSH_HOME,'/synthetic/test')
   assert.equal(host.DSBOT_COMMUNICATION_CREDENTIAL,'synthetic-pairing');assert.equal(host.DSBOT_OPENAI_LOCAL,'x'.repeat(32))
   const mock=benchEnvironment(input,'/synthetic/test',options,{mock:true})

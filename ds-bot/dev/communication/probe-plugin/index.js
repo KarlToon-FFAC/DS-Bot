@@ -1,3 +1,4 @@
+import {inspectSession} from '../../../src/host/session-inspection.js'
 // Test-only bundle: never included in the published DS-Bot plugin.
 import { randomUUID } from 'node:crypto'
 import { readFile, writeFile } from 'node:fs/promises'
@@ -189,7 +190,7 @@ export function apply(ctx) {
           const presets = ctx.get('agentPresets')
           sessions.push({ sessionId, checkpoint: checkpoints.get(sessionId) ?? null,
             preset: 'error' in resolved ? null : { id: presets?.composedPreset(resolved.agent.ctx), composition: presets?.inspectCompositions(resolved.agent.ctx) },
-            ...await ctx.sessionController.inspect(sessionId, AbortSignal.timeout(15000)) })
+            ...await inspectSession(ctx,sessionId, AbortSignal.timeout(15000)) })
         }
         return { bindings, sessions, checkpoints: [...runtimeCheckpoints.values()].filter(item => item.conversationId === body.conversationId),
           inbox: db.prepare('SELECT delivery_id,ai,ai_state,mapping,revoked,revocation_result FROM inbox WHERE conversation_id=?').all(body.conversationId),
@@ -233,7 +234,7 @@ export function apply(ctx) {
     if (['metrics','native-tools','local-message-ids'].includes(body.operation)) {
       const team = JSON.parse(await readFile(join(root, 'bot', 'state.json'), 'utf8'))
       const chief = team.bots[value.botId]
-      const inspection = await ctx.sessionController.inspect(chief.sessionId ?? chief.id, AbortSignal.timeout(15000))
+      const inspection = await inspectSession(ctx,chief.sessionId ?? chief.id, AbortSignal.timeout(15000))
       if(body.operation==='local-message-ids')return {messages:inspection.events.filter(event=>event.type==='user/message'&&event.data.source?.kind==='user').map(event=>({messageId:event.data.id??event.data.message?.id,text:event.data.content.filter(block=>block.type==='text').map(block=>block.text).join('\n')}))}
       if(body.operation==='native-tools'){
         if(!Number.isSafeInteger(body.afterSeq)||body.afterSeq<0)throw new Error('Invalid watermark')

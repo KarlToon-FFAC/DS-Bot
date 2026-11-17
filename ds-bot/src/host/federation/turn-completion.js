@@ -1,3 +1,4 @@
+import {inspectSession} from '../session-inspection.js'
 import {awaitingLocalConsultation} from './local-consultations.js'
 import {randomUUID,createHash} from 'node:crypto'
 import {createUserMessage} from '@deepseek-ai/dsh-llm'
@@ -14,7 +15,7 @@ export async function checkCommunicationCompletion(runtime,{agent,turn,signal}) 
   if (!binding || signal?.aborted) return
   await runtime.authorize(binding)
   await runtime.ctx.sessions.flush(agent.session)
-  const {events} = await runtime.ctx.sessionController.inspect(agent.id,signal)
+  const {events} = await inspectSession(runtime.ctx,agent.id,signal)
   const current = events.filter(event=>event.type !== 'turn/end' || event.data.turn !== turn)
   const closing = {type:'turn/end',seq:Infinity,data:{turn,reason:{kind:'completed'}}}
   const output = completedOutputs([{sessionId:agent.id,events:[...current,closing]}],binding,{includeEmpty:true})
@@ -52,7 +53,7 @@ export async function communicationDraft(runtime,draftId,exec) {
   const binding=exec.communicationBinding,cause=exec.communicationCausation
   const row=runtime.queue.db.prepare('SELECT * FROM completion_checks WHERE draft_id=?').get(draftId)
   if (!row || row.binding_id!==binding.id || row.delivery_id!==cause.causationDeliveryId || row.session_id!==exec.agent.id) fail('COMMUNICATION_DRAFT_UNAVAILABLE')
-  const {events}=await runtime.ctx.sessionController.inspect(row.session_id,AbortSignal.timeout(15000))
+  const {events}=await inspectSession(runtime.ctx,row.session_id,AbortSignal.timeout(15000))
   const event=events.find(item=>item.seq===row.seq && item.type==='assistant/message' && item.data.message.id===row.message_id && item.data.turn===row.turn)
   const blocks=event?.data.message.content
   if (!blocks || event.data.interrupted || blocks.some(part=>!['text','reasoning'].includes(part.type))) fail('COMMUNICATION_DRAFT_UNAVAILABLE')

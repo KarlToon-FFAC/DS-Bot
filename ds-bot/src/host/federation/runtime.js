@@ -1,3 +1,4 @@
+import {inspectSession} from '../session-inspection.js'
 import {filterToolPresentation} from '../tool-compat.js'
 import {bindingFailure,resolveBindingAgent,recoverUnusedBinding,safeBindingFailure} from './binding-recovery.js'
 import {LEGACY_SKILL_TOOLS} from '../constants.js'
@@ -212,7 +213,7 @@ export class CommunicationRuntime {
   async toolProvenance(exec) {
     if (!exec.callId || !exec.agent?.id) fail('UNSUPPORTED_CAPABILITY')
     await this.ctx.sessions.flush(exec.agent.session)
-    const { events } = await this.ctx.sessionController.inspect(exec.agent.id, AbortSignal.timeout(15000))
+    const { events } = await inspectSession(this.ctx,exec.agent.id, AbortSignal.timeout(15000))
     const event = events.findLast(event => event.type === 'assistant/message' && event.data.message.content.some(block =>
       block.type === 'tool-call' && block.id === (exec.rootCallId ?? exec.callId)))
     if (!event?.data.message.id) fail('TOOL_SOURCE_UNKNOWN')
@@ -327,7 +328,7 @@ export class CommunicationRuntime {
     const recordWork = (sessionId, owner, event, staged) => {
       this.workEvents = this.workEvents.catch(() => {}).then(async () => {
         try {
-          const { events } = await this.ctx.sessionController.inspect(sessionId, AbortSignal.timeout(15000))
+          const { events } = await inspectSession(this.ctx,sessionId, AbortSignal.timeout(15000))
           const actual = startedSources(events, event).map(source => sourceDelivery(this.queue, owner, source))
           const allowed = new Set(staged.map(source => sourceDelivery(this.queue, owner, source).deliveryId))
           for (const delivery of actual) if (allowed.has(delivery.deliveryId)) this.queue.aiStarted(delivery.deliveryId)
@@ -864,7 +865,7 @@ export class CommunicationRuntime {
         else fresh=true
       }
       if(existing && (!hasCommunicationPreset(this.ctx.get('agentPresets'), existing) || existing.session.header?.cwd !== cwd)) {
-        const { events } = await this.ctx.sessionController.inspect(existing.id, AbortSignal.timeout(15000))
+        const { events } = await inspectSession(this.ctx,existing.id, AbortSignal.timeout(15000))
         if (!legacySessionSettled(this.queue, binding, existing, events)) fail('COMMUNICATION_SESSION_MIGRATION_REQUIRED')
         fresh = true
       }
@@ -954,7 +955,7 @@ export class CommunicationRuntime {
     let agent = await this.ensureSession(binding, bot)
     await this.authorize(binding)
     const source = this.source(delivery)
-    let sessions = await inspectBinding(this.ctx.sessionController, binding, AbortSignal.timeout(15000))
+    let sessions = await inspectBinding(this.ctx, binding, AbortSignal.timeout(15000))
     let input = reconcileInput(sessions, source)
     if (input.status === 'admitted') {
       this.queue.aiState(delivery.deliveryId, 'accepted', { sessionId: input.sessionId, messageId: input.messageId, seq: input.seq })
@@ -985,7 +986,7 @@ export class CommunicationRuntime {
     if (previous?.events.some(event => event.type === 'user/message') && await this.needsSegment(agent, bot)) {
       await this.export(binding)
       agent = await this.ensureSession(binding, bot, { fresh: true })
-      recovered.sessions = await inspectBinding(this.ctx.sessionController, binding, AbortSignal.timeout(15000))
+      recovered.sessions = await inspectBinding(this.ctx, binding, AbortSignal.timeout(15000))
     }
     sessions = recovered.sessions
     const current = sessions.find(session => session.sessionId === agent.id)
@@ -1014,7 +1015,7 @@ export class CommunicationRuntime {
     if (this.queue?.isRetiredBot?.(binding.recipientPrincipalId)) return
     this.recoveryAttempts ??= new Map()
     try { this.queue.member(binding.conversationId, binding.recipientPrincipalId, binding.membershipEpoch) } catch { return }
-    const inspected = await inspectBinding(this.ctx.sessionController, binding, AbortSignal.timeout(15000)), sessions = []
+    const inspected = await inspectBinding(this.ctx, binding, AbortSignal.timeout(15000)), sessions = []
     for (const session of inspected) {
       const resolved = await this.ctx.sessionController.resolveAgent(session.sessionId)
       if ('error' in resolved) fail('SESSION_UNAVAILABLE')
@@ -1043,7 +1044,7 @@ export class CommunicationRuntime {
         // attempt. A cancelled signal or changed journal invalidates the proof.
         const retryAttempt = retry?.sessionId === sessionId && retry.source.deliveryId === source.deliveryId ? retry : null
         if (retryAttempt) {
-          if (!retryablePromptAttempt(retryAttempt, await inspectBinding(this.ctx.sessionController, binding, AbortSignal.timeout(15000)))) continue
+          if (!retryablePromptAttempt(retryAttempt, await inspectBinding(this.ctx, binding, AbortSignal.timeout(15000)))) continue
         }
         const result = await resumeInterruptedInput(this.ctx, { ...binding, sessionIds: sessions.map(session => session.sessionId) }, source, createUserMessage, this.resumedTurns, AbortSignal.timeout(15000), {
           retryNoticeIds: retryAttempt ? [...(retryAttempt.priorNotices ?? []), retryAttempt.noticeId] : [], retryTurnKey: retryAttempt?.turnKey, retryProof: retryAttempt,
@@ -1063,7 +1064,7 @@ export class CommunicationRuntime {
         && item.recipientPrincipalId === delivery.recipientPrincipalId && item.membershipEpoch === delivery.membershipEpoch)
       if (!binding?.sessionIds.length) { this.queue.revocationResult(delivery.deliveryId, { status: 'not_injected' }); continue }
       const source = this.source(delivery)
-      const input = reconcileInput(await inspectBinding(this.ctx.sessionController, binding, AbortSignal.timeout(15000)), source)
+      const input = reconcileInput(await inspectBinding(this.ctx, binding, AbortSignal.timeout(15000)), source)
       if (input.status === 'queued') {
         await this.ctx.sessionController.updateQueue({ sessionId: input.sessionId, itemId: input.messageId, action: { kind: 'remove' } })
         const resolved = await this.ctx.sessionController.resolveAgent(input.sessionId)
@@ -1085,7 +1086,7 @@ export class CommunicationRuntime {
     for (const id of binding.sessionIds) {
       const resolved = {agent:await resolveBindingAgent(this,id,'export-resolve')}
       if (!hasCommunicationPreset(this.ctx.get('agentPresets'), resolved.agent)) {
-        const { events } = await this.ctx.sessionController.inspect(id, AbortSignal.timeout(15000))
+        const { events } = await inspectSession(this.ctx,id, AbortSignal.timeout(15000))
         if (!legacySessionSettled(this.queue, binding, resolved.agent, events)) fail('COMMUNICATION_SESSION_MIGRATION_REQUIRED')
         continue
       }
@@ -1093,7 +1094,7 @@ export class CommunicationRuntime {
       this.scope(resolved.agent)
       await this.ctx.sessions.flush(resolved.agent.session)
     }
-    const sessions = (await inspectBinding(this.ctx.sessionController, binding, AbortSignal.timeout(15000))).filter(s => safeIds.has(s.sessionId))
+    const sessions = (await inspectBinding(this.ctx, binding, AbortSignal.timeout(15000))).filter(s => safeIds.has(s.sessionId))
     if (this.transport?.welcome?.capabilities?.includes('bot-work-events')) {
       for (const session of sessions) for (const step of session.events.filter(event => event.type === 'step/start')) {
         try {
@@ -1124,7 +1125,7 @@ export class CommunicationRuntime {
       if(delivery.state==='accepted')continue
       const source={...this.source(delivery),kind:'ds-bot-communication-update'}
       sourceDelivery(this.queue,binding,source)
-      const sessions=await inspectBinding(this.ctx.sessionController,binding,AbortSignal.timeout(15000))
+      const sessions=await inspectBinding(this.ctx,binding,AbortSignal.timeout(15000))
       const input=reconcileInput(sessions,source)
       if(input.status==='admitted'){
         const session=sessions.find(s=>s.sessionId===input.sessionId)

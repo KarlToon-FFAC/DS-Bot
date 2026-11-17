@@ -1918,7 +1918,7 @@ test('a missing post-delivery ledger receipt reports uncertainty without an auto
   const written=host.rt.ledger.written
   host.rt.ledger.written=async book=>{if(host.rt.ledger.records(book).at(-1)?.event==='delivered')throw new Error('synthetic marker write failure');return written(book)}
   answerSender(host.rt,'b',{exchangeId:'request',senderSessionId:'a'},'The answer')
-  await delay(25)
+  for(let attempt=0;attempt<200&&!host.agentOf('a').calls.length;attempt++)await delay(10)
   assert.equal(host.agentOf('a').calls.length,1)
 })
 

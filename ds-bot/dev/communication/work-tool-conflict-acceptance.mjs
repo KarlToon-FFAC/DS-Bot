@@ -47,4 +47,8 @@ try{
   console.log('PASS native mode: original input admitted and replied once; conflicting foreign capability stays unavailable with an explicit warning')
   console.log('PASS native mode: owner release repairs the capability on the same binding; later @ works without clearing Hub or local data')
  }
+}catch(error){
+ const peer=topology.peers[1]
+ if(peer?.api){const state=await peer.api({endpoint:'state'}).catch(()=>null);console.error(JSON.stringify({errors:state?.errors,workToolWarnings:state?.workToolWarnings,transportState:state?.transport?.state}))}
+ throw error
 }finally{await topology.close()}
