@@ -58,6 +58,14 @@ process.on('message',async message=>{
       const auth={instanceId,epoch:hub.store.db.prepare('SELECT epoch FROM instances WHERE id=?').get(instanceId).epoch}
       value=hub.store.accept(auth,{principalId,inviteId,operationId:message.id+'-'+inviteId})
     }
+    else if(message.command==='publish-scoped-dm'){
+      const {instanceId,otherPrincipalId,payload}=message.value
+      if(!peers.some(peer=>peer.instanceId===instanceId)||payload.author?.homeInstanceId!==instanceId)throw new Error('Unknown synthetic peer')
+      const auth={instanceId,epoch:hub.store.db.prepare('SELECT epoch FROM instances WHERE id=?').get(instanceId).epoch}
+      const scope=otherPrincipalId?hub.store.createDm(auth,{operationId:payload.messageId,principalId:payload.author.principalId,otherPrincipalId}):{conversationId:payload.conversationId}
+      const member=hub.store.memberships(auth).memberships.find(item=>item.conversationId===scope.conversationId&&item.principalId===payload.author.principalId&&item.active)
+      value=hub.store.publish(auth,{...payload,conversationId:scope.conversationId,membershipEpoch:member.membershipEpoch})
+    }
     else if(message.command==='stats')value={messages:hub.store.db.prepare('SELECT id,conversation_id,seq,author_id,body FROM messages').all(),
       deliveries:hub.store.db.prepare('SELECT * FROM deliveries').all(),responses:hub.store.db.prepare('SELECT * FROM responses').all(),instances:hub.store.db.prepare('SELECT id,epoch FROM instances').all()}
     else if(message.command==='close'){await hub.close();process.send?.({id:message.id,ok:true,value:{closed:true}});process.exit(0)}

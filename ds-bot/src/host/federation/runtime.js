@@ -540,7 +540,7 @@ export class CommunicationRuntime {
     if (!bot && all && (!members || info.membershipVersion !== this.member(principalId, conversationId, membershipEpoch).membershipVersion)) fail('AUTHORIZATION_PENDING')
     return { protocol: PROTOCOL, type: 'message.publish', messageId, conversationId,
       author: { principalId, homeInstanceId: this.queue.instanceId, kind: principalId.startsWith('human:') ? 'human' : 'bot' },
-      ...(bot&&info?.kind==='group'&&this.transport?.welcome?.capabilities?.includes('bot-reply-activation')?{replyActivation:replyActivation??'implicit'}:{}),
+      ...(bot&&['group','dm'].includes(info?.kind)&&this.transport?.welcome?.capabilities?.includes('bot-reply-activation')?{replyActivation:replyActivation??'implicit'}:{}),
       clientCreatedAt, content: { format: 'markdown', text },
       ...(admitted.length ? { attachments:admitted } : {}),
       ...(updateForMessageId ? { updateForMessageId, updateRecipientPrincipalId } : {}),

@@ -265,3 +265,56 @@ test('a queued proactive Bot task refuses an old Hub without blocking unrelated 
   assert.ok(!calls.includes('message.publish'))
  }finally{queue.close()}
 })
+
+
+test('installed conversation list and own history agree on all eleven owned memberships in local and remote Sessions',async()=>{
+ const home=mkdtempSync(join(tmpdir(),'dsbot-owned-conversations-')),start=CommunicationTransport.prototype.start
+ const envName='DSBOT_COMMUNICATION_MEMBERSHIP_TEST',previous=process.env[envName]
+ let rt
+ CommunicationTransport.prototype.start=()=>{}
+ try{
+  process.env[envName]='synthetic-bootstrap-for-isolated-test-only'
+  const bot={id:'worker',name:'Worker'},presets={list:async()=>[],register:async()=>()=>{},
+   composedPreset:()=> 'ds-bot-communication',inspectCompositions:()=>[{id:'ds-bot-communication',leakedServices:[],modules:[{moduleName:'@deepseek-ai/dsh-persona'}]}]}
+  rt={home,config:{communication:{enabled:true,url:'wss://isolated.example.test/communication',instanceId:'a',dataPath:':memory:',credentialEnv:envName,publishedBotIds:[bot.id]}},
+   teamTools:[],load:async()=>{},refresh:async()=>{},readOnly:()=>undefined,botOf:id=>id===bot.id?bot:undefined,selfOf:id=>id==='own-chat'?bot.id:undefined,
+   chatOwners:new Map([['own-chat',bot.id]]),groupOwners:new Map(),ctx:{effect:()=>{},on:()=>()=>{},systemPrompt:{section:()=>()=>{}},get:name=>name==='agentPresets'?presets:undefined}}
+  install(rt)
+  const call=async(name,sessionId)=>JSON.parse(await rt.teamTools.find(tool=>tool.name===name).execute({},{name,agent:{id:sessionId,ctx:{}}}))
+  const initial=await call('list_communication_conversations','own-chat')
+  assert.equal(initial.ok===false,false,JSON.stringify(initial))
+  assert.deepEqual(initial.conversations,[])
+  const comm=rt.communication,old=comm.bots.get(bot.id)
+  comm.queue.reconcileBotPublications([])
+  const [current]=comm.queue.reconcileBotPublications([bot]);comm.bots=new Map([[bot.id,current]])
+  const member=(conversationId,principalId)=>({conversationId,principalId,membershipEpoch:'epoch-'+conversationId,kind:'dm',active:true,joinSeq:1,watermark:1})
+  const memberships=Array.from({length:10},(_,i)=>member('current-'+i,current.principalId))
+  memberships.push(member('retired-identity-dm',old.principalId),member('other-private','bot:a:another'),member('human-private',comm.human.principalId))
+  comm.queue.applyMemberships({memberships});comm.everReconciled=true
+  const scope=memberships[0]
+  comm.owners.set('remote-worker',{localBotRef:bot.id,recipientPrincipalId:current.principalId,...scope})
+  comm.authorize=async()=>{}
+  for(const sessionId of ['own-chat','remote-worker']){
+   const listed=await call('list_communication_conversations',sessionId),history=await call('read_own_remote_history',sessionId)
+   assert.equal(listed.conversations.length,11)
+   assert.deepEqual(listed.conversations.map(row=>row.conversationId).sort(),history.conversations.map(row=>row.conversationId).sort())
+   assert.ok(!listed.conversations.some(row=>['other-private','human-private'].includes(row.conversationId)))
+  }
+  assert.throws(()=>assertConversationToolScope(scope,'send_contact_message',{conversationId:'current-1'}),{code:'CONVERSATION_SCOPE_MISMATCH'})
+ }finally{
+  CommunicationTransport.prototype.start=start
+  if(previous===undefined)delete process.env[envName];else process.env[envName]=previous
+  await rt?.communication?.close();rmSync(home,{recursive:true,force:true})
+ }
+})
+
+
+test('Bot reply activation negotiation marks DMs and groups alike, without requiring the new Hub for basic compatibility',()=>{
+ const runtime={queue:{instanceId:'a'},contacts:[],member:()=>({membershipEpoch:'epoch'}),conversations:new Map([['dm',{kind:'dm',members:[]}],['group',{kind:'group',members:[]}]]),transport:{welcome:{capabilities:['bot-reply-activation']}}}
+ for(const conversationId of ['dm','group']){
+  const input=CommunicationRuntime.prototype.message.call(runtime,'bot:a:worker',conversationId,{text:'Deliberate answer',replyToMessageId:'quoted'})
+  assert.equal(input.replyActivation,'implicit')
+ }
+ runtime.transport.welcome.capabilities=[]
+ assert.equal(CommunicationRuntime.prototype.message.call(runtime,'bot:a:worker','dm',{text:'Legacy answer',replyToMessageId:'quoted'}).replyActivation,undefined)
+})

@@ -352,17 +352,19 @@ test('long Bot-only DMs have independent proactive tasks beyond 32 deliveries wh
  assert.equal(duplicate.causality.rootMessageId,parent.causality.rootMessageId)
 })
 
-test('DM result resumes its requester once, acknowledgement does not reactivate the peer, explicit follow-up still works',t=>{
+test('DM replies implicitly activate their quoted Bot across multiple turns; no-reply ends the chain',t=>{
  const f=fixture(t),dm=f.store.createDm(f.a,f.op({principalId:f.A,otherPrincipalId:f.B})).conversationId
  const send=(id,extra={})=>f.send(id,{conversationId:dm,membershipEpoch:f.member(id,dm).membershipEpoch,...extra})
  const request=send(f.A),delivery=f.grant(request,f.B)
  const answer=send(f.B,{replyToMessageId:request.messageId,responseToDeliveryId:delivery})
  assert.deepEqual(f.ai(answer),[f.A])
  const resultGrant=f.grant(answer,f.A)
- const ack=send(f.A,{replyToMessageId:answer.messageId,responseToDeliveryId:resultGrant})
- assert.deepEqual(f.ai(ack),[])
- const question=send(f.A,{causationDeliveryId:resultGrant,activationTargets:[{principalId:f.B}]})
- assert.deepEqual(f.ai(question),[f.B]);assert.equal(question.causality.rootMessageId,request.messageId)
+ const followup=send(f.A,{replyToMessageId:answer.messageId,responseToDeliveryId:resultGrant})
+ assert.deepEqual(f.ai(followup),[f.B]);assert.equal(followup.causality.rootMessageId,request.messageId)
+ const grant=f.grant(followup,f.B)
+ f.store.receipt(f.b,{deliveryId:grant,principalId:f.B,membershipEpoch:f.member(f.B,dm).membershipEpoch,status:'noReply'})
+ assert.equal(f.store.db.prepare('SELECT count(*) n FROM messages WHERE conversation_id=?').get(dm).n,3)
+ assert.throws(()=>send(f.B,{replyToMessageId:followup.messageId,responseToDeliveryId:grant}),{code:'RESPONSE_ALREADY_SENT'})
 })
 
 test('no-reply is an idempotent control event bound to a stored AI grant and prevents later reply publication',t=>{
@@ -396,4 +398,55 @@ test('collected progress reports remain visible without a separate coordinator a
  assert.equal(status.reports.find(row=>row.principalId===f.B).status,'replied')
  const followup=f.send(f.C,{replyActivation:'implicit',replyToMessageId:request.messageId,responseToDeliveryId:f.grant(request,f.C),activationTargets:[{principalId:f.A}]})
  assert.deepEqual(f.ai(followup),[f.A],'explicit urgent activation is still intentional')
+})
+
+
+test('DM direct quotes without grants or activation targets wake the author and retain durable deduplication and depth limits',t=>{
+ const f=fixture(t,{maxCausalDepth:4},true),dm=f.store.createDm(f.a,f.op({principalId:f.A,otherPrincipalId:f.B})).conversationId
+ const send=(id,extra={})=>f.send(id,{conversationId:dm,membershipEpoch:f.member(id,dm).membershipEpoch,...extra})
+ const first=send(f.A),answer=send(f.B,{replyToMessageId:first.messageId})
+ assert.deepEqual(f.ai(answer),[f.A])
+ assert.deepEqual(answer.activatedBotPrincipalIds,[f.A])
+ const input=f.input(f.A,{conversationId:dm,membershipEpoch:f.member(f.A,dm).membershipEpoch,replyToMessageId:answer.messageId})
+ const next=f.store.publish(f.a,input)
+ assert.deepEqual(f.ai(next),[f.B])
+ const stored=JSON.parse(f.store.db.prepare('SELECT body FROM events WHERE id=?').get(next.messageId).body)
+ assert.deepEqual(stored.activatedBotPrincipalIds,[f.B])
+ f.store.close();f.store=new HubStore(f.path,{limits:f.limits})
+ assert.deepEqual(f.store.publish(f.a,input),next)
+ const duplicate=send(f.A,{replyToMessageId:answer.messageId})
+ assert.equal(duplicate.dispatchSuppressed,'DUPLICATE_HANDOFF');assert.deepEqual(duplicate.activatedBotPrincipalIds,[])
+ const third=send(f.B,{replyToMessageId:next.messageId})
+ assert.deepEqual(f.ai(third),[f.A])
+ const limited=send(f.A,{replyToMessageId:third.messageId})
+ assert.equal(limited.dispatchSuppressed,'CAUSAL_LIMIT');assert.deepEqual(limited.activatedBotPrincipalIds,[])
+ const self=send(f.A,{replyToMessageId:limited.messageId})
+ assert.deepEqual(self.activatedBotPrincipalIds,[])
+})
+
+
+test('DM collection reports stay quiet while deliberate follow-ups can activate the requester',t=>{
+ const f=fixture(t),dm=f.store.createDm(f.a,f.op({principalId:f.A,otherPrincipalId:f.B})).conversationId
+ const send=(id,extra={})=>f.send(id,{conversationId:dm,membershipEpoch:f.member(id,dm).membershipEpoch,...extra})
+ const request=send(f.A,{replyActivation:'collect',activationTargets:[{principalId:f.B}]})
+ const report=send(f.B,{replyActivation:'implicit',replyToMessageId:request.messageId,responseToDeliveryId:f.grant(request,f.B)})
+ assert.deepEqual(report.activatedBotPrincipalIds,[])
+ const followup=send(f.A,{replyToMessageId:report.messageId})
+ assert.deepEqual(followup.activatedBotPrincipalIds,[f.B])
+ const next=send(f.B,{replyToMessageId:followup.messageId,responseToDeliveryId:f.grant(followup,f.B)})
+ assert.deepEqual(next.activatedBotPrincipalIds,[f.A])
+})
+
+test('DM replies never activate the sender or a Human, and cannot quote another conversation',t=>{
+ const f=fixture(t),dm=f.store.createDm(f.a,f.op({principalId:f.A,otherPrincipalId:f.B})).conversationId
+ const send=(id,extra={})=>f.send(id,{conversationId:dm,membershipEpoch:f.member(id,dm).membershipEpoch,...extra})
+ const request=send(f.A)
+ assert.deepEqual(send(f.A,{replyToMessageId:request.messageId}).activatedBotPrincipalIds,[])
+ const group=f.send(f.H,{mentions:[{principalId:f.A}]})
+ assert.throws(()=>send(f.A,{replyToMessageId:group.messageId}),{code:'INVALID_REPLY_TARGET'})
+ const humanDm=f.store.createDm(f.a,f.op({principalId:f.H,otherPrincipalId:f.B})).conversationId
+ const human=f.send(f.H,{conversationId:humanDm,membershipEpoch:f.member(f.H,humanDm).membershipEpoch})
+ assert.deepEqual(human.activatedBotPrincipalIds,[f.B])
+ const response=f.send(f.B,{conversationId:humanDm,membershipEpoch:f.member(f.B,humanDm).membershipEpoch,replyToMessageId:human.messageId,responseToDeliveryId:f.grant(human,f.B)})
+ assert.deepEqual(response.activatedBotPrincipalIds,[])
 })

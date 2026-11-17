@@ -748,14 +748,6 @@ export class HubStore {
     })
     return {requestMessageId:row.id,conversationId:input.conversationId,complete:reports.every(report=>report.status!=='pending'),reports}
   }
-  resumesDmRequest(message, cause, recipientId, responderId) {
-    if (!message.responseToDeliveryId || !cause) return false
-    const parent = this.db.prepare('SELECT author_id,body FROM messages WHERE id=?').get(cause.message_id)
-    if (parent?.author_id !== recipientId) return false
-    const request = JSON.parse(parent.body)
-    return (request.activationTargets ?? []).some(target => target.principalId === responderId)
-      || (!request.responseToDeliveryId && !request.causationDeliveryId && !request.replyToMessageId)
-  }
   publish(auth,input) {
     const author=this.principal(auth,input.author?.principalId)
     const message=normalizeMessage(input,author,this.limits)
@@ -815,11 +807,11 @@ export class HubStore {
       if(message.replyToMessageId){
         const parent=this.db.prepare('SELECT m.conversation_id,m.seq,m.author_id,m.body,p.kind FROM messages m JOIN principals p ON p.id=m.author_id WHERE m.id=?').get(message.replyToMessageId)
         requireThat(parent?.conversation_id===message.conversationId&&parent.seq>=sender.join_seq,'INVALID_REPLY_TARGET')
-        if(conversation.kind==='group'&&parent.kind==='bot'){
+        if(parent.kind==='bot'){
           const target=members.find(member=>member.principal_id===parent.author_id)
           requireThat(target&&parent.seq>=target.join_seq,'INVALID_REPLY_TARGET')
           const collected=cause?.message_id===message.replyToMessageId&&JSON.parse(parent.body).replyActivation==='collect'
-          if(author.kind==='human'||message.replyActivation==='implicit'&&!collected)replyBot=target.principal_id
+          if(author.kind==='human'||!collected&&(conversation.kind==='dm'||message.replyActivation==='implicit'))replyBot=target.principal_id
         }
       }
       let rootId, parentMessageId=null, depth=0
@@ -858,7 +850,7 @@ export class HubStore {
       const deliveries=members.map(member=>{
         const mentioned=targets.some(mention=>mention.principalId===member.principal_id)
         const mayReceiveAi=conversation.kind==='dm'||['passive','active'].includes(member.speaking_mode)
-        let ai=author.kind==='human'?humanTargets.has(member.principal_id):member.kind==='bot'&&member.published===1&&member.principal_id!==author.principalId&&mayReceiveAi&&(conversation.kind==='dm'?(mentioned||(!cause&&!message.replyToMessageId)||this.resumesDmRequest(message,cause,member.principal_id,author.principalId)):
+        let ai=author.kind==='human'?humanTargets.has(member.principal_id):member.kind==='bot'&&member.published===1&&member.principal_id!==author.principalId&&mayReceiveAi&&(conversation.kind==='dm'?(mentioned||member.principal_id===replyBot||(!cause&&!message.replyToMessageId)):
           (mentioned||member.principal_id===replyBot))
         if(message.updateForMessageId)ai=false
         if(ai&&author.kind==='bot'&&this.db.prepare('SELECT 1 FROM bot_dispatches WHERE cause_key=? AND author_id=? AND target_id=?').get(dispatchKey,author.principalId,member.principal_id)){ai=false;duplicate=true}
