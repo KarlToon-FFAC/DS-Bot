@@ -28,6 +28,7 @@ try{
   const dialog=page.getByRole('dialog',{name:'Invite participant',exact:true});await dialog.waitFor()
   assert.equal(await dialog.locator('input[type=radio]').count(),0)
   const choices=dialog.getByRole('checkbox');assert.equal(await choices.count(),2)
+  for(const group of await dialog.locator('details.bt-comm-group-contact').all())await group.locator('summary').click()
   await choices.nth(0).check();await choices.nth(1).check()
   await dialog.getByText('Selected Bots: 2',{exact:true}).waitFor()
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth))

@@ -1,6 +1,7 @@
 import { createElement as h } from 'react'
 import { contactDirectory } from './communication-contacts.js'
 import { CommunicationAvatar } from './communication-profile.js'
+import {ChevronRightIcon} from './icons.js'
 import { t } from './i18n.js'
 
 export function invitationGroups(invites = []) {
@@ -20,13 +21,18 @@ export function GroupBotChoices({ contacts, humanId, instanceId, selected, onCha
   const self = contacts.find(person => person.principalId === humanId) ?? { principalId: humanId, displayName: t('You'), kind: 'human' }
   const groups = [{ person: self, bots: local }, ...people.filter(item => item.available)]
   if (otherBots.length) groups.push({ person: { displayName: t('Other available Bots') }, bots: otherBots })
-  return h('div', { className: 'bt-comm-group-choices' }, groups.map(({ person, bots }, index) => h('section', { key: person.principalId ?? index, className: 'bt-comm-group-contact' },
-    h('div', { className: 'bt-comm-group-contact-heading' }, person.principalId ? h(CommunicationAvatar, { person, request, size: 24 }) : null,
-      h('strong', null, person.displayName), h('span', { className: 'bt-comm-reference' }, person.ipAddress ?? t('Address unavailable'))),
-    bots.map(bot => h('label', { key: bot.principalId, className: 'bt-comm-check' },
-      h('input', { type: single ? 'radio' : 'checkbox', name: single ? 'invite-group-bot' : undefined, disabled:disabled || disabledIds.includes(bot.principalId), 'aria-label': `${t('Invite')} ${bot.displayName}`, checked: selected.includes(bot.principalId), onChange: event => onChange(event.target.checked ? single ? [bot.principalId] : [...selected, bot.principalId] : selected.filter(id => id !== bot.principalId)) }),
-      h(CommunicationAvatar, { person: bot, request, size: 24 }), h('span', { className: 'bt-comm-choice-name' }, bot.displayName))))),
-    h('p', { className: 'bt-comm-reference' }, t('Selected Bots and their owners join the group immediately.')))
+  return h('div', { className: 'bt-comm-group-choices' }, groups.map(({ person, bots }, index) => {
+    const count=bots.filter(bot=>selected.includes(bot.principalId)).length
+    return h('details', { key: person.principalId ?? index, className: 'bt-comm-group-contact', 'data-choice-contact-id':person.principalId },
+      h('summary', { className: 'bt-comm-group-contact-heading' }, person.principalId ? h(CommunicationAvatar, { person, request, size: 24 }) : null,
+        h('span',{className:'bt-comm-group-contact-person'},h('strong', null, person.displayName), h('span', { className: 'bt-comm-reference' }, person.ipAddress ?? t('Address unavailable'))),
+        count?h('span',{className:'bt-comm-group-selected'},t('Selected Bots: {count}',{count})):null,
+        h('span',{className:'bt-comm-group-chevron','aria-hidden':true},h(ChevronRightIcon))),
+      bots.length?bots.map(bot => h('label', { key: bot.principalId, className: 'bt-comm-check' },
+        h('input', { type: single ? 'radio' : 'checkbox', name: single ? 'invite-group-bot' : undefined, disabled:disabled || disabledIds.includes(bot.principalId), 'aria-label': `${t('Invite')} ${bot.displayName}`, checked: selected.includes(bot.principalId), onChange: event => onChange(event.target.checked ? single ? [bot.principalId] : [...selected, bot.principalId] : selected.filter(id => id !== bot.principalId)) }),
+        h(CommunicationAvatar, { person: bot, request, size: 24 }), h('span', { className: 'bt-comm-choice-name' }, bot.displayName))):h('p',{className:'bt-comm-reference'},t('No Bots available to invite.')))
+  }),h('p', { className: 'bt-comm-reference' }, t('Selected Bots and their owners join the group immediately.')))
+
 }
 
 export function InvitationDetails({ invitation, busy, onAccept }) {

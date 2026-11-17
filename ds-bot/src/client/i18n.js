@@ -5,6 +5,7 @@
 export const NAMESPACE = 'ds-bot'
 
 const ZH = {
+  'No Bots available to invite.':'暂无可邀请的 Bot。',
   'Consulted':'咨询了',
   'Replied to':'答复了',
   'Reported to':'汇报给',

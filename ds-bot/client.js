@@ -42,6 +42,7 @@ module.exports = __toCommonJS(index_exports);
 // src/client/i18n.js
 var NAMESPACE = "ds-bot";
 var ZH = {
+  "No Bots available to invite.": "暂无可邀请的 Bot。",
   "Consulted": "咨询了",
   "Replied to": "答复了",
   "Reported to": "汇报给",
@@ -23443,29 +23444,28 @@ function GroupBotChoices({ contacts, humanId, instanceId, selected, onChange, re
   const self = contacts.find((person) => person.principalId === humanId) ?? { principalId: humanId, displayName: t("You"), kind: "human" };
   const groups = [{ person: self, bots: local }, ...people.filter((item) => item.available)];
   if (otherBots.length) groups.push({ person: { displayName: t("Other available Bots") }, bots: otherBots });
-  return (0, import_react67.createElement)(
-    "div",
-    { className: "bt-comm-group-choices" },
-    groups.map(({ person, bots }, index) => (0, import_react67.createElement)(
-      "section",
-      { key: person.principalId ?? index, className: "bt-comm-group-contact" },
+  return (0, import_react67.createElement)("div", { className: "bt-comm-group-choices" }, groups.map(({ person, bots }, index) => {
+    const count = bots.filter((bot) => selected.includes(bot.principalId)).length;
+    return (0, import_react67.createElement)(
+      "details",
+      { key: person.principalId ?? index, className: "bt-comm-group-contact", "data-choice-contact-id": person.principalId },
       (0, import_react67.createElement)(
-        "div",
+        "summary",
         { className: "bt-comm-group-contact-heading" },
         person.principalId ? (0, import_react67.createElement)(CommunicationAvatar, { person, request, size: 24 }) : null,
-        (0, import_react67.createElement)("strong", null, person.displayName),
-        (0, import_react67.createElement)("span", { className: "bt-comm-reference" }, person.ipAddress ?? t("Address unavailable"))
+        (0, import_react67.createElement)("span", { className: "bt-comm-group-contact-person" }, (0, import_react67.createElement)("strong", null, person.displayName), (0, import_react67.createElement)("span", { className: "bt-comm-reference" }, person.ipAddress ?? t("Address unavailable"))),
+        count ? (0, import_react67.createElement)("span", { className: "bt-comm-group-selected" }, t("Selected Bots: {count}", { count })) : null,
+        (0, import_react67.createElement)("span", { className: "bt-comm-group-chevron", "aria-hidden": true }, (0, import_react67.createElement)(ChevronRightIcon))
       ),
-      bots.map((bot) => (0, import_react67.createElement)(
+      bots.length ? bots.map((bot) => (0, import_react67.createElement)(
         "label",
         { key: bot.principalId, className: "bt-comm-check" },
         (0, import_react67.createElement)("input", { type: single ? "radio" : "checkbox", name: single ? "invite-group-bot" : void 0, disabled: disabled || disabledIds.includes(bot.principalId), "aria-label": `${t("Invite")} ${bot.displayName}`, checked: selected.includes(bot.principalId), onChange: (event) => onChange(event.target.checked ? single ? [bot.principalId] : [...selected, bot.principalId] : selected.filter((id) => id !== bot.principalId)) }),
         (0, import_react67.createElement)(CommunicationAvatar, { person: bot, request, size: 24 }),
         (0, import_react67.createElement)("span", { className: "bt-comm-choice-name" }, bot.displayName)
-      ))
-    )),
-    (0, import_react67.createElement)("p", { className: "bt-comm-reference" }, t("Selected Bots and their owners join the group immediately."))
-  );
+      )) : (0, import_react67.createElement)("p", { className: "bt-comm-reference" }, t("No Bots available to invite."))
+    );
+  }), (0, import_react67.createElement)("p", { className: "bt-comm-reference" }, t("Selected Bots and their owners join the group immediately.")));
 }
 function InvitationDetails({ invitation, busy, onAccept }) {
   return invitation ? (0, import_react67.createElement)(
@@ -25536,6 +25536,14 @@ var communicationCSS = `
 .bt-comm-archive-notice{padding:0 24px;color:var(--bt-ink-2)}
 
 .bt-comm-group-contact-heading{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px}
+.bt-comm-group-contact>summary{list-style:none;cursor:pointer;padding:8px;border-radius:10px}
+.bt-comm-group-contact>summary::-webkit-details-marker{display:none}
+.bt-comm-group-contact>summary:hover{background:var(--bt-hover)}
+.bt-comm-group-contact>summary:focus-visible{outline:2px solid var(--bt-accent);outline-offset:2px}
+.bt-comm-group-contact-person{flex:1;min-width:0;display:flex;align-items:center;gap:4px 8px;flex-wrap:wrap;overflow-wrap:anywhere}
+.bt-comm-group-selected{font-size:11px;color:var(--bt-ink-2)}
+.bt-comm-group-chevron{display:flex;flex:none}
+.bt-comm-group-contact[open]>summary .bt-comm-group-chevron{transform:rotate(90deg)}
 .bt-comm-group-contact .bt-comm-check{padding-left:28px;min-width:0}.bt-comm-choice-name{min-width:0;overflow-wrap:anywhere}
 .bt-comm-invitations>button{display:flex;align-items:center;justify-content:space-between;width:100%;margin:4px 0}
 .bt-comm-invitation-details dd{margin:4px 0 12px;overflow-wrap:anywhere}

@@ -10,6 +10,14 @@ export const communicationCSS = `
 .bt-comm-archive-notice{padding:0 24px;color:var(--bt-ink-2)}
 
 .bt-comm-group-contact-heading{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px}
+.bt-comm-group-contact>summary{list-style:none;cursor:pointer;padding:8px;border-radius:10px}
+.bt-comm-group-contact>summary::-webkit-details-marker{display:none}
+.bt-comm-group-contact>summary:hover{background:var(--bt-hover)}
+.bt-comm-group-contact>summary:focus-visible{outline:2px solid var(--bt-accent);outline-offset:2px}
+.bt-comm-group-contact-person{flex:1;min-width:0;display:flex;align-items:center;gap:4px 8px;flex-wrap:wrap;overflow-wrap:anywhere}
+.bt-comm-group-selected{font-size:11px;color:var(--bt-ink-2)}
+.bt-comm-group-chevron{display:flex;flex:none}
+.bt-comm-group-contact[open]>summary .bt-comm-group-chevron{transform:rotate(90deg)}
 .bt-comm-group-contact .bt-comm-check{padding-left:28px;min-width:0}.bt-comm-choice-name{min-width:0;overflow-wrap:anywhere}
 .bt-comm-invitations>button{display:flex;align-items:center;justify-content:space-between;width:100%;margin:4px 0}
 .bt-comm-invitation-details dd{margin:4px 0 12px;overflow-wrap:anywhere}
