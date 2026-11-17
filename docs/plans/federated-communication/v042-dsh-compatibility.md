@@ -1,6 +1,6 @@
 # DSH 0.2.2 compatibility (V0.4.2 batch)
 
-Target: npm default channel **0.2.2-rc.1**, with **0.2.1-rc.4** retained for this migration window. rc.3 is not the supported release target. Plugin, Hub and desktop metadata remain at the existing V0.4.1 release; the desktop's stale V0.2.6 metadata is aligned with its plugin as required by its existing packaging contract. No Hub protocol change is required.
+Target: npm default channel **0.2.2-rc.1**, with **0.2.1-rc.4** retained for this migration window. rc.3 is not the supported release target. Plugin, Hub and desktop metadata are now V0.4.2. The desktop metadata had first been aligned from stale V0.2.6 with the V0.4.1 plugin during preparation. No Hub protocol change is required.
 
 ## Public SDK boundary
 

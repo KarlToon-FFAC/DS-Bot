@@ -57,6 +57,9 @@ export function install(rt) {
     // Deleted private Bots whose folder, memory and chats stay closed to the others.
     privateArchives: rt.archivesView(),
     exchangeTurns: state.exchangeTurns,
+    remoteExchangeTurns:Object.fromEntries(Object.entries(state.turnAudiences??{}).map(([id,turns])=>[id,Object.entries(turns).filter(([,value])=>value.triggerOrigin==='remote-bot').map(([turn])=>Number(turn))])),
+    localConsultations:Object.values(state.localConsultations??{}).map(({id,ownerBotId,targetBotId,status})=>({id,ownerBotId,targetBotId,status})),
+    communicationSessions:Object.fromEntries([...(rt.communication?.owners??[])].filter(([,binding])=>rt.botOf(binding.localBotRef)).map(([sessionId,binding])=>[sessionId,binding.localBotRef])),
     questions: state.questions,
     views: state.views ?? {},
     // Aside answers of each Bot's current part, newest first. Not part of the

@@ -36,6 +36,8 @@ V0.3.0 新增 **设置 → 通用 → 启用远程 Hub**。新安装默认关闭
 
 **V0.3.8** 中，远程回合按同一个 Bot 的身份使用本地团队、记忆、原生工具和已挂载 MCP 工具的权限。`read_own_chat({"message_id":"…"})` 可跨会话分段读取指定 ID 的本地消息。本地 Main Bot、私有 Bot、沙箱和审批检查继续生效；本地卡片和定时任务落在该 Bot 的本地对话中，对外发布仍需显式调用通信工具。
 
+**V0.4.2** 增加会话隐藏/恢复、置顶和经确认删除本机可见记录。远程任务中的咨询、汇报与内部答复可在同一个本地 Bot 消息流窗口查看，包括已经保存的咨询答复；内部正文仍需显式发布才会外发。详见[远程与本地消息流](docs/plans/federated-communication/v042-local-exchanges.md)。
+
 **V0.4.1** 首项改动修复正文路由：Bot 回报触发的回合默认内部可见；用户回合中的普通 Bot 请求排队处理；未发布的收尾正文仅由所属 Bot 私下处置。可通过 `read_turn_output` / `submit_turn_output` 按原文和稳定回执提交，或通过 `decline_turn_output` 明确保留为私密内容。可见性事实、投递回执和待决状态分账记录；Chief 接管需要明确委派，用户面不再展示内部正文预览或发布按钮。未知来源和定时任务不会默认对用户发布。开启发布权限不等于已经送达。参见[v3 路由与网关对接约定](docs/plans/federated-communication/v041-output-routing-v3.md)。
 
 V0.4.1 另修复了执行 Session 缺失时，尚未使用的远程绑定导致收件永久 pending 的问题；恢复保留原消息和 Bot 身份，已有执行记录或结果不明的消息不会自动重放。活动页和 `communication_diagnose.bindingFailures` 会单独显示失败阶段及宿主原因，参见[复现与恢复边界](docs/plans/federated-communication/v041-binding-recovery.md)。
@@ -52,9 +54,9 @@ V0.4.0 同步了上游的 Bot 私聊消息账本、工作答复保留和运行�
 
 远程会话支持隐藏后重新显示、置顶，以及经独立窗口确认后删除本机可见聊天记录。隐藏不停止收信；删除不影响 Hub 和其他成员的记录，新消息仍可让会话重新出现。详见[会话管理说明](docs/plans/federated-communication/conversation-management.md)。
 
-下一批 V0.4.2 面向 npm 默认通道的 DSH **0.2.2-rc.1**，同时保留 **0.2.1-rc.4** 兼容。DSH 0.2.2 要求 **Node 24.9 或更新版本**。升级前备份配置和数据；兼容两套 SDK 不代表新版宿主写入的数据能够直接降级。详见[接口兼容方案](docs/plans/federated-communication/v042-dsh-compatibility.md)。包版本尚未推进到 V0.4.2。
+V0.4.2 面向 npm 默认通道的 DSH **0.2.2-rc.1**，同时保留 **0.2.1-rc.4** 兼容。DSH 0.2.2 要求 **Node 24.9 或更新版本**。升级前备份配置和数据；兼容两套 SDK 不代表新版宿主写入的数据能够直接降级。详见[接口兼容方案](docs/plans/federated-communication/v042-dsh-compatibility.md)。插件、Hub 和桌面应用包版本均为 V0.4.2。
 
-![版本](https://img.shields.io/badge/版本-V0.4.1-blue) ![DSH](https://img.shields.io/badge/DSH-0.2.2--rc.1-4D6BFE) ![许可](https://img.shields.io/badge/许可-Apache_2.0-green)
+![版本](https://img.shields.io/badge/版本-V0.4.2-blue) ![DSH](https://img.shields.io/badge/DSH-0.2.2--rc.1-4D6BFE) ![许可](https://img.shields.io/badge/许可-Apache_2.0-green)
 
 DS Bot 是一个基于 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（简称 dsh）的 bot 插件，插件将 dsh 改造为 bot 形式。你可以与自己创建的 bot 交流、工作。
 

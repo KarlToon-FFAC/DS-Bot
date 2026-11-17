@@ -1,6 +1,6 @@
 # Hidden, pinned and deleted remote conversations
 
-First feature in the upcoming V0.4.2 batch. Keep the current V0.4.1 package versions until release is requested. This user request replaces the earlier always-visible list decision.
+Released in V0.4.2 together with remote-task local Bot exchange inspection. This user request replaces the earlier always-visible list decision.
 
 Hide/show and pin/unpin apply to remote groups, Human DMs and the owner's read-only Bot DM records. Existing archived IDs are hidden IDs: no data or membership migration is needed. Hidden conversations remain received and saved, and remain hidden when new messages arrive. A separate collection restores them. Pins sort first within each existing list section; hidden pins stay hidden. Preferences belong to the current local Hub queue and persist across browser/host restarts. UI header actions and row context menus offer the same operations.
 

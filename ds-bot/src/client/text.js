@@ -166,7 +166,7 @@ export function toolArgs(root) {
 // parts) are not events in the chat, nor is a request handed back after its line was
 // already shown: deferred, resumed after a restart, or retried after a tool call
 // written as text.
-const RELAY_ROLES = new Set(['request', 'reply', 'stopped'])
+const RELAY_ROLES = new Set(['request', 'reply', 'stopped','federation-report'])
 export const isRelayContext = (data) => {
   const source = data?.source
   if (source === null || typeof source !== 'object' || source.kind !== 'bot' || source.handoff === true) return false

@@ -265,7 +265,15 @@ export function AssistantCell({ node, groupPart, sessionId, openFile, fileMentio
   const ms = useThinkingMs({ sessionId, turn: data.turn, settledSteps: members.filter(step => step.status !== 'running').length, skip: hidden || reasoning === '' })
   // A streaming reply stands in for the activity row.
   useLiveNote(actions, sessionId, `text:${node.key ?? data.seq}`, !hidden && running && texts.length > 0 ? { text: true } : null)
-  if (hidden) return h(CellEmpty)
+  if (hidden) {
+    const incoming=!roster.roomsById[sessionId]&&relayPart(data,groupPart)?relaysBefore(contexts,steps,data).filter(item=>item.source?.remoteSource):[]
+    if(!incoming.length)return h(CellEmpty)
+    const self=roster.byId[sessionId]
+    return h(Fragment,null,incoming.map(relay=>{
+      const sender=roster.byId[relay.source.senderSessionId]
+      return self&&sender?h(EventLine,{key:relay.seq,prefix:t('Message from'),bots:[sender],onOpen:()=>actions.openExchange(self.id,sender.id),whole:true}):null
+    }))
+  }
   // A relay spliced mid-turn is a 'context' node, hidden from the chat flow on
   // DSH 0.2; the step that answers it shows the event line where it was read,
   // once, in the step's first cell.
@@ -661,7 +669,7 @@ export function TriggerCell({ node, sessionId, useRoster, useSessions, useTurnCl
       ) : null
       if (run === 'folded') return null
       const sender = roster.byId[source.senderSessionId] ?? { id: source.senderSessionId, name: source.senderName ?? t('a Bot'), color: 'gray' }
-      const count = run?.count ?? (isHiddenTurn(roster, sessionId, turn) ? 2 : 1)
+      const count = run?.count ?? (source.role!=='federation-report'&&isHiddenTurn(roster, sessionId, turn) ? 2 : 1)
       // Peers may be named by any part of their chat, so they are matched by Bot.
       const bots = [sender]
       for (const peer of (run?.peerIds ?? []).map(id => roster.byId[id]).filter(Boolean)) {
@@ -967,7 +975,8 @@ function GroupReplies({ sessionId, callId, done, content, roster, actions, useUi
 
 // The calls ToolCell draws. A PTC program (`run_code`) dispatches the real tools as
 // its sub-calls, so a call draws by its own name wherever it sits in the tree.
-const DRAWN = new Set(['message_bot', 'stop_bot', 'create_bot', 'update_bot', 'group_relay', 'create_group', 'update_group', 'delete_group', 'post_to_group', 'ask_user', 'request_secret', 'ask_user_question', 'show_view', 'browser_handoff', 'read_group_chat', 'remember', 'forget'])
+const EXCHANGE_TOOLS=new Set(['message_bot','consult_local_bot','reply_to_local_consultation','report_to_local_chief'])
+const DRAWN = new Set(['consult_local_bot','reply_to_local_consultation','report_to_local_chief','message_bot', 'stop_bot', 'create_bot', 'update_bot', 'group_relay', 'create_group', 'update_group', 'delete_group', 'post_to_group', 'ask_user', 'request_secret', 'ask_user_question', 'show_view', 'browser_handoff', 'read_group_chat', 'remember', 'forget'])
 // Calls whose card a dock above the composer carries when the call is not drawn.
 const CARDS = new Set(['ask_user', 'request_secret', 'show_view', 'browser_handoff'])
 
@@ -1004,6 +1013,16 @@ function renderCall(call, { sessionId, roster, actions, useUi, useWork, findBot,
   const { text: arg, value: argValue } = toolArgs(call)
   const self = roster.byId[sessionId]
   switch (tool) {
+    case 'consult_local_bot':
+    case 'reply_to_local_consultation':
+    case 'report_to_local_chief': {
+      const consultation=roster.localConsultations?.find(row=>row.id===arg('consultationId'))
+      const target=findBot(tool==='report_to_local_chief'?arg('chiefId'):tool==='reply_to_local_consultation'?consultation?.ownerBotId:arg('botId')??consultation?.targetBotId)
+      if(!self||!target)return h(CellEmpty)
+      if(done&&call.isError)return h('div',{className:'bt-event'},t("Couldn't message {name}",{name:target.name}))
+      const prefix=tool==='report_to_local_chief'?'Reported to':tool==='reply_to_local_consultation'?'Replied to':'Consulted'
+      return h(EventLine,{prefix:t(prefix),bots:[target],onOpen:()=>actions.openExchange(self.id,target.id),whole:true})
+    }
     case 'message_bot': {
       const target = findBot(arg('to')) ?? { name: arg('to') ?? '…', color: 'gray' }
       if (done && call.isError) return h('div', { className: 'bt-event' }, t("Couldn't message {name}", { name: target.name }))
@@ -1086,10 +1105,11 @@ export function ToolCell({ node, sessionId, useRoster, useUi, useWork, useHeldCa
   const turn = node.location?.turn?.turn ?? root.turn
   const hidden = isHiddenTurn(roster, sessionId, turn)
   const findBot = nameOrId => roster.byId[nameOrId] ?? roster.bots.find(bot => bot.name.toLowerCase() === String(nameOrId ?? '').toLowerCase())
-  const calls = hidden ? [] : callTree(root)
+  const remote=Boolean(roster.communicationSessions?.[sessionId]||roster.remoteExchangeTurns?.[sessionId]?.includes(turn))
+  const calls = callTree(root).filter(call=>!hidden||remote&&EXCHANGE_TOOLS.has(toolName(call)))
   const drawn = calls.filter(call => DRAWN.has(toolName(call)))
   // The newest call still running names the work, so a program reads as the tool it is in.
-  const running = root.kind === 'tool-result' ? undefined : calls.findLast(call => call.kind !== 'tool-result')
+  const running = hidden||root.kind === 'tool-result' ? undefined : calls.findLast(call => call.kind !== 'tool-result')
   const note = running ? toolActivity(toolName(running), toolArgs(running).text, findBot, roster.byId[sessionId]) : null
   // A running tool shows only as the activity row's phrase.
   useLiveNote(actions, sessionId, `tool:${root.callId ?? node.key}`, note)

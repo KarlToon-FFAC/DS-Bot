@@ -2070,3 +2070,49 @@ test('pending notices offer at most five owned IDs and never embed private prose
  assert.equal(host.agentOf('b').calls.length,0)
  assert.equal(host.rt.outputNoticePrompt('a'),'')
 })
+
+test('saved remote consultations appear as exact pair results with full text and no synthetic delivery',async t=>{
+ const host=await start(team());t.after(host.stop)
+ const long='Saved internal answer. '.repeat(200),source={conversationId:'remote-room',messageId:'remote-message'}
+ host.rt.state.localConsultations={saved:{id:'saved',ownerBotId:'b',targetBotId:'a',status:'completed',text:long,receiptId:'durable-receipt',remoteSource:source,completedAt:100},pending:{id:'pending',ownerBotId:'b',targetBotId:'a',status:'pending',text:'UNSAVED'},foreign:{id:'foreign',ownerBotId:'c',targetBotId:'a',status:'completed',text:'OTHER_PAIR',receiptId:'other'}}
+ const results=await host.exchanges()
+ assert.equal(results.length,1);assert.equal(results[0].consultationResult,true)
+ assert.equal(results[0].from,'a');assert.equal(results[0].to,'b');assert.deepEqual(results[0].remoteSource,source)
+ assert.equal(results[0].receiptId,'durable-receipt');assert.equal(results[0].length,long.length)
+ const full=await host.call('exchange-text',{id:results[0].id,a:'a',b:'b'})
+ assert.equal(full.value.text,long)
+ assert.equal((await host.call('exchange-text',{id:results[0].id,a:'a',b:'c'})).ok,false)
+ assert.deepEqual(await host.exchanges(),results,'reading again never appends or redelivers')
+ assert.equal(host.agents.size,0)
+ await host.rt.save({required:true})
+ const persisted=JSON.parse(readFileSync(join(host.home,'state.json'),'utf8'))
+ assert.equal(persisted.localConsultations.saved.text,long)
+})
+
+test('a result being saved or a failed save cannot appear as a completed remote exchange',async t=>{
+ const host=await start(team());t.after(host.stop)
+ const {settleLocalConsultation}=await import('../src/host/federation/local-consultations.js')
+ const source={exchangeId:'save-case',senderSessionId:'b',remoteSource:{consultationId:'save-case',conversationId:'remote',messageId:'message'}}
+ host.rt.state.localConsultations={'save-case':{id:'save-case',ownerBotId:'b',targetBotId:'a',status:'pending',remoteSource:source.remoteSource}}
+ let release,entered
+ const gate=new Promise(resolve=>{release=resolve}),arrived=new Promise(resolve=>{entered=resolve})
+ const original=host.rt.save
+ host.rt.save=async options=>{if(options?.required){entered();await gate;throw new Error('synthetic write failure')}return original(options)}
+ const result=settleLocalConsultation(host.rt,'a',source,'PRIVATE_UNSAVED_ANSWER')
+ await arrived
+ assert.equal((await host.exchanges()).length,0)
+ release();await assert.rejects(result,{code:'LOCAL_CONSULTATION_RESULT_NOT_SAVED'})
+ assert.equal((await host.exchanges()).length,0)
+ host.rt.save=original
+ const receipt=await settleLocalConsultation(host.rt,'a',source,'Saved answer')
+ assert.equal((await host.exchanges())[0].receiptId,receipt.receiptId)
+})
+
+test('earlier local parts retain a remote report exchange entry while internal prose stays hidden',async t=>{
+ const host=await start(team());t.after(host.stop)
+ host.rt.state.turnAudiences??={}
+ host.rt.state.turnAudiences.a={1:{audience:'internal',triggerOrigin:'remote-bot'}}
+ const items=host.rt.displayItems('a',[{type:'turn/start',seq:1,data:{turn:1}},{type:'user/message',seq:2,time:100,data:{source:{kind:'bot',role:'federation-report',senderSessionId:'b',senderName:'Writer'},content:[{type:'text',text:'PRIVATE_REPORT'}]}},{type:'assistant/message',seq:3,data:{turn:1,message:{content:[{type:'text',text:'PRIVATE_FINAL'}]}}}])
+ assert.equal(items.length,1);assert.equal(items[0].kind,'event');assert.equal(items[0].botId,'b')
+ assert.doesNotMatch(JSON.stringify(items),/PRIVATE_/)
+})

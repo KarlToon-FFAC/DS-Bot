@@ -39,6 +39,9 @@ export function indexRoster(value) {
   for (const bot of value.bots) {
     for (const id of [...(bot.parts ?? []), bot.sessionId ?? bot.id, bot.id]) byId[id] = bot
   }
+  for(const [sessionId,botId] of Object.entries(value.communicationSessions??{})){
+    if(!byId[sessionId]&&byId[botId])byId[sessionId]=byId[botId]
+  }
   const roomsById = {}
   // A group's own Session is a chain of parts like a Bot's chat: `room.id` is its
   // first part's id and `sessionId` its current one; every part id finds the room.

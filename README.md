@@ -43,6 +43,8 @@ Remote groups can select **multiple default receiving Bots** from the group side
 
 In **V0.3.8**, Remote turns use the same Bot identity and local team, memory, native and attached MCP tool permissions as its local chat. `read_own_chat({"message_id":"…"})` retrieves an exact local message across conversation parts. Local Main Bot, private-Bot, sandbox and approval checks still apply. Local cards and scheduled tasks target the Bot’s local chat; remote publication always requires an explicit communication send.
 
+**V0.4.2** adds reversible conversation hiding, pinning and confirmed local history deletion. Remote-task consultations, reports and internal replies open the same local Bot exchange drawer, including saved consultation results. Internal prose remains private until explicitly published. See [remote/local exchange inspection](docs/plans/federated-communication/v042-local-exchanges.md).
+
 **V0.4.1** starts with output routing fixes: Bot result turns stay internal unless explicitly published, ordinary Bot requests queue during user-facing work, and unpublished closing text stays private to its owning Bot. Use `read_turn_output` / `submit_turn_output` to submit saved ordinary text with a stable receipt, or `decline_turn_output` to keep it private. Visibility facts, delivery receipts and pending decisions are separate ledgers. Chief access needs explicit delegation; private drafts have no user preview or publish button. Unknown/scheduled input never defaults to public. A publication grant does not confirm delivery. See the [v3 routing and gateway contract](docs/plans/federated-communication/v041-output-routing-v3.md).
 
 V0.4.1 also recovers a provably unused remote binding whose execution Session is missing, preserving the original pending input and Bot identity. Used or ambiguous inputs are retained without replay. Activity and `communication_diagnose.bindingFailures` expose the safe failure stage and host cause independently of Hub connectivity; see the [reproduction and recovery boundary](docs/plans/federated-communication/v041-binding-recovery.md).
@@ -59,9 +61,9 @@ In **V0.3.9**, accepted contact requests disappear from the request list. Local 
 
 Remote conversation lists support reversible hiding, pinning, and confirmed deletion of local owner-visible history. Hidden chats continue receiving messages; deleting a chat preserves Hub/peer records and later messages can return the conversation. See [conversation management](docs/plans/federated-communication/conversation-management.md).
 
-The next V0.4.2 batch targets DSH **0.2.2-rc.1** (default npm channel) while retaining **0.2.1-rc.4** compatibility. DSH 0.2.2 requires **Node 24.9 or newer**. Back up the profile before upgrading; compatibility with both SDKs does not guarantee a profile written by the new host can be downgraded. See the [SDK compatibility plan](docs/plans/federated-communication/v042-dsh-compatibility.md). Package release versions have not advanced to V0.4.2.
+V0.4.2 targets DSH **0.2.2-rc.1** (default npm channel) while retaining **0.2.1-rc.4** compatibility. DSH 0.2.2 requires **Node 24.9 or newer**. Back up the profile before upgrading; compatibility with both SDKs does not guarantee a profile written by the new host can be downgraded. See the [SDK compatibility plan](docs/plans/federated-communication/v042-dsh-compatibility.md). The plugin, Hub and desktop package versions are V0.4.2.
 
-![version](https://img.shields.io/badge/version-V0.4.1-blue) ![DSH](https://img.shields.io/badge/DSH-0.2.2--rc.1-4D6BFE) ![license](https://img.shields.io/badge/license-Apache_2.0-green)
+![version](https://img.shields.io/badge/version-V0.4.2-blue) ![DSH](https://img.shields.io/badge/DSH-0.2.2--rc.1-4D6BFE) ![license](https://img.shields.io/badge/license-Apache_2.0-green)
 
 DS Bot is a bot plugin for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH). It turns DSH into bots. You create your own bots, then talk and work with them.
 

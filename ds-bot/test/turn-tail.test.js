@@ -167,3 +167,18 @@ test('explicit local publication reveals only ordinary text inside its saved seq
   }
   assert.equal(find(render(10, { audience: 'internal', userOutputThroughSeq: 10 }), node => node.type === MarkdownText).length, 1)
 })
+
+test('a hidden remote report context keeps its exchange chip but never exposes the responding text or thinking',()=>{
+ const {props}=cellProps(),opened=[]
+ const worker={id:'worker',name:'Remote worker'}
+ const current={...props.node.data,time:10,blocks:[{kind:'reasoning',text:'PRIVATE_THINKING'},{kind:'text',text:'PRIVATE_FINAL'}]}
+ props.node.data=current
+ props.useTurnSteps=()=>[current]
+ props.useTurnContext=()=>[{seq:5,time:5,source:{kind:'bot',role:'federation-report',senderSessionId:'worker',remoteSource:{conversationId:'remote'}}}]
+ props.useRoster=select=>select({...roster,byId:{...roster.byId,worker},exchangeTurns:{b:[3]},prefs:{thinking:true}})
+ props.actions={noteLive(){},openExchange:(...ids)=>opened.push(ids)}
+ const out=expand(AssistantCell(props),[]),line=find(out,node=>node.type?.name==='EventLine')[0]
+ assert.ok(line);line.props.onOpen()
+ assert.deepEqual(opened,[['b','worker']])
+ assert.equal(find(out,node=>node.type===ThinkingRow||node.type===MarkdownText||node.type?.name==='Bubbles').length,0)
+})

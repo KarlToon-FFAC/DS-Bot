@@ -1,3 +1,4 @@
+import {consultationSettling} from './federation/local-consultations.js'
 // Delivery: how one Bot, the user, or DS Bot itself puts a message into a Bot Session.
 import { randomUUID } from 'node:crypto'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
@@ -65,7 +66,16 @@ export function install(rt) {
         if (record.delivered === true) shown.set(record.id, record)
       }
     }
-    return [...shown.values()]
+    // Consultation results are already durable in state, not a new Session delivery.
+    // Project them here so old saved answers also become visible without replay.
+    for(const row of Object.values(state.localConsultations??{})){
+      if(row.status!=='completed'||typeof row.id!=='string'||!row.receiptId||typeof row.text!=='string'||consultationSettling(rt,row.id))continue
+      if(!(row.targetBotId===a&&row.ownerBotId===b||row.targetBotId===b&&row.ownerBotId===a))continue
+      const id='consultation-result:'+row.id
+      shown.set(id,{id,from:row.targetBotId,to:row.ownerBotId,role:'reply',replyTo:row.id,text:row.text,time:row.completedAt??row.createdAt??0,
+        remoteSource:row.remoteSource,audience:'internal',triggerOrigin:'remote-bot',consultationResult:true,receiptId:row.receiptId})
+    }
+    return [...shown.values()].sort((a,b)=>a.time-b.time)
   }
 
   // `sessionId` defaults to the recipient's own chat; group turns name its group Session.
@@ -165,6 +175,7 @@ export function install(rt) {
   // be read (the Session is gone, or the message is past what the dialog shows).
   async function exchangeText(entry) {
     // A message of the ledger is whole there, or in its file when it went as one.
+    if(entry.consultationResult===true)return {text:headOf(entry.text,TEXT_SHOW_MAX),whole:entry.text.length<=TEXT_SHOW_MAX}
     if (entry.ledger === true && entry.files?.length > 0) return await fileText(entry.files[0]) ?? { text: headOf(entry.text, TEXT_SHOW_MAX), whole: false }
     if (entry.ledger === true) return { text: headOf(entry.text, TEXT_SHOW_MAX), whole: entry.text.length <= TEXT_SHOW_MAX }
     if (entry.length === undefined) return { text: entry.text, whole: true }

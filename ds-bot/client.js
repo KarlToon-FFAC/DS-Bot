@@ -42,6 +42,11 @@ module.exports = __toCommonJS(index_exports);
 // src/client/i18n.js
 var NAMESPACE = "ds-bot";
 var ZH = {
+  "Consulted": "咨询了",
+  "Replied to": "答复了",
+  "Reported to": "汇报给",
+  "Remote task": "远程任务",
+  "Remote task · consultation result": "远程任务 · 咨询答复",
   "Some work tools are unavailable": "部分工作工具不可用",
   "The remote execution Session could not be opened. Check bindingFailures for the stage and hostCode; do not reset conversation data.": "远程执行会话无法打开。请查看 bindingFailures 中的阶段和宿主错误码，不要重置聊天数据。",
   "A previously used remote Session is missing. Its admission outcome cannot be proven; it was not recreated or replayed.": "已使用过的远程执行会话缺失，无法确认历史任务的执行状态，因此没有自动重建或重放。",
@@ -2209,6 +2214,9 @@ function indexRoster(value) {
   for (const bot of value.bots) {
     for (const id of [...bot.parts ?? [], bot.sessionId ?? bot.id, bot.id]) byId[id] = bot;
   }
+  for (const [sessionId, botId] of Object.entries(value.communicationSessions ?? {})) {
+    if (!byId[sessionId] && byId[botId]) byId[sessionId] = byId[botId];
+  }
   const roomsById = {};
   for (const room2 of value.rooms) {
     for (const id of [room2.id, room2.sessionId, ...room2.ownParts ?? []]) roomsById[id] = room2;
@@ -2781,7 +2789,7 @@ function toolArgs(root) {
     value: (key2) => object()?.[key2]
   };
 }
-var RELAY_ROLES = /* @__PURE__ */ new Set(["request", "reply", "stopped"]);
+var RELAY_ROLES = /* @__PURE__ */ new Set(["request", "reply", "stopped", "federation-report"]);
 var isRelayContext = (data) => {
   const source = data?.source;
   if (source === null || typeof source !== "object" || source.kind !== "bot" || source.handoff === true) return false;
@@ -3475,6 +3483,7 @@ html[data-windows-titlebar]:not([data-fullscreen]) :is(.bt-pane,.bt-panel)::befo
 .bt-exchange .bt-dialog{position:relative}
 .bt-exchange .bt-dialog-log{max-width:none;margin:0;padding:39px max(16px,calc((100% - 960px)/2)) 116px;scrollbar-width:thin}
 .bt-exchange .bt-tools{display:none}
+.bt-exchange-origin{display:block;font-size:11px;line-height:16px;color:var(--bt-ink-2);margin:0 0 4px 42px}
 .bt-fold{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 10px;margin-top:4px;white-space:normal}
 .bt-fold-code{position:relative}
 .bt-fold-code>.bt-tool{position:absolute;right:6px;bottom:6px}
@@ -8956,7 +8965,15 @@ function AssistantCell({ node, groupPart, sessionId, openFile, fileMentions, use
   const thinking = groupPart === "response" || !shown ? void 0 : thinkingStep(members);
   const ms = useThinkingMs({ sessionId, turn: data.turn, settledSteps: members.filter((step) => step.status !== "running").length, skip: hidden || reasoning === "" });
   useLiveNote(actions, sessionId, `text:${node.key ?? data.seq}`, !hidden && running && texts2.length > 0 ? { text: true } : null);
-  if (hidden) return (0, import_react19.createElement)(CellEmpty);
+  if (hidden) {
+    const incoming = !roster.roomsById[sessionId] && relayPart(data, groupPart) ? relaysBefore(contexts, steps, data).filter((item) => item.source?.remoteSource) : [];
+    if (!incoming.length) return (0, import_react19.createElement)(CellEmpty);
+    const self = roster.byId[sessionId];
+    return (0, import_react19.createElement)(import_react19.Fragment, null, incoming.map((relay) => {
+      const sender = roster.byId[relay.source.senderSessionId];
+      return self && sender ? (0, import_react19.createElement)(EventLine, { key: relay.seq, prefix: t("Message from"), bots: [sender], onOpen: () => actions.openExchange(self.id, sender.id), whole: true }) : null;
+    }));
+  }
   const relays = relayPart(data, groupPart) ? relaysBefore(contexts, steps, data) : [];
   if (texts2.length === 0 && !reasoning && relays.length === 0) return (0, import_react19.createElement)(CellEmpty);
   const selfId = roster.byId[sessionId]?.id ?? sessionId;
@@ -9353,7 +9370,7 @@ function TriggerCell({ node, sessionId, useRoster, useSessions, useTurnClock, us
       ) : null;
       if (run2 === "folded") return null;
       const sender = roster.byId[source.senderSessionId] ?? { id: source.senderSessionId, name: source.senderName ?? t("a Bot"), color: "gray" };
-      const count = run2?.count ?? (isHiddenTurn(roster, sessionId, turn) ? 2 : 1);
+      const count = run2?.count ?? (source.role !== "federation-report" && isHiddenTurn(roster, sessionId, turn) ? 2 : 1);
       const bots = [sender];
       for (const peer of (run2?.peerIds ?? []).map((id) => roster.byId[id]).filter(Boolean)) {
         if (!bots.some((bot) => bot.id === peer.id)) bots.push(peer);
@@ -9664,7 +9681,8 @@ function GroupReplies({ sessionId, callId, done, content, roster, actions, useUi
     })
   );
 }
-var DRAWN = /* @__PURE__ */ new Set(["message_bot", "stop_bot", "create_bot", "update_bot", "group_relay", "create_group", "update_group", "delete_group", "post_to_group", "ask_user", "request_secret", "ask_user_question", "show_view", "browser_handoff", "read_group_chat", "remember", "forget"]);
+var EXCHANGE_TOOLS = /* @__PURE__ */ new Set(["message_bot", "consult_local_bot", "reply_to_local_consultation", "report_to_local_chief"]);
+var DRAWN = /* @__PURE__ */ new Set(["consult_local_bot", "reply_to_local_consultation", "report_to_local_chief", "message_bot", "stop_bot", "create_bot", "update_bot", "group_relay", "create_group", "update_group", "delete_group", "post_to_group", "ask_user", "request_secret", "ask_user_question", "show_view", "browser_handoff", "read_group_chat", "remember", "forget"]);
 var CARDS = /* @__PURE__ */ new Set(["ask_user", "request_secret", "show_view", "browser_handoff"]);
 function callTree(root) {
   const calls = [];
@@ -9694,6 +9712,16 @@ function renderCall(call2, { sessionId, roster, actions, useUi, useWork, findBot
   const { text: arg, value: argValue } = toolArgs(call2);
   const self = roster.byId[sessionId];
   switch (tool) {
+    case "consult_local_bot":
+    case "reply_to_local_consultation":
+    case "report_to_local_chief": {
+      const consultation = roster.localConsultations?.find((row) => row.id === arg("consultationId"));
+      const target = findBot(tool === "report_to_local_chief" ? arg("chiefId") : tool === "reply_to_local_consultation" ? consultation?.ownerBotId : arg("botId") ?? consultation?.targetBotId);
+      if (!self || !target) return (0, import_react19.createElement)(CellEmpty);
+      if (done && call2.isError) return (0, import_react19.createElement)("div", { className: "bt-event" }, t("Couldn't message {name}", { name: target.name }));
+      const prefix = tool === "report_to_local_chief" ? "Reported to" : tool === "reply_to_local_consultation" ? "Replied to" : "Consulted";
+      return (0, import_react19.createElement)(EventLine, { prefix: t(prefix), bots: [target], onOpen: () => actions.openExchange(self.id, target.id), whole: true });
+    }
     case "message_bot": {
       const target = findBot(arg("to")) ?? { name: arg("to") ?? "…", color: "gray" };
       if (done && call2.isError) return (0, import_react19.createElement)("div", { className: "bt-event" }, t("Couldn't message {name}", { name: target.name }));
@@ -9777,9 +9805,10 @@ function ToolCell({ node, sessionId, useRoster, useUi, useWork, useHeldCards, us
   const turn = node.location?.turn?.turn ?? root.turn;
   const hidden = isHiddenTurn(roster, sessionId, turn);
   const findBot = (nameOrId) => roster.byId[nameOrId] ?? roster.bots.find((bot) => bot.name.toLowerCase() === String(nameOrId ?? "").toLowerCase());
-  const calls = hidden ? [] : callTree(root);
+  const remote = Boolean(roster.communicationSessions?.[sessionId] || roster.remoteExchangeTurns?.[sessionId]?.includes(turn));
+  const calls = callTree(root).filter((call2) => !hidden || remote && EXCHANGE_TOOLS.has(toolName(call2)));
   const drawn = calls.filter((call2) => DRAWN.has(toolName(call2)));
-  const running = root.kind === "tool-result" ? void 0 : calls.findLast((call2) => call2.kind !== "tool-result");
+  const running = hidden || root.kind === "tool-result" ? void 0 : calls.findLast((call2) => call2.kind !== "tool-result");
   const note = running ? toolActivity(toolName(running), toolArgs(running).text, findBot, roster.byId[sessionId]) : null;
   useLiveNote(actions, sessionId, `tool:${root.callId ?? node.key}`, note);
   useShownCards(actions, sessionId, drawn.filter((call2) => CARDS.has(toolName(call2)) && call2.callId).map((call2) => call2.callId));
@@ -15785,6 +15814,7 @@ function ExchangeDialog({ pair, roster, actions }) {
             (0, import_react36.createElement)(
               "div",
               { className: "bt-group-msg" },
+              entry.remoteSource ? (0, import_react36.createElement)("small", { className: "bt-exchange-origin", title: [entry.remoteSource.conversationId, entry.remoteSource.messageId].filter(Boolean).join(" · ") }, t(entry.consultationResult ? "Remote task · consultation result" : "Remote task")) : null,
               (0, import_react36.createElement)("span", { className: "bt-group-name", style: flat ? void 0 : { color: inkText(colorOf(bot)) } }, flat ? lead : null, bot.name),
               (0, import_react36.createElement)(Bubbles, { texts: [stripLongNote(entry.text)], roster, selfId: bot.id, actions, whole, lead: flat ? null : lead })
             )
@@ -23967,7 +23997,7 @@ function CommunicationResizeHandle({ side, width, onChange }) {
 // package.json
 var package_default = {
   name: "ds-bot",
-  version: "0.4.1",
+  version: "0.4.2",
   description: "DS Bot: a team of long-lived Bots for DeepSeek Harness, with Main Bots, Bot-to-Bot messages and group chats",
   keywords: [
     "dsh-plugin",

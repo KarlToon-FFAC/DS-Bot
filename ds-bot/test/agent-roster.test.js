@@ -51,3 +51,11 @@ test('the plain flag maps to the mounted groups', () => {
   assert.deepEqual(groupsFor({ mode: 'bot', plain: isAgentSession(indexRoster(ROSTER_VALUE), new Set(), 's1') }), { shell: true, conversation: false })
   assert.deepEqual(groupsFor({ mode: 'bot', plain: isAgentSession(indexRoster(ROSTER_VALUE), new Set(), 'm1') }), { shell: true, conversation: true })
 })
+
+test('owned communication Sessions resolve to their Bot without replacing known identities or adding foreign Bots',()=>{
+ const roster=indexRoster({...ROSTER_VALUE,communicationSessions:{remote:'m1',foreign:'missing',m1:'missing'}})
+ assert.equal(roster.byId.remote,roster.byId.m1)
+ assert.equal(roster.byId.foreign,undefined)
+ assert.equal(roster.byId.m1.name,'Chief')
+ assert.equal(roster.agentOf.remote,undefined,'a remote Bot is not the standalone DSH Agent')
+})

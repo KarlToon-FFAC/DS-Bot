@@ -68,6 +68,7 @@ export function ExchangeDialog({ pair, roster, actions }) {
               return h(Fragment, { key: entry.id },
                 showDay ? h('time', { className: 'bt-time' }, dayLabel(entry.time)) : null,
                 h('div', { className: 'bt-group-msg' },
+                  entry.remoteSource?h('small',{className:'bt-exchange-origin',title:[entry.remoteSource.conversationId,entry.remoteSource.messageId].filter(Boolean).join(' · ')},t(entry.consultationResult?'Remote task · consultation result':'Remote task')):null,
                   h('span', { className: 'bt-group-name', style: flat ? undefined : { color: inkText(colorOf(bot)) } }, flat ? lead : null, bot.name),
                   h(Bubbles, { texts: [stripLongNote(entry.text)], roster, selfId: bot.id, actions, whole, lead: flat ? null : lead })))
             })),

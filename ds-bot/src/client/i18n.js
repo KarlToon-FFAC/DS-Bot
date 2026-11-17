@@ -5,6 +5,11 @@
 export const NAMESPACE = 'ds-bot'
 
 const ZH = {
+  'Consulted':'咨询了',
+  'Replied to':'答复了',
+  'Reported to':'汇报给',
+  'Remote task':'远程任务',
+  'Remote task · consultation result':'远程任务 · 咨询答复',
   'Some work tools are unavailable':'部分工作工具不可用',
   'The remote execution Session could not be opened. Check bindingFailures for the stage and hostCode; do not reset conversation data.':'远程执行会话无法打开。请查看 bindingFailures 中的阶段和宿主错误码，不要重置聊天数据。',
   'A previously used remote Session is missing. Its admission outcome cannot be proven; it was not recreated or replayed.':'已使用过的远程执行会话缺失，无法确认历史任务的执行状态，因此没有自动重建或重放。',

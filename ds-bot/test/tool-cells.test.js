@@ -1000,3 +1000,23 @@ test('a folded code block leaves no copy of only its shown part', async () => {
   assert.equal(copyOf(short).length, 0)
   effects = []
 })
+
+test('remote consultation and reply controls open the native pair without showing hidden text or other tools',()=>{
+ const opened=[],roster=team({exchangeTurns:{chief:[1]},remoteExchangeTurns:{chief:[1]},localConsultations:[{id:'consult',ownerBotId:'writer',targetBotId:'chief',status:'completed'},{id:'out',ownerBotId:'chief',targetBotId:'writer',status:'pending'}]})
+ for(const [name,args] of [['consult_local_bot',{botId:'writer'}],['consult_local_bot',{consultationId:'out'}],['reply_to_local_consultation',{consultationId:'consult'}],['report_to_local_chief',{chiefId:'writer'}]]){
+  const out=show(program([call('read','private',{args:{path:'PRIVATE_FILE'},content:'PRIVATE_RESULT'}),call(name,'remote-call',{args,content:'PRIVATE_TOOL_RESULT'})]),{roster,actions:{openExchange:(...ids)=>opened.push(ids)}})
+  assert.doesNotMatch(text(out),/PRIVATE/)
+  const target='writer'
+  find(out,node=>node.type==='button').props.onClick()
+  assert.deepEqual(opened.at(-1),['chief',target])
+ }
+ assert.equal(emptied(show(call('reply_to_local_consultation','bad',{args:{consultationId:'missing'},content:'PRIVATE'}),{roster})),true)
+})
+
+test('remote report trigger opens the same pair from a current or historical local part',()=>{
+ const opened=[],roster=team({byId:{chief,writer,'chief-older':chief}})
+ const out=expand(TriggerCell({node:{key:'remote-report',location:{turn:{turn:1}},data:{turn:1,source:{kind:'bot',role:'federation-report',senderSessionId:'writer',remoteSource:{conversationId:'remote-group',messageId:'source'}},content:text$('PRIVATE_REPORT')}},sessionId:'chief-older',useRoster:select=>select(roster),useSessions:select=>select({byId:{}}),useTurnClock:select=>select({}),useUi:select=>select({visits:{}}),actions:{openExchange:(...ids)=>opened.push(ids)}}))
+ assert.doesNotMatch(text(out),/PRIVATE_REPORT/)
+ find(out,node=>node.type==='button').props.onClick()
+ assert.deepEqual(opened,[['chief','writer']])
+})
