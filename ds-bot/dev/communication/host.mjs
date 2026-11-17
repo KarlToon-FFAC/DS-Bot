@@ -7,7 +7,7 @@ import { watchOwnedParent } from './owned-parent.mjs'
 watchOwnedParent()
 
 const plugin = resolve(import.meta.dirname, '../..')
-const anchor = join(plugin, 'dev/harness/package.json')
+const anchor = process.env.DSH_HARNESS ? resolve(process.env.DSH_HARNESS,'package.json') : join(plugin, 'dev/harness/package.json')
 const require = createRequire(anchor)
 const { initProfile, loadProfileDirectory, loadLayeredEnv } = await import(pathToFileURL(require.resolve('@deepseek-ai/dsh-app-boot')))
 const { runProfile } = await import(pathToFileURL(require.resolve('@deepseek-ai/dsh/profile-boot')))

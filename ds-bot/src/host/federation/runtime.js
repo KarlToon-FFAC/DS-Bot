@@ -1,3 +1,4 @@
+import {filterToolPresentation} from '../tool-compat.js'
 import {bindingFailure,resolveBindingAgent,recoverUnusedBinding,safeBindingFailure} from './binding-recovery.js'
 import {LEGACY_SKILL_TOOLS} from '../constants.js'
 import {awaitingLocalConsultation} from './local-consultations.js'
@@ -388,9 +389,11 @@ export class CommunicationRuntime {
     this.recoveryAttempts ??= new Map()
     const tools = [...this.tools.filter(tool => !OUTSIDE_CONVERSATION_TOOLS.has(tool.name) && !LOCAL_MANAGEMENT_TOOLS.has(tool.name)),...localIdentityTools(this)]
     const communicationNames = new Set(tools.map(tool => tool.name))
+    const permitted=name=>!LEGACY_SKILL_TOOLS.has(name)&&(name==='run_code'||communicationNames.has(name)||this.workToolScopes?.get(agent)?.get(name)?.active===true)
+    this.toolPermissions??=new WeakMap();this.toolPermissions.set(agent,permitted)
     for (const tool of tools) this.disposers.push(agent.ctx.tools.register(tool))
     this.disposers.push(agent.ctx.on('system-prompt/assemble', async (_assembly, context, next) => {
-      await this.syncWorkContext(agent)
+      await this.syncWorkContext(agent,false)
       const current=this.owners?.get(agent.id),bot=current&&this.rt?.botOf(current.localBotRef)
       if(bot&&this.ctx?.get?.('fs')){
         this.workspaceGuidance??=new Map()
@@ -420,7 +423,7 @@ export class CommunicationRuntime {
       }
       const assembled = await next()
       const allowed = name => !LEGACY_SKILL_TOOLS.has(name) && (name === 'run_code' || communicationNames.has(name) || this.workToolScopes?.get(agent)?.get(name)?.active === true)
-      return { ...assembled, tools: assembled.tools.filter(tool => allowed(tool.name)),
+      return { ...assembled, ...filterToolPresentation(assembled,allowed),
         sections: assembled.sections.filter(section => ['deployment:persona-prefix', 'ds-bot-communication', 'tools:sdk', 'tools:ptc-only'].includes(section.name)
           || section.name.startsWith('tool:') && allowed(section.name.slice(5)))
           // Section functions ran before this async waterfall: replace their old
@@ -435,7 +438,7 @@ export class CommunicationRuntime {
     }))
     this.scoped.add(agent)
   }
-  async syncWorkContext(agent) {
+  async syncWorkContext(agent,prepareExecutor=true) {
     const binding = this.owners.get(agent.id)
     if (binding && this.queue?.isRetiredBot?.(binding.recipientPrincipalId)) fail('BOT_RETIRED')
     const bot = binding && this.rt.botOf(binding.localBotRef)
@@ -450,6 +453,7 @@ export class CommunicationRuntime {
     const names = await syncWorkTools(this, agent, bot)
     this.workToolNames ??= new Map()
     this.workToolNames.set(binding.id, names)
+    if(prepareExecutor)await this.rt.ensureBotToolExecutor?.(agent,this.toolPermissions?.get(agent))
     return cwd
   }
   async operation(principalId, type, payload, id = randomUUID()) {

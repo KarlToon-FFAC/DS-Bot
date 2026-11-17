@@ -1,3 +1,4 @@
+import {filterToolPresentation} from './tool-compat.js'
 import {installSkillTools,saveBotCapability} from './skill-tools.js'
 import {replyToLocalConsultation} from './federation/local-consultations.js'
 // Team tools: the roster, bot-to-bot messages, group chat settings and posts, and the
@@ -901,6 +902,7 @@ export function install(rt) {
   }
   ctx.effect(() => () => { stopped = true; for (const id of scoped.keys()) unscope(id) }, 'ds-bot: scoped team tools')
 
+  rt.botToolAllowed=name=>!HIDDEN_TOOLS.includes(name)&&!LEGACY_SKILL_TOOLS.has(name)
   const shareBotTools = (agent) => {
     if (stopped || agent === undefined) return
     const id = agent.session?.id
@@ -981,7 +983,7 @@ export function install(rt) {
       const assembled = await next()
       return {
         ...assembled,
-        tools: assembled.tools.filter(tool => !HIDDEN_TOOLS.includes(tool.name) && !LEGACY_SKILL_TOOLS.has(tool.name)),
+        ...filterToolPresentation(assembled,name=>!HIDDEN_TOOLS.includes(name)&&!LEGACY_SKILL_TOOLS.has(name)),
         sections: assembled.sections.filter(section => !HIDDEN_SECTIONS.has(section.name) && !LEGACY_SKILL_TOOLS.has(section.name.replace(/^tool:/, ''))),
       }
     })
@@ -1093,6 +1095,7 @@ export function install(rt) {
     try {
       await rt.load()
       hideBotUnusedTools(agent)
+      await rt.ensureBotToolExecutor?.(agent)
     } catch (error) {
       rt.warn('ds-bot: hiding %s on agent/created failed: %s', HIDDEN_TOOLS.join(', '), error)
     }

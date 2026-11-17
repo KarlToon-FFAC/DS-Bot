@@ -1489,7 +1489,9 @@ test('remote local team tools use the same Bot privileges and keep local replies
  assert.match(incoming.content[0].text,/not local-user authorization/)
  emit('a','turn/start',{turn:1});emit('a','user/message',{source:incoming.source,content:incoming.content})
  emit('a','assistant/message',{message:{role:'assistant',content:[{type:'text',text:'Local-only result'}]}})
- emit('a','turn/end',{turn:1,reason:{kind:'completed'}});await delay(30)
+ emit('a','turn/end',{turn:1,reason:{kind:'completed'}})
+ for(let attempt=0;attempt<200&&!agentOf('b').calls.length;attempt++)await delay(10)
+ assert.ok(agentOf('b').calls.length,'the asynchronous local reply must settle')
  const reply=agentOf('b').calls.at(-1)[1]
  assert.equal(reply.source.remoteSource.messageId,'request')
  assert.equal(reply.source.audience,'internal')

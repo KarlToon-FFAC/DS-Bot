@@ -11,7 +11,7 @@ the existing single-Bot rule remains compatible with older Hubs.
 
 > Early release (v0.1). Features, tools and the saved data format can still change.
 
-Tested with dsh `0.2.1-rc.4` (Web) and `0.2.0-rc.2` (Web and Desktop).
+Targets DSH `0.2.2-rc.1` (the default npm channel) and retains `0.2.1-rc.4` compatibility. DSH 0.2.2 requires Node 24.9+. Tests and CI cover both SDK generations. The built-in native and PTC presentations use their respective public executor APIs; custom per-Session executors are not supported by the compatibility adapter. Back up profiles before host upgrades; SDK compatibility is not a data downgrade guarantee.
 
 ## Features
 

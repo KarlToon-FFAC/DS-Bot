@@ -46,7 +46,7 @@ export function sourceDelivery(queue, binding, source) {
 export function communicationInputs(queue, binding, messages) {
   return messages.filter(message => {
     // Host filesystem notices must never become federated model context.
-    if (['agent-instructions', 'working-directory'].includes(message.source?.kind) || isCommunicationContext(message.source)) return false
+    if (['agent-instructions', 'working-directory','tool-registry'].includes(message.source?.kind) || isCommunicationContext(message.source)) return false
     sourceDelivery(queue, binding, message.source)
     return true
   })

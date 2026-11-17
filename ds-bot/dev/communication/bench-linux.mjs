@@ -122,7 +122,7 @@ async function supervise(options){
     const duration=Number(process.env.DSBOT_COMMUNICATION_TEST_LIFETIME_MS??900000)
     if(!Number.isSafeInteger(duration)||duration<60000||duration>14400000)fail('INVALID_OWNED_LIFETIME')
     await portUnused(options.webPort);await portUnused(options.mockPort)
-    if(!existsSync(join(repo,'ds-bot/dev/harness/node_modules/@deepseek-ai/dsh/lib/bin.js')))fail('BENCH_DEPENDENCIES_MISSING')
+    if(!existsSync(join(process.env.DSH_HARNESS??join(repo,'ds-bot/dev/harness'),'node_modules/@deepseek-ai/dsh/lib/bin.js')))fail('BENCH_DEPENDENCIES_MISSING')
     mkdirSync(join(home,'workspace'),{recursive:true,mode:0o700})
     writeFileSync(join(home,'bench.patch.yml'),benchOverlay(process.env),{mode:0o600})
     for(const [name,worker,port] of [['mock',join(repo,'ds-bot/dev/mock-llm.mjs'),options.mockPort],['web',join(import.meta.dirname,'host.mjs'),options.webPort]]){

@@ -165,7 +165,8 @@ export function apply(ctx) {
         if(!member||db.prepare('SELECT 1 FROM bindings WHERE conversation_id=? AND principal_id=?').get(body.conversationId,body.principalId))throw new Error('Owned conflict fixture needs a new current binding')
         db.prepare('INSERT INTO bindings(id,conversation_id,principal_id,epoch,bot_ref,sessions) VALUES (?,?,?,?,?,?)').run(bindingId,body.conversationId,body.principalId,member.epoch,bot.id,JSON.stringify([sessionId]))
       }finally{db.close()}
-      return {bindingId,sessionId,localMode:registry.modeFor(local),remoteMode:registry.modeFor(remote)}
+      const mode=async agent=>registry.modeFor?registry.modeFor(agent):(await ctx.get('systemPrompt').assemble({scope:agent,agent})).tools.some(tool=>tool.name==='run_code')?'ptc':'native'
+      return {bindingId,sessionId,localMode:await mode(local),remoteMode:await mode(remote)}
     }
     if(body.operation==='production-missing-session'){
       const db=new DatabaseSync(join(root,'bot/communication.sqlite'))

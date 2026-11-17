@@ -24021,7 +24021,9 @@ var package_default = {
     "@deepseek-ai/dsh-workspace": "*",
     "@deepseek-ai/dsh-session-projection-cache": "*",
     "@deepseek-ai/dsh-user-approval": "*",
-    "@deepseek-ai/dsh-agent-instructions": "*"
+    "@deepseek-ai/dsh-agent-instructions": "*",
+    "@deepseek-ai/dsh-tool-executor-native": "*",
+    "@deepseek-ai/dsh-tool-executor-ptc": "*"
   },
   dsh: {
     client: {
@@ -24072,7 +24074,16 @@ var package_default = {
     },
     "@deepseek-ai/dsh-user-approval": {
       optional: true
+    },
+    "@deepseek-ai/dsh-tool-executor-native": {
+      optional: true
+    },
+    "@deepseek-ai/dsh-tool-executor-ptc": {
+      optional: true
     }
+  },
+  engines: {
+    dsh: ">=0.2.1-rc.4 <0.2.3-0"
   }
 };
 

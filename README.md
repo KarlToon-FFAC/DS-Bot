@@ -57,7 +57,9 @@ V0.4.0 also selectively backports upstream Bot-pair message persistence, retaine
 
 In **V0.3.9**, accepted contact requests disappear from the request list. Local consultation answers return durable receipts via `reply_to_local_consultation` or `message_bot`; unpublished responders need no Hub publication. Pending consultations can pause the remote turn, and late results notify the original remote Session without automatically publishing them.
 
-![version](https://img.shields.io/badge/version-V0.4.1-blue) ![DSH](https://img.shields.io/badge/DSH-0.2.1--rc.4-4D6BFE) ![license](https://img.shields.io/badge/license-Apache_2.0-green)
+The next V0.4.2 batch targets DSH **0.2.2-rc.1** (default npm channel) while retaining **0.2.1-rc.4** compatibility. DSH 0.2.2 requires **Node 24.9 or newer**. Back up the profile before upgrading; compatibility with both SDKs does not guarantee a profile written by the new host can be downgraded. See the [SDK compatibility plan](docs/plans/federated-communication/v042-dsh-compatibility.md). Package release versions have not advanced to V0.4.2.
+
+![version](https://img.shields.io/badge/version-V0.4.1-blue) ![DSH](https://img.shields.io/badge/DSH-0.2.2--rc.1-4D6BFE) ![license](https://img.shields.io/badge/license-Apache_2.0-green)
 
 DS Bot is a bot plugin for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH). It turns DSH into bots. You create your own bots, then talk and work with them.
 
@@ -112,8 +114,8 @@ DS Bot 0.2.1 and earlier cannot update themselves in DSH Desktop 0.2.1-rc.2 or l
 Needs Node.js `22.19` or later, and pnpm.
 
 ```sh
-npx @deepseek-ai/dsh@0.2.1-rc.4 plugin --profile web add ds-bot
-npx @deepseek-ai/dsh@0.2.1-rc.4 web
+npx @deepseek-ai/dsh@0.2.2-rc.1 plugin --profile web add ds-bot
+npx @deepseek-ai/dsh@0.2.2-rc.1 web
 ```
 
 **Docker (NAS, Linux server)**

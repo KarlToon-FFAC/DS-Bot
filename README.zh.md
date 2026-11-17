@@ -50,7 +50,9 @@ V0.4.0 同步了上游的 Bot 私聊消息账本、工作答复保留和运行�
 
 **V0.3.9** 中，已通过的联系人申请不再显示在申请列表。本地咨询可通过 `reply_to_local_consultation` 或 `message_bot` 提交答复并取得持久回执，答复方无需发布到 Hub。等待咨询时可暂停远程回合，迟到结果会通知原远程会话，仍不自动对外发布。
 
-![版本](https://img.shields.io/badge/版本-V0.4.1-blue) ![DSH](https://img.shields.io/badge/DSH-0.2.1--rc.4-4D6BFE) ![许可](https://img.shields.io/badge/许可-Apache_2.0-green)
+下一批 V0.4.2 面向 npm 默认通道的 DSH **0.2.2-rc.1**，同时保留 **0.2.1-rc.4** 兼容。DSH 0.2.2 要求 **Node 24.9 或更新版本**。升级前备份配置和数据；兼容两套 SDK 不代表新版宿主写入的数据能够直接降级。详见[接口兼容方案](docs/plans/federated-communication/v042-dsh-compatibility.md)。包版本尚未推进到 V0.4.2。
+
+![版本](https://img.shields.io/badge/版本-V0.4.1-blue) ![DSH](https://img.shields.io/badge/DSH-0.2.2--rc.1-4D6BFE) ![许可](https://img.shields.io/badge/许可-Apache_2.0-green)
 
 DS Bot 是一个基于 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（简称 dsh）的 bot 插件，插件将 dsh 改造为 bot 形式。你可以与自己创建的 bot 交流、工作。
 
@@ -103,8 +105,8 @@ DS Bot 0.2.1 及更早的版本在 DSH Desktop 0.2.1-rc.2 及以后的版本里�
 需要 Node.js `22.19` 以上和 pnpm。
 
 ```sh
-npx @deepseek-ai/dsh@0.2.1-rc.4 plugin --profile web add ds-bot
-npx @deepseek-ai/dsh@0.2.1-rc.4 web
+npx @deepseek-ai/dsh@0.2.2-rc.1 plugin --profile web add ds-bot
+npx @deepseek-ai/dsh@0.2.2-rc.1 web
 ```
 
 **Docker（NAS、Linux 服务器）**
