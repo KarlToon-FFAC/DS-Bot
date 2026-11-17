@@ -4,7 +4,7 @@ import * as ui from '@deepseek-ai/dsh-client-ui-primitives'
 import { mentionSpans } from '../shared/mentions.js'
 import { BotMark,UserAvatar } from './mark.js'
 import { CheckIcon, CopyIcon } from './icons.js'
-import { dateLocale, t } from './i18n.js'
+import { t } from './i18n.js'
 import { noHover } from './motion.js'
 import { clockLabel, messageClock } from './text.js'
 import { useFold } from './fold.js'
@@ -81,7 +81,7 @@ function CopyButton({ text }) {
   return h('button', { type: 'button', className: 'bt-tool', 'aria-label': copied ? t('Copied') : t('Copy'), title: copied ? t('Copied') : t('Copy'), onClick: copy }, copied ? h(CheckIcon) : h(CopyIcon))
 }
 
-const clock = time => (typeof time === 'number' ? new Date(time).toLocaleTimeString(dateLocale(), { hour: 'numeric', minute: '2-digit' }) : undefined)
+const clock = time => (typeof time === 'number' ? messageClock(time) : undefined)
 
 // A sent message, or one that joined a running turn ("steering").
 export function UserMessageCell({ node, sessionId, useRoster, actions, renderMessageImages, openFile, openSkill }) {

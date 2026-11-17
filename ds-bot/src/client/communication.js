@@ -1,3 +1,4 @@
+import {messageClock} from './text.js'
 import { useActionMenu } from './action-menu.js'
 import {GroupProfileDialog} from './communication-group-profile.js'
 import {CommunicationPresence,BotAvailabilityNotice} from './communication-presence.js'
@@ -728,7 +729,7 @@ export function CommunicationSurface({ roster, surface, panel, request = communi
           h(CommunicationActivation,{event,members:[...currentMembers,...(member.info?.formerMembers??[])],request:conversationRequest}),
         h(CommunicationMessageActions,{message:event.message,onReply:canSpeak?openThread:undefined,
             onThread:member.kind==='group'?(message,trigger)=>openThread(message,trigger,false):undefined},
-            h('time', { title: new Date(event.serverAcceptedAt).toLocaleString() }, new Date(event.serverAcceptedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))))),
+            h('time', { dateTime:event.serverAcceptedAt,title: new Date(event.serverAcceptedAt).toLocaleString() }, messageClock(event.serverAcceptedAt))))),
         ownOutbox.filter(item => item.state !== 'failed' && !visibleIds.has(item.id) && (item.state !== 'accepted' || older === null && item.result?.conversationSeq > (page?.watermark ?? 0))).map(item => h('article', { key: item.id, 'data-message-id': item.id, 'data-self': true, 'data-failed': item.state === 'failed' },
           messageAvatar(state.humanPrincipalId, contacts.find(person => person.principalId === state.humanPrincipalId)?.displayName), h('strong', { title: state.humanPrincipalId }, contacts.find(person => person.principalId === state.humanPrincipalId)?.displayName ?? t('You'), identityIcons({ principalId: state.humanPrincipalId, kind: 'human', homeInstanceId: state.instanceId })), h('p', { className: 'bt-comm-pending-text' }, item.text), h(CommunicationActivation,{event:item.result,members:currentMembers,request:conversationRequest,pending:true}), h('p', { role: 'status' }, t(item.state === 'accepted' ? 'Hub accepted' : 'Queued on this device'))))),
       currentMembers.some(person => person.retired) ? h('p', { role: 'status', className: 'bt-comm-reference' }, t('This Bot identity no longer exists. This chat is read only. A re-published Bot must start a new chat.')) : null,

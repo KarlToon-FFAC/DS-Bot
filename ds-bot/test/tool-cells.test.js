@@ -130,6 +130,7 @@ const at = (daysAgo, hour, minute) => {
   const today = new Date()
   return new Date(today.getFullYear(), today.getMonth(), today.getDate() - daysAgo, hour, minute).getTime()
 }
+const dateClockOf=ms=>`${new Date(ms).toLocaleDateString('en-US',{year:'numeric',month:'2-digit',day:'2-digit'})} ${clockOf(ms)}`
 const clockOf = ms => new Date(ms).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
 const findAll = (node, match) => {
   const found = []
@@ -153,7 +154,7 @@ test('a group reply shows its time, and how long its turn ran', () => {
   const out = show(call('group_relay', 'direct', { content: { replies } }), { sessionId: 'room' })
   const times = findAll(out, node => node.props?.className === 'bt-group-time')
   const tooks = findAll(out, node => node.props?.className === 'bt-group-took')
-  assert.deepEqual(times.map(text), [clockOf(today), `Yesterday ${clockOf(yesterday)}`])
+  assert.deepEqual(times.map(text), [dateClockOf(today), dateClockOf(yesterday)])
   assert.deepEqual(times.map(node => node.props.title), [`Today ${clockOf(today)}`, `Yesterday ${clockOf(yesterday)}`])
   assert.deepEqual(tooks.map(text), ['1m 8s', '2s'])
   assert.deepEqual(tooks.map(node => node.props.title), ['Ran for 1m 8s', 'Ran for 2s'])
@@ -168,7 +169,7 @@ test('a user message inside a group relay shows its time', () => {
   ]
   const out = show(call('group_relay', 'direct', { content: { replies } }), { sessionId: 'room' })
   const times = findAll(out, node => node.props?.className === 'bt-utime')
-  assert.deepEqual(times.map(text), [clockOf(today)])
+  assert.deepEqual(times.map(text), [dateClockOf(today)])
   assert.deepEqual(times.map(node => node.props.title), [`Today ${clockOf(today)}`])
 })
 
@@ -205,7 +206,7 @@ test('a group post drawn from its trigger shows the time it came in', () => {
   }))
   const stamps = findAll(out, entry => entry.props?.className === 'bt-group-time')
   assert.equal(stamps.length, 1)
-  assert.equal(text(stamps[0]), clockOf(time))
+  assert.equal(text(stamps[0]), dateClockOf(time))
   effects = []
 })
 

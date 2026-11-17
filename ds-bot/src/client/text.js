@@ -49,9 +49,12 @@ export function clockLabel(time, now = Date.now()) {
   return `${date.toLocaleDateString(dateLocale(), { weekday: 'short', month: 'short', day: 'numeric', ...(sameYear ? {} : { year: 'numeric' }) })} ${stamp}`
 }
 
-// A message's own stamp: today only the clock, an earlier day named as a separator does.
-export function messageClock(time, now = Date.now()) {
-  return daysBefore(new Date(time), now) === 0 ? clock(time) : clockLabel(time, now)
+// Message stamps always include the civil date in the reader's local time zone.
+export function messageClock(time) {
+  if(time===undefined||time===null)return ''
+  const date=new Date(time)
+  if(!Number.isFinite(date.getTime()))return ''
+  return `${date.toLocaleDateString(dateLocale(),{year:'numeric',month:'2-digit',day:'2-digit'})} ${clock(date.getTime())}`
 }
 
 // A short relative stamp for list rows: "just now", "5 min", "3 h", "2 d", then a date.

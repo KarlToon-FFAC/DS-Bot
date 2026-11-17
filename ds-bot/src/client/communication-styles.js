@@ -116,7 +116,7 @@ export const communicationCSS = `
 .bt-comm-log article[data-failed=true]{outline:1px solid var(--bt-danger);outline-offset:2px}
 .bt-comm-log article[data-referenced=true]{outline:2px solid var(--bt-accent);outline-offset:2px}
 .bt-comm-log strong{font-size:12px;line-height:16px;font-weight:500}
-.bt-comm-message-actions{display:flex;gap:12px;align-items:center;font-size:11px;line-height:16px;margin-top:8px}
+.bt-comm-message-actions{display:flex;flex-wrap:wrap;gap:12px;align-items:center;font-size:11px;line-height:16px;margin-top:8px}
 .bt-comm-message-actions button{min-height:28px;padding:3px 8px;font-size:12px}
 .bt-comm-reference,.bt-comm-event{font-size:12px;line-height:16px;color:var(--bt-ink-2)}
 .bt-comm-field{display:flex;flex-direction:column;gap:6px;margin:8px 0;font-size:12px;line-height:16px}

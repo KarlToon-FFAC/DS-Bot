@@ -1,3 +1,4 @@
+import {messageClock} from './text.js'
 import {MentionPerson} from './communication-mention-person.js'
 import {CommunicationActivation} from './communication-activation.js'
 import {RecipientPreview} from './communication-recipient-preview.js'
@@ -71,7 +72,7 @@ export function CommunicationThread({ member, messageId, request, canSpeak, onRe
         parent ? h('p', { className: 'bt-comm-thread-parent' }, t('Reply to'), ' ', labels.get(parent.author.principalId) ?? t('Participant'), ': ', referenceExcerpt(parent.content.text)) : null,
         h('div', { className: 'bt-comm-body' }, h(CommunicationMessage, { message, members, request, onInspect })),
         h(CommunicationActivation,{event,members,request}),
-        h(CommunicationMessageActions,{message,onReply:canSpeak?onReply:undefined},h('time', null, new Date(event.serverAcceptedAt).toLocaleString()),
+        h(CommunicationMessageActions,{message,onReply:canSpeak?onReply:undefined},h('time', {dateTime:event.serverAcceptedAt,title:new Date(event.serverAcceptedAt).toLocaleString()}, messageClock(event.serverAcceptedAt)),
           replies.length ? h('button', { type: 'button', 'aria-expanded': !hidden, onClick: () => setCollapsed(old => { const next = new Set(old); if (hidden) next.delete(message.messageId); else next.add(message.messageId); return next }) }, t(hidden ? 'Show {count} replies' : 'Hide replies', { count: replies.length })) : null)),
       replies.length && !hidden ? h('ol', { className: 'bt-comm-thread-branches' }, replies.map(child => renderBranch(child, level + 1))) : null)
   }

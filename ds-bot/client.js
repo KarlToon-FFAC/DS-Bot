@@ -2691,8 +2691,11 @@ function clockLabel(time, now = Date.now()) {
   const sameYear = date.getFullYear() === new Date(now).getFullYear();
   return `${date.toLocaleDateString(dateLocale(), { weekday: "short", month: "short", day: "numeric", ...sameYear ? {} : { year: "numeric" } })} ${stamp}`;
 }
-function messageClock(time, now = Date.now()) {
-  return daysBefore(new Date(time), now) === 0 ? clock(time) : clockLabel(time, now);
+function messageClock(time) {
+  if (time === void 0 || time === null) return "";
+  const date = new Date(time);
+  if (!Number.isFinite(date.getTime())) return "";
+  return `${date.toLocaleDateString(dateLocale(), { year: "numeric", month: "2-digit", day: "2-digit" })} ${clock(date.getTime())}`;
 }
 function relativeShort(ms) {
   const diff = Math.max(0, Date.now() - ms);
@@ -3341,7 +3344,7 @@ button.bt-lead{border:0;background:none;padding:0;cursor:pointer}
 /* Rows without the avatar start where the bubble beside it starts: 22px avatar + 8px gap. */
 .bt-astack[data-lead]>.bt-msg:not(:last-child)>.bt-msg-line,.bt-astack[data-lead] .bt-reacts{margin-left:30px}
 .bt-group-name{font-size:12px;line-height:16px;font-weight:500;margin-left:42px}
-.bt-group-name:has(>.bt-lead){display:flex;align-items:center;margin:0 0 2px;font-size:13px;line-height:22px;font-weight:600;color:var(--bt-ink)}
+.bt-group-name:has(>.bt-lead){display:flex;flex-wrap:wrap;align-items:center;margin:0 0 2px;font-size:13px;line-height:22px;font-weight:600;color:var(--bt-ink)}
 .bt-group-name>.bt-lead{margin:0 8px 0 0}
 .bt-group-time,.bt-group-took{margin-left:6px;font-size:11px;line-height:16px;font-weight:400;color:var(--bt-ink-2);font-variant-numeric:tabular-nums;white-space:nowrap}
 .bt-x{border:0;background:none;color:var(--bt-ink-2);cursor:pointer;width:24px;height:24px;border-radius:6px;font-size:16px;line-height:24px;padding:0;transition:background-color .12s ease,color .12s ease,${spring(SPRING_TAP, "scale")}}
@@ -15810,7 +15813,7 @@ function ExchangeDialog({ pair, roster, actions }) {
           return (0, import_react36.createElement)(
             import_react36.Fragment,
             { key: entry.id },
-            showDay ? (0, import_react36.createElement)("time", { className: "bt-time" }, dayLabel(entry.time)) : null,
+            showDay ? (0, import_react36.createElement)("time", { className: "bt-time" }, messageClock(entry.time)) : null,
             (0, import_react36.createElement)(
               "div",
               { className: "bt-group-msg" },
@@ -22219,7 +22222,7 @@ function CopyButton({ text }) {
   };
   return (0, import_react57.createElement)("button", { type: "button", className: "bt-tool", "aria-label": copied ? t("Copied") : t("Copy"), title: copied ? t("Copied") : t("Copy"), onClick: copy2 }, copied ? (0, import_react57.createElement)(CheckIcon) : (0, import_react57.createElement)(CopyIcon));
 }
-var clock3 = (time) => typeof time === "number" ? new Date(time).toLocaleTimeString(dateLocale(), { hour: "numeric", minute: "2-digit" }) : void 0;
+var clock3 = (time) => typeof time === "number" ? messageClock(time) : void 0;
 function UserMessageCell({ node, sessionId, useRoster, actions, renderMessageImages, openFile, openSkill }) {
   const context = useActionMenu();
   const roster = useRoster((value) => value);
@@ -25238,7 +25241,7 @@ function CommunicationThread({ member, messageId, request, canSpeak, onReply, on
         (0, import_react81.createElement)(
           CommunicationMessageActions,
           { message, onReply: canSpeak ? onReply : void 0 },
-          (0, import_react81.createElement)("time", null, new Date(event.serverAcceptedAt).toLocaleString()),
+          (0, import_react81.createElement)("time", { dateTime: event.serverAcceptedAt, title: new Date(event.serverAcceptedAt).toLocaleString() }, messageClock(event.serverAcceptedAt)),
           replies.length ? (0, import_react81.createElement)("button", { type: "button", "aria-expanded": !hidden, onClick: () => setCollapsed((old) => {
             const next = new Set(old);
             if (hidden) next.delete(message.messageId);
@@ -25639,7 +25642,7 @@ var communicationCSS = `
 .bt-comm-log article[data-failed=true]{outline:1px solid var(--bt-danger);outline-offset:2px}
 .bt-comm-log article[data-referenced=true]{outline:2px solid var(--bt-accent);outline-offset:2px}
 .bt-comm-log strong{font-size:12px;line-height:16px;font-weight:500}
-.bt-comm-message-actions{display:flex;gap:12px;align-items:center;font-size:11px;line-height:16px;margin-top:8px}
+.bt-comm-message-actions{display:flex;flex-wrap:wrap;gap:12px;align-items:center;font-size:11px;line-height:16px;margin-top:8px}
 .bt-comm-message-actions button{min-height:28px;padding:3px 8px;font-size:12px}
 .bt-comm-reference,.bt-comm-event{font-size:12px;line-height:16px;color:var(--bt-ink-2)}
 .bt-comm-field{display:flex;flex-direction:column;gap:6px;margin:8px 0;font-size:12px;line-height:16px}
@@ -27314,7 +27317,7 @@ function CommunicationSurface({ roster, surface, panel, request = communicationR
               onReply: canSpeak ? openThread : void 0,
               onThread: member.kind === "group" ? (message, trigger) => openThread(message, trigger, false) : void 0
             },
-            (0, import_react83.createElement)("time", { title: new Date(event.serverAcceptedAt).toLocaleString() }, new Date(event.serverAcceptedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }))
+            (0, import_react83.createElement)("time", { dateTime: event.serverAcceptedAt, title: new Date(event.serverAcceptedAt).toLocaleString() }, messageClock(event.serverAcceptedAt))
           )
         )),
         ownOutbox.filter((item) => item.state !== "failed" && !visibleIds.has(item.id) && (item.state !== "accepted" || older === null && item.result?.conversationSeq > (page?.watermark ?? 0))).map((item) => (0, import_react83.createElement)(

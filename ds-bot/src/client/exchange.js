@@ -1,6 +1,6 @@
 import { createElement as h, Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { inkText } from './inks.js'
-import { dayLabel } from './text.js'
+import { messageClock } from './text.js'
 import { colorOf, BotMark } from './mark.js'
 import { Bubbles } from './cells.js'
 import { stripLongNote } from './fold.js'
@@ -66,7 +66,7 @@ export function ExchangeDialog({ pair, roster, actions }) {
               const whole = entry.length === undefined ? undefined : { length: entry.length, load: () => actions.exchangeText(entry.id, entry.from, entry.to) }
               const lead = h('span', { className: 'bt-lead' }, h(BotMark, { bot: bot, size: 22 }))
               return h(Fragment, { key: entry.id },
-                showDay ? h('time', { className: 'bt-time' }, dayLabel(entry.time)) : null,
+                showDay ? h('time', { className: 'bt-time' }, messageClock(entry.time)) : null,
                 h('div', { className: 'bt-group-msg' },
                   entry.remoteSource?h('small',{className:'bt-exchange-origin',title:[entry.remoteSource.conversationId,entry.remoteSource.messageId].filter(Boolean).join(' · ')},t(entry.consultationResult?'Remote task · consultation result':'Remote task')):null,
                   h('span', { className: 'bt-group-name', style: flat ? undefined : { color: inkText(colorOf(bot)) } }, flat ? lead : null, bot.name),

@@ -62,6 +62,7 @@ try{
   await page.evaluate(()=>window.fixture.open());await page.locator('[data-conversation-id="group"]').first().click()
   const quote=page.locator('[data-message-id="message-2"] .bt-comm-quote'),received=page.locator('[data-message-id="message-3"] .bt-comm-quote'),unavailable=page.locator('[data-message-id="message-4"] .bt-comm-quote')
   await quote.locator('.bt-comm-quote-text').waitFor();await received.locator('.bt-comm-quote-text').waitFor();await unavailable.filter({hasText:'Earlier message unavailable'}).waitFor()
+  assert.ok(await page.locator('.bt-comm-log time[datetime]').evaluateAll(nodes=>nodes.length>0&&nodes.every(node=>node.textContent.includes(String(new Date(node.dateTime).getFullYear())))),'main message times visibly include the year')
   for(const theme of ['deepseek','mono','paper','moonlight'])for(const dark of [false,true]){
    await page.evaluate(({theme,dark})=>window.fixture.theme(theme,dark),{theme,dark});await page.mouse.move(1,1)
    for(const id of ['message-2','message-4','queued-own']){
@@ -90,6 +91,7 @@ try{
 
   const original=page.locator('[data-thread-message-id="message-1"] .bt-comm-body'),composer=page.locator('.bt-comm-thread-composer .bt-comm-reference')
   await original.waitFor();await composer.waitFor()
+  assert.equal(await page.locator('[data-thread-message-id="message-2"] time').textContent(),await page.locator('[data-message-id="message-2"] time').textContent(),'main and reply chain show the same full timestamp')
   for(const dark of [false,true]){
    await page.evaluate(dark=>window.fixture.theme('deepseek',dark),dark)
    const samples={original:await contrast(original),composer:await contrast(composer)}
