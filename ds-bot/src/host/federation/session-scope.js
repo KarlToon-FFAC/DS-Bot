@@ -1,3 +1,4 @@
+import {HarnessError} from '@deepseek-ai/dsh-llm'
 export const COMMUNICATION_PRESET = 'ds-bot-communication'
 export const communicationPreset = { id: COMMUNICATION_PRESET, name: 'Federated communication', plugins: [
   { name: '@deepseek-ai/dsh-persona', config: { prefix: 'You are a Bot in an isolated federated communication Session.', suffix: '', complete: false, includeRuntimeContext: false } },
@@ -7,7 +8,14 @@ export const communicationPreset = { id: COMMUNICATION_PRESET, name: 'Federated 
 export const isCommunicationContext = source => source?.kind === 'runtime-context' && source.form === 'snapshot'
   && Array.isArray(source.sections) && source.sections.every(section => section && typeof section.name === 'string' && section.name.length > 0)
 
-const fail = code => { throw Object.assign(new Error(code), { code }) }
+export const isCommunicationMetadata = source => isCommunicationContext(source)
+  || ['agent-instructions','working-directory','tool-registry'].includes(source?.kind)
+  || source?.kind === 'model-selection' && source.form === 'notice' && typeof source.summary === 'string' && source.summary.length > 0
+
+export function communicationSourceFailure(code) {
+  return new HarnessError(`[${code}] This turn contains missing or unverified communication input provenance. Nothing was sent by this failed operation. Host metadata does not authorize a reply; do not retry the same operation or fall back to an unscoped send.`, code)
+}
+const fail = code => { throw communicationSourceFailure(code) }
 
 export function hasCommunicationPreset(registry, agent) {
   if (registry?.composedPreset(agent.ctx) !== COMMUNICATION_PRESET) return false
@@ -46,7 +54,7 @@ export function sourceDelivery(queue, binding, source) {
 export function communicationInputs(queue, binding, messages) {
   return messages.filter(message => {
     // Host filesystem notices must never become federated model context.
-    if (['agent-instructions', 'working-directory','tool-registry'].includes(message.source?.kind) || isCommunicationContext(message.source)) return false
+    if (isCommunicationMetadata(message.source)) return false
     sourceDelivery(queue, binding, message.source)
     return true
   })

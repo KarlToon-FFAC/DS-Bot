@@ -30,7 +30,7 @@ import { botWorkDirectory, syncWorkTools, syncWorkPermission, cancelRevokedWork,
 import { RelationshipMemory, relationshipMemoryContext } from './relationship-memory.js'
 import { OUTSIDE_CONVERSATION_TOOLS } from './tool-scope.js'
 import { LOCAL_MANAGEMENT_TOOLS, localManagementAuthority } from './local-management.js'
-import { COMMUNICATION_PRESET, hasCommunicationPreset, communicationInputs, sourceDelivery, legacySessionSettled, isCommunicationContext } from './session-scope.js'
+import { COMMUNICATION_PRESET, hasCommunicationPreset, communicationInputs, sourceDelivery, legacySessionSettled, isCommunicationMetadata, communicationSourceFailure } from './session-scope.js'
 
 const PROTOCOL = 'dsbot-communication/1'
 const fail = code => { throw Object.assign(new Error(code), { code }) }
@@ -236,10 +236,17 @@ export class CommunicationRuntime {
       if (record.seq > event.seq) break
       if (record.type === 'turn/start') turn = record.data.turn
       if (record.type === 'user/message' && (record.data.turn ?? turn) === event.data.turn
-        && !isCommunicationContext(record.data.source)) inputs.push(record.data.source)
+        && !isCommunicationMetadata(record.data.source)) inputs.push(record.data.source)
     }
-    if (!inputs.length) fail('COMMUNICATION_INPUT_SOURCE_UNKNOWN')
-    const deliveries = inputs.map(source => sourceDelivery(this.queue, binding, source))
+    let deliveries
+    try {
+      if (!inputs.length) throw communicationSourceFailure('COMMUNICATION_INPUT_SOURCE_UNKNOWN')
+      deliveries = inputs.map(source => sourceDelivery(this.queue, binding, source))
+    } catch(error) {
+      if(error.code==='COMMUNICATION_INPUT_SOURCE_UNKNOWN') CommunicationRuntime.prototype.recordBindingFailure.call(this,binding,error,'tool-provenance')
+      throw error
+    }
+    if (this.bindingDiagnostics?.get(binding.id)?.stage==='tool-provenance' && this.errors?.get(binding.id)==='COMMUNICATION_INPUT_SOURCE_UNKNOWN') { this.errors.delete(binding.id);this.bindingDiagnostics.delete(binding.id) }
     const input = deliveries.at(-1)
     return { sourceKey, causationDeliveryId: input.deliveryId, replyToMessageId: input.messageId }
   }
@@ -276,6 +283,7 @@ export class CommunicationRuntime {
     const member = this.queue.memberships().find(item => item.conversationId === binding.conversationId
       && item.principalId === binding.recipientPrincipalId && item.membershipEpoch === binding.membershipEpoch)
     return communicationPrompt(bot, binding, member, { ...(this.relationshipContexts?.get(binding.id) ?? this.conversations.get(binding.conversationId)),
+      sourceError:['COMMUNICATION_INPUT_SOURCE_UNKNOWN','COMMUNICATION_OUTPUT_SOURCE_UNKNOWN'].includes(this.errors?.get(binding.id))?this.errors.get(binding.id):null,
       botReplyActivation:this.transport?.welcome?.capabilities?.includes('bot-reply-activation')===true,
       ownSkills:ownSkills(this,bot).map(({name,description})=>({name,description})),workspaceGuidance:this.workspaceGuidance?.get(binding.id)??'',
       localUserPrincipalId: this.human.principalId, remoteWorkApproval: this.settings.remoteWorkApproval ?? 'inherit', workToolNames: this.workToolNames?.get(binding.id) ?? [], workToolWarnings:workToolWarnings(this).filter(item=>item.bindingId===binding.id), localMemory: this.localMemoryFor(binding), relationshipMemory: this.relationshipMemoryFor(binding) })
@@ -314,7 +322,14 @@ export class CommunicationRuntime {
     return this.relationships.seed(binding, info, input, this.human.principalId)
   }
   installHooks() {
-    this.disposers.push(this.ctx.on('agent/turn-stopping', payload => checkCommunicationCompletion(this,payload)))
+    this.disposers.push(this.ctx.on('agent/turn-stopping', async payload => {
+      try { return await checkCommunicationCompletion(this,payload) }
+      catch(error) {
+        const owner=this.owners.get(payload.agent.id)
+        if(owner && ['COMMUNICATION_INPUT_SOURCE_UNKNOWN','COMMUNICATION_OUTPUT_SOURCE_UNKNOWN'].includes(error.code)) CommunicationRuntime.prototype.recordBindingFailure.call(this,owner,error,'turn-completion')
+        throw error
+      }
+    }))
     this.workInputs ??= new Map()
     this.workSteps ??= new Map()
     this.workEvents ??= Promise.resolve()
@@ -361,6 +376,7 @@ export class CommunicationRuntime {
         const decision = await next()
         if (decision.kind !== 'enter') return decision
         const inputs = communicationInputs(this.queue, owner, decision.messages)
+        if(inputs.length && ['COMMUNICATION_INPUT_SOURCE_UNKNOWN','COMMUNICATION_OUTPUT_SOURCE_UNKNOWN'].includes(this.errors.get(owner.id))) { this.errors.delete(owner.id);this.bindingDiagnostics?.delete(owner.id) }
         if (this.transport?.welcome?.capabilities?.includes('bot-work-events')) {
           const staged = inputs.map(input => input.source)
           this.workInputs.set(agent.id, staged)
@@ -371,7 +387,7 @@ export class CommunicationRuntime {
       }
       catch (error) {
         if (error.code !== 'COMMUNICATION_INPUT_SOURCE_UNKNOWN') throw error
-        this.errors.set(owner.id, error.code ?? 'COMMUNICATION_INPUT_SOURCE_UNKNOWN')
+        CommunicationRuntime.prototype.recordBindingFailure.call(this,owner,error,'input-admission')
         for (const delivery of this.queue.pendingAi().filter(item => item.conversationId === owner.conversationId && item.recipientPrincipalId === owner.recipientPrincipalId && item.membershipEpoch === owner.membershipEpoch)) {
           this.queue.aiState(delivery.deliveryId, 'injection_unknown', { reason: 'COMMUNICATION_INPUT_SOURCE_UNKNOWN' })
         }
@@ -1185,7 +1201,7 @@ export class CommunicationRuntime {
     }
   }
   recordBindingFailure(binding,error,stage){
-    this.errors.set(binding.id,error.code??'INJECTION_UNKNOWN')
+    ;(this.errors??=new Map()).set(binding.id,error.code??'INJECTION_UNKNOWN')
     ;(this.bindingDiagnostics??=new Map()).set(binding.id,safeBindingFailure(error,stage))
   }
   async process() {
@@ -1223,7 +1239,7 @@ export class CommunicationRuntime {
       if (this.queue?.isRetiredBot?.(binding.recipientPrincipalId)) continue
       try {
         await this.export(binding)
-          if (!injectionFailed.has(binding.id) && !['INPUT_CANCELED','COMMUNICATION_SESSION_MIGRATION_REQUIRED','COMMUNICATION_INPUT_SOURCE_UNKNOWN','REPLY_DECISION_REQUIRED','REPLY_SEND_FAILED'].includes(this.errors.get(binding.id))) {this.errors.delete(binding.id);this.bindingDiagnostics?.delete(binding.id)}
+          if (!injectionFailed.has(binding.id) && !['INPUT_CANCELED','COMMUNICATION_SESSION_MIGRATION_REQUIRED','COMMUNICATION_INPUT_SOURCE_UNKNOWN','COMMUNICATION_OUTPUT_SOURCE_UNKNOWN','REPLY_DECISION_REQUIRED','REPLY_SEND_FAILED'].includes(this.errors.get(binding.id))) {this.errors.delete(binding.id);this.bindingDiagnostics?.delete(binding.id)}
         const failed = this.queue.exportFailures().find(item => item.bindingId === binding.id)
         if (failed) this.errors.set(binding.id, failed.code ?? 'EXPORT_REJECTED')
       } catch (error) {if(typeof this.recordBindingFailure==='function')this.recordBindingFailure(binding,error,'export');else this.errors.set(binding.id,error.code??'EXPORT_UNKNOWN')}

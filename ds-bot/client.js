@@ -12578,6 +12578,8 @@ ${shown}`, { axis: "y", ...QUICK_EDGES });
 
 // src/shared/communication-diagnostics.js
 var communicationDescriptions = {
+  COMMUNICATION_INPUT_SOURCE_UNKNOWN: "The tool could not identify a verified input for this turn. Nothing was sent by this failed operation. Host notices are not tasks. Do not repeat this call or use an unscoped fallback; preserve your answer and inspect communication activity.",
+  COMMUNICATION_OUTPUT_SOURCE_UNKNOWN: "This turn output could not be attributed to verified communication inputs and was not published. Preserve the private draft and inspect the input provenance before explicitly resending.",
   CONVERSATION_DELETE_CONFIRMATION_REQUIRED: "Confirm that the current local conversation history will be deleted before continuing.",
   OUTPUT_PRIVATE_DRAFT: "Private pending text is available only to its authorized Bot.",
   OUTPUT_BOT_SUBMISSION_REQUIRED: "Only the owning Bot or its explicitly authorized Chief can submit private output.",
@@ -24000,7 +24002,7 @@ function CommunicationResizeHandle({ side, width, onChange }) {
 // package.json
 var package_default = {
   name: "ds-bot",
-  version: "0.4.2",
+  version: "0.4.3",
   description: "DS Bot: a team of long-lived Bots for DeepSeek Harness, with Main Bots, Bot-to-Bot messages and group chats",
   keywords: [
     "dsh-plugin",

@@ -109,7 +109,7 @@ export function install(rt) {
         comm.member(actor.principalId, communicationBinding.conversationId, communicationBinding.membershipEpoch)
         args = { ...args, membershipEpoch: communicationBinding.membershipEpoch }
       }
-      const read = ['list_local_bots','read_own_remote_history','list_local_chiefs','list_contacts', 'list_communication_conversations', 'read_communication_history', 'read_communication_members', 'read_communication_group_identity', 'read_communication_reference', 'read_communication_thread','read_communication_attachment','read_communication_relationships'].includes(exec.name)
+      const read = ['list_local_bots','read_own_remote_history','list_local_chiefs','list_contacts', 'list_communication_conversations', 'read_communication_history', 'read_communication_members', 'read_communication_group_identity', 'read_communication_reference', 'read_communication_thread','read_communication_attachment','read_communication_relationships'].includes(exec.name) || exec.name==='consult_local_bot' && args.consultationId!==undefined
       const provenance = read ? null : await comm.toolProvenance(exec)
       return JSON.stringify(await work(comm, actor, args, { ...exec, communicationSource: provenance?.sourceKey,
         communicationCausation: provenance, communicationBinding }))

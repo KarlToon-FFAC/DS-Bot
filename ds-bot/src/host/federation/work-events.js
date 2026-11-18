@@ -1,4 +1,4 @@
-import { isCommunicationContext } from './session-scope.js'
+import { isCommunicationMetadata } from './session-scope.js'
 
 // Only a real journal step, paired with that turn's admitted inputs, proves work began.
 export function startedSources(events, step) {
@@ -17,7 +17,7 @@ export function startedSources(events, step) {
     if (position < before) continue
     if (event.type !== 'user/message' || (event.data?.turn ?? turn) !== step.data.turn) continue
     const source = event.data?.source
-    if (['agent-instructions', 'working-directory'].includes(source?.kind) || isCommunicationContext(source)) continue
+    if (isCommunicationMetadata(source)) continue
     sources.push(source)
   }
   return sources

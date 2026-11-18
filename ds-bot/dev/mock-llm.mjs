@@ -232,6 +232,12 @@ function decide(body) {
       if(!communicationResults)return [tool('consult_local_bot',{botId:lateConsultation[1],text:`CONSULT-RESPONSE-PROBE ${lateConsultation[2]}`,waitSeconds:0})]
       return [text('Waiting for the internal consultation result; no answer has been sent.')]
     }
+    const localReport=/^COMM-REPORT-LOCAL (\S+) (\S+)$/m.exec(relationshipInput.split('Current message:\n').at(-1))
+    if(localReport){
+      if(!communicationResults)return [tool('report_to_local_chief',{chiefId:localReport[1],text:`Internal status ${localReport[2]}`} )]
+      let result;try{result=JSON.parse(textOf(blocks.findLast(block=>block.type==='tool_result')?.content))}catch{}
+      return publicReply(`Local report ${localReport[2]} ${result?.status==='delivered'?'DELIVERED':'FAILED'}`)
+    }
     const consultation=/^COMM-CONSULT (\S+) (\S+)$/m.exec(relationshipInput.split('Current message:\n').at(-1))
     if(consultation){
       if(!communicationResults)return [tool('consult_local_bot',{botId:consultation[1],text:`Return a short internal confirmation for ${consultation[2]}.`,waitSeconds:30})]

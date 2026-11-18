@@ -1,6 +1,6 @@
 import {inspectSession} from '../session-inspection.js'
 // Public Session inspection is the recovery source; never infer receipt from text.
-import { isCommunicationContext } from './session-scope.js'
+import { isCommunicationMetadata,communicationSourceFailure } from './session-scope.js'
 export const SOURCE_KIND = 'ds-bot-communication'
 export const RECOVERY_SOURCE_KIND = 'ds-bot-communication-recovery'
 
@@ -200,7 +200,7 @@ export function completedOutputs(sessions, binding, { recoverSettled = false, in
     for (const event of events) {
       if (event.type === 'turn/start') currentTurn = event.data.turn
       if (event.type === 'user/message') {
-        if (isCommunicationContext(event.data.source)) continue
+        if (isCommunicationMetadata(event.data.source)) continue
         const turn = event.data.turn ?? currentTurn
         const inputs = inputsByTurn.get(turn) ?? []
         inputs.push(event.data.source)
@@ -229,7 +229,7 @@ export function completedOutputs(sessions, binding, { recoverSettled = false, in
         || source.conversationId !== binding.conversationId
         || source.kind === SOURCE_KIND && source.recipientPrincipalId !== binding.recipientPrincipalId
         || source.membershipEpoch !== undefined && source.membershipEpoch !== binding.membershipEpoch)) {
-        throw Object.assign(new Error('Output has no exclusive communication input provenance'), { code: 'COMMUNICATION_OUTPUT_SOURCE_UNKNOWN' })
+        throw communicationSourceFailure('COMMUNICATION_OUTPUT_SOURCE_UNKNOWN')
       }
       outputs.push({
         sourceKey: JSON.stringify([binding.id, sessionId, event.seq, message.id]),
