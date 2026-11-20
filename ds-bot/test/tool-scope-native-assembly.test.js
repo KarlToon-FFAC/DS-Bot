@@ -21,7 +21,7 @@ test('real DSH assembly observes a newly repaired scoped schema in the same requ
     t.after(async () => scope.dispose())
     agent.ctx = scope.ctx
     const rt = { ctx: inner, state: { bots: {}, rooms: {} }, teamTools: [], load: async () => {},
-      isBotSession: id => id === agent.id, roomOf: () => undefined, warn() {} }
+      selfOf: id => id === agent.id ? agent.id : undefined, botOf: () => undefined, isBotSession: id => id === agent.id, roomOf: () => undefined, warn() {} }
     install(rt)
     installToolCompat(rt)
     rt.hideBotUnusedTools(agent)

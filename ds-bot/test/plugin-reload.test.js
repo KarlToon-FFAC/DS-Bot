@@ -1,8 +1,13 @@
+
 import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
+import { Context } from '@deepseek-ai/cordis'
+import { LlmAdapter, createUserMessage } from '@deepseek-ai/dsh-llm'
+import { SessionId } from '@deepseek-ai/dsh-session'
+import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { createRuntime } from '../index.js'
 import { fakeContext } from './fake-ctx.js'
 
@@ -31,6 +36,13 @@ const team = () => ({
 const settle = async (check, ms = 2000) => {
   const until = Date.now() + ms
   while (!check() && Date.now() < until) await new Promise(resolve => setImmediate(resolve))
+  assert.ok(check(), 'condition not reached')
+}
+// A group post resolves its Agent in another turn of the loop, so waiting with
+// setImmediate alone can read the calls before they exist.
+const waitFor = async (check, ms = 2000) => {
+  const until = Date.now() + ms
+  while (!check() && Date.now() < until) await new Promise(resolve => setTimeout(resolve, 20))
   assert.ok(check(), 'condition not reached')
 }
 
@@ -159,11 +171,52 @@ test('a child still running after the reload shows in its group, and settling cl
   // dsh settles the child after the reload: the notice reaches the parent Session.
   child.status = 'idle'
   emit(second.ctx, 'gb', 'user/message', {
-    source: { kind: 'subagent-settled', senderSessionId: 'child1' },
-    content: [{ type: 'text', text: 'the child result' }],
+    source: { kind: 'subagent-settled', form: 'notice', summary: 'Background subagent child1 finished.', senderSessionId: 'child1' },
+    content: [{ type: 'text', text: 'Background subagent child1 finished.' }],
   })
   assert.equal(second.rt.hasSubagents('gb'), false)
   assert.equal((second.rt.roomWorkView().r1 ?? []).some(item => item.botId === 'b'), false)
+})
+
+test('a failure the reload left only a settlement notice for shows in its group once (#973)', async (t) => {
+  const home = freshHome()
+  const dsh = dshSide()
+  dsh.agentOf('gb', { status: 'idle' })
+  dsh.agentOf('child1', { parent: 'gb' })
+
+  const first = await loadPlugin(dsh, home)
+  await settle(() => first.rt.hasSubagents('gb') === true)
+  await first.ctx.dispose()
+
+  const second = await loadPlugin(dsh, home)
+  cleanup(t, home, second.ctx)
+  await settle(() => second.rt.hasSubagents('gb') === true)
+  // The child's catalog carries the label the group knows it by; the lifecycle ending
+  // was lost with the old plugin, so the notice is the only ending the new one sees.
+  emit(second.ctx, 'gb', 'subagent/catalog', { childId: 'child1', label: 'Export the deck' })
+  const notice = {
+    source: { kind: 'subagent-settled', form: 'notice', summary: 'Background subagent child1 failed before it finished.', senderSessionId: 'child1' },
+    content: [
+      { type: 'text', text: 'Background subagent child1 failed before it finished.' },
+      { type: 'text', text: 'It left no closing message.' },
+    ],
+  }
+  const revBefore = second.rt.state.revision
+  emit(second.ctx, 'gb', 'user/message', notice)
+  const rows = () => second.rt.groupRows('r1', 0, second.rt.roomOf('r1').seq)
+  await waitFor(() => second.rt.state.revision > revBefore && rows().some(row => row.kind === 'helper-failed'))
+  const shown = rows().filter(row => row.kind === 'helper-failed')
+  assert.equal(shown.length, 1)
+  assert.equal(shown[0].name, 'Writer')
+  assert.equal(shown[0].stopReason, 'error')
+  assert.equal(shown[0].helper, 'Export the deck')
+  assert.equal(shown[0].text, 'Export the deck — subagent ended (error)')
+  assert.equal(dsh.agentOf('r1').calls.length, 0)
+  // The same notice again, and a late lifecycle ending, add no second row or post.
+  emit(second.ctx, 'gb', 'user/message', notice)
+  emit(second.ctx, 'gb', 'subagent/end', { id: 'child1', stopReason: 'error', runId: 'run-1', provider: 'spawn', local: true })
+  assert.equal(dsh.agentOf('r1').calls.length, 0)
+  assert.equal(rows().filter(row => row.kind === 'helper-failed').length, 1)
 })
 
 test('adoption marks a running Bot Session and leaves an idle one alone', async (t) => {
@@ -192,7 +245,7 @@ test('a plugin loaded again gives a live Bot Session its tools before its next r
     },
     on: () => () => {},
   }
-  const served = ['read', 'subagent', 'workflow', 'message_bot', 'remember', 'recall', 'request_secret']
+  const served = ['read', 'subagent', 'workflow', 'message_bot', 'bot_remember', 'bot_recall', 'request_secret']
   const first = await loadPlugin(dsh, home, { served })
   await settle(() => registered.includes('message_bot'))
   await first.ctx.dispose()
@@ -203,10 +256,42 @@ test('a plugin loaded again gives a live Bot Session its tools before its next r
   const second = await loadPlugin(dsh, home, { served })
   cleanup(t, home, second.ctx)
   await settle(() => registered.includes('message_bot'))
-  for (const name of ['remember', 'recall', 'request_secret']) assert.equal(registered.includes(name), true, name)
+  for (const name of ['bot_remember', 'bot_recall', 'request_secret']) assert.equal(registered.includes(name), true, name)
   // The delegation tools a Bot Session must not use stay masked.
   assert.equal(denied.includes('subagent'), true)
   assert.equal(denied.includes('workflow'), true)
+})
+
+test('Bot memory tools coexist with another plugin memory tools in a Bot Session', async (t) => {
+  const home = freshHome()
+  const dsh = dshSide()
+  const foreign = new Map(['remember', 'forget', 'recall'].map(name => [name, { name }]))
+  const registered = new Map(foreign)
+  const collisions = []
+  dsh.agentOf('gb', { status: 'idle' }).ctx = {
+    tools: {
+      register: def => {
+        if (registered.has(def.name)) {
+          collisions.push(def.name)
+          throw new Error(`Tool ${def.name} is already registered`)
+        }
+        registered.set(def.name, def)
+        return () => registered.delete(def.name)
+      },
+      restrict: () => () => {},
+    },
+    on: () => () => {},
+  }
+  const { ctx, rt } = await loadPlugin(dsh, home)
+  cleanup(t, home, ctx)
+  await settle(() => registered.has('message_bot'))
+  rt.syncScopedTools()
+  for (const name of ['bot_remember', 'bot_forget', 'bot_recall']) {
+    assert.equal(typeof registered.get(name)?.execute, 'function', name)
+  }
+  // No Bot memory tool may collide with the foreign registrations.
+  assert.deepEqual(collisions, [])
+  for (const [name, def] of foreign) assert.equal(registered.get(name), def)
 })
 
 test('a tool whose registration failed is tried again, and another Agent is not disturbed', async (t) => {
@@ -223,7 +308,7 @@ test('a tool whose registration failed is tried again, and another Agent is not 
         register: (def) => {
           attempts[id].push(def.name)
           // The first attempt happens while the Agent cannot take it yet.
-          if (id === 'gb' && def.name === 'remember' && rememberFailures < 1) {
+          if (id === 'gb' && def.name === 'bot_remember' && rememberFailures < 1) {
             rememberFailures += 1
             throw new Error('the Agent is not ready for scoped tools yet')
           }
@@ -237,19 +322,19 @@ test('a tool whose registration failed is tried again, and another Agent is not 
   }
   const { ctx, rt } = await loadPlugin(dsh, home)
   cleanup(t, home, ctx)
-  // The scope was built once and 'remember' was refused; it must not count as added.
-  await settle(() => attempts.gb.includes('remember'))
-  assert.equal(registered.gb.includes('remember'), false)
+  // The scope was built once and 'bot_remember' was refused; it must not count as added.
+  await settle(() => attempts.gb.includes('bot_remember'))
+  assert.equal(registered.gb.includes('bot_remember'), false)
   // The next sync tries it again, and this time it lands.
   rt.syncScopedTools()
-  assert.equal(registered.gb.includes('remember'), true)
-  const settled = attempts.gb.filter(name => name === 'remember').length
+  assert.equal(registered.gb.includes('bot_remember'), true)
+  const settled = attempts.gb.filter(name => name === 'bot_remember').length
   assert.equal(settled, 2)
   rt.syncScopedTools()
-  assert.equal(attempts.gb.filter(name => name === 'remember').length, settled)
+  assert.equal(attempts.gb.filter(name => name === 'bot_remember').length, settled)
   // The other Agent got the tool once, and was not touched by the retry.
-  assert.equal(registered.b.includes('remember'), true)
-  assert.equal(attempts.b.filter(name => name === 'remember').length, 1)
+  assert.equal(registered.b.includes('bot_remember'), true)
+  assert.equal(attempts.b.filter(name => name === 'bot_remember').length, 1)
 })
 
 test('a running group turn that ends after the reload still posts its reply to the group', async (t) => {
@@ -307,7 +392,65 @@ test('a new request joins a recovered turn and is answered in its own turn', asy
 })
 
 
-
+test('a real DSH loop keeps post-reload input separate from the running task', async (t) => {
+  const root = new Context()
+  await mountAgentLoopTestDependencies(root)
+  const release = Promise.withResolvers()
+  let calls = 0
+  class Adapter extends LlmAdapter {
+    async resolveModel(provider, id) { return { provider, id, name: id, inputModalities: ['text'], context: { contextWindow: 100000 } } }
+    async *stream() {
+      const first = ++calls === 1
+      if (first) await release.promise
+      const text = first ? 'The old task result' : 'The new request result'
+      yield { type: 'block-start', index: 0, blockType: 'text' }
+      yield { type: 'text-delta', index: 0, text }
+      yield { type: 'block-end', index: 0, block: { type: 'text', text } }
+      yield { type: 'finish', reason: { kind: 'stop' } }
+    }
+  }
+  root.llm.registerAdapter(['reload-test'], new Adapter())
+  await mountAgentLoopTestHarness(root)
+  const agent = await root.agentLoop.create(SessionId('b'), { provider: 'reload-test', model: 'test' })
+  const home = freshHome()
+  const dsh = dshSide()
+  dsh.agentMap.set('b', agent)
+  dsh.services.agents = root.agents
+  let active
+  root.on('session/event', (session, event) => {
+    for (const listener of active?.listeners.get('session/event') ?? []) {
+      if (listener.length >= 2) listener(session, event)
+    }
+  })
+  const first = await loadPlugin(dsh, home)
+  active = first.ctx
+  t.after(async () => {
+    release.resolve()
+    await root.fiber.dispose()
+    await active?.dispose()
+    rmSync(home, { recursive: true, force: true, maxRetries: 5 })
+  })
+  agent.followup(createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: 'The original task' }] }))
+  await settle(() => calls === 1, 5000)
+  await first.ctx.dispose()
+  const second = await loadPlugin(dsh, home)
+  active = second.ctx
+  const delivered = []
+  second.rt.deliver = async request => { delivered.push(request) }
+  await settle(() => second.rt.live.get('b')?.turn !== undefined)
+  const request = { kind: 'bot', role: 'request', exchangeId: 'new-request', senderSessionId: 'a' }
+  const message = () => createUserMessage({ source: request, content: [{ type: 'text', text: 'A separate new request' }] })
+  agent.inject(message())
+  release.resolve()
+  await agent.whenIdle()
+  await settle(() => delivered.length > 0)
+  assert.equal(delivered.some(item => item.replyTo === request.exchangeId), false)
+  assert.equal(delivered[0].deferred, true)
+  agent.followup(message())
+  await agent.whenIdle()
+  await settle(() => delivered.some(item => item.replyTo === request.exchangeId))
+  assert.equal(delivered.find(item => item.replyTo === request.exchangeId).text, 'The new request result')
+})
 
 test('an ordinary fork is neither adopted as a subagent nor stopped with its parent', async t => {
   const home = freshHome(), dsh = dshSide()

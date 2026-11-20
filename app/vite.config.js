@@ -20,7 +20,7 @@ export default defineConfig({
   plugins: [ownPrimitives],
   // The Bot views come from the plugin's interface code in ../ds-bot, which has no React
   // of its own.
-  resolve: { dedupe: ['react', 'react-dom'] },
+  resolve: { dedupe: ['react', 'react-dom', '@deepseek-ai/dsh-client-ui-primitives'] },
   // One bundle: the window loads it from disk, not over a network.
   build: { outDir: 'dist', emptyOutDir: true, chunkSizeWarningLimit: 2048 },
 })

@@ -103,6 +103,91 @@ test('packs expand only to MCP and skill items', () => {
   assert.throws(() => expandCapabilityNames(['bad'], { ...items, bad: { kind: 'pack', items: ['team'] } }), /unavailable capability/)
 })
 
+test('status cache follows install, approval, config edits, detach and removal', async t => {
+  const env = await setup({ beforeLoad({ rt, mounts, skills }) {
+    const agents = new Map()
+    rt.resolveAgent = async id => {
+      if (!agents.has(id)) agents.set(id, testAgent(id, mounts, skills))
+      return agents.get(id)
+    }
+  } })
+  t.after(() => env.dispose())
+  const { rt } = env
+  const view = () => rt.capabilityStatusesView()
+  const empty = view()
+  assert.equal(view(), empty)
+  await rt.capabilitySave(mcp('echo'), { botId: 'chief' })
+  await rt.capabilityEndpoint('bot-capability', { botId: 'chief', name: 'echo', attached: true })
+  await rt.reconcileCapabilities()
+  assert.equal(view().chief.echo.state, 'needs-approval')
+  const blocked = view()
+  assert.equal(view(), blocked)
+  await rt.capabilityEndpoint('capability-approve', { name: 'echo' })
+  await rt.reconcileCapabilities()
+  assert.equal(view().chief.echo.state, 'ready')
+  await rt.capabilitySave(mcp('echo', 'changed-command'), { botId: 'chief' })
+  await rt.reconcileCapabilities()
+  assert.equal(view().chief.echo.state, 'needs-approval')
+  await rt.capabilitySave({ name: 'bundle', kind: 'pack', items: ['echo'] }, { ui: true })
+  rt.state.bots.chief.capabilities = ['bundle']
+  assert.equal(view().chief.bundle.state, 'needs-approval')
+  rt.state.capabilities.items.bundle.items = []
+  assert.deepEqual(view().chief, {})
+  rt.state.capabilities.items.bundle.items = ['echo']
+  assert.equal(view().chief.bundle.state, 'needs-approval')
+  rt.state.bots.chief.capabilities = []
+  assert.deepEqual(view().chief, {})
+  rt.state.bots.chief.capabilities = ['echo']
+  assert.equal(view().chief.echo.state, 'needs-approval')
+  await rt.capabilityDelete('echo', { ui: true })
+  assert.deepEqual(view().chief, {})
+  const removed = view()
+  await assert.rejects(rt.capabilityDelete('missing', { ui: true }), /No capability/)
+  assert.equal(view(), removed)
+  delete rt.state.bots.worker
+  assert.equal(view().worker, undefined)
+})
+
+for (const operation of ['install', 'approve', 'removal']) test(`cached status updates after ${operation}`, async t => {
+  const state = team()
+  state.capabilities = { items: { echo: { ...mcp('echo'), approved: operation !== 'approve' } } }
+  state.bots.chief.capabilities = ['echo']
+  const env = await setup({ state })
+  t.after(() => env.dispose())
+  const agent = testAgent('chief', env.mounts, env.skills)
+  if (operation !== 'install') await created(env)({ agent })
+  const before = env.rt.capabilityStatusesView()
+  assert.equal(env.rt.capabilityStatusesView(), before)
+  if (operation === 'install') {
+    assert.deepEqual(before.chief, {})
+    await created(env)({ agent })
+    assert.equal(env.rt.capabilityStatusesView().chief.echo.state, 'ready')
+  } else if (operation === 'approve') {
+    assert.equal(before.chief.echo.state, 'needs-approval')
+    await env.rt.capabilityEndpoint('capability-approve', { name: 'echo' })
+    await env.rt.reconcileCapabilities()
+    assert.equal(env.rt.capabilityStatusesView().chief.echo.state, 'ready')
+  } else {
+    await env.rt.capabilityDelete('echo', { ui: true })
+    assert.deepEqual(env.rt.capabilityStatusesView().chief, {})
+  }
+})
+
+test('status cache clears on Agent disposal and store replacement', async t => {
+  const state = team()
+  state.capabilities = { items: { echo: { ...mcp('echo'), approved: true } } }
+  state.bots.chief.capabilities = ['echo']
+  const env = await setup({ state })
+  t.after(() => env.dispose())
+  const agent = testAgent('chief', env.mounts, env.skills)
+  await created(env)({ agent })
+  assert.equal(env.rt.capabilityStatusesView().chief.echo.state, 'ready')
+  agent.ctx.dispose()
+  assert.deepEqual(env.rt.capabilityStatusesView().chief, {})
+  env.rt.state.bots = {}
+  assert.deepEqual(env.rt.capabilityStatusesView(), {})
+})
+
 test('state migration adds an empty library and Bot attachment lists', async t => {
   const old = team()
   delete old.capabilities
@@ -483,11 +568,11 @@ async function mountUrlCapability(t, { value, url, bots = ['chief'], awaitMount 
   const env = await setup({ secret: exaSecret(value) })
   t.after(() => env.dispose())
   const { ctx, rt, mounts, skills } = env
-  await rt.capabilitySave({ name: 'exa', kind: 'mcp', description: '', transport: 'streamable-http', url, headers: {} }, { botId: 'chief' })
-  for (const bot of bots) await rt.changeCapabilityAttachment('attach', { name: 'exa', bot: rt.state.bots[bot].name }, 'chief')
+  await rt.capabilitySave({ name: 'exa-cap', kind: 'mcp', description: '', transport: 'streamable-http', url, headers: {} }, { botId: 'chief' })
+  for (const bot of bots) await rt.changeCapabilityAttachment('attach', { name: 'exa-cap', bot: rt.state.bots[bot].name }, 'chief')
   for (const bot of bots) ctx.emit('agent/created', { agent: testAgent(bot, mounts, skills, { awaitMount }) })
   await rt.scheduleCapabilitiesReconcile()
-  const mountFor = bot => mounts.find(mount => mount.sessionId === bot && mount.config?.serverName === 'exa')
+  const mountFor = bot => mounts.find(mount => mount.sessionId === bot && mount.config?.serverName === 'exa-cap')
   return { ...env, mountFor }
 }
 
@@ -495,11 +580,11 @@ test('secret references in an HTTP MCP URL are resolved, and an unavailable one 
   const env = await mountUrlCapability(t, { value: 'fake-exa-key', url: 'https://mcp.exa.test/mcp?apiKey=$DSH_SECRET_EXA_API_KEY', bots: ['chief', 'worker'] })
   const { rt, mountFor } = env
   assert.equal(mountFor('chief').config.url, 'https://mcp.exa.test/mcp?apiKey=fake-exa-key')
-  assert.equal(rt.capabilityStatusesView().chief.exa.state, 'ready')
+  assert.equal(rt.capabilityStatusesView().chief['exa-cap'].state, 'ready')
   assert.equal(JSON.stringify(rt.state.capabilities).includes('fake-exa-key'), false)
   assert.equal(mountFor('worker'), undefined)
-  assert.equal(rt.capabilityStatusesView().worker.exa.state, 'error')
-  assert.match(rt.capabilityStatusesView().worker.exa.error, /EXA_API_KEY/)
+  assert.equal(rt.capabilityStatusesView().worker['exa-cap'].state, 'error')
+  assert.match(rt.capabilityStatusesView().worker['exa-cap'].error, /EXA_API_KEY/)
 })
 
 test('a secret in an HTTP MCP URL query is encoded as one parameter value', async t => {
@@ -521,7 +606,7 @@ test('a failed HTTP MCP mount does not show the encoded secret from its URL', as
     url: 'https://mcp.exa.test/mcp?apiKey=$DSH_SECRET_EXA_API_KEY',
     awaitMount: async mount => { throw new Error('Connection failed', { cause: new Error(`fetch ${mount.config.url}`) }) },
   })
-  const status = env.rt.capabilityStatusesView().chief.exa
+  const status = env.rt.capabilityStatusesView().chief['exa-cap']
   assert.equal(status.state, 'error')
   assert.equal(status.error, 'Connection failed: fetch https://mcp.exa.test/mcp?apiKey=[secret:EXA_API_KEY]')
 })

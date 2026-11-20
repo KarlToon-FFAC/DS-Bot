@@ -6,6 +6,10 @@ import {explicitUserStream} from '../shared/turn-audience.js'
 //   live      work changed without a new revision: ask for `state` again
 //   message   a new entry of a Bot's own chat, as the `chat` endpoint returns it
 //   stream    the reply a Bot is writing: a start, its text as it comes, an end
+//   notice    something a client that is not looking should hear about (mobile.js)
+//   room      a group chat changed: ask for `room-chat` again
+// `hello` carries the team's revision and, for the mobile API, its version and the
+// latest notice, so a client that reconnects knows what it missed.
 import { ROUTE } from './constants.js'
 
 export const FEED_ROUTE = `${ROUTE}/feed`
@@ -32,6 +36,10 @@ export function install(rt) {
     try { controller.enqueue(chunk) } catch { clients.delete(controller); userClients.delete(controller) }
   }
   const publish = (event, data) => {
+    for (const tap of taps) {
+      try { tap(event, data) } catch { /* taps are isolated from the feed */ }
+    }
+    if (clients.size === 0) return
     const chunk = encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
     for (const controller of clients) send(controller, chunk)
   }
@@ -43,13 +51,29 @@ export function install(rt) {
     for(const [controller,target] of userClients)if(target===botId){rt.recordRecoveredVisibility?.(item.routing.originalOutputId,'recovered-user-output');send(controller,chunk)}
   }
 
-  rt.stateSaved = () => {
-    if (clients.size > 0) publish('revision', { revision: state.revision })
+  const feedHello = () => ({ revision: state.revision, ...(rt.noticeCursor ? { api: rt.apiVersion, ...rt.noticeCursor() } : {}) })
+
+  // Non-SSE listeners (the phone link) get every event through a tap; a tap is
+  // isolated so a slow or throwing listener never hurts SSE clients.
+  const taps = new Set()
+  rt.feedTap = (listener) => { taps.add(listener); return () => taps.delete(listener) }
+  // Remote subscribers (such as `dsBot/feed`) open at `hello` and then track every live event.
+  rt.subscribeFeed = (listener) => {
+    const untap = rt.feedTap(listener)
+    try { listener('hello', feedHello()) } catch { /* isolate subscriber errors */ }
+    return untap
+  }
+  const listening = () => clients.size > 0 || taps.size > 0
+  const offSaved = rt.onSaved(() => {
+    if (listening()) publish('revision', { revision: state.revision })
+  })
+  rt.publishFeed = (event, data) => {
+    if (listening()) publish(event, data)
   }
 
   let liveTimer
   const live = () => {
-    if (clients.size === 0 || liveTimer !== undefined) return
+    if (!listening() || liveTimer !== undefined) return
     liveTimer = setTimeout(() => {
       liveTimer = undefined
       publish('live', {})
@@ -60,7 +84,7 @@ export function install(rt) {
   })
 
   ctx.on('session/event', (session, event) => {
-    if(closed || clients.size===0&&userClients.size===0&&event.type!=='assistant/message')return
+    if(closed || !listening()&&userClients.size===0&&event.type!=='assistant/message')return
     const botId=rt.chatOwners.get(session.id)
     if(botId===undefined)return
     const emit=()=>{
@@ -95,7 +119,7 @@ export function install(rt) {
   ctx.on('agent/assistant-stream', ({ agent, frame }) => {
     if (frame.type === 'start') {
       const botId = rt.chatOwners.get(agent.id)
-      if (clients.size === 0 || botId === undefined || !canStream(agent.id, frame.turn)) return
+      if (!listening() || botId === undefined || !canStream(agent.id, frame.turn)) return
       writing.set(frame.attemptId, { target: { botId, sessionId: agent.id }, turn: frame.turn })
       publish('stream', { botId, sessionId: agent.id, attemptId: frame.attemptId, phase: 'start' })
       return
@@ -114,9 +138,14 @@ export function install(rt) {
     }
   })
 
+  // A Request built on a caller's signal only follows it while the Request is reachable;
+  // once collected, its abort never fires and the feed stays open. Each open feed keeps
+  // its Request until it leaves.
+  const requests = new Map()
   const leave = (controller) => {
     clients.delete(controller); userClients.delete(controller)
-    if (clients.size === 0) writing.clear()
+    requests.delete(controller)
+    if (!listening()) writing.clear()
     try { controller.close() } catch { /* already closed or errored */ }
   }
 
@@ -145,10 +174,11 @@ export function install(rt) {
         start(own) {
           controller = own
           clients.add(own)
-          send(own, encoder.encode(`event: hello\ndata: ${JSON.stringify({ revision: state.revision })}\n\n`))
+          send(own, encoder.encode(`event: hello\ndata: ${JSON.stringify(feedHello())}\n\n`))
         },
         cancel() { leave(controller) },
       })
+      requests.set(controller, request)
       request.signal.addEventListener('abort', () => leave(controller), { once: true })
       return new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-store' } })
     },
@@ -163,6 +193,7 @@ export function install(rt) {
       closed=true
       clearInterval(keepalive)
       clearTimeout(liveTimer)
+      offSaved()
       for (const controller of [...clients,...userClients.keys()]) leave(controller)
     }
   }, 'ds-bot: live feed')

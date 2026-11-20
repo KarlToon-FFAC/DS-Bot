@@ -43,3 +43,10 @@ export function MarkdownText({ text, labels, variant }) {
   return h('div', { className: variant === 'compact' ? 'md_markdown md-compact' : 'md_markdown' },
     h(Markdown, { remarkPlugins: plugins, components }, text ?? ''))
 }
+
+// Native DSH-only user projection is not used by the standalone window.
+export const projectUserText = undefined
+export const JsonBlock = ({ payload }) => h('pre', null, JSON.stringify(payload, null, 2))
+export { SlidersIcon as IconAgentPresetOutlineMedium, ArchiveIcon as IconArchiveOutlineMedium, PlugIcon as IconPersonalizationOutlineMedium, GearIcon as IconSettingsOutlineMedium, PeopleIcon as IconUserOutlineMedium } from '../../../ds-bot/src/client/icons.js'
+
+export const FileTypeIcon = undefined

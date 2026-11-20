@@ -7,10 +7,13 @@ const NAME = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
 const SECRET_REFERENCE = /\$DSH_SECRET_([A-Z][A-Z0-9_]*)/g
 const ENSURE_TIMEOUT_MS = 15_000
 
-export function validateCapabilityName(value) {
+// Connector ids are reserved: a capability named like one would collide with
+// its mcp__<id>__* tool prefix. The connectors module registers its ids here.
+export const CONNECTOR_IDS = new Set(['github', 'mail'])
+export function validateCapabilityName(value, reserved = CONNECTOR_IDS) {
   const name = String(value ?? '').trim()
-  if (name.length > 32 || !NAME.test(name) || name === 'github') {
-    throw new Error('Use a capability name with lowercase letters, digits, and single hyphens; "github" is reserved.')
+  if (name.length > 32 || !NAME.test(name) || name === 'github' || reserved.has(name)) {
+    throw new Error('Use a capability name with lowercase letters, digits, and single hyphens; connector names are reserved.')
   }
   return name
 }
@@ -58,6 +61,8 @@ export function install(rt) {
   const chains = new WeakMap()
   const queued = new WeakSet()
   const sessionStatuses = new Map()
+  let statusesCache
+  let statusesKey
   let pluginPromise
   let scheduled = null
   let loadingSecrets = 0
@@ -205,6 +210,7 @@ export function install(rt) {
   }
 
   const statusSet = (botId, itemName, sessionId, status) => {
+    statusesCache = undefined
     let byItem = sessionStatuses.get(botId)
     if (!byItem) sessionStatuses.set(botId, byItem = new Map())
     let bySession = byItem.get(itemName)
@@ -212,6 +218,7 @@ export function install(rt) {
     bySession.set(sessionId, status)
   }
   const clearStatus = (botId, itemName, sessionId) => {
+    statusesCache = undefined
     const byItem = sessionStatuses.get(botId)
     const bySession = byItem?.get(itemName)
     bySession?.delete(sessionId)
@@ -219,6 +226,7 @@ export function install(rt) {
     if (byItem?.size === 0) sessionStatuses.delete(botId)
   }
   const clearSession = sessionId => {
+    statusesCache = undefined
     for (const [botId, byItem] of sessionStatuses) {
       for (const [name, bySession] of byItem) {
         bySession.delete(sessionId)
@@ -235,6 +243,15 @@ export function install(rt) {
     return values.length > 0 ? { state: 'ready' } : undefined
   }
   const capabilityStatusesView = () => {
+    // The returned view is shared and cached; callers must not mutate it.
+    // Store adoption and in-place attachment/pack edits need no separate notification.
+    const key = JSON.stringify(Object.values(state.bots).map(bot => [bot.id,
+      (bot.capabilities ?? []).map(name => {
+        const item = own(library(), name)
+        return [name, item?.kind, item?.kind === 'pack' ? item.items : undefined]
+      }),
+    ]))
+    if (statusesCache && statusesKey === key) return statusesCache
     const result = {}
     for (const bot of Object.values(state.bots)) {
       const statuses = {}
@@ -255,6 +272,8 @@ export function install(rt) {
       }
       result[bot.id] = statuses
     }
+    statusesKey = key
+    statusesCache = result
     return result
   }
   const libraryView = () => Object.values(library()).map(item => ({
@@ -535,6 +554,7 @@ export function install(rt) {
       mounts.clear()
       agents.clear()
       sessionStatuses.clear()
+      statusesCache = undefined
       await Promise.all(live.flatMap(agentMounts => [...agentMounts.values()].map(disposeMount)))
     }
   }, 'ds-bot: capabilities')

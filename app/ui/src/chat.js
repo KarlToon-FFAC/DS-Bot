@@ -2,10 +2,12 @@ import { createElement as h, useCallback, useEffect, useLayoutEffect, useMemo, u
 import { call } from '../../../ds-bot/src/client/api.js'
 import { Bubbles, ChatRows, Shimmer } from '../../../ds-bot/src/client/cells.js'
 import { ComposerPlus, ComposerVoice } from '../../../ds-bot/src/client/composer.js'
+import { sendsOnEnter } from '../../../ds-bot/src/client/enter-key.js'
 import { t } from '../../../ds-bot/src/client/i18n.js'
 import { ArrowUpIcon } from '../../../ds-bot/src/client/icons.js'
 import { ModelChoiceDock } from '../../../ds-bot/src/client/model-menu.js'
 import { PendingQuestion } from '../../../ds-bot/src/client/questions.js'
+import { ReadOnlyDock } from '../../../ds-bot/src/client/read-only-dock.js'
 
 // The chat follows its end while the user is this close to it.
 const FOLLOW_PX = 80
@@ -53,7 +55,7 @@ function useChat(botId, part, feed) {
   useEffect(() => feed.on((event, data) => {
     // The feed came back after a break: entries may have been missed.
     if (event === 'hello') { if (ready.current) void load(undefined); return }
-    if (botId === undefined || data?.botId !== botId) return
+    if (botId === undefined || data?.botId !== botId || data.sessionId !== part) return
     if (event === 'message') {
       if (!ready.current) { early.current.push(data); return }
       setView(current => (data.sessionId !== current.sessionId || current.items.some(item => sameItem(item, data.item)) ? current : { ...current, items: [...current.items, data.item] }))
@@ -69,7 +71,7 @@ function useChat(botId, part, feed) {
       else if (data.phase === 'end') setStream(current => (current?.attemptId === data.attemptId ? null : current))
       else setStream(current => (current?.attemptId === data.attemptId ? { ...current, text: current.text + data.text } : current))
     }
-  }), [feed, botId, load])
+  }), [feed, botId, part, load])
 
   // Shown at once: the message can come back on the feed before the request returns.
   const send = async (text, actions, sessionId) => {
@@ -103,6 +105,7 @@ function Composer({ sessionId, placeholder, disabled, onSend, actions, useUi, us
   const [error, setError] = useState(null)
   const field = useRef(null)
   const inputActions = useInput(field, setText)
+  const enterToSend = useRoster(state => sendsOnEnter(state.prefs))
   useLayoutEffect(() => {
     const node = field.current
     node.style.height = 'auto'
@@ -136,14 +139,14 @@ function Composer({ sessionId, placeholder, disabled, onSend, actions, useUi, us
           'data-composer-input': '',
           onChange: event => setText(event.target.value),
           onKeyDown: (event) => {
-            if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+            if (event.key === 'Enter' && enterToSend && !event.shiftKey && !event.nativeEvent.isComposing) {
               event.preventDefault()
               void submit()
             }
           },
         })),
       h('div', { className: 'dsb-composer-trailing' },
-        h(ComposerVoice, { sessionId, inputActions, actions, useUi }),
+        h(ComposerVoice, { sessionId, inputActions, actions, useUi, useRoster }),
         h('button', { type: 'button', className: 'dsb-send', disabled: disabled || text.trim() === '', 'aria-label': t('Send message'), title: t('Send message'), onClick: () => { void submit() } }, h(ArrowUpIcon)))))
 }
 
@@ -158,6 +161,11 @@ export function Chat({ sessionId, team }) {
   const follow = useRef(true)
   const question = roster.questions?.[sessionId]
   const running = hooks.useSessionStatus(map => map.get(sessionId)?.running === true)
+  // A part the user opened while its turn runs takes no input until that turn ends or
+  // the user stops it: the same lock and the same dock the plugin puts in DSH.
+  const readOnlyPart = hooks.useUi(state => state.readOnlyPart ?? null)
+  const partRunning = hooks.useRoster(state => state.partsRunning?.[sessionId] === true)
+  const readOnly = readOnlyPart !== null && readOnlyPart === sessionId && partRunning
 
   useLayoutEffect(() => {
     const node = scroller.current
@@ -186,12 +194,13 @@ export function Chat({ sessionId, team }) {
           stream?.text ? h(Bubbles, { texts: [stream.text], roster, selfId: bot?.id, actions, streaming: true, sessionId }) : null,
           // The Bot views' activity row (from the header pill) draws itself in here.
           h('div', { 'data-chat-running': '' }),
-          question ? h(PendingQuestion, { key: JSON.stringify([sessionId, question.id]), sessionId, question, actions, inline: true }) : null))),
+          question ? h(PendingQuestion, { key: JSON.stringify([sessionId, question.id]), sessionId, question, actions, inline: true, enterToSend: sendsOnEnter(roster.prefs) }) : null))),
     h('div', { className: 'dsb-composer-root' },
       h(ModelChoiceDock, { sessionId, useRoster: hooks.useRoster, actions }),
+      h(ReadOnlyDock, { sessionId, useUi: hooks.useUi, useRoster: hooks.useRoster, actions }),
       h(Composer, {
         sessionId,
-        disabled: waiting,
+        disabled: waiting || readOnly,
         placeholder: waiting ? t('Pick a model and {name} can start.', { name }) : name ? t('Message {name}', { name }) : t('Message'),
         onSend: text => send(text, actions, sessionId),
         actions,

@@ -1,9 +1,11 @@
+
 import assert from 'node:assert/strict'
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { install, bookFile, parseBook } from '../src/host/ledger.js'
+import { relayRange } from '../src/shared/group-replies.js'
 
 const host = (t, { home = mkdtempSync(join(tmpdir(), 'ds-bot-ledger-')), readOnly } = {}) => {
   const warnings = []
@@ -88,6 +90,11 @@ test('a book with an id that is not a plain name gets a file name of its own', (
   assert.notEqual(bookFile('group-../x'), bookFile('group-../y'))
 })
 
+test("a round's result names its rows; a result from before the ledger does not", () => {
+  assert.deepEqual(relayRange('{"from":3,"to":9,"passed":[]}'), { from: 3, to: 9 })
+  assert.equal(relayRange('{"replies":[],"passed":[]}'), undefined)
+  assert.equal(relayRange('{"replies":[{"botId":"a","text":"cu'), undefined)
+})
 
 // A window that only read a book takes over writing when the other host goes: what that
 // host wrote meanwhile is read again before anything new is added.
@@ -126,6 +133,26 @@ test('a write that does not reach the disk is reported to whoever waits for it',
   assert.deepEqual(parseBook(readFileSync(join(home, 'ledger', 'pair-a-b.jsonl'), 'utf8')).map(record => record.id), ['x'])
 })
 
+test('prepend puts recovered records before existing ones and keeps concurrent appends in order', async (t) => {
+  const writer = host(t)
+  writer.rt.ledger.append('group-r1', { seq: 3, text: 'three' })
+  writer.rt.ledger.append('group-r1', { seq: 4, text: 'four' })
+  await writer.rt.ledger.flush('group-r1')
+
+  const reader = host(t, { home: writer.home, readOnly: () => 'read only' })
+  assert.deepEqual(reader.rt.ledger.records('group-r1').map(record => record.seq), [3, 4])
+
+  // Prepend 1..2 and append 5 without awaiting between them.
+  const added = writer.rt.ledger.prepend('group-r1', [{ seq: 2, text: 'two' }, { seq: 1, text: 'one' }, { seq: 3, text: 'dup' }])
+  assert.equal(added, 2)
+  writer.rt.ledger.append('group-r1', { seq: 5, text: 'five' })
+  await writer.rt.ledger.flush('group-r1')
+
+  assert.deepEqual(parseBook(readFileSync(writer.file('group-r1'), 'utf8')).map(record => [record.seq, record.text]), [
+    [1, 'one'], [2, 'two'], [3, 'three'], [4, 'four'], [5, 'five'],
+  ])
+  assert.deepEqual(reader.rt.ledger.records('group-r1').map(record => record.seq), [1, 2, 3, 4, 5])
+})
 
 test('a failed legacy import cannot create a new-only book on the next append', async t => {
   const { rt, home, file } = host(t)

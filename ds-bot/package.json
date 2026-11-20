@@ -22,30 +22,33 @@
   },
   "license": "Apache-2.0",
   "type": "module",
-  "main": "index.js",
+  "main": "plugin.js",
   "exports": {
-    ".": "./index.js",
+    ".": "./plugin.js",
     "./client": "./client.js",
     "./web-search": "./web-search.js",
     "./package.json": "./package.json"
   },
   "files": [
+    "bin/",
+    "plugin.js",
     "index.js",
     "src/host/",
     "src/shared/",
     "src/office/",
     "client.js",
+    "link.js",
     "office.js",
     "web-search.js",
     "cordis.patch.yml",
     "README.md",
     "LICENSE",
-    "bin/",
     "skills/"
   ],
   "scripts": {
-    "build": "node scripts/build-client.mjs",
-    "test": "node --import ./test/harness-resolve.mjs --test \"test/*.test.js\"",
+    "build": "node scripts/build-client.mjs && node scripts/build-link.mjs",
+    "test": "node --import ./test/harness-resolve.mjs --test --test-timeout=120000 --test-force-exit \"test/*.test.js\"",
+    "test:browser": "node --import ./test/harness-resolve.mjs --test --test-concurrency=1 --test-timeout=120000 --test-force-exit \"test/browser/*.test.js\"",
     "lint": "node scripts/lint.mjs",
     "harness": "npm install --prefix dev/harness --legacy-peer-deps=false --no-package-lock --no-fund --no-audit",
     "check": "sh dev/check.sh"
@@ -68,7 +71,8 @@
     "@deepseek-ai/dsh-user-approval": "*",
     "@deepseek-ai/dsh-agent-instructions": "*",
     "@deepseek-ai/dsh-tool-executor-native": "*",
-    "@deepseek-ai/dsh-tool-executor-ptc": "*"
+    "@deepseek-ai/dsh-tool-executor-ptc": "*",
+    "@deepseek-ai/dsh-typert-protocol": "*"
   },
   "dsh": {
     "client": {
@@ -80,17 +84,28 @@
   },
   "devDependencies": {
     "@xmldom/xmldom": "0.9.12",
-    "esbuild": "0.28.2"
+    "esbuild": "0.28.2",
+    "qrcode-generator": "2.0.4"
   },
   "dependencies": {
-    "deep-view": "0.1.0",
+    "deep-view": "0.1.2",
     "ws": "8.22.1",
-    "yaml": "2.9.1"
+    "yaml": "2.9.1",
+    "@modelcontextprotocol/client": "2.4.0",
+    "imapflow": "2.9.1",
+    "jpeg-js": "0.4.4",
+    "mailparser": "3.12.4",
+    "nodemailer": "10.2.1",
+    "playwright-core": "1.64.1",
+    "pngjs": "7.0.0",
+    "semver": "^7.8.6",
+    "undici": "8.11.2"
   },
   "bin": {
     "dsbot-remote": "./bin/dsbot-remote.mjs",
     "dsbot-team": "./bin/dsbot-team.mjs",
-    "dsbot-reset": "./bin/dsbot-reset.mjs"
+    "dsbot-reset": "./bin/dsbot-reset.mjs",
+    "ds-bot": "./bin/ds-bot-doctor.mjs"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/dsh-session-format-catalog": {
@@ -126,8 +141,5 @@
     "@deepseek-ai/dsh-tool-executor-ptc": {
       "optional": true
     }
-  },
-  "engines": {
-    "dsh": ">=0.2.1-rc.4 <0.2.3-0"
   }
 }
