@@ -65,7 +65,7 @@ actions. Text editing and selected text retain the native browser menu. The Hub
 device list shows each client's reported release version, including the last
 reported version while offline; an older client that reports none stays unknown.
 
-This federation branch includes the full upstream dev update through `a676f7a7` (2026-11-19). Use **DSH 0.2.2-rc.1**; DSH 0.2.1 is no longer a supported target. See the [integration notes](docs/plans/2026-11-20-full-upstream-sync.md).
+This federation branch includes the full upstream dev update through `6e2afaa9` (2026-11-20 snapshot). Use **DSH 0.2.2-rc.1**; DSH 0.2.1 is no longer a supported target. See the [integration notes](docs/plans/2026-11-20-full-upstream-sync.md).
 
 ## Install
 

@@ -38,7 +38,11 @@ try{
   await page.getByText('Verify all group features',{exact:true}).waitFor()
   const out=join(repo,'.dsh-test-tools/upstream-group-layout');mkdirSync(out,{recursive:true})
   await page.screenshot({path:join(out,'wide.png')})
-  await page.setViewportSize({width:800,height:680});await page.screenshot({path:join(out,'narrow.png')})
+  await page.setViewportSize({width:800,height:680})
+  if(!await page.getByText('Verify the upstream group layout',{exact:true}).isVisible())await page.getByRole('button',{name:'View conversation details',exact:true}).click()
+  await page.getByText('Verify the upstream group layout',{exact:true}).waitFor()
+  await page.getByText('Verify all group features',{exact:true}).waitFor()
+  await page.screenshot({path:join(out,'narrow.png')})
   assert.deepEqual(errors,[])
   await browser.close();browser=undefined
   console.log('PASS actual group details render the shared to-do and task board at wide and narrow widths with no browser exceptions')

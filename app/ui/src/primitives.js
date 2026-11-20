@@ -50,3 +50,6 @@ export const JsonBlock = ({ payload }) => h('pre', null, JSON.stringify(payload,
 export { SlidersIcon as IconAgentPresetOutlineMedium, ArchiveIcon as IconArchiveOutlineMedium, PlugIcon as IconPersonalizationOutlineMedium, GearIcon as IconSettingsOutlineMedium, PeopleIcon as IconUserOutlineMedium } from '../../../ds-bot/src/client/icons.js'
 
 export const FileTypeIcon = undefined
+
+export const fileExtension = undefined
+export const fileSizeText = undefined

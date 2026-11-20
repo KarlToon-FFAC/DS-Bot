@@ -56,7 +56,7 @@ DS Bot 是一个基于 [DeepSeek Harness](https://github.com/deepseek-ai/deepsee
 保留浏览器原生菜单。Hub 设备列表显示各客户端上报的版本，离线时保留上次
 上报值；未上报版本的老客户端显示未知，不影响兼容协议下的通信。
 
-本联邦分支已完整同步上游 dev 至 `a676f7a7`（2026-11-19）。请使用 **DSH 0.2.2-rc.1**，本轮不再支持 DSH 0.2.1。详见[同步与兼容性说明](docs/plans/2026-11-20-full-upstream-sync.md)。
+本联邦分支已完整同步上游 dev 至 `6e2afaa9`（2026-11-20 快照）。请使用 **DSH 0.2.2-rc.1**，本轮不再支持 DSH 0.2.1。详见[同步与兼容性说明](docs/plans/2026-11-20-full-upstream-sync.md)。
 
 ## 安装
 
